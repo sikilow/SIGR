@@ -6,11 +6,13 @@ import IconoEstado, { type TonoEstado } from './IconoEstado.vue'
 defineProps<{
   tono: TonoEstado
   texto: string
+  /** Permite que un texto largo pase a otra línea (p. ej. "Cuenta solicitada · Pago digital"). */
+  ajustar?: boolean
 }>()
 </script>
 
 <template>
-  <span class="insignia" :class="`insignia--${tono}`">
+  <span class="insignia" :class="[`insignia--${tono}`, { 'insignia--ajustar': ajustar }]">
     <IconoEstado class="insignia__icono" :tono="tono" />
     <span>{{ texto }}</span>
   </span>
@@ -33,6 +35,13 @@ defineProps<{
   font-size: var(--texto-sm);
   font-weight: 700;
   white-space: nowrap;
+  max-width: 100%;
+  line-height: 1.25;
+}
+
+/* Textos largos: pasan a otra línea en vez de desbordar la tarjeta */
+.insignia--ajustar {
+  white-space: normal;
 }
 
 .insignia__icono {
@@ -72,9 +81,41 @@ defineProps<{
   --tono-texto: var(--color-primary-dark);
 }
 
-/* Cuenta solicitada: usa el color de marca (no hay token propio de estado) */
-.insignia--cuenta {
+/* Cuenta solicitada / abierta: usan el color de marca (no hay token propio de estado) */
+.insignia--cuenta,
+.insignia--cuenta_abierta {
   --tono: var(--color-primary);
   --tono-texto: var(--color-primary-dark);
+}
+
+/* Estados del pedido: cada uno con su ícono y su par color/texto oscuro */
+.insignia--registrado {
+  --tono: var(--color-registrado);
+  --tono-texto: var(--color-registrado-texto);
+}
+
+.insignia--enviado {
+  --tono: var(--color-enviado);
+  --tono-texto: var(--color-enviado-texto);
+}
+
+.insignia--en_preparacion {
+  --tono: var(--color-preparacion);
+  --tono-texto: var(--color-preparacion-texto);
+}
+
+.insignia--entregado {
+  --tono: var(--color-entregado);
+  --tono-texto: var(--color-entregado-texto);
+}
+
+.insignia--cancelado {
+  --tono: var(--color-peligro);
+  --tono-texto: var(--color-peligro-texto);
+}
+
+.insignia--pagado {
+  --tono: var(--color-pagado);
+  --tono-texto: var(--color-pagado-texto);
 }
 </style>

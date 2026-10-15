@@ -1,5 +1,6 @@
 import vue from '@vitejs/plugin-vue'
-import { defineConfig, loadEnv } from 'vite'
+import { loadEnv } from 'vite'
+import { defineConfig } from 'vitest/config'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -9,6 +10,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [vue()],
+    // Pruebas automáticas (npm test): solo lógica pura y servicios simulados, sin navegador.
+    test: {
+      environment: 'node',
+      include: ['src/**/*.test.ts'],
+    },
     server: {
       // Proxy opcional: solo se activa si se define API_PROXY_TARGET.
       // Evita CORS en desarrollo; `/api/mesas` llega al destino como `/mesas`.

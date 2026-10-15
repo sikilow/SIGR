@@ -38,8 +38,12 @@ export interface MenuService {
 }
 
 export interface PedidosService {
-  /** POST /pedidos. El pedido queda en estado `registrado`. */
-  crear(pedido: NuevoPedido): Promise<Pedido>
+  /**
+   * POST /pedidos. El pedido queda en estado `registrado`.
+   * `claveIdempotencia` (CAMBIO PROPUESTO EN F5) viaja en la cabecera `Idempotency-Key`: los
+   * reintentos de la MISMA intención la reutilizan para no duplicar el pedido.
+   */
+  crear(pedido: NuevoPedido, claveIdempotencia?: string): Promise<Pedido>
   /** GET /pedidos (filtros: mesa_id, estado) */
   listar(filtro?: FiltroPedidos): Promise<Pedido[]>
   /** GET /pedidos/{id} */
@@ -49,21 +53,26 @@ export interface PedidosService {
    * Reemplaza el detalle completo de un pedido en estado `registrado`.
    */
   actualizar(id: number, detalle: LineaNuevoPedido[]): Promise<Pedido>
-  /** POST /pedidos/{id}/enviar */
-  enviar(id: number): Promise<Pedido>
+  /** POST /pedidos/{id}/enviar (con `Idempotency-Key`, CAMBIO PROPUESTO EN F5). */
+  enviar(id: number, claveIdempotencia?: string): Promise<Pedido>
   /**
-   * POST /pedidos/{id}/cancelar.
+   * POST /pedidos/{id}/cancelar (con `Idempotency-Key`, CAMBIO PROPUESTO EN F5).
    * El mesero solo cancela en `registrado` o `enviado`; en `en_preparacion`
-   * falla con `ErrorServicio('requiere_gerente')`.
+   * falla con `ErrorServicio('requiere_gerente')`. `motivo` es texto libre de 5 a 200 caracteres.
    */
-  cancelar(id: number, motivo: MotivoCancelacion): Promise<Pedido>
+  cancelar(id: number, motivo: MotivoCancelacion, claveIdempotencia?: string): Promise<Pedido>
+  /**
+   * POST /pedidos/{id}/entregar  (CAMBIO PROPUESTO EN F5).
+   * Marca como `entregado` un pedido `listo`; desde otro estado falla con `estado_invalido`.
+   */
+  entregar(id: number, claveIdempotencia?: string): Promise<Pedido>
 }
 
 export interface CuentasService {
   /** GET /mesas/{id}/cuenta. Devuelve `null` si la mesa no tiene cuenta activa. */
   obtenerPorMesa(mesaId: number): Promise<Cuenta | null>
-  /** POST /cuentas/{id}/solicitar-pago */
-  solicitarPago(cuentaId: number, tipo: TipoPago): Promise<Cuenta>
+  /** POST /cuentas/{id}/solicitar-pago (con `Idempotency-Key`, CAMBIO PROPUESTO EN F5). */
+  solicitarPago(cuentaId: number, tipo: TipoPago, claveIdempotencia?: string): Promise<Cuenta>
 }
 
 export interface Servicios {

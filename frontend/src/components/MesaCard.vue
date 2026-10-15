@@ -3,7 +3,7 @@
 // Ocupada: muestra pedidos, total y avisos. Libre/reservada: solo el estado, atenuada
 // con fondo y color de número más suaves (sin bajar el contraste del texto por debajo de AA).
 import { computed } from 'vue'
-import { ETIQUETA_ESTADO_MESA, type Mesa } from '../types'
+import { ETIQUETA_ESTADO_MESA, ETIQUETA_TIPO_PAGO, type Mesa } from '../types'
 import { formatearCapacidad, formatearMoneda, formatearPedidosActivos } from '../utils/formato'
 import InsigniaEstado from './InsigniaEstado.vue'
 
@@ -18,6 +18,12 @@ defineEmits<{ seleccionar: [mesa: Mesa] }>()
 const ocupada = computed(() => props.mesa.estado === 'ocupada')
 const cuentaSolicitada = computed(() => props.mesa.estadoCuenta === 'por_pagar')
 const hayPedidoListo = computed(() => props.mesa.pedidosListos > 0)
+/** "Cuenta solicitada · Pago digital"; sin el tipo de pago (la API no lo envía) solo "Cuenta solicitada". */
+const textoCuenta = computed(() =>
+  props.mesa.tipoPagoSolicitado
+    ? `Cuenta solicitada · ${ETIQUETA_TIPO_PAGO[props.mesa.tipoPagoSolicitado]}`
+    : 'Cuenta solicitada',
+)
 </script>
 
 <template>
@@ -45,7 +51,7 @@ const hayPedidoListo = computed(() => props.mesa.pedidosListos > 0)
       </span>
       <span v-if="hayPedidoListo || cuentaSolicitada" class="mesa__avisos">
         <InsigniaEstado v-if="hayPedidoListo" tono="listo" texto="Pedido listo" />
-        <InsigniaEstado v-if="cuentaSolicitada" tono="cuenta" texto="Cuenta solicitada" />
+        <InsigniaEstado v-if="cuentaSolicitada" tono="cuenta" :texto="textoCuenta" ajustar />
       </span>
     </template>
   </button>

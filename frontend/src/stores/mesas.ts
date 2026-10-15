@@ -87,6 +87,16 @@ export const useMesasStore = defineStore('mesas', () => {
     return enCurso
   }
 
+  /**
+   * Los datos cambiaron en el servidor (p. ej. se solicitó la cuenta): recarga YA, esperando a que
+   * termine cualquier carga en curso para no quedarse con una respuesta anterior al cambio.
+   */
+  async function invalidar(): Promise<void> {
+    if (ultimaActualizacion.value === null && mesas.value.length === 0) return
+    if (enCurso) await enCurso
+    await cargar()
+  }
+
   function mostrarAviso(texto: string) {
     aviso.value = texto
   }
@@ -110,5 +120,6 @@ export const useMesasStore = defineStore('mesas', () => {
     contadores,
     mesasFiltradas,
     cargar,
+    invalidar,
   }
 })

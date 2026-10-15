@@ -184,7 +184,7 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
       </p>
       <button
         type="button"
-        class="btn pedido__revisar"
+        class="btn btn--grande pedido__revisar"
         :aria-disabled="vacio ? 'true' : undefined"
         :aria-describedby="vacio ? 'pedido-motivo-vacio' : undefined"
         @click="revisar"
@@ -302,9 +302,9 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
 }
 
 .cantidad__boton[aria-disabled='true'] {
-  border-color: #c9bbaa;
-  background: #ece3d9;
-  color: #4b5563;
+  border-color: var(--color-deshabilitado-borde);
+  background: var(--color-deshabilitado-fondo);
+  color: var(--color-deshabilitado-texto);
   cursor: not-allowed;
 }
 
@@ -403,8 +403,6 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
 
 .pedido__revisar {
   width: 100%;
-  min-height: 56px;
-  font-size: var(--texto-lg);
 }
 
 .pedido__motivo {

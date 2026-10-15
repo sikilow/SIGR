@@ -83,7 +83,8 @@ function crearMesas(): MesaGuardada[] {
 
 function crearPedidos(): Pedido[] {
   const base = { meseroId: 1, motivoCancelacion: null }
-  return [
+  // En el mock el número visible de la mesa coincide con su id.
+  const pedidos: Array<Omit<Pedido, 'mesaNumero'>> = [
     // Mesa 3 (cuenta 1): un pedido ya entregado y otro listo para entregar
     {
       ...base, id: 1, mesaId: 3, cuentaId: 1, estado: 'entregado', creadoEn: hace(50), total: 330,
@@ -100,7 +101,7 @@ function crearPedidos(): Pedido[] {
         { productoId: 12, nombreProducto: 'Agua de horchata', cantidad: 1, observaciones: 'Poco hielo', precioUnitario: 55 },
       ],
     },
-    // Mesa 5 (cuenta 2): en preparación (el mesero ya no puede cancelar)
+    // Mesa 5 (cuenta 2): en preparación; la simulación lo pasa a "listo" a los 30 s
     {
       ...base, id: 3, mesaId: 5, cuentaId: 2, estado: 'en_preparacion', creadoEn: hace(8), total: 570,
       detalle: [
@@ -128,7 +129,36 @@ function crearPedidos(): Pedido[] {
         { productoId: 14, nombreProducto: 'Café de olla', cantidad: 2, observaciones: '', precioUnitario: 40 },
       ],
     },
+    // Mesa 12 (cuenta 5): entregado + en preparación (estable varios minutos) + uno CANCELADO con motivo
+    {
+      ...base, id: 7, mesaId: 12, cuentaId: 5, estado: 'entregado', creadoEn: hace(40), total: 240,
+      detalle: [
+        { productoId: 16, nombreProducto: 'Tacos al pastor', cantidad: 2, observaciones: 'Con poca piña', precioUnitario: 120 },
+      ],
+    },
+    {
+      ...base, id: 8, mesaId: 12, cuentaId: 5, estado: 'cancelado', creadoEn: hace(25), total: 140,
+      motivoCancelacion: 'El cliente cambió de opinión',
+      detalle: [
+        { productoId: 9, nombreProducto: 'Flan napolitano', cantidad: 2, observaciones: '', precioUnitario: 70 },
+      ],
+    },
+    {
+      ...base, id: 9, mesaId: 12, cuentaId: 5, estado: 'en_preparacion', creadoEn: hace(6), total: 315,
+      detalle: [
+        { productoId: 2, nombreProducto: 'Sopa de tortilla', cantidad: 1, observaciones: '', precioUnitario: 85 },
+        { productoId: 7, nombreProducto: 'Filete de pescado', cantidad: 1, observaciones: '', precioUnitario: 230 },
+      ],
+    },
+    // Mesa 2 (cuenta 6, ya cerrada): pedido pagado
+    {
+      ...base, id: 10, mesaId: 2, cuentaId: 6, estado: 'pagado', creadoEn: hace(300), total: 190,
+      detalle: [
+        { productoId: 8, nombreProducto: 'Mole poblano', cantidad: 1, observaciones: '', precioUnitario: 190 },
+      ],
+    },
   ]
+  return pedidos.map((p) => ({ ...p, mesaNumero: p.mesaId }))
 }
 
 function crearCuentas(): CuentaGuardada[] {
@@ -137,6 +167,8 @@ function crearCuentas(): CuentaGuardada[] {
     { id: 2, mesaId: 5, estado: 'abierta', abiertaEn: hace(10), tipoPagoSolicitado: null },
     { id: 3, mesaId: 8, estado: 'por_pagar', abiertaEn: hace(90), tipoPagoSolicitado: 'fisico' },
     { id: 4, mesaId: 11, estado: 'abierta', abiertaEn: hace(6), tipoPagoSolicitado: null },
+    { id: 5, mesaId: 12, estado: 'abierta', abiertaEn: hace(45), tipoPagoSolicitado: null },
+    { id: 6, mesaId: 2, estado: 'cerrada', abiertaEn: hace(320), tipoPagoSolicitado: 'digital' },
   ]
 }
 
@@ -151,6 +183,6 @@ export const baseDatos: BaseDatosMock = {
   categorias: crearCategorias(),
   cuentas: crearCuentas(),
   pedidos: crearPedidos(),
-  siguienteIdPedido: 7,
-  siguienteIdCuenta: 5,
+  siguienteIdPedido: 11,
+  siguienteIdCuenta: 7,
 }

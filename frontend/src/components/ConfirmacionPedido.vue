@@ -68,7 +68,7 @@ onMounted(async () => {
       </li>
     </ul>
 
-    <div class="confirmacion__acciones">
+    <div class="fila-botones confirmacion__acciones">
       <RouterLink class="btn" :to="{ name: 'mesero-mesas' }">Volver al panel</RouterLink>
       <button type="button" class="btn btn--secundario" @click="$emit('nuevo')">Nuevo pedido en esta mesa</button>
       <RouterLink class="btn btn--secundario" :to="{ name: 'mesero-cuenta-mesa', params: { mesaId: pedido.mesaId } }">
@@ -145,16 +145,7 @@ onMounted(async () => {
 }
 
 .confirmacion__acciones {
-  display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  gap: var(--espacio-3);
   width: 100%;
-}
-
-.confirmacion__acciones .btn {
-  flex: 1 1 180px;
-  min-height: 56px;
-  text-decoration: none;
 }
 </style>

@@ -16,3 +16,20 @@ export function formatearCapacidad(personas: number): string {
 export function formatearPedidosActivos(cantidad: number): string {
   return `${cantidad} ${cantidad === 1 ? 'pedido activo' : 'pedidos activos'}`
 }
+
+/** "2026-10-14T18:30:00Z" → "18:30" (hora local, 24 h) */
+export function formatearHora(iso: string): string {
+  const fecha = new Date(iso)
+  if (Number.isNaN(fecha.getTime())) return ''
+  return fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+/** 1 → "1 producto", 3 → "3 productos" */
+export function formatearProductos(cantidad: number): string {
+  return `${cantidad} ${cantidad === 1 ? 'producto' : 'productos'}`
+}
+
+/** 1 → "1 pedido", 3 → "3 pedidos" */
+export function formatearPedidos(cantidad: number): string {
+  return `${cantidad} ${cantidad === 1 ? 'pedido' : 'pedidos'}`
+}

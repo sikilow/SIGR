@@ -139,7 +139,7 @@ function elegirCategoria(id: number) {
 
 .menu__cuadricula {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
   gap: var(--espacio-3);
   margin: 0;
   padding: 0;

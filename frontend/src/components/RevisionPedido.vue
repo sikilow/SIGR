@@ -8,6 +8,7 @@ import { ErrorServicio, servicios } from '../services'
 import type { DisponibilidadProducto, Pedido } from '../types'
 import { aLineasNuevoPedido, subtotalDe, type LineaCarrito } from '../utils/carrito'
 import { formatearMoneda } from '../utils/formato'
+import { crearClaveIdempotencia, esFalloReintentable } from '../utils/idempotencia'
 import DialogoModal from './DialogoModal.vue'
 
 export type ResultadoPedido = 'registrado' | 'enviado' | 'actualizado'
@@ -42,6 +43,11 @@ const errorGeneral = ref('')
 /** Pedido ya registrado cuyo envío a cocina falló (la única acción pendiente es reintentar el envío). */
 const registradoSinEnviar = ref<Pedido | null>(null)
 const errorEnvio = ref('')
+
+// Idempotency-Key (CAMBIO PROPUESTO EN F5): una clave por intención. Reintentar la MISMA intención
+// (mismo pedido, mismo envío) reutiliza la clave; abrir la revisión de nuevo es una intención nueva.
+const claveRegistro = crearClaveIdempotencia()
+const claveEnvio = crearClaveIdempotencia()
 
 const editando = computed(() => props.pedidoId !== null)
 const nombrePorProducto = computed(() => new Map(props.lineas.map((l) => [l.productoId, l.nombre])))
@@ -98,6 +104,8 @@ watch(
     errorGeneral.value = ''
     errorEnvio.value = ''
     registradoSinEnviar.value = null
+    claveRegistro.soltar()
+    claveEnvio.soltar()
     void verificarDisponibilidad()
   },
 )
@@ -117,8 +125,14 @@ async function registrar(enviarACocina: boolean) {
   enCurso.value = enviarACocina ? 'enviar' : 'registrar'
   let pedido: Pedido
   try {
-    pedido = await servicios.pedidos.crear({ mesaId: props.mesaId, detalle: aLineasNuevoPedido(props.lineas) })
+    const detalle = aLineasNuevoPedido(props.lineas)
+    // Mismos productos en la misma mesa = reintento del mismo registro (misma clave).
+    const clave = claveRegistro.para(`registrar|${props.mesaId}|${JSON.stringify(detalle)}`)
+    pedido = await servicios.pedidos.crear({ mesaId: props.mesaId, detalle }, clave)
+    claveRegistro.soltar()
   } catch (e) {
+    // Si el resultado es desconocido (red) se conserva la clave para el reintento; si no, se cierra la intención.
+    if (!esFalloReintentable(e)) claveRegistro.soltar()
     manejarError(e)
     enCurso.value = null
     return
@@ -138,11 +152,14 @@ async function enviar(pedido: Pedido, operacion: Operacion) {
   enCurso.value = operacion
   errorEnvio.value = ''
   try {
-    const enviado = await servicios.pedidos.enviar(pedido.id)
+    // "Reintentar envío" es la misma intención: reutiliza la clave y no repite el envío.
+    const enviado = await servicios.pedidos.enviar(pedido.id, claveEnvio.para(`enviar|${pedido.id}`))
+    claveEnvio.soltar()
     registradoSinEnviar.value = null
     enCurso.value = null
     emit('completado', enviado, 'enviado')
   } catch (e) {
+    if (!esFalloReintentable(e)) claveEnvio.soltar()
     registradoSinEnviar.value = pedido
     if (e instanceof ErrorServicio && e.codigo === 'producto_agotado' && e.faltantes.length > 0) {
       faltantes.value = e.faltantes
@@ -248,7 +265,7 @@ function modificar() {
       </p>
       <p class="revision__nota-total">El total final lo calcula el sistema al registrar.</p>
 
-      <div class="revision__botones">
+      <div class="fila-botones">
         <template v-if="registradoSinEnviar">
           <button type="button" class="btn btn--secundario" :aria-disabled="enCurso !== null ? 'true' : undefined" @click="dejarRegistrado">
             Dejar registrado
@@ -366,15 +383,4 @@ function modificar() {
   font-size: var(--texto-sm);
 }
 
-.revision__botones {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espacio-3);
-}
-
-.revision__botones .btn {
-  flex: 1;
-  min-height: 56px;
-  font-size: var(--texto-lg);
-}
 </style>

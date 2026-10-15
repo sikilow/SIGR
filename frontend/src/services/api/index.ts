@@ -11,6 +11,7 @@ import {
   aPedido,
   aUsuario,
   deActualizacionPedido,
+  deCancelacion,
   deItemsDisponibilidad,
   deNuevoPedido,
   type CategoriaMenuDto,
@@ -67,8 +68,8 @@ export function crearServiciosApi(): Servicios {
     },
 
     pedidos: {
-      async crear(pedido) {
-        const r = await solicitar<PedidoDto>('POST', '/pedidos', { cuerpo: deNuevoPedido(pedido) })
+      async crear(pedido, claveIdempotencia) {
+        const r = await solicitar<PedidoDto>('POST', '/pedidos', { cuerpo: deNuevoPedido(pedido), claveIdempotencia })
         return aPedido(r)
       },
 
@@ -88,12 +89,18 @@ export function crearServiciosApi(): Servicios {
         return aPedido(await solicitar<PedidoDto>('PATCH', `/pedidos/${id}`, { cuerpo }))
       },
 
-      async enviar(id) {
-        return aPedido(await solicitar<PedidoDto>('POST', `/pedidos/${id}/enviar`))
+      async enviar(id, claveIdempotencia) {
+        return aPedido(await solicitar<PedidoDto>('POST', `/pedidos/${id}/enviar`, { claveIdempotencia }))
       },
 
-      async cancelar(id, motivo) {
-        return aPedido(await solicitar<PedidoDto>('POST', `/pedidos/${id}/cancelar`, { cuerpo: { motivo } }))
+      async cancelar(id, motivo, claveIdempotencia) {
+        const cuerpo = deCancelacion(motivo)
+        return aPedido(await solicitar<PedidoDto>('POST', `/pedidos/${id}/cancelar`, { cuerpo, claveIdempotencia }))
+      },
+
+      // CAMBIO PROPUESTO EN F5
+      async entregar(id, claveIdempotencia) {
+        return aPedido(await solicitar<PedidoDto>('POST', `/pedidos/${id}/entregar`, { claveIdempotencia }))
       },
     },
 
@@ -108,8 +115,11 @@ export function crearServiciosApi(): Servicios {
         }
       },
 
-      async solicitarPago(cuentaId, tipo) {
-        return aCuenta(await solicitar<CuentaDto>('POST', `/cuentas/${cuentaId}/solicitar-pago`, { cuerpo: { tipo } }))
+      async solicitarPago(cuentaId, tipo, claveIdempotencia) {
+        const cuerpo = { tipo }
+        return aCuenta(
+          await solicitar<CuentaDto>('POST', `/cuentas/${cuentaId}/solicitar-pago`, { cuerpo, claveIdempotencia }),
+        )
       },
     },
   }

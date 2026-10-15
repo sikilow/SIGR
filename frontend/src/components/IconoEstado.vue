@@ -1,6 +1,21 @@
 <script setup lang="ts">
 // Ícono de estado (decorativo: siempre va junto a un texto visible, por eso se oculta a lectores).
-export type TonoEstado = 'libre' | 'ocupada' | 'reservada' | 'listo' | 'cuenta' | 'agotado' | 'carrito'
+export type TonoEstado =
+  | 'libre'
+  | 'ocupada'
+  | 'reservada'
+  | 'listo'
+  | 'cuenta'
+  | 'cuenta_abierta'
+  | 'agotado'
+  | 'carrito'
+  // Estados del pedido (`listo` se comparte con el aviso "Pedido listo" del panel)
+  | 'registrado'
+  | 'enviado'
+  | 'en_preparacion'
+  | 'entregado'
+  | 'cancelado'
+  | 'pagado'
 
 withDefaults(defineProps<{ tono: TonoEstado; tamano?: number }>(), { tamano: 20 })
 </script>
@@ -49,6 +64,40 @@ withDefaults(defineProps<{ tono: TonoEstado; tamano?: number }>(), { tamano: 20 
       <path d="M3 4h2.5l2 11h10l2-8H7" />
       <circle cx="9.5" cy="19" r="1.2" />
       <circle cx="16.5" cy="19" r="1.2" />
+    </template>
+    <!-- cuenta abierta: nota con renglones -->
+    <template v-else-if="tono === 'cuenta_abierta'">
+      <path d="M5 4h14v16H5z" />
+      <path d="M9 9h6M9 13h6M9 17h3" />
+    </template>
+    <!-- registrado: lápiz sobre hoja -->
+    <template v-else-if="tono === 'registrado'">
+      <path d="M5 3h9l5 5v13H5z" />
+      <path d="M14 3v5h5M9 13h6M9 17h4" />
+    </template>
+    <!-- enviado: avión de papel -->
+    <template v-else-if="tono === 'enviado'">
+      <path d="M21 3 10 14" />
+      <path d="M21 3l-7 18-4-7-7-4z" />
+    </template>
+    <!-- en preparación: llama -->
+    <template v-else-if="tono === 'en_preparacion'">
+      <path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2.2-4.6.2 1.4.9 2.2 1.8 2.6C11 8 11.2 5.5 12 3z" />
+    </template>
+    <!-- entregado: cloche (bandeja servida) -->
+    <template v-else-if="tono === 'entregado'">
+      <path d="M3 18h18M5 18a7 7 0 0 1 14 0" />
+      <path d="M12 8V6M10 6h4" />
+    </template>
+    <!-- cancelado: círculo tachado -->
+    <template v-else-if="tono === 'cancelado'">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m9 9 6 6M15 9l-6 6" />
+    </template>
+    <!-- pagado: billete -->
+    <template v-else-if="tono === 'pagado'">
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.5" />
     </template>
     <!-- pedido listo: campana -->
     <template v-else>

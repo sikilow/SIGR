@@ -1,5 +1,5 @@
 // PROVISIONAL: modelo de dominio pendiente de validar con el equipo de API.
-import type { EstadoCuentaActiva } from './cuenta'
+import type { EstadoCuentaActiva, TipoPago } from './cuenta'
 
 export type EstadoMesa = 'libre' | 'ocupada' | 'reservada'
 
@@ -17,6 +17,11 @@ export interface Mesa {
   pedidosActivos: number
   /** Total acumulado de la cuenta activa (sin pedidos cancelados), en MXN. */
   totalCuenta: number
+  /**
+   * CAMBIO PROPUESTO EN F6: tipo de pago ya solicitado (`null` si la cuenta aún no se solicitó o si la
+   * API no lo envía). El panel lo usa para mostrar "Cuenta solicitada · Pago digital".
+   */
+  tipoPagoSolicitado: TipoPago | null
   /** Cantidad de pedidos en estado `listo` (cocina terminó; falta servirlos). */
   pedidosListos: number
 }

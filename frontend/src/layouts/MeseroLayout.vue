@@ -1,28 +1,42 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import FranjaDemo from '../components/FranjaDemo.vue'
+import LogoMarca from '../components/LogoMarca.vue'
+import { usandoMock } from '../services'
+import { useAnunciosStore } from '../stores/anuncios'
 import { useMesasStore } from '../stores/mesas'
 import { useSesionStore } from '../stores/sesion'
 import { ETIQUETA_ROL } from '../types'
 
 const sesion = useSesionStore()
 const mesas = useMesasStore()
+const anuncios = useAnunciosStore()
 const router = useRouter()
 const route = useRoute()
 
 const contenido = ref<HTMLElement | null>(null)
 
 // Al cambiar de pantalla el foco pasa al contenido, para teclado y lectores de pantalla.
+// Se compara el registro de la ruta (no la ruta completa): abrir un pedido dentro de "Mis pedidos"
+// no es cambiar de pantalla y no debe quitarle el foco a la fila que se acaba de tocar.
 watch(
-  () => route.path,
+  () => route.matched.at(-1)?.path ?? route.path,
   async () => {
     await nextTick()
     contenido.value?.focus({ preventScroll: true })
   },
 )
 
+// El layout se monta DESPUÉS de cambiar de ruta (p. ej. al iniciar sesión), así que el watch de arriba no
+// se dispara la primera vez: se enfoca el contenido también al montarse.
+onMounted(() => contenido.value?.focus({ preventScroll: true }))
+
 // "Mesas" sigue activa en las pantallas de una mesa (/mesero/mesas/:id/...)
 const enMesas = computed(() => route.path.startsWith('/mesero/mesas'))
+
+// "Pedidos" sigue activa en sus pantallas hijas (/mesero/pedidos/:pedidoId)
+const enPedidos = computed(() => route.path.startsWith('/mesero/pedidos'))
 
 const rolVisible = computed(() => (sesion.rol ? ETIQUETA_ROL[sesion.rol] : ''))
 
@@ -33,10 +47,14 @@ async function salir() {
 </script>
 
 <template>
-  <div class="layout">
+  <div class="layout" :class="{ 'layout--demo': usandoMock }">
     <a class="saltar-contenido" href="#contenido-principal">Saltar al contenido</a>
+    <FranjaDemo />
     <header class="barra">
-      <h1 class="barra__restaurante">La Madalena</h1>
+      <div class="barra__marca">
+        <LogoMarca :tamano="40" invertido />
+        <h1 class="barra__restaurante">La Madalena</h1>
+      </div>
       <div class="barra__usuario">
         <p class="barra__datos">
           <strong>{{ sesion.usuario?.nombre }}</strong>
@@ -54,6 +72,16 @@ async function salir() {
     <!-- Región en vivo persistente: anuncia los avisos que dejan otras pantallas (p. ej. al ser redirigido) -->
     <p class="solo-lectores" role="status" aria-live="polite">{{ mesas.aviso }}</p>
 
+    <!-- Avisos breves ("Pedido #5 cancelado", "Pedido #8, mesa 5: listo"): visibles y anunciados, sin quitar el foco -->
+    <div class="avisos" role="status" aria-live="polite" aria-atomic="true">
+      <p v-if="anuncios.texto" class="avisos__texto">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m5 12 5 5 9-10" />
+        </svg>
+        {{ anuncios.texto }}
+      </p>
+    </div>
+
     <main id="contenido-principal" ref="contenido" class="contenido" tabindex="-1">
       <RouterView />
     </main>
@@ -66,7 +94,7 @@ async function salir() {
         </svg>
         <span>Mesas</span>
       </RouterLink>
-      <RouterLink class="nav__enlace" :to="{ name: 'mesero-pedidos' }">
+      <RouterLink class="nav__enlace" :class="{ 'router-link-active': enPedidos }" :to="{ name: 'mesero-pedidos' }">
         <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
           <rect x="5" y="4" width="14" height="17" rx="2" />
           <path d="M9 3h6v3H9zM9 11h6M9 15h6" />
@@ -80,19 +108,43 @@ async function salir() {
 <style scoped>
 .layout {
   display: grid;
-  grid-template-rows: var(--altura-barra-superior) 1fr var(--altura-nav-inferior);
+  /* minmax(0, 1fr): ningún hijo puede ensanchar la página (sin scroll horizontal con zoom alto) */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(var(--altura-barra-superior), auto) minmax(0, 1fr) var(--altura-nav-inferior);
   height: 100dvh;
   min-height: 0;
 }
 
 .barra {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--espacio-4);
-  padding: 0 var(--espacio-6);
+  gap: var(--espacio-1) var(--espacio-4);
+  padding: var(--espacio-1) var(--espacio-6);
   background: var(--color-primary);
   color: var(--color-on-primary);
+}
+
+/* Con la franja "Modo demo" arriba se agrega una fila automática */
+.layout--demo {
+  grid-template-rows: auto minmax(var(--altura-barra-superior), auto) minmax(0, 1fr) var(--altura-nav-inferior);
+}
+
+.barra__marca {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+}
+
+@media (max-width: 30em) {
+  .barra {
+    padding-inline: var(--espacio-3);
+  }
+
+  .barra__restaurante {
+    font-size: var(--texto-lg);
+  }
 }
 
 .barra__restaurante {
@@ -126,6 +178,51 @@ async function salir() {
   outline: none;
   overflow-y: auto;
   padding: var(--espacio-6);
+  /* Barras fijas al fondo de una pantalla no deben tapar el control enfocado con el teclado */
+  scroll-padding-bottom: 160px;
+}
+
+/* Aviso breve, arriba y centrado (no tapa las acciones del fondo); no recibe toques */
+.avisos {
+  position: fixed;
+  top: calc(var(--altura-barra-superior) + var(--espacio-3));
+  left: 50%;
+  z-index: 50;
+  width: max-content;
+  max-width: calc(100% - var(--espacio-8));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.avisos__texto {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin: 0;
+  padding: var(--espacio-3) var(--espacio-5);
+  border: 2px solid var(--color-entregado-texto);
+  border-radius: var(--radio);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgb(31 41 55 / 25%);
+  color: var(--color-entregado-texto);
+  font-weight: 700;
+}
+
+.avisos__texto svg {
+  flex: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .avisos__texto {
+    animation: entrar-aviso 200ms ease-out;
+  }
+}
+
+@keyframes entrar-aviso {
+  from {
+    transform: translateY(-12px);
+    opacity: 0;
+  }
 }
 
 .nav {

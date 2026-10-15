@@ -38,6 +38,8 @@ export interface MesaDto {
   pedidos_activos: number
   total_cuenta: number
   pedidos_listos: number
+  // CAMBIO PROPUESTO EN F6 (opcional: si la API no lo envía, el panel muestra solo "Cuenta solicitada")
+  tipo_pago_solicitado?: TipoPago | null
 }
 
 export interface ProductoDto {
@@ -71,12 +73,15 @@ export interface DetallePedidoDto {
 export interface PedidoDto {
   id: number
   mesa_id: number
+  // CAMBIO PROPUESTO EN F5 (ver docs/contrato-api-mesero.md)
+  mesa_numero: number
   cuenta_id: number
   mesero_id: number
   estado: EstadoPedido
   detalle: DetallePedidoDto[]
   total: number
   creado_en: string
+  // CAMBIO PROPUESTO EN F5: texto libre (5 a 200 caracteres), no un código
   motivo_cancelacion: MotivoCancelacion | null
 }
 
@@ -105,6 +110,7 @@ export function aMesa(dto: MesaDto): Mesa {
     estadoCuenta: dto.estado_cuenta,
     pedidosActivos: dto.pedidos_activos,
     totalCuenta: dto.total_cuenta,
+    tipoPagoSolicitado: dto.tipo_pago_solicitado ?? null,
     pedidosListos: dto.pedidos_listos,
   }
 }
@@ -135,6 +141,7 @@ export function aPedido(dto: PedidoDto): Pedido {
   return {
     id: dto.id,
     mesaId: dto.mesa_id,
+    mesaNumero: dto.mesa_numero,
     cuentaId: dto.cuenta_id,
     meseroId: dto.mesero_id,
     estado: dto.estado,
@@ -181,6 +188,11 @@ export function deNuevoPedido(pedido: NuevoPedido) {
 /** CAMBIO PROPUESTO EN F4: cuerpo de PATCH /pedidos/{id} (detalle completo). */
 export function deActualizacionPedido(detalle: LineaNuevoPedido[]) {
   return { detalle: deLineas(detalle) }
+}
+
+/** CAMBIO PROPUESTO EN F5: el motivo es texto libre (ya no un código). */
+export function deCancelacion(motivo: MotivoCancelacion) {
+  return { motivo: motivo.trim() }
 }
 
 export function deItemsDisponibilidad(items: ItemDisponibilidad[]) {

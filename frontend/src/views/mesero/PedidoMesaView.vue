@@ -28,6 +28,7 @@ import {
   type LineaCarrito,
 } from '../../utils/carrito'
 import { formatearMoneda } from '../../utils/formato'
+import { motivoPedidoBloqueado } from '../../utils/reglas'
 
 type Fase = 'cargando' | 'error' | 'editor' | 'confirmacion'
 
@@ -122,10 +123,8 @@ async function iniciar() {
 
     const encontrada = mesasStore.mesas.find((m) => m.id === id)
     if (!encontrada) return volverConAviso(`La mesa ${id} no existe.`)
-    if (encontrada.estado !== 'ocupada') return volverConAviso(`La mesa ${encontrada.numero} no está ocupada.`)
-    if (encontrada.estadoCuenta === 'por_pagar') {
-      return volverConAviso(`La cuenta de la mesa ${encontrada.numero} ya fue solicitada.`)
-    }
+    const bloqueo = motivoPedidoBloqueado(encontrada)
+    if (bloqueo) return volverConAviso(bloqueo)
 
     let pedido: Pedido | null = null
     if (idEditar !== null) {
@@ -279,12 +278,15 @@ onBeforeRouteUpdate((a, b) =>
     <!-- Región en vivo única: cambios del pedido y total -->
     <p class="solo-lectores" role="status" aria-live="polite">{{ anuncio }}</p>
 
-    <div v-if="fase === 'cargando'" class="estado tarjeta" role="status">
-      <p>Cargando mesa y menú…</p>
-    </div>
+    <template v-if="fase === 'cargando'">
+      <div class="esqueletos" aria-hidden="true">
+        <div v-for="n in 3" :key="n" class="esqueleto" />
+      </div>
+      <p class="solo-lectores" role="status">Cargando mesa y menú…</p>
+    </template>
 
-    <div v-else-if="fase === 'error'" class="estado tarjeta" role="alert">
-      <h2>No se pudo abrir el pedido</h2>
+    <div v-else-if="fase === 'error'" class="vacio" role="alert">
+      <h3>No se pudo abrir el pedido</h3>
       <p>{{ errorCarga }}</p>
       <div class="estado__acciones">
         <button type="button" class="btn" @click="iniciar">Reintentar</button>
@@ -302,7 +304,7 @@ onBeforeRouteUpdate((a, b) =>
 
     <div v-else-if="mesa" class="editor">
       <div class="editor__menu">
-        <RouterLink class="editor__volver" :to="{ name: 'mesero-mesas' }">
+        <RouterLink class="enlace-volver" :to="{ name: 'mesero-mesas' }">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6" /></svg>
           Panel de mesas
         </RouterLink>
@@ -332,7 +334,7 @@ onBeforeRouteUpdate((a, b) =>
           <strong class="numero">{{ formatearMoneda(total) }}</strong>
           <span class="barra-pedido__etiqueta">Total estimado</span>
         </p>
-        <button ref="botonVerPedido" type="button" class="btn" aria-haspopup="dialog" @click="pedidoAbierto = true">
+        <button ref="botonVerPedido" type="button" class="btn btn--grande" aria-haspopup="dialog" @click="pedidoAbierto = true">
           Ver pedido
         </button>
       </div>
@@ -360,7 +362,7 @@ onBeforeRouteUpdate((a, b) =>
           @sugerencia="usarSugerencia"
           @revisar="abrirRevision"
         />
-        <button type="button" class="btn btn--secundario pedido-dialogo__cerrar" @click="dialogoPedido?.cerrar()">
+        <button type="button" class="btn btn--secundario btn--grande pedido-dialogo__cerrar" @click="dialogoPedido?.cerrar()">
           Seguir agregando
         </button>
       </div>
@@ -387,7 +389,7 @@ onBeforeRouteUpdate((a, b) =>
         <p>
           {{ editando ? '¿Salir sin guardar los cambios?' : '¿Salir y conservar el borrador?' }}
         </p>
-        <div class="salida__botones">
+        <div class="fila-botones">
           <button type="button" class="btn" autofocus @click="responderSalida(false)">Seguir editando</button>
           <button type="button" class="btn btn--secundario" @click="responderSalida(true)">
             {{ editando ? 'Salir sin guardar' : 'Salir y conservar borrador' }}
@@ -406,16 +408,10 @@ onBeforeRouteUpdate((a, b) =>
   min-height: 0;
 }
 
-.estado {
+.esqueletos {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: var(--espacio-3);
-  text-align: center;
-}
-
-.estado p {
-  margin: 0;
 }
 
 .estado__acciones {
@@ -423,10 +419,6 @@ onBeforeRouteUpdate((a, b) =>
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--espacio-3);
-}
-
-.estado__acciones .btn {
-  text-decoration: none;
 }
 
 .editor {
@@ -446,22 +438,11 @@ onBeforeRouteUpdate((a, b) =>
   padding: var(--espacio-1);
 }
 
-.editor__volver {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--espacio-1);
-  align-self: flex-start;
-  min-height: var(--tactil-min);
-  padding-right: var(--espacio-3);
-  color: var(--color-primary-dark);
-  font-weight: 700;
-  text-decoration: none;
-}
-
 .editor__pedido {
   min-height: 0;
   padding: var(--espacio-4);
-  overflow: hidden;
+  /* Con texto grande el panel puede no caber: que se desplace y no recorte el botón "Revisar pedido" */
+  overflow-y: auto;
 }
 
 /* Barra inferior (tablet vertical) */
@@ -496,11 +477,9 @@ onBeforeRouteUpdate((a, b) =>
 
 .barra-pedido .btn {
   min-width: 160px;
-  min-height: 56px;
-  font-size: var(--texto-lg);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 53.75em), (max-height: 37.5em) {
   .editor {
     display: flex;
     flex-direction: column;
@@ -525,7 +504,6 @@ onBeforeRouteUpdate((a, b) =>
 
 .pedido-dialogo__cerrar {
   flex: none;
-  min-height: 56px;
 }
 
 .salida {
@@ -536,16 +514,5 @@ onBeforeRouteUpdate((a, b) =>
 
 .salida p {
   margin: 0;
-}
-
-.salida__botones {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--espacio-3);
-}
-
-.salida__botones .btn {
-  flex: 1 1 200px;
-  min-height: 56px;
 }
 </style>
