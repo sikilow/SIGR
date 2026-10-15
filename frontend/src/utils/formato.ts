@@ -16,3 +16,8 @@ export function formatearCapacidad(personas: number): string {
 export function formatearPedidosActivos(cantidad: number): string {
   return `${cantidad} ${cantidad === 1 ? 'pedido activo' : 'pedidos activos'}`
 }
+
+/** "2026-10-14T18:05:00.000Z" → "12:05" (hora local, formato de México). */
+export function formatearHora(iso: string): string {
+  return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+}

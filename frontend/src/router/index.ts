@@ -40,8 +40,7 @@ export const router = createRouter({
         {
           path: String.raw`mesas/:mesaId(\d+)/cuenta`,
           name: 'mesero-cuenta-mesa',
-          component: () => import('../views/mesero/PendienteView.vue'),
-          meta: { titulo: 'Cuenta de mesa' },
+          component: () => import('../views/mesero/CuentaMesaView.vue'),
         },
         {
           path: 'pedidos',

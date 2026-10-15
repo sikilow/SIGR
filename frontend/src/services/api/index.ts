@@ -1,8 +1,9 @@
-// Implementación de los servicios contra la API real (endpoints propuestos en
-// docs/contrato-api-mesero.md). Solo se usa con VITE_USE_MOCK=false.
+// Implementación de los servicios contra la API real (backend/ de este repo, rutas /api/...).
+// Solo se usa con VITE_USE_MOCK=false.
 import { ErrorServicio } from '../errores'
 import type { Servicios } from '../interfaces'
 import { solicitar } from './cliente'
+import { guardarToken, leerToken, limpiarToken } from './token'
 import {
   aCategoriaMenu,
   aCuenta,
@@ -25,15 +26,19 @@ export function crearServiciosApi(): Servicios {
   return {
     auth: {
       async iniciarSesion(credenciales) {
-        const r = await solicitar<{ usuario: UsuarioDto }>('POST', '/auth/login', { cuerpo: credenciales })
+        const r = await solicitar<{ token: string; usuario: UsuarioDto }>('POST', '/auth/login', { cuerpo: credenciales })
+        guardarToken(r.token)
         return aUsuario(r.usuario)
       },
 
       async cerrarSesion() {
-        await solicitar<void>('POST', '/auth/logout')
+        // El token es un JWT sin estado en el servidor: cerrar sesión es olvidarlo aquí.
+        limpiarToken()
       },
 
       async obtenerSesion() {
+        // Sin token no hay nada que recuperar (y nos ahorramos una petición).
+        if (!leerToken()) return null
         try {
           const r = await solicitar<{ usuario: UsuarioDto }>('GET', '/auth/me')
           return aUsuario(r.usuario)

@@ -15,9 +15,11 @@ const cargando = ref(false)
 const verContrasena = ref(false)
 const error = ref('')
 
-const aviso = computed(() =>
-  route.query.motivo === 'rol' ? 'Tu rol no tiene acceso a esa pantalla. Inicia sesión con otro usuario.' : '',
-)
+const aviso = computed(() => {
+  if (route.query.motivo === 'rol') return 'Tu rol no tiene acceso a esa pantalla. Inicia sesión con otro usuario.'
+  if (route.query.motivo === 'expirada') return 'Tu sesión venció. Inicia sesión de nuevo.'
+  return ''
+})
 
 async function entrar() {
   error.value = ''
