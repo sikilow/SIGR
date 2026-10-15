@@ -26,6 +26,29 @@
   --color-reservada-texto: #1e40af;
   --color-listo-texto: #92400e;
 
+  /* Controles deshabilitados (relleno neutro y texto oscuro legible) */
+  --color-deshabilitado-borde: #c9bbaa;
+  --color-deshabilitado-fondo: #ece3d9;
+  --color-deshabilitado-texto: #4b5563;
+  --color-listo-fondo: #fffbeb;
+
+  /* Acción destructiva (cancelar): relleno, variante oscura para texto/hover (AA sobre blanco) */
+  --color-peligro: #b91c1c;
+  --color-peligro-texto: #7f1d1d;
+  --color-peligro-fondo: #fef2f2;
+
+  /* Estados del pedido: color para ícono/borde y variante oscura para texto (AA sobre blanco) */
+  --color-registrado: #6b7280;
+  --color-registrado-texto: #374151;
+  --color-enviado: #2563eb;
+  --color-enviado-texto: #1e40af;
+  --color-preparacion: #7c3aed;
+  --color-preparacion-texto: #5b21b6;
+  --color-entregado: #16a34a;
+  --color-entregado-texto: #166534;
+  --color-pagado: #0f766e;
+  --color-pagado-texto: #115e59;
+
   /* Forma */
   --radio: 16px;
   --radio-sm: 8px;

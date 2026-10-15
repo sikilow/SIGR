@@ -7,8 +7,6 @@ declare module 'vue-router' {
   interface RouteMeta {
     /** Si se define, la ruta exige sesión y uno de estos roles. */
     roles?: Rol[]
-    /** Título de las pantallas placeholder. */
-    titulo?: string
   }
 }
 
@@ -43,7 +41,8 @@ export const router = createRouter({
           component: () => import('../views/mesero/CuentaMesaView.vue'),
         },
         {
-          path: 'pedidos',
+          // Una sola ruta para la lista y el detalle: /mesero/pedidos y /mesero/pedidos/:pedidoId
+          path: String.raw`pedidos/:pedidoId(\d+)?`,
           name: 'mesero-pedidos',
           component: () => import('../views/mesero/PedidosView.vue'),
         },

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Tarjeta de producto del menú. Tocarla agrega 1 unidad. El menú no maneja cantidades en
-// existencia: el producto está "Disponible" o "Agotado". Si está agotado la tarjeta queda
-// aria-disabled (sigue enfocable) y explica el motivo con texto.
+// existencia: un producto disponible no lleva insignia y uno agotado muestra "Agotado". Si está
+// agotado la tarjeta queda aria-disabled (sigue enfocable) y explica el motivo con texto.
 import { computed } from 'vue'
 import type { Producto } from '../types'
 import { formatearMoneda } from '../utils/formato'
@@ -35,9 +35,8 @@ function alTocar() {
     <span class="producto__nombre">{{ producto.nombre }}</span>
     <span class="producto__precio numero">{{ formatearMoneda(producto.precio) }}</span>
 
-    <span class="producto__etiquetas">
+    <span v-if="agotado || enPedido > 0" class="producto__etiquetas">
       <InsigniaEstado v-if="agotado" tono="agotado" texto="Agotado" />
-      <InsigniaEstado v-else tono="libre" texto="Disponible" />
       <InsigniaEstado v-if="enPedido > 0" tono="carrito" :texto="`En pedido: ${enPedido}`" />
     </span>
 

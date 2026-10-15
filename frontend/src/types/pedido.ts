@@ -21,6 +21,8 @@ export interface DetallePedido {
 export interface Pedido {
   id: number
   mesaId: number
+  /** CAMBIO PROPUESTO EN F5: número visible de la mesa (puede diferir del id), para listar sin pedir las mesas. */
+  mesaNumero: number
   cuentaId: number
   meseroId: number
   estado: EstadoPedido
@@ -29,6 +31,7 @@ export interface Pedido {
   total: number
   /** Fecha ISO 8601. */
   creadoEn: string
+  /** Texto libre (5 a 200 caracteres) escrito al cancelar; `null` si el pedido no está cancelado. */
   motivoCancelacion: MotivoCancelacion | null
 }
 
@@ -50,9 +53,12 @@ export interface FiltroPedidos {
   estado?: EstadoPedido
 }
 
-/** Códigos de motivo al cancelar un pedido. */
-export type MotivoCancelacion =
-  | 'error_captura'
-  | 'cliente_desiste'
-  | 'producto_agotado'
-  | 'otro'
+/**
+ * Motivo al cancelar un pedido.
+ * CAMBIO PROPUESTO EN F5: antes era un código fijo (`error_captura`, `cliente_desiste`…); ahora es
+ * texto libre obligatorio de 5 a 200 caracteres (los atajos de la interfaz solo rellenan el texto).
+ */
+export type MotivoCancelacion = string
+
+export const MOTIVO_MIN = 5
+export const MOTIVO_MAX = 200

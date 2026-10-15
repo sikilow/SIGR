@@ -1,11 +1,11 @@
-import type { DetallePedido, DisponibilidadProducto, LineaNuevoPedido, Pedido } from '../../types'
+import { MOTIVO_MAX, MOTIVO_MIN, type DetallePedido, type DisponibilidadProducto, type LineaNuevoPedido, type Pedido } from '../../types'
 import { cancelacionRequiereGerente, meseroPuedeCancelar } from '../../utils/reglas'
 import { ErrorServicio } from '../errores'
 import type { PedidosService } from '../interfaces'
 import { usuarioActual } from './authMock'
 import { baseDatos } from './baseDatos'
 import { buscarProducto } from './menuMock'
-import { conRetraso, consumirFalloSimulado } from './utiles'
+import { conRetraso, conRetrasoIdempotente, consumirFalloSimulado } from './utiles'
 
 function buscarPedido(id: number): Pedido {
   const pedido = baseDatos.pedidos.find((p) => p.id === id)
@@ -56,8 +56,8 @@ function construirDetalle(lineas: LineaNuevoPedido[]): DetallePedido[] {
 
 export function crearPedidosMock(): PedidosService {
   return {
-    crear(nuevo) {
-      return conRetraso(() => {
+    crear(nuevo, claveIdempotencia) {
+      return conRetrasoIdempotente(claveIdempotencia, () => {
         const mesa = baseDatos.mesas.find((m) => m.id === nuevo.mesaId)
         if (!mesa) throw new ErrorServicio('no_encontrado', `La mesa ${nuevo.mesaId} no existe.`, 404)
         // Regla: solo se registran pedidos en mesas OCUPADAS (la hostess las ocupa).
@@ -86,6 +86,7 @@ export function crearPedidosMock(): PedidosService {
         const pedido: Pedido = {
           id: baseDatos.siguienteIdPedido++,
           mesaId: mesa.id,
+          mesaNumero: mesa.numero,
           cuentaId: cuenta.id,
           meseroId: usuarioActual()?.id ?? 1,
           estado: 'registrado',
@@ -128,10 +129,10 @@ export function crearPedidosMock(): PedidosService {
       })
     },
 
-    enviar(id) {
-      return conRetraso(() => {
+    enviar(id, claveIdempotencia) {
+      return conRetrasoIdempotente(claveIdempotencia, () => {
         const pedido = buscarPedido(id)
-        // Fallo simulado (ver utiles.ts) para probar "Reintentar envío".
+        // Fallo simulado (ver utiles.ts) para probar "Reintentar envío": falla ANTES de aplicar la acción.
         if (pedido.estado === 'registrado' && consumirFalloSimulado('sigr.mock.fallarEnvio')) {
           throw new ErrorServicio('desconocido', 'Fallo simulado al enviar a cocina.', 500)
         }
@@ -146,17 +147,38 @@ export function crearPedidosMock(): PedidosService {
       })
     },
 
-    cancelar(id, motivo) {
-      return conRetraso(() => {
+    cancelar(id, motivo, claveIdempotencia) {
+      return conRetrasoIdempotente(claveIdempotencia, () => {
         const pedido = buscarPedido(id)
+        const texto = motivo.trim()
+        if (texto.length < MOTIVO_MIN || texto.length > MOTIVO_MAX) {
+          throw new ErrorServicio('estado_invalido', `El motivo debe tener entre ${MOTIVO_MIN} y ${MOTIVO_MAX} caracteres.`, 422)
+        }
         if (cancelacionRequiereGerente(pedido.estado)) {
           throw new ErrorServicio('requiere_gerente', 'El pedido está en preparación: solo el gerente puede cancelarlo.', 403)
         }
         if (!meseroPuedeCancelar(pedido.estado)) {
           throw new ErrorServicio('estado_invalido', 'Este pedido ya no se puede cancelar.', 409)
         }
+        // SUPOSICIÓN (pregunta abierta c): con la cuenta ya solicitada no se cancelan pedidos.
+        const cuenta = baseDatos.cuentas.find((c) => c.id === pedido.cuentaId)
+        if (cuenta?.estado === 'por_pagar') {
+          throw new ErrorServicio('estado_invalido', 'La cuenta ya solicitó el pago: no se pueden cancelar pedidos.', 409)
+        }
         pedido.estado = 'cancelado'
-        pedido.motivoCancelacion = motivo
+        pedido.motivoCancelacion = texto
+        return pedido
+      })
+    },
+
+    // CAMBIO PROPUESTO EN F5
+    entregar(id, claveIdempotencia) {
+      return conRetrasoIdempotente(claveIdempotencia, () => {
+        const pedido = buscarPedido(id)
+        if (pedido.estado !== 'listo') {
+          throw new ErrorServicio('estado_invalido', 'Solo se puede entregar un pedido que está listo.', 409)
+        }
+        pedido.estado = 'entregado'
         return pedido
       })
     },

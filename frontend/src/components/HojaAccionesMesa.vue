@@ -40,7 +40,7 @@ function bloquear(evento: Event) {
         <div class="hoja__acciones">
           <RouterLink
             v-if="!cuentaSolicitada"
-            class="btn hoja__boton"
+            class="btn btn--grande hoja__boton"
             :to="{ name: 'mesero-pedido-mesa', params: { mesaId: mesa.id } }"
             autofocus
           >
@@ -49,7 +49,7 @@ function bloquear(evento: Event) {
           <template v-else>
             <button
               type="button"
-              class="btn hoja__boton"
+              class="btn btn--grande hoja__boton"
               aria-disabled="true"
               aria-describedby="hoja-aviso-cuenta"
               autofocus
@@ -63,13 +63,13 @@ function bloquear(evento: Event) {
           </template>
 
           <RouterLink
-            class="btn btn--secundario hoja__boton"
+            class="btn btn--secundario btn--grande hoja__boton"
             :to="{ name: 'mesero-cuenta-mesa', params: { mesaId: mesa.id } }"
           >
             Ver cuenta
           </RouterLink>
           <RouterLink
-            class="btn btn--secundario hoja__boton"
+            class="btn btn--secundario btn--grande hoja__boton"
             :to="{ name: 'mesero-pedidos', query: { mesa: mesa.id } }"
           >
             Pedidos de la mesa
@@ -82,7 +82,7 @@ function bloquear(evento: Event) {
 
       <button
         type="button"
-        class="btn btn--secundario hoja__boton"
+        class="btn btn--secundario btn--grande hoja__boton"
         :autofocus="!ocupada"
         @click="dialogo?.cerrar()"
       >
@@ -118,10 +118,7 @@ function bloquear(evento: Event) {
 }
 
 .hoja__boton {
-  min-height: 56px;
   width: 100%;
-  font-size: var(--texto-lg);
-  text-decoration: none;
 }
 
 .hoja__aviso {

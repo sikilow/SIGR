@@ -17,7 +17,19 @@ export function formatearPedidosActivos(cantidad: number): string {
   return `${cantidad} ${cantidad === 1 ? 'pedido activo' : 'pedidos activos'}`
 }
 
-/** "2026-10-14T18:05:00.000Z" → "12:05" (hora local, formato de México). */
+/** "2026-10-14T18:30:00Z" → "18:30" (hora local, 24 h) */
 export function formatearHora(iso: string): string {
-  return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+  const fecha = new Date(iso)
+  if (Number.isNaN(fecha.getTime())) return ''
+  return fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+/** 1 → "1 producto", 3 → "3 productos" */
+export function formatearProductos(cantidad: number): string {
+  return `${cantidad} ${cantidad === 1 ? 'producto' : 'productos'}`
+}
+
+/** 1 → "1 pedido", 3 → "3 pedidos" */
+export function formatearPedidos(cantidad: number): string {
+  return `${cantidad} ${cantidad === 1 ? 'pedido' : 'pedidos'}`
 }

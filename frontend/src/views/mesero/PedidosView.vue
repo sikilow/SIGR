@@ -1,234 +1,318 @@
 <script setup lang="ts">
-// Mis pedidos (/mesero/pedidos[?mesa=:mesaId]): consulta los pedidos del mesero y permite
-// editar, enviar a cocina o cancelar. "Eliminar" un pedido = cancelarlo con un motivo: el
-// registro se conserva (historial y cuenta), por eso no se borra de la base de datos.
-import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import DialogoModal from '../../components/DialogoModal.vue'
-import type { TonoEstado } from '../../components/IconoEstado.vue'
+// Mis pedidos (/mesero/pedidos y /mesero/pedidos/:pedidoId). Con 1024 px o más, lista a la izquierda y
+// detalle a la derecha; con menos, el detalle es una pantalla aparte ("Volver a pedidos").
+// Los filtros viven en la URL: ?estado=registrado|enviado|en_preparacion|listo|entregado|cancelado
+// (sin valor = "Activos") y ?mesa=:mesaId.
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import IndicadorActualizacion from '../../components/IndicadorActualizacion.vue'
 import InsigniaEstado from '../../components/InsigniaEstado.vue'
+import PedidoDetalle from '../../components/PedidoDetalle.vue'
+import { useCompacto } from '../../composables/useCompacto'
 import { usePolling } from '../../composables/usePolling'
-import { ErrorServicio, servicios } from '../../services'
+import { useAnunciosStore } from '../../stores/anuncios'
 import { useMesasStore } from '../../stores/mesas'
-import {
-  ETIQUETA_ESTADO_PEDIDO,
-  ETIQUETA_MOTIVO,
-  type EstadoPedido,
-  type MotivoCancelacion,
-  type Pedido,
-} from '../../types'
-import { formatearHora, formatearMoneda } from '../../utils/formato'
-import { esPedidoActivo, meseroPuedeCancelar, mensajeCancelacionBloqueada } from '../../utils/reglas'
+import { usePedidosStore } from '../../stores/pedidos'
+import { ETIQUETA_ESTADO_PEDIDO } from '../../types'
+import { formatearHora, formatearMoneda, formatearProductos } from '../../utils/formato'
+import { FILTROS_LISTA_PEDIDOS, filtroListaDesdeConsulta, type FiltroListaPedidos } from '../../utils/reglas'
 
 const route = useRoute()
-const mesasStore = useMesasStore()
+const router = useRouter()
+const store = usePedidosStore()
+const mesas = useMesasStore()
+const anuncios = useAnunciosStore()
+// Lista + detalle solo con 64em (1024 px) o más; con menos, o con el texto muy agrandado, el detalle es otra pantalla
+const compacto = useCompacto('(max-width: 63.9375em), (max-height: 37.5em)')
 
-type Filtro = 'activos' | 'todos'
-const filtro = ref<Filtro>('activos')
-const pedidos = ref<Pedido[]>([])
-const cargando = ref(true)
-const error = ref('')
-const anuncio = ref('')
+const ETIQUETA_FILTRO: Record<FiltroListaPedidos, string> = {
+  activos: 'Activos',
+  registrado: 'Registrado',
+  enviado: 'Enviado',
+  en_preparacion: 'En preparación',
+  listo: 'Listo',
+  entregado: 'Entregado',
+  cancelado: 'Cancelado',
+}
 
-/** ?mesa=5 limita la lista a una mesa (viene de "Pedidos de la mesa"). */
-const mesaFiltroId = computed<number | null>(() => {
-  const valor = route.query.mesa
+const MENSAJE_VACIO: Record<FiltroListaPedidos, string> = {
+  activos: 'No hay pedidos activos',
+  registrado: 'No hay pedidos registrados',
+  enviado: 'No hay pedidos enviados',
+  en_preparacion: 'No hay pedidos en preparación',
+  listo: 'No hay pedidos listos',
+  entregado: 'No hay pedidos entregados',
+  cancelado: 'No hay pedidos cancelados',
+}
+
+/** Entero positivo o `null`. */
+function entero(valor: unknown): number | null {
   return typeof valor === 'string' && /^[1-9]\d*$/.test(valor) ? Number(valor) : null
-})
-
-const numeroMesa = (mesaId: number): number => mesasStore.mesas.find((m) => m.id === mesaId)?.numero ?? mesaId
-
-const visibles = computed(() => (filtro.value === 'activos' ? pedidos.value.filter((p) => esPedidoActivo(p.estado)) : pedidos.value))
-
-// Tono (ícono + color) de la insignia; el texto siempre acompaña al color.
-const TONO: Record<EstadoPedido, TonoEstado> = {
-  registrado: 'carrito',
-  enviado: 'cuenta',
-  en_preparacion: 'reservada',
-  listo: 'listo',
-  entregado: 'libre',
-  cancelado: 'agotado',
-  pagado: 'libre',
 }
 
-// ---------- Carga (con actualización automática) ----------
-async function cargar() {
-  try {
-    pedidos.value = await servicios.pedidos.listar(mesaFiltroId.value !== null ? { mesaId: mesaFiltroId.value } : {})
-    error.value = ''
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'No se pudieron cargar los pedidos.'
-  } finally {
-    cargando.value = false
+const pedidoId = computed(() => entero(route.params.pedidoId))
+const mesaFiltroId = computed(() => entero(route.query.mesa))
+
+// ---------- Filtros sincronizados con la URL ----------
+watch(
+  () => route.query.estado,
+  (valor) => {
+    store.filtro = filtroListaDesdeConsulta(valor)
+  },
+  { immediate: true },
+)
+
+const listo = ref(false) // `true` una vez montada la pantalla (antes no hay nada que recargar)
+
+watch(
+  mesaFiltroId,
+  (id) => {
+    const cambio = store.mesaId !== id
+    store.filtrarPorMesa(id)
+    if (cambio && listo.value) void store.cargar()
+  },
+  { immediate: true },
+)
+
+watch(pedidoId, (id) => store.seleccionar(id), { immediate: true })
+
+function consultaCon(cambios: Record<string, string | undefined>) {
+  const consulta = { ...route.query }
+  for (const [clave, valor] of Object.entries(cambios)) {
+    if (valor === undefined) delete consulta[clave]
+    else consulta[clave] = valor
+  }
+  return consulta
+}
+
+function cambiarFiltro(filtro: FiltroListaPedidos) {
+  void router.replace({ query: consultaCon({ estado: filtro === 'activos' ? undefined : filtro }) })
+}
+
+function quitarFiltroMesa() {
+  void router.replace({ query: consultaCon({ mesa: undefined }) })
+}
+
+const numeroMesaFiltro = computed(() => {
+  if (mesaFiltroId.value === null) return null
+  return (
+    mesas.mesas.find((m) => m.id === mesaFiltroId.value)?.numero ??
+    store.pedidos.find((p) => p.mesaId === mesaFiltroId.value)?.mesaNumero ??
+    mesaFiltroId.value
+  )
+})
+
+// ---------- Actualización automática ----------
+const polling = usePolling(() => Promise.all([store.cargar(), mesas.cargar()]))
+
+// ---------- Aviso y resaltado de pedidos que pasan a "listo" ----------
+const resaltados = ref<number[]>([])
+let temporizadorResaltado: ReturnType<typeof setTimeout> | undefined
+
+watch(
+  () => store.nuevosListos,
+  (ids) => {
+    if (ids.length === 0) return
+    resaltados.value = [...ids]
+    clearTimeout(temporizadorResaltado)
+    temporizadorResaltado = setTimeout(() => (resaltados.value = []), 6000)
+  },
+)
+
+watch(
+  () => store.anuncio,
+  (texto) => {
+    if (texto) void anuncios.anunciar(texto)
+  },
+)
+
+// ---------- Detalle ----------
+const detalle = ref<InstanceType<typeof PedidoDetalle> | null>(null)
+const tituloLista = ref<HTMLElement | null>(null)
+
+const cuentaPorPagar = computed(() => {
+  const mesaId = store.seleccionado?.mesaId
+  return mesaId !== undefined && mesas.mesas.find((m) => m.id === mesaId)?.estadoCuenta === 'por_pagar'
+})
+
+const mostrarLista = computed(() => !compacto.value || pedidoId.value === null)
+const mostrarDetalle = computed(() => !compacto.value || pedidoId.value !== null)
+
+// En pantalla compacta, abrir un pedido es cambiar de pantalla: el foco pasa al detalle; al volver, a su fila.
+let enfocarDetalle = false
+
+function intentarEnfocarDetalle() {
+  if (enfocarDetalle && detalle.value) {
+    detalle.value.enfocar()
+    enfocarDetalle = false
   }
 }
 
-const { iniciar, ejecutarAhora } = usePolling(cargar)
+watch(pedidoId, async (nuevo, anterior) => {
+  if (!compacto.value) return
+  await nextTick()
+  if (nuevo !== null) {
+    enfocarDetalle = true
+    intentarEnfocarDetalle()
+  } else if (anterior !== null) {
+    const fila = document.querySelector<HTMLElement>(`[data-pedido-id="${anterior}"]`)
+    ;(fila ?? tituloLista.value)?.focus({ preventScroll: false })
+  }
+})
+watch(detalle, intentarEnfocarDetalle)
+
+const enlaceVolver = computed(() => ({ name: 'mesero-pedidos' as const, query: route.query }))
+
+function enlaceAPedido(id: number) {
+  return { name: 'mesero-pedidos' as const, params: { pedidoId: id }, query: route.query }
+}
+
 onMounted(() => {
-  void mesasStore.cargar() // para mostrar el número de mesa
-  iniciar()
+  listo.value = true
+  store.reiniciarSeguimiento()
+  polling.iniciar()
 })
-
-// ---------- Enviar a cocina ----------
-const enviandoId = ref<number | null>(null)
-const errorAccion = ref('')
-
-async function enviar(pedido: Pedido) {
-  errorAccion.value = ''
-  enviandoId.value = pedido.id
-  try {
-    await servicios.pedidos.enviar(pedido.id)
-    anuncio.value = `Pedido ${pedido.id} enviado a cocina.`
-    await ejecutarAhora()
-    void mesasStore.cargar()
-  } catch (e) {
-    errorAccion.value =
-      e instanceof ErrorServicio && e.codigo === 'producto_agotado'
-        ? 'No se pudo enviar: hay productos agotados. Edita el pedido para quitarlos.'
-        : e instanceof Error
-          ? e.message
-          : 'No se pudo enviar el pedido.'
-  } finally {
-    enviandoId.value = null
-  }
-}
-
-// ---------- Cancelar ----------
-const MOTIVOS = Object.keys(ETIQUETA_MOTIVO) as MotivoCancelacion[]
-const pedidoACancelar = ref<Pedido | null>(null)
-const motivo = ref<MotivoCancelacion | null>(null)
-const cancelando = ref(false)
-const errorCancelar = ref('')
-
-function abrirCancelar(pedido: Pedido) {
-  pedidoACancelar.value = pedido
-  motivo.value = null
-  errorCancelar.value = ''
-}
-
-function cerrarCancelar() {
-  if (!cancelando.value) pedidoACancelar.value = null
-}
-
-async function confirmarCancelar() {
-  const pedido = pedidoACancelar.value
-  if (!pedido || motivo.value === null || cancelando.value) return
-  cancelando.value = true
-  errorCancelar.value = ''
-  try {
-    await servicios.pedidos.cancelar(pedido.id, motivo.value)
-    pedidoACancelar.value = null
-    anuncio.value = `Pedido ${pedido.id} cancelado.`
-    await ejecutarAhora()
-    void mesasStore.cargar()
-  } catch (e) {
-    errorCancelar.value = e instanceof Error ? e.message : 'No se pudo cancelar el pedido.'
-  } finally {
-    cancelando.value = false
-  }
-}
-
-/** Texto junto a la acción de cancelar cuando no está disponible (no aplica a cancelado/pagado). */
-function avisoCancelacion(estado: EstadoPedido): string | null {
-  return estado === 'cancelado' || estado === 'pagado' ? null : mensajeCancelacionBloqueada(estado)
-}
 </script>
 
 <template>
-  <section class="pedidos" aria-labelledby="pedidos-titulo">
-    <header class="pedidos__cabecera">
-      <h2 id="pedidos-titulo">
-        {{ mesaFiltroId !== null ? `Pedidos de la mesa ${numeroMesa(mesaFiltroId)}` : 'Mis pedidos' }}
-      </h2>
-      <RouterLink v-if="mesaFiltroId !== null" class="btn btn--secundario" :to="{ name: 'mesero-pedidos' }">
-        Ver todos mis pedidos
-      </RouterLink>
-    </header>
+  <section class="pedidos" :class="{ 'pedidos--dos-paneles': !compacto }" :aria-busy="store.cargando">
+    <!-- Encabezado y filtros: se ocultan en la pantalla de detalle de las tablets verticales -->
+    <template v-if="mostrarLista">
+      <header class="pedidos__encabezado">
+        <h2 ref="tituloLista" tabindex="-1">Mis pedidos</h2>
+        <IndicadorActualizacion :ultima="store.ultimaActualizacion" :actualizando="store.actualizando" @actualizar="polling.ejecutarAhora()" />
+      </header>
 
-    <div class="pedidos__filtros" role="group" aria-label="Filtrar pedidos">
-      <button type="button" class="chip" :class="{ 'chip--activo': filtro === 'activos' }" :aria-pressed="filtro === 'activos'" @click="filtro = 'activos'">
-        Activos
-      </button>
-      <button type="button" class="chip" :class="{ 'chip--activo': filtro === 'todos' }" :aria-pressed="filtro === 'todos'" @click="filtro = 'todos'">
-        Todos
-      </button>
+      <div class="filtros" role="group" aria-label="Filtrar pedidos">
+        <button
+          v-if="numeroMesaFiltro !== null"
+          type="button"
+          class="chip chip--activo filtros__mesa"
+          :aria-label="`Quitar filtro de la mesa ${numeroMesaFiltro}`"
+          @click="quitarFiltroMesa"
+        >
+          Mesa {{ numeroMesaFiltro }}
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+        <button
+          v-for="f in FILTROS_LISTA_PEDIDOS"
+          :key="f"
+          type="button"
+          class="chip"
+          :class="{ 'chip--activo': store.filtro === f }"
+          :aria-pressed="store.filtro === f"
+          @click="cambiarFiltro(f)"
+        >
+          <svg v-if="store.filtro === f" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m5 12 5 5 9-10" />
+          </svg>
+          {{ ETIQUETA_FILTRO[f] }}
+        </button>
+      </div>
+    </template>
+
+    <!-- Error con datos previos: se conservan los pedidos y se ofrece reintentar -->
+    <div v-if="store.error && (store.pedidos.length > 0 || store.seleccionado)" class="aviso aviso--error" role="alert">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v6M12 16.5v.01" />
+      </svg>
+      <p>No se pudo actualizar. Se muestran los últimos datos recibidos. {{ store.error }}</p>
+      <button type="button" class="btn" :disabled="store.actualizando" @click="polling.ejecutarAhora()">Reintentar</button>
     </div>
 
-    <p class="solo-lectores" role="status" aria-live="polite">{{ anuncio }}</p>
-    <p v-if="error" class="texto-error" role="alert">{{ error }}</p>
-    <p v-if="errorAccion" class="texto-error" role="alert">{{ errorAccion }}</p>
+    <div class="paneles">
+      <!-- ============ Lista ============ -->
+      <section v-if="mostrarLista" class="lista" aria-label="Lista de pedidos">
+        <!-- Carga inicial -->
+        <template v-if="store.cargando">
+          <div class="esqueletos" aria-hidden="true">
+            <div v-for="n in 5" :key="n" class="esqueleto" />
+          </div>
+          <p class="solo-lectores" role="status">Cargando pedidos…</p>
+        </template>
 
-    <p v-if="cargando" class="pedidos__vacio">Cargando pedidos…</p>
-    <p v-else-if="visibles.length === 0 && !error" class="pedidos__vacio">
-      {{ filtro === 'activos' ? 'No tienes pedidos activos.' : 'Todavía no hay pedidos.' }}
-    </p>
-
-    <ul v-else class="pedidos__lista">
-      <li v-for="pedido in visibles" :key="pedido.id" class="tarjeta pedido">
-        <div class="pedido__cabecera">
-          <h3>Pedido #{{ pedido.id }} · Mesa {{ numeroMesa(pedido.mesaId) }}</h3>
-          <InsigniaEstado :tono="TONO[pedido.estado]" :texto="ETIQUETA_ESTADO_PEDIDO[pedido.estado]" />
+        <!-- Error sin datos previos -->
+        <div v-else-if="store.error && store.pedidos.length === 0" class="vacio" role="alert">
+          <h3>No se pudieron cargar los pedidos</h3>
+          <p>{{ store.error }}</p>
+          <button type="button" class="btn" :disabled="store.actualizando" @click="polling.ejecutarAhora()">Reintentar</button>
         </div>
-        <p class="pedido__meta">Registrado a las {{ formatearHora(pedido.creadoEn) }}</p>
 
-        <ul class="pedido__lineas">
-          <li v-for="linea in pedido.detalle" :key="linea.productoId">
-            <span>
-              {{ linea.cantidad }} × {{ linea.nombreProducto }}
-              <small v-if="linea.observaciones" class="pedido__obs">({{ linea.observaciones }})</small>
-            </span>
-            <span class="numero">{{ formatearMoneda(linea.cantidad * linea.precioUnitario) }}</span>
+        <!-- Vacío (por filtro) -->
+        <div v-else-if="store.ordenados.length === 0" class="vacio">
+          <h3>
+            {{ MENSAJE_VACIO[store.filtro] }}<template v-if="numeroMesaFiltro !== null"> en la mesa {{ numeroMesaFiltro }}</template>
+          </h3>
+          <div class="vacio__acciones">
+            <button v-if="store.filtro !== 'activos'" type="button" class="btn btn--secundario" @click="cambiarFiltro('activos')">
+              Ver pedidos activos
+            </button>
+            <button v-if="numeroMesaFiltro !== null" type="button" class="btn btn--secundario" @click="quitarFiltroMesa">
+              Ver todas las mesas
+            </button>
+          </div>
+        </div>
+
+        <!-- Filas -->
+        <ul v-else class="filas" aria-label="Pedidos">
+          <li v-for="p in store.ordenados" :key="p.id">
+            <RouterLink
+              class="fila"
+              :class="{ 'fila--resaltada': resaltados.includes(p.id), 'fila--listo': p.estado === 'listo' }"
+              :to="enlaceAPedido(p.id)"
+              :data-pedido-id="p.id"
+            >
+              <span class="fila__cabecera">
+                <strong class="numero">#{{ p.id }}</strong>
+                <span>Mesa {{ p.mesaNumero }}</span>
+                <span class="fila__hora numero">{{ formatearHora(p.creadoEn) }}</span>
+              </span>
+              <InsigniaEstado :tono="p.estado" :texto="ETIQUETA_ESTADO_PEDIDO[p.estado]" />
+              <span class="fila__datos">
+                {{ formatearProductos(p.detalle.reduce((suma, d) => suma + d.cantidad, 0)) }} ·
+                <strong class="numero" :class="{ 'fila__total--cancelado': p.estado === 'cancelado' }">{{ formatearMoneda(p.total) }}</strong>
+              </span>
+            </RouterLink>
           </li>
         </ul>
+      </section>
 
-        <p class="pedido__total">
-          Total <strong class="numero">{{ formatearMoneda(pedido.total) }}</strong>
-        </p>
-        <p v-if="pedido.motivoCancelacion" class="pedido__meta">Motivo: {{ ETIQUETA_MOTIVO[pedido.motivoCancelacion] }}</p>
+      <!-- ============ Detalle ============ -->
+      <section v-if="mostrarDetalle" class="detalle-panel" aria-label="Detalle del pedido">
+        <RouterLink v-if="compacto" class="enlace-volver" :to="enlaceVolver">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m15 6-6 6 6 6" />
+          </svg>
+          Volver a pedidos
+        </RouterLink>
 
-        <div class="pedido__acciones">
-          <template v-if="pedido.estado === 'registrado'">
-            <RouterLink
-              class="btn btn--secundario"
-              :to="{ name: 'mesero-pedido-mesa', params: { mesaId: pedido.mesaId }, query: { editar: pedido.id } }"
-            >
-              Editar
-            </RouterLink>
-            <button type="button" class="btn" :disabled="enviandoId === pedido.id" @click="enviar(pedido)">
-              {{ enviandoId === pedido.id ? 'Enviando…' : 'Enviar a cocina' }}
-            </button>
-          </template>
-          <button v-if="meseroPuedeCancelar(pedido.estado)" type="button" class="btn btn--peligro" @click="abrirCancelar(pedido)">
-            Cancelar pedido
-          </button>
-          <p v-else-if="avisoCancelacion(pedido.estado)" class="pedido__meta">{{ avisoCancelacion(pedido.estado) }}</p>
+        <div v-if="pedidoId === null" class="vacio">
+          <h3>Selecciona un pedido</h3>
+          <p>Toca un pedido de la lista para ver su detalle y sus acciones.</p>
         </div>
-      </li>
-    </ul>
 
-    <DialogoModal :abierto="pedidoACancelar !== null" etiqueta-id="cancelar-titulo" :cerrable="!cancelando" @cerrar="cerrarCancelar">
-      <form v-if="pedidoACancelar" class="cancelar" @submit.prevent="confirmarCancelar">
-        <h2 id="cancelar-titulo">¿Cancelar el pedido #{{ pedidoACancelar.id }}?</h2>
-        <p class="pedido__meta">El pedido no se borra: queda registrado como cancelado y deja de sumar a la cuenta.</p>
+        <PedidoDetalle v-else-if="store.seleccionado" ref="detalle" :pedido="store.seleccionado" :cuenta-por-pagar="cuentaPorPagar" />
 
-        <fieldset class="cancelar__motivos">
-          <legend>Motivo de la cancelación</legend>
-          <label v-for="opcion in MOTIVOS" :key="opcion" class="cancelar__opcion">
-            <input v-model="motivo" type="radio" name="motivo" :value="opcion" />
-            {{ ETIQUETA_MOTIVO[opcion] }}
-          </label>
-        </fieldset>
-
-        <p v-if="errorCancelar" class="texto-error" role="alert">{{ errorCancelar }}</p>
-
-        <div class="cancelar__acciones">
-          <button type="button" class="btn btn--secundario" :disabled="cancelando" @click="cerrarCancelar">Volver</button>
-          <button type="submit" class="btn btn--peligro" :disabled="motivo === null || cancelando">
-            {{ cancelando ? 'Cancelando…' : 'Cancelar pedido' }}
-          </button>
+        <div v-else-if="store.seleccionadoNoEncontrado" class="vacio" role="alert">
+          <h3>El pedido #{{ pedidoId }} no existe</h3>
+          <RouterLink class="btn" :to="enlaceVolver">Ver mis pedidos</RouterLink>
         </div>
-      </form>
-    </DialogoModal>
+
+        <div v-else-if="store.error" class="vacio" role="alert">
+          <h3>No se pudo cargar el pedido #{{ pedidoId }}</h3>
+          <p>{{ store.error }}</p>
+          <button type="button" class="btn" :disabled="store.actualizando" @click="polling.ejecutarAhora()">Reintentar</button>
+        </div>
+
+        <div v-else class="esqueletos" aria-hidden="true">
+          <div class="esqueleto" />
+          <div class="esqueleto" />
+        </div>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -236,136 +320,189 @@ function avisoCancelacion(estado: EstadoPedido): string | null {
 .pedidos {
   display: flex;
   flex-direction: column;
+  gap: var(--espacio-3);
+  min-height: 100%;
+}
+
+/* Dos paneles: cada uno hace su propio scroll y la pantalla no crece más que la ventana */
+.pedidos--dos-paneles {
+  height: 100%;
+  min-height: 0;
+}
+
+.pedidos__encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--espacio-4);
 }
 
-.pedidos__cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--espacio-3);
+.pedidos__encabezado h2:focus {
+  outline: none;
 }
 
-.pedidos__filtros {
+.filtros {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--espacio-2);
 }
 
-.pedidos__vacio {
-  margin: 0;
-  color: var(--color-muted);
+.filtros__mesa svg {
+  flex: none;
 }
 
-.pedidos__lista {
+.paneles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--espacio-4);
+}
+
+.pedidos--dos-paneles .paneles {
+  flex: 1;
+  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.pedidos--dos-paneles .lista,
+.pedidos--dos-paneles .detalle-panel {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pedidos--dos-paneles .lista {
+  padding: var(--espacio-1);
+}
+
+.detalle-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+
+/* En dos paneles el detalle es una tarjeta */
+.pedidos--dos-paneles .detalle-panel {
+  padding: var(--espacio-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radio);
+  background: var(--color-surface);
+  box-shadow: var(--sombra);
+}
+
+.esqueletos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+
+.vacio__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--espacio-3);
+}
+
+/* ---------- Filas ---------- */
+.filas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.pedido {
+.fila {
   display: flex;
   flex-direction: column;
-  gap: var(--espacio-3);
-  padding: var(--espacio-5);
-}
-
-.pedido__cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: var(--espacio-2);
+  min-height: 88px;
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 2px solid var(--color-border);
+  border-left-width: 8px;
+  border-radius: var(--radio);
+  background: var(--color-surface);
+  box-shadow: var(--sombra);
+  color: var(--color-text);
+  text-decoration: none;
+  touch-action: manipulation;
+  transition: transform 100ms ease-out;
 }
 
-.pedido__cabecera h3 {
+.fila:active {
+  transform: scale(0.99);
+}
+
+/* Pedido listo: borde ámbar grueso (además de la insignia con texto) */
+.fila--listo {
+  border-color: var(--color-listo);
+}
+
+/* Seleccionado: fondo, borde de marca y texto en negrita (no solo color) */
+.fila.router-link-exact-active {
+  border-color: var(--color-primary-dark);
+  background: var(--color-bg);
+  box-shadow: inset 0 0 0 1px var(--color-primary-dark);
+}
+
+.fila.router-link-exact-active .fila__cabecera {
+  font-weight: 800;
+}
+
+.fila__cabecera {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espacio-3);
+}
+
+.fila__cabecera strong {
   font-size: var(--texto-lg);
 }
 
-.pedido__meta {
-  margin: 0;
+.fila__hora {
+  margin-left: auto;
   color: var(--color-muted);
   font-size: var(--texto-sm);
 }
 
-.pedido__lineas {
-  display: flex;
-  flex-direction: column;
-  gap: var(--espacio-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pedido__lineas li {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--espacio-3);
-}
-
-.pedido__obs {
+.fila__datos {
   color: var(--color-muted);
+  font-size: var(--texto-sm);
 }
 
-.pedido__total {
-  display: flex;
-  justify-content: space-between;
-  margin: 0;
-  padding-top: var(--espacio-2);
-  border-top: 1px solid var(--color-border);
+.fila__datos strong {
+  color: var(--color-text);
 }
 
-.pedido__acciones {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--espacio-3);
+.fila__total--cancelado {
+  text-decoration: line-through;
 }
 
-.cancelar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--espacio-4);
+/* Resaltado de "pedido listo": anillo fijo + pulso solo si se permite animar */
+.fila--resaltada {
+  outline: 4px solid var(--color-listo);
+  outline-offset: 2px;
 }
 
-.cancelar__motivos {
-  display: flex;
-  flex-direction: column;
-  gap: var(--espacio-2);
-  margin: 0;
-  padding: 0;
-  border: none;
+@media (prefers-reduced-motion: reduce) {
+  .fila:active {
+    transform: none;
+  }
 }
 
-.cancelar__motivos legend {
-  margin-bottom: var(--espacio-2);
-  font-weight: 700;
+@media (prefers-reduced-motion: no-preference) {
+  .fila--resaltada {
+    animation: pulso-listo 0.8s ease-out 2;
+  }
 }
 
-.cancelar__opcion {
-  display: flex;
-  align-items: center;
-  gap: var(--espacio-3);
-  min-height: var(--tactil-min);
-  padding: 0 var(--espacio-4);
-  border: 2px solid var(--color-border);
-  border-radius: var(--radio-sm);
-  cursor: pointer;
-}
+@keyframes pulso-listo {
+  0% {
+    box-shadow: 0 0 0 0 rgb(217 119 6 / 60%);
+  }
 
-.cancelar__opcion input {
-  width: 22px;
-  height: 22px;
-  accent-color: var(--color-primary-dark);
-}
-
-.cancelar__acciones {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: var(--espacio-3);
+  100% {
+    box-shadow: 0 0 0 16px rgb(217 119 6 / 0%);
+  }
 }
 </style>

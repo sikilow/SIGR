@@ -18,8 +18,10 @@ const props = withDefaults(
     cerrable?: boolean
     /** Elemento al que se devuelve el foco; por defecto, el que lo tenía al abrir. */
     origenFoco?: HTMLElement | null
+    /** Si el origen ya no existe al cerrar (p. ej. su botón desapareció), el foco va aquí. */
+    focoAlternativo?: HTMLElement | null
   }>(),
-  { variante: 'centro', cerrable: true, origenFoco: null },
+  { variante: 'centro', cerrable: true, origenFoco: null, focoAlternativo: null },
 )
 
 const emit = defineEmits<{ cerrar: [] }>()
@@ -27,7 +29,8 @@ const emit = defineEmits<{ cerrar: [] }>()
 const dialogo = ref<HTMLDialogElement | null>(null)
 let elementoOrigen: HTMLElement | null = null
 
-const SELECTOR_ENFOCABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+const SELECTOR_ENFOCABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 watch(
   () => props.abierto,
@@ -49,6 +52,7 @@ watch(
 function alCerrar() {
   const destino = props.origenFoco ?? elementoOrigen
   if (destino?.isConnected) destino.focus()
+  else props.focoAlternativo?.focus()
   elementoOrigen = null
   if (props.abierto) emit('cerrar')
 }

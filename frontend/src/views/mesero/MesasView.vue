@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import FiltrosMesas from '../../components/FiltrosMesas.vue'
 import HojaAccionesMesa from '../../components/HojaAccionesMesa.vue'
+import IndicadorActualizacion from '../../components/IndicadorActualizacion.vue'
 import MesaCard from '../../components/MesaCard.vue'
 import ResumenMesas from '../../components/ResumenMesas.vue'
 import { usePolling } from '../../composables/usePolling'
@@ -42,15 +43,6 @@ const MENSAJE_VACIO: Record<FiltroMesas, string> = {
 // ---------- Actualización automática ----------
 const { iniciar, ejecutarAhora } = usePolling(() => store.cargar())
 
-const ahora = ref(Date.now())
-let relojAhora: ReturnType<typeof setInterval> | undefined
-
-const textoActualizado = computed(() => {
-  if (store.ultimaActualizacion === null) return ''
-  const segundos = Math.max(0, Math.floor((ahora.value - store.ultimaActualizacion) / 1000))
-  return segundos < 60 ? `Actualizado hace ${segundos} s` : `Actualizado hace ${Math.floor(segundos / 60)} min`
-})
-
 // ---------- Resaltado de mesas que pasan a "pedido listo" ----------
 const resaltadas = ref<number[]>([])
 let temporizadorResaltado: ReturnType<typeof setTimeout> | undefined
@@ -72,14 +64,10 @@ const mesaSeleccionada = computed<Mesa | null>(
   () => store.mesas.find((m) => m.id === mesaSeleccionadaId.value) ?? null,
 )
 
-onMounted(() => {
-  relojAhora = setInterval(() => (ahora.value = Date.now()), 1000)
-  iniciar()
-})
+onMounted(iniciar)
 
 onBeforeUnmount(() => {
   store.descartarAviso()
-  clearInterval(relojAhora)
   clearTimeout(temporizadorResaltado)
 })
 </script>
@@ -88,28 +76,7 @@ onBeforeUnmount(() => {
   <section class="panel" :aria-busy="store.cargando">
     <header class="panel__encabezado">
       <h2>Panel de mesas</h2>
-      <div class="panel__actualizacion">
-        <span class="panel__hace">{{ textoActualizado }}</span>
-        <button type="button" class="btn btn--secundario" :disabled="store.actualizando" @click="ejecutarAhora()">
-          <svg
-            class="panel__icono-actualizar"
-            :class="{ 'panel__icono-actualizar--girando': store.actualizando }"
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            aria-hidden="true"
-            focusable="false"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" />
-          </svg>
-          {{ store.actualizando ? 'Actualizando…' : 'Actualizar' }}
-        </button>
-      </div>
+      <IndicadorActualizacion :ultima="store.ultimaActualizacion" :actualizando="store.actualizando" @actualizar="ejecutarAhora()" />
     </header>
 
     <!-- Aviso de otra pantalla (p. ej. "La mesa 7 no está ocupada"). Lo anuncia el layout (aria-live). -->
@@ -127,6 +94,10 @@ onBeforeUnmount(() => {
 
     <!-- Error con datos previos: se conservan las mesas y se ofrece reintentar -->
     <div v-if="store.error && store.mesas.length > 0" class="aviso aviso--error" role="alert">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v6M12 16.5v.01" />
+      </svg>
       <p>No se pudo actualizar. Se muestran los últimos datos recibidos. {{ store.error }}</p>
       <button type="button" class="btn" :disabled="store.actualizando" @click="ejecutarAhora()">Reintentar</button>
     </div>
@@ -182,30 +153,10 @@ onBeforeUnmount(() => {
 
 .panel__encabezado {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--espacio-4);
-}
-
-.panel__actualizacion {
-  display: flex;
-  align-items: center;
-  gap: var(--espacio-3);
-}
-
-.panel__hace {
-  color: var(--color-muted);
-  font-size: var(--texto-sm);
-}
-
-.panel__icono-actualizar--girando {
-  animation: girar 1s linear infinite;
-}
-
-@keyframes girar {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .cuadricula {
@@ -222,72 +173,8 @@ onBeforeUnmount(() => {
   display: flex;
 }
 
+/* Las tarjetas de mesa son más altas que el esqueleto base */
 .esqueleto {
   min-height: 150px;
-  border-radius: var(--radio);
-  background: linear-gradient(90deg, var(--color-border) 25%, var(--color-surface) 50%, var(--color-border) 75%);
-  background-size: 200% 100%;
-  animation: brillo 1.4s ease-in-out infinite;
-}
-
-@keyframes brillo {
-  from {
-    background-position: 200% 0;
-  }
-
-  to {
-    background-position: -200% 0;
-  }
-}
-
-.vacio {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--espacio-3);
-  padding: var(--espacio-10) var(--espacio-4);
-  border: 2px dashed var(--color-muted);
-  border-radius: var(--radio);
-  text-align: center;
-}
-
-.vacio p {
-  margin: 0;
-  color: var(--color-muted);
-}
-
-.aviso {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--espacio-4);
-  padding: var(--espacio-3) var(--espacio-4);
-  border: 2px solid var(--color-error);
-  border-radius: var(--radio);
-  background: var(--color-surface);
-}
-
-.aviso p {
-  flex: 1;
-  margin: 0;
-  color: var(--color-error);
-  font-weight: 600;
-}
-
-/* Aviso informativo: color de marca + ícono (no solo color) */
-.aviso--info {
-  border-color: var(--color-primary);
-  color: var(--color-primary-dark);
-}
-
-.aviso--info p {
-  color: var(--color-text);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .panel__icono-actualizar--girando,
-  .esqueleto {
-    animation: none;
-  }
 }
 </style>

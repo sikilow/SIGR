@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "build:api": "vue-tsc -b && vite build --mode api",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "check": "vue-tsc -b && vitest run && vite build"
   },
   "dependencies": {
     "pinia": "^4.1.0",
@@ -19,6 +22,7 @@
     "@vue/tsconfig": "^0.9.1",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
+    "vitest": "^5.0.4",
     "vue-tsc": "^3.3.11"
   }
 }

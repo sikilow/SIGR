@@ -13,6 +13,7 @@ function conResumen(mesa: MesaGuardada): Mesa {
     ...mesa,
     estadoCuenta: cuenta && cuenta.estado !== 'cerrada' ? cuenta.estado : null,
     pedidosActivos: pedidos.filter((p) => esPedidoActivo(p.estado)).length,
+    tipoPagoSolicitado: cuenta?.tipoPagoSolicitado ?? null,
     totalCuenta: pedidos.filter((p) => p.estado !== 'cancelado').reduce((suma, p) => suma + p.total, 0),
     pedidosListos: pedidos.filter((p) => p.estado === 'listo').length,
   }

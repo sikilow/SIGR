@@ -2,7 +2,7 @@ import type { Cuenta } from '../../types'
 import { ErrorServicio } from '../errores'
 import type { CuentasService } from '../interfaces'
 import { baseDatos, type CuentaGuardada } from './baseDatos'
-import { conRetraso } from './utiles'
+import { conRetraso, conRetrasoIdempotente } from './utiles'
 
 /** Arma la cuenta con sus pedidos; el total excluye los pedidos cancelados. */
 function componerCuenta(guardada: CuentaGuardada): Cuenta {
@@ -22,12 +22,16 @@ export function crearCuentasMock(): CuentasService {
       })
     },
 
-    solicitarPago(cuentaId, tipo) {
-      return conRetraso(() => {
+    solicitarPago(cuentaId, tipo, claveIdempotencia) {
+      return conRetrasoIdempotente(claveIdempotencia, () => {
         const guardada = baseDatos.cuentas.find((c) => c.id === cuentaId)
         if (!guardada) throw new ErrorServicio('no_encontrado', `La cuenta ${cuentaId} no existe.`, 404)
         if (guardada.estado !== 'abierta') {
           throw new ErrorServicio('estado_invalido', 'La cuenta no está abierta.', 409)
+        }
+        // Sin pedidos vigentes no hay nada que cobrar (SUPOSICIÓN: la API también debe rechazarlo).
+        if (componerCuenta(guardada).total === 0) {
+          throw new ErrorServicio('estado_invalido', 'La cuenta no tiene pedidos activos.', 409)
         }
         guardada.estado = 'por_pagar'
         guardada.tipoPagoSolicitado = tipo

@@ -90,7 +90,7 @@ const contadores = (): Contador[] => [
 }
 
 /* Tablet vertical (768 px): dos columnas para que los textos no se corten */
-@media (max-width: 860px) {
+@media (max-width: 53.75em) {
   .resumen {
     grid-template-columns: repeat(2, 1fr);
   }

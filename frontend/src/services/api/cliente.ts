@@ -15,6 +15,12 @@ interface Opciones {
   cuerpo?: unknown
   /** Parámetros de consulta; los `undefined` se omiten. */
   consulta?: Record<string, ValorConsulta>
+  /**
+   * CAMBIO PROPUESTO EN F5: se envía como cabecera `Idempotency-Key`. Todos los reintentos de una
+   * misma intención del usuario llevan la misma clave. El servidor debe permitir esta cabecera en CORS
+   * (`Access-Control-Allow-Headers`).
+   */
+  claveIdempotencia?: string
 }
 
 /** Forma tolerante del cuerpo de error: el formato real está por acordar con el equipo de API. */
@@ -72,6 +78,7 @@ export async function solicitar<T>(metodo: Metodo, ruta: string, opciones: Opcio
         Accept: 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(opciones.cuerpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(opciones.claveIdempotencia ? { 'Idempotency-Key': opciones.claveIdempotencia } : {}),
       },
       body: opciones.cuerpo !== undefined ? JSON.stringify(opciones.cuerpo) : undefined,
     })

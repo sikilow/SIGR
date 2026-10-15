@@ -1,4 +1,5 @@
 // Utilidades compartidas por los servicios simulados.
+import { ErrorServicio } from '../errores'
 
 /** Retraso simulado de red, en milisegundos. */
 export const RETRASO_MS = 300
@@ -30,4 +31,32 @@ export function consumirFalloSimulado(clave: string): boolean {
   } catch {
     return false
   }
+}
+
+/** Resultados ya entregados por clave de idempotencia (solo mock; se reinicia al recargar). */
+const resultadosPorClave = new Map<string, unknown>()
+
+/**
+ * Como `conRetraso`, pero respeta `Idempotency-Key` (CAMBIO PROPUESTO EN F5): si la clave ya se usó,
+ * devuelve el resultado anterior en vez de repetir la acción. Solo se guardan los éxitos; un error
+ * (p. ej. `estado_invalido`) no consume la clave.
+ *
+ * Fallo simulado de "respuesta perdida" (la acción SÍ se aplica, pero el cliente no se entera):
+ *   sessionStorage.setItem('sigr.mock.perderRespuesta', '1')   // la próxima acción responde "red" 1 vez
+ * Sirve para comprobar que reintentar con la misma clave no duplica nada.
+ */
+export function conRetrasoIdempotente<T>(clave: string | undefined, accion: () => T): Promise<T> {
+  return conRetraso(() => {
+    let resultado: T
+    if (clave !== undefined && resultadosPorClave.has(clave)) {
+      resultado = structuredClone(resultadosPorClave.get(clave) as T)
+    } else {
+      resultado = accion()
+      if (clave !== undefined) resultadosPorClave.set(clave, structuredClone(resultado))
+    }
+    if (consumirFalloSimulado('sigr.mock.perderRespuesta')) {
+      throw new ErrorServicio('red', 'Se perdió la respuesta del servidor (fallo simulado).')
+    }
+    return resultado
+  })
 }
