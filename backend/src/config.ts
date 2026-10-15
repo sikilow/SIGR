@@ -7,8 +7,15 @@ if (!JWT_SECRET) {
 
 export const PUERTO = Number(process.env.PORT ?? 3000);
 
-/** Orígenes permitidos por CORS (separados por coma). Por defecto, el servidor de Vite. */
-export const ORIGENES_PERMITIDOS = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173")
+/**
+ * Orígenes permitidos por CORS. Por defecto: el front en desarrollo desde localhost o 127.0.0.1
+ * en CUALQUIER puerto (Vite salta al 5174, 5175... si el 5173 está ocupado).
+ * En producción define CORS_ORIGIN en .env (URLs separadas por coma).
+ */
+const DESDE_ENV = (process.env.CORS_ORIGIN ?? "")
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
+
+export const ORIGENES_PERMITIDOS: (string | RegExp)[] =
+  DESDE_ENV.length > 0 ? DESDE_ENV : [/^http:\/\/(localhost|127\.0\.0\.1):\d+$/];

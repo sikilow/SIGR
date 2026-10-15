@@ -16,7 +16,7 @@ mesasRouter.get("/", requiereAuth(), async (_req, res) => {
   const rows = await filas(
     pool,
     `SELECT m.id_mesa AS id, m.numero, m.capacidad, m.estado,
-            c.estado AS estado_cuenta,
+            c.estado AS estado_cuenta, c.tipo_pago_solicitado,
             COALESCE(pa.pedidos_activos, 0) AS pedidos_activos,
             COALESCE(pa.pedidos_listos, 0)  AS pedidos_listos,
             COALESCE(t.total, 0)            AS total_cuenta
@@ -47,6 +47,7 @@ mesasRouter.get("/", requiereAuth(), async (_req, res) => {
       capacidad: r.capacidad as number,
       estado: r.estado as string,
       estado_cuenta: (r.estado_cuenta as string | null) ?? null,
+      tipo_pago_solicitado: (r.tipo_pago_solicitado as string | null) ?? null,
       pedidos_activos: Number(r.pedidos_activos),
       total_cuenta: Number(r.total_cuenta),
       pedidos_listos: Number(r.pedidos_listos),

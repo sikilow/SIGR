@@ -2,7 +2,7 @@
 // y reúne las consultas que comparten varias rutas.
 import type { RowDataPacket } from "mysql2/promise";
 import { z } from "zod";
-import { filas, type Ejecutor } from "./db";
+import { ejecutar, filas, type Ejecutor } from "./db";
 import { ErrorApi } from "./errores";
 
 // ---------- Estados de pedido: código del front  →  nombre en la tabla estado_pedido ----------
@@ -24,21 +24,6 @@ export const ESTADOS_PEDIDO = Object.keys(ESTADO_PEDIDO_DB) as [EstadoPedido, ..
 const ESTADO_DESDE_DB = Object.fromEntries(
   Object.entries(ESTADO_PEDIDO_DB).map(([codigo, nombre]) => [nombre, codigo]),
 ) as Record<string, EstadoPedido>;
-
-// ---------- Motivos de cancelación: código del front  →  descripción en motivo_cancelacion ----------
-export const MOTIVO_DB = {
-  error_captura: "Error al capturar",
-  cliente_desiste: "Cliente cambió de opinión",
-  producto_agotado: "Producto agotado",
-  otro: "Otro",
-} as const;
-
-export type MotivoCancelacion = keyof typeof MOTIVO_DB;
-export const MOTIVOS = Object.keys(MOTIVO_DB) as [MotivoCancelacion, ...MotivoCancelacion[]];
-
-const MOTIVO_DESDE_DB = Object.fromEntries(
-  Object.entries(MOTIVO_DB).map(([codigo, descripcion]) => [descripcion, codigo]),
-) as Record<string, MotivoCancelacion>;
 
 // ---------- Utilidades ----------
 const redondear = (n: number): number => Math.round(n * 100) / 100;
@@ -76,18 +61,15 @@ export async function idEstadoPedido(ex: Ejecutor, estado: EstadoPedido): Promis
   return fila.id_estado as number;
 }
 
-export async function idMotivo(ex: Ejecutor, motivo: MotivoCancelacion): Promise<number> {
-  const [fila] = await filas<RowDataPacket>(ex, "SELECT id_motivo FROM motivo_cancelacion WHERE descripcion = ? LIMIT 1", [
-    MOTIVO_DB[motivo],
-  ]);
-  if (!fila) {
-    throw new ErrorApi(
-      500,
-      "desconocido",
-      `Falta el motivo '${MOTIVO_DB[motivo]}' en motivo_cancelacion. Ejecuta database/migracion_01_front.sql.`,
-    );
-  }
-  return fila.id_motivo as number;
+/**
+ * El motivo de cancelación es TEXTO LIBRE (5 a 200 caracteres). Se reutiliza la fila si ya existe
+ * un motivo igual en motivo_cancelacion; si no, se crea.
+ */
+export async function idMotivoTexto(ex: Ejecutor, texto: string): Promise<number> {
+  const [fila] = await filas<RowDataPacket>(ex, "SELECT id_motivo FROM motivo_cancelacion WHERE descripcion = ? LIMIT 1", [texto]);
+  if (fila) return fila.id_motivo as number;
+  const res = await ejecutar(ex, "INSERT INTO motivo_cancelacion (descripcion) VALUES (?)", [texto]);
+  return res.insertId;
 }
 
 // ---------- Productos y disponibilidad ----------
@@ -147,20 +129,23 @@ export interface DetallePedidoDto {
 export interface PedidoDto {
   id: number;
   mesa_id: number;
+  mesa_numero: number;
   cuenta_id: number;
   mesero_id: number;
   estado: EstadoPedido;
   detalle: DetallePedidoDto[];
   total: number;
   creado_en: string;
-  motivo_cancelacion: MotivoCancelacion | null;
+  /** Texto libre escrito al cancelar; null si no está cancelado. */
+  motivo_cancelacion: string | null;
 }
 
 const SELECT_PEDIDO = `
-  SELECT p.id_pedido AS id, c.id_mesa AS mesa_id, p.id_cuenta AS cuenta_id, p.id_mesero AS mesero_id,
+  SELECT p.id_pedido AS id, c.id_mesa AS mesa_id, m.numero AS mesa_numero, p.id_cuenta AS cuenta_id, p.id_mesero AS mesero_id,
          ep.nombre AS estado, p.fecha_hora AS creado_en, mc.descripcion AS motivo
     FROM pedido p
     JOIN cuenta c ON c.id_cuenta = p.id_cuenta
+    JOIN mesa m ON m.id_mesa = c.id_mesa
     JOIN estado_pedido ep ON ep.id_estado = p.id_estado
     LEFT JOIN motivo_cancelacion mc ON mc.id_motivo = p.id_motivo`;
 
@@ -198,6 +183,7 @@ export async function cargarPedidos(ex: Ejecutor, condicion = "", params: unknow
     return {
       id: p.id as number,
       mesa_id: p.mesa_id as number,
+      mesa_numero: p.mesa_numero as number,
       cuenta_id: p.cuenta_id as number,
       mesero_id: p.mesero_id as number,
       estado: ESTADO_DESDE_DB[p.estado as string] ?? "registrado",
@@ -205,7 +191,7 @@ export async function cargarPedidos(ex: Ejecutor, condicion = "", params: unknow
       // El total SIEMPRE se calcula aquí, nunca viene del cliente.
       total: redondear(detalle.reduce((suma, d) => suma + d.cantidad * d.precio_unitario, 0)),
       creado_en: (p.creado_en as Date).toISOString(),
-      motivo_cancelacion: p.motivo ? (MOTIVO_DESDE_DB[p.motivo as string] ?? "otro") : null,
+      motivo_cancelacion: (p.motivo as string | null) ?? null,
     };
   });
 }

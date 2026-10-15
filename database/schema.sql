@@ -108,7 +108,7 @@ CREATE TABLE estado_pedido (
 
 CREATE TABLE motivo_cancelacion (
   id_motivo INT AUTO_INCREMENT PRIMARY KEY,
-  descripcion VARCHAR(180) NOT NULL
+  descripcion VARCHAR(200) NOT NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE pedido (
@@ -192,6 +192,16 @@ CREATE TABLE factura (
   estado VARCHAR(20) NOT NULL DEFAULT 'emitida',
   CONSTRAINT fk_factura_id_venta FOREIGN KEY (id_venta) REFERENCES venta (id_venta) ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT fk_factura_id_datos_fiscales FOREIGN KEY (id_datos_fiscales) REFERENCES datos_fiscales (id_datos_fiscales) ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE idempotencia (
+  clave VARCHAR(100) NOT NULL,
+  id_usuario INT NOT NULL,
+  ruta VARCHAR(160) NOT NULL,
+  estado_http INT NOT NULL,
+  respuesta JSON NOT NULL,
+  creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (clave, id_usuario)
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_reservacion_fecha_hora ON reservacion (fecha_hora);
