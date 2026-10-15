@@ -5,6 +5,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import FranjaDemo from '../components/FranjaDemo.vue'
 import LogoMarca from '../components/LogoMarca.vue'
+import { rutaInicial } from '../router'
 import { ErrorServicio, usandoMock } from '../services'
 import { useSesionStore } from '../stores/sesion'
 
@@ -46,7 +47,8 @@ async function entrar() {
   cargando.value = true
   try {
     await sesion.iniciarSesion({ usuario: usuario.value.trim(), contrasena: contrasena.value })
-    const destino = typeof route.query.redirigir === 'string' ? route.query.redirigir : '/mesero/mesas'
+    const porDefecto = sesion.usuario ? rutaInicial(sesion.usuario.rol) : '/mesero/mesas'
+    const destino = typeof route.query.redirigir === 'string' ? route.query.redirigir : porDefecto
     await router.push(destino)
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo iniciar sesión.'

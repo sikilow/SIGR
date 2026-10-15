@@ -7,7 +7,7 @@ import { leerToken, limpiarToken } from './token'
 
 const URL_BASE = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
 
-type Metodo = 'GET' | 'POST' | 'PATCH'
+type Metodo = 'GET' | 'POST' | 'PATCH' | 'DELETE'
 type ValorConsulta = string | number | undefined
 
 interface Opciones {

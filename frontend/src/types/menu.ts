@@ -26,4 +26,6 @@ export interface ItemDisponibilidad {
 export interface DisponibilidadProducto {
   productoId: number
   disponible: boolean
+  /** Cuántas unidades quedan (solo cuando el servidor rechaza por existencia insuficiente). */
+  existencia?: number
 }

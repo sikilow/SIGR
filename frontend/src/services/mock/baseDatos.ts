@@ -5,6 +5,8 @@ import type { CategoriaMenu, Cuenta, Mesa, Pedido, Usuario } from '../../types'
 export interface UsuarioMock extends Usuario {
   usuario: string
   contrasena: string
+  /** `false` = desactivado por el gerente (no puede iniciar sesión). Si falta, está activo. */
+  activo?: boolean
 }
 
 /** Cuenta tal como se guarda: los pedidos se consultan aparte y el total se calcula. */

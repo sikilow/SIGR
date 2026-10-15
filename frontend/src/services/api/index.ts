@@ -5,21 +5,31 @@ import type { Servicios } from '../interfaces'
 import { solicitar } from './cliente'
 import { guardarToken, leerToken, limpiarToken } from './token'
 import {
+  aCategoriaAdmin,
   aCategoriaMenu,
   aCuenta,
   aDisponibilidad,
   aMesa,
   aPedido,
+  aProductoAdmin,
   aUsuario,
+  aUsuarioAdmin,
+  deCambioProducto,
+  deCambioUsuario,
   deActualizacionPedido,
   deCancelacion,
   deItemsDisponibilidad,
   deNuevoPedido,
+  deNuevoProducto,
+  deNuevoUsuario,
+  type CategoriaAdminDto,
   type CategoriaMenuDto,
   type CuentaDto,
   type DisponibilidadDto,
   type MesaDto,
   type PedidoDto,
+  type ProductoAdminDto,
+  type UsuarioAdminDto,
   type UsuarioDto,
 } from './mappers'
 
@@ -125,6 +135,62 @@ export function crearServiciosApi(): Servicios {
         return aCuenta(
           await solicitar<CuentaDto>('POST', `/cuentas/${cuentaId}/solicitar-pago`, { cuerpo, claveIdempotencia }),
         )
+      },
+    },
+
+    usuarios: {
+      async listar() {
+        const r = await solicitar<UsuarioAdminDto[]>('GET', '/usuarios')
+        return r.map(aUsuarioAdmin)
+      },
+
+      async crear(usuario) {
+        return aUsuarioAdmin(await solicitar<UsuarioAdminDto>('POST', '/usuarios', { cuerpo: deNuevoUsuario(usuario) }))
+      },
+
+      async actualizar(id, cambio) {
+        const cuerpo = deCambioUsuario(cambio)
+        return aUsuarioAdmin(await solicitar<UsuarioAdminDto>('PATCH', `/usuarios/${id}`, { cuerpo }))
+      },
+
+      async cambiarContrasena(id, contrasena) {
+        await solicitar<{ ok: boolean }>('POST', `/usuarios/${id}/contrasena`, { cuerpo: { contrasena } })
+      },
+    },
+
+    catalogo: {
+      async listarCategorias() {
+        const r = await solicitar<CategoriaAdminDto[]>('GET', '/catalogo/categorias')
+        return r.map(aCategoriaAdmin)
+      },
+
+      async crearCategoria(nombre) {
+        const r = await solicitar<CategoriaAdminDto>('POST', '/catalogo/categorias', { cuerpo: { nombre: nombre.trim() } })
+        return aCategoriaAdmin(r)
+      },
+
+      async renombrarCategoria(id, nombre) {
+        const cuerpo = { nombre: nombre.trim() }
+        return aCategoriaAdmin(await solicitar<CategoriaAdminDto>('PATCH', `/catalogo/categorias/${id}`, { cuerpo }))
+      },
+
+      async eliminarCategoria(id) {
+        await solicitar<{ ok: boolean }>('DELETE', `/catalogo/categorias/${id}`)
+      },
+
+      async listarProductos() {
+        const r = await solicitar<ProductoAdminDto[]>('GET', '/catalogo/productos')
+        return r.map(aProductoAdmin)
+      },
+
+      async crearProducto(producto) {
+        const cuerpo = deNuevoProducto(producto)
+        return aProductoAdmin(await solicitar<ProductoAdminDto>('POST', '/catalogo/productos', { cuerpo }))
+      },
+
+      async actualizarProducto(id, cambio) {
+        const cuerpo = deCambioProducto(cambio)
+        return aProductoAdmin(await solicitar<ProductoAdminDto>('PATCH', `/catalogo/productos/${id}`, { cuerpo }))
       },
     },
   }

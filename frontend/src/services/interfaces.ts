@@ -1,6 +1,9 @@
 // Contratos de la capa de servicios. Las vistas y stores dependen SOLO de estas
 // interfaces; `services/index.ts` decide si se usa el mock o la API real.
 import type {
+  CambioProducto,
+  CambioUsuario,
+  CategoriaAdmin,
   CategoriaMenu,
   Credenciales,
   Cuenta,
@@ -11,9 +14,13 @@ import type {
   Mesa,
   MotivoCancelacion,
   NuevoPedido,
+  NuevoProducto,
+  NuevoUsuario,
   Pedido,
+  ProductoAdmin,
   TipoPago,
   Usuario,
+  UsuarioAdmin,
 } from '../types'
 
 export interface AuthService {
@@ -75,10 +82,42 @@ export interface CuentasService {
   solicitarPago(cuentaId: number, tipo: TipoPago, claveIdempotencia?: string): Promise<Cuenta>
 }
 
+/** Administración de usuarios. Solo el gerente (la API lo valida con 403 `sin_permiso`). */
+export interface UsuariosService {
+  /** GET /usuarios (activos e inactivos) */
+  listar(): Promise<UsuarioAdmin[]>
+  /** POST /usuarios. Falla con `estado_invalido` si el usuario o el correo ya existen. */
+  crear(usuario: NuevoUsuario): Promise<UsuarioAdmin>
+  /** PATCH /usuarios/{id}. Desactivar = `{ activo: false }` (los usuarios no se borran). */
+  actualizar(id: number, cambio: CambioUsuario): Promise<UsuarioAdmin>
+  /** POST /usuarios/{id}/contrasena */
+  cambiarContrasena(id: number, contrasena: string): Promise<void>
+}
+
+/** Administración del catálogo: categorías, productos e inventario. Solo el gerente. */
+export interface CatalogoService {
+  /** GET /catalogo/categorias */
+  listarCategorias(): Promise<CategoriaAdmin[]>
+  /** POST /catalogo/categorias */
+  crearCategoria(nombre: string): Promise<CategoriaAdmin>
+  /** PATCH /catalogo/categorias/{id} */
+  renombrarCategoria(id: number, nombre: string): Promise<CategoriaAdmin>
+  /** DELETE /catalogo/categorias/{id}. Solo si no tiene productos (si no, `estado_invalido`). */
+  eliminarCategoria(id: number): Promise<void>
+  /** GET /catalogo/productos (también los inactivos, con su inventario) */
+  listarProductos(): Promise<ProductoAdmin[]>
+  /** POST /catalogo/productos */
+  crearProducto(producto: NuevoProducto): Promise<ProductoAdmin>
+  /** PATCH /catalogo/productos/{id}. Desactivar = `{ activo: false }` (los productos no se borran). */
+  actualizarProducto(id: number, cambio: CambioProducto): Promise<ProductoAdmin>
+}
+
 export interface Servicios {
   auth: AuthService
   mesas: MesasService
   menu: MenuService
   pedidos: PedidosService
   cuentas: CuentasService
+  usuarios: UsuariosService
+  catalogo: CatalogoService
 }

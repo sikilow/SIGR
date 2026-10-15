@@ -11,7 +11,9 @@ import {
   idDeRuta,
   idEstadoPedido,
   idMotivoTexto,
+  devolverExistencia,
   validar,
+  verificarExistencia,
   type PedidoDto,
 } from "../dominio";
 import { ErrorApi } from "../errores";
@@ -90,6 +92,7 @@ pedidosRouter.post("/", requiereAuth("mesero", "gerente"), async (req, res) => {
 
       // Se valida antes de abrir la cuenta: si hay productos agotados no se crea nada.
       await exigirDisponibles(cx, detalle.map((l) => l.producto_id));
+      await verificarExistencia(cx, detalle, false); // aviso temprano; el descuento real es al enviar
 
       const [activa] = await filas(cx, "SELECT id_cuenta, estado FROM cuenta WHERE id_mesa = ? AND estado <> 'cerrada' LIMIT 1", [mesa_id]);
       if (activa?.estado === "por_pagar") throw new ErrorApi(409, "estado_invalido", "La cuenta ya solicitó el pago.");
@@ -154,6 +157,7 @@ pedidosRouter.patch("/:id", requiereAuth("mesero", "gerente"), async (req, res) 
       throw new ErrorApi(409, "estado_invalido", "La cuenta ya solicitó el pago: no se pueden editar pedidos.");
     }
     await exigirDisponibles(cx, detalle.map((l) => l.producto_id));
+    await verificarExistencia(cx, detalle, false);
     await ejecutar(cx, "DELETE FROM detalle_pedido WHERE id_pedido = ?", [id]);
     await guardarDetalle(cx, id, detalle);
     return pedidoOError(cx, id);
@@ -172,9 +176,14 @@ pedidosRouter.post("/:id/enviar", requiereAuth("mesero", "gerente"), async (req,
       if (estado !== "registrado") {
         throw new ErrorApi(409, "estado_invalido", "Solo se puede enviar un pedido registrado.");
       }
-      // Un producto pudo agotarse entre el registro y el envío.
-      const detalle = await filas(cx, "SELECT DISTINCT id_producto FROM detalle_pedido WHERE id_pedido = ?", [id]);
-      await exigirDisponibles(cx, detalle.map((d) => d.id_producto as number));
+      // Un producto pudo agotarse entre el registro y el envío: se bloquea el inventario, se verifica que
+      // alcance y se descuenta. Si no alcanza, lanza 409 y la transacción se deshace (nada se descuenta).
+      const detalle = await filas(cx, "SELECT id_producto, cantidad FROM detalle_pedido WHERE id_pedido = ?", [id]);
+      await verificarExistencia(
+        cx,
+        detalle.map((d) => ({ producto_id: d.id_producto as number, cantidad: d.cantidad as number })),
+        true,
+      );
 
       await ejecutar(cx, "UPDATE pedido SET id_estado = ? WHERE id_pedido = ?", [await idEstadoPedido(cx, "enviado"), id]);
       return pedidoOError(cx, id);
@@ -185,7 +194,7 @@ pedidosRouter.post("/:id/enviar", requiereAuth("mesero", "gerente"), async (req,
 /**
  * POST /api/pedidos/:id/cancelar  { motivo }   (motivo = texto libre de 5 a 200 caracteres; acepta Idempotency-Key)
  * El pedido NO se borra (queda el historial): pasa a `cancelado` con su motivo.
- *  - registrado / enviado: lo puede cancelar el mesero o el gerente.
+ *  - registrado / enviado: lo puede cancelar el mesero o el gerente. Si ya se había enviado, devuelve la existencia.
  *  - en_preparacion: solo el gerente (el mesero recibe 403 `requiere_gerente`).
  *  - cuenta por_pagar o cualquier otro estado: 409.
  */
@@ -206,6 +215,8 @@ pedidosRouter.post("/:id/cancelar", requiereAuth("mesero", "gerente"), async (re
       if (cuentaPorPagar) {
         throw new ErrorApi(409, "estado_invalido", "La cuenta ya solicitó el pago: no se pueden cancelar pedidos.");
       }
+      // Si ya se había enviado a cocina, su existencia ya estaba descontada: se devuelve al inventario.
+      if (estado === "enviado" || estado === "en_preparacion") await devolverExistencia(cx, id);
       await ejecutar(cx, "UPDATE pedido SET id_estado = ?, id_motivo = ? WHERE id_pedido = ?", [
         await idEstadoPedido(cx, "cancelado"),
         await idMotivoTexto(cx, motivo),

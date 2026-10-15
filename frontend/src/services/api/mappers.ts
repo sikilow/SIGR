@@ -1,6 +1,9 @@
 // ÚNICO lugar donde se traduce entre el JSON de la API (snake_case, PROVISIONAL)
 // y los tipos del frontend (camelCase). Si la API cambia de convención, solo se edita este archivo.
 import type {
+  CambioProducto,
+  CambioUsuario,
+  CategoriaAdmin,
   CategoriaMenu,
   Cuenta,
   DisponibilidadProducto,
@@ -13,11 +16,15 @@ import type {
   Mesa,
   MotivoCancelacion,
   NuevoPedido,
+  NuevoProducto,
+  NuevoUsuario,
   Pedido,
   Producto,
+  ProductoAdmin,
   Rol,
   TipoPago,
   Usuario,
+  UsuarioAdmin,
 } from '../../types'
 
 // ---------- DTOs: formato de la API ----------
@@ -60,6 +67,7 @@ export interface CategoriaMenuDto {
 export interface DisponibilidadDto {
   producto_id: number
   disponible: boolean
+  existencia?: number
 }
 
 export interface DetallePedidoDto {
@@ -134,6 +142,7 @@ export function aDisponibilidad(dto: DisponibilidadDto): DisponibilidadProducto 
   return {
     productoId: dto.producto_id,
     disponible: dto.disponible,
+    ...(dto.existencia !== undefined ? { existencia: dto.existencia } : {}),
   }
 }
 
@@ -197,4 +206,117 @@ export function deCancelacion(motivo: MotivoCancelacion) {
 
 export function deItemsDisponibilidad(items: ItemDisponibilidad[]) {
   return { items: items.map((i) => ({ producto_id: i.productoId })) }
+}
+
+// ---------- Módulo del gerente ----------
+
+export interface UsuarioAdminDto {
+  id: number
+  nombre: string
+  correo: string
+  usuario: string
+  rol: Rol
+  activo: boolean
+  telefono: string | null
+  creado_en: string
+  ultimo_acceso: string | null
+}
+
+export interface CategoriaAdminDto {
+  id: number
+  nombre: string
+  total_productos: number
+}
+
+export interface ProductoAdminDto {
+  id: number
+  categoria_id: number
+  categoria: string
+  nombre: string
+  descripcion: string
+  precio: number
+  activo: boolean
+  existencia: number
+  stock_minimo: number
+  disponible: boolean
+}
+
+export function aUsuarioAdmin(dto: UsuarioAdminDto): UsuarioAdmin {
+  return {
+    id: dto.id,
+    nombre: dto.nombre,
+    correo: dto.correo,
+    usuario: dto.usuario,
+    rol: dto.rol,
+    activo: dto.activo,
+    telefono: dto.telefono,
+    creadoEn: dto.creado_en,
+    ultimoAcceso: dto.ultimo_acceso,
+  }
+}
+
+export function aCategoriaAdmin(dto: CategoriaAdminDto): CategoriaAdmin {
+  return { id: dto.id, nombre: dto.nombre, totalProductos: dto.total_productos }
+}
+
+export function aProductoAdmin(dto: ProductoAdminDto): ProductoAdmin {
+  return {
+    id: dto.id,
+    categoriaId: dto.categoria_id,
+    categoria: dto.categoria,
+    nombre: dto.nombre,
+    descripcion: dto.descripcion,
+    precio: dto.precio,
+    activo: dto.activo,
+    existencia: dto.existencia,
+    stockMinimo: dto.stock_minimo,
+    disponible: dto.disponible,
+  }
+}
+
+export function deNuevoUsuario(u: NuevoUsuario) {
+  return {
+    nombre: u.nombre.trim(),
+    correo: u.correo.trim(),
+    usuario: u.usuario.trim(),
+    contrasena: u.contrasena,
+    rol: u.rol,
+    ...(u.telefono?.trim() ? { telefono: u.telefono.trim() } : {}),
+  }
+}
+
+/** Solo viajan los campos que cambiaron (PATCH parcial). */
+export function deCambioUsuario(c: CambioUsuario) {
+  return {
+    ...(c.nombre !== undefined ? { nombre: c.nombre.trim() } : {}),
+    ...(c.correo !== undefined ? { correo: c.correo.trim() } : {}),
+    ...(c.usuario !== undefined ? { usuario: c.usuario.trim() } : {}),
+    ...(c.rol !== undefined ? { rol: c.rol } : {}),
+    ...(c.activo !== undefined ? { activo: c.activo } : {}),
+    ...(c.telefono !== undefined ? { telefono: c.telefono?.trim() ? c.telefono.trim() : null } : {}),
+  }
+}
+
+export function deNuevoProducto(p: NuevoProducto) {
+  return {
+    categoria_id: p.categoriaId,
+    nombre: p.nombre.trim(),
+    descripcion: p.descripcion.trim(),
+    precio: p.precio,
+    activo: p.activo,
+    existencia: p.existencia,
+    stock_minimo: p.stockMinimo,
+  }
+}
+
+export function deCambioProducto(c: CambioProducto) {
+  return {
+    ...(c.categoriaId !== undefined ? { categoria_id: c.categoriaId } : {}),
+    ...(c.nombre !== undefined ? { nombre: c.nombre.trim() } : {}),
+    ...(c.descripcion !== undefined ? { descripcion: c.descripcion.trim() } : {}),
+    ...(c.precio !== undefined ? { precio: c.precio } : {}),
+    ...(c.activo !== undefined ? { activo: c.activo } : {}),
+    ...(c.existencia !== undefined ? { existencia: c.existencia } : {}),
+    ...(c.stockMinimo !== undefined ? { stock_minimo: c.stockMinimo } : {}),
+  }
 }

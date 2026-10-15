@@ -1,4 +1,5 @@
 import type { Servicios } from '../interfaces'
+import { crearCatalogoMock, crearUsuariosMock } from './adminMock'
 import { crearAuthMock } from './authMock'
 import { crearCuentasMock } from './cuentasMock'
 import { crearMenuMock } from './menuMock'
@@ -15,5 +16,7 @@ export function crearServiciosMock(): Servicios {
     menu: crearMenuMock(),
     pedidos: crearPedidosMock(),
     cuentas: crearCuentasMock(),
+    usuarios: crearUsuariosMock(),
+    catalogo: crearCatalogoMock(),
   }
 }

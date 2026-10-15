@@ -123,9 +123,12 @@ async function explicarRechazo(e: ErrorServicio, pedido: Pedido) {
     }
   } else if (e.codigo === 'producto_agotado' && e.faltantes.length > 0) {
     const nombres = e.faltantes
-      .map((f) => pedido.detalle.find((d) => d.productoId === f.productoId)?.nombreProducto ?? `Producto ${f.productoId}`)
+      .map((f) => {
+        const nombre = pedido.detalle.find((d) => d.productoId === f.productoId)?.nombreProducto ?? `Producto ${f.productoId}`
+        return f.existencia !== undefined && f.existencia > 0 ? `${nombre} (solo quedan ${f.existencia})` : `${nombre} (agotado)`
+      })
       .join(', ')
-    rechazo.value = `Hay productos agotados: ${nombres}. Edita el pedido para quitarlos.`
+    rechazo.value = `No hay existencia suficiente: ${nombres}. Edita el pedido para ajustarlo.`
   }
   void invalidarDatos()
 }

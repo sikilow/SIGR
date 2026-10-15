@@ -117,6 +117,80 @@ export async function exigirDisponibles(ex: Ejecutor, ids: number[]): Promise<Ma
   return productos;
 }
 
+// ---------- Existencia (inventario) ----------
+// La existencia se DESCUENTA al enviar el pedido a cocina y se DEVUELVE si se cancela después de enviarlo.
+// Mientras el pedido solo está `registrado` no se descuenta (solo se avisa si ya no alcanza).
+export interface LineaCantidad {
+  producto_id: number;
+  cantidad: number;
+}
+
+/** Suma las cantidades por producto (el mismo producto puede venir en varias líneas). */
+function sumarPorProducto(lineas: LineaCantidad[]): Map<number, number> {
+  const mapa = new Map<number, number>();
+  for (const l of lineas) mapa.set(l.producto_id, (mapa.get(l.producto_id) ?? 0) + l.cantidad);
+  return mapa;
+}
+
+/**
+ * Revisa que la existencia alcance para las cantidades pedidas. Lanza 409 `producto_agotado` con el detalle
+ * (cuánto se pidió y cuánto queda). Con `descontar: true` además resta la existencia, bloqueando las filas de
+ * inventario (FOR UPDATE, siempre en orden de id para evitar interbloqueos): dos meseros que piden lo último
+ * a la vez no pueden vender el mismo producto dos veces. Debe llamarse dentro de una transacción.
+ */
+export async function verificarExistencia(ex: Ejecutor, lineas: LineaCantidad[], descontar: boolean): Promise<void> {
+  const pedidas = sumarPorProducto(lineas);
+  const ids = [...pedidas.keys()].sort((a, b) => a - b);
+  if (ids.length === 0) return;
+
+  const inventario = await filas(
+    ex,
+    `SELECT id_producto, existencia FROM disponibilidadProducto WHERE id_producto IN (?) ORDER BY id_producto${descontar ? " FOR UPDATE" : ""}`,
+    [ids],
+  );
+  const existencias = new Map(inventario.map((r) => [r.id_producto as number, r.existencia as number]));
+  const productos = await filas(ex, "SELECT id_producto, nombre, disponible FROM producto WHERE id_producto IN (?)", [ids]);
+  const infoProducto = new Map(productos.map((r) => [r.id_producto as number, { nombre: r.nombre as string, activo: Boolean(r.disponible) }]));
+
+  const faltantes = ids
+    .map((id) => {
+      const info = infoProducto.get(id);
+      const queda = info?.activo ? (existencias.get(id) ?? 0) : 0;
+      return { id, nombre: info?.nombre ?? `Producto ${id}`, pedidas: pedidas.get(id)!, queda };
+    })
+    .filter((f) => f.queda < f.pedidas);
+
+  if (faltantes.length > 0) {
+    const texto = faltantes
+      .map((f) => (f.queda === 0 ? `${f.nombre} (agotado)` : `${f.nombre} (pides ${f.pedidas}, solo quedan ${f.queda})`))
+      .join("; ");
+    throw new ErrorApi(409, "producto_agotado", `No hay existencia suficiente: ${texto}.`, {
+      productos: faltantes.map((f) => ({ producto_id: f.id, disponible: false, existencia: f.queda, solicitado: f.pedidas })),
+    });
+  }
+
+  if (descontar) {
+    for (const id of ids) {
+      await ejecutar(ex, "UPDATE disponibilidadProducto SET existencia = existencia - ? WHERE id_producto = ?", [pedidas.get(id)!, id]);
+    }
+  }
+}
+
+/** Devuelve al inventario lo que consumió un pedido ya enviado (al cancelarlo). Dentro de una transacción. */
+export async function devolverExistencia(ex: Ejecutor, pedidoId: number): Promise<void> {
+  const lineas = await filas(
+    ex,
+    "SELECT id_producto, SUM(cantidad) AS cantidad FROM detalle_pedido WHERE id_pedido = ? GROUP BY id_producto ORDER BY id_producto",
+    [pedidoId],
+  );
+  for (const l of lineas) {
+    await ejecutar(ex, "UPDATE disponibilidadProducto SET existencia = existencia + ? WHERE id_producto = ?", [
+      Number(l.cantidad),
+      l.id_producto,
+    ]);
+  }
+}
+
 // ---------- Pedidos ----------
 export interface DetallePedidoDto {
   producto_id: number;
