@@ -1,0 +1,205 @@
+/* Reinicio mínimo y componentes base reutilizables. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--fuente);
+  font-size: var(--texto-base);
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.25;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+/* Foco visible para uso con teclado y lectores de pantalla */
+:focus-visible {
+  outline: 3px solid var(--color-primary-dark);
+  outline-offset: 2px;
+}
+
+/* Botones: siempre ≥ 48px de alto */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2);
+  min-height: var(--tactil-min);
+  min-width: var(--tactil-min);
+  padding: 0 var(--espacio-5);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radio);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color 150ms ease-out,
+    transform 100ms ease-out;
+}
+
+/* Feedback inmediato al presionar (sin cambiar el espacio que ocupa el botón) */
+.btn:active:not(:disabled):not([aria-disabled='true']) {
+  transform: scale(0.97);
+}
+
+.btn:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+}
+
+/* Acción destructiva (p. ej. quitar): rojo de error con texto blanco (AA) */
+.btn--peligro {
+  border-color: var(--color-error);
+  background: var(--color-error);
+}
+
+.btn--peligro:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: #7f1d1d;
+  background: #7f1d1d;
+}
+
+/* Deshabilitado: relleno neutro y texto oscuro (legible), sin depender solo de la opacidad */
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  border-color: #c9bbaa;
+  background: #ece3d9;
+  color: #4b5563;
+  cursor: not-allowed;
+}
+
+.btn--secundario {
+  background: var(--color-surface);
+  color: var(--color-primary-dark);
+}
+
+.btn--secundario:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-bg);
+  color: var(--color-primary-dark);
+}
+
+/* Chips de filtro/categoría (≥ 48 px). Activo: relleno + check + aria-pressed, no solo color */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  min-height: var(--tactil-min);
+  padding: 0 var(--espacio-5);
+  border: 2px solid var(--color-muted);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 150ms ease-out;
+}
+
+.chip:active {
+  background: var(--color-border);
+}
+
+.chip--activo,
+.chip--activo:active {
+  border-color: var(--color-primary-dark);
+  background: var(--color-primary-dark);
+  color: var(--color-on-primary);
+}
+
+.tarjeta {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  padding: var(--espacio-6);
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+  font-weight: 600;
+}
+
+.campo input {
+  min-height: var(--tactil-min);
+  padding: 0 var(--espacio-4);
+  border: 2px solid var(--color-muted);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface);
+  font-weight: 400;
+}
+
+.texto-error {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Enlace para saltar la navegación (teclado y lectores de pantalla) */
+.saltar-contenido {
+  position: absolute;
+  top: var(--espacio-2);
+  left: var(--espacio-2);
+  z-index: 100;
+  padding: var(--espacio-3) var(--espacio-4);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface);
+  color: var(--color-primary-dark);
+  font-weight: 700;
+  transform: translateY(-200%);
+}
+
+.saltar-contenido:focus {
+  transform: none;
+}
+
+/* Cifras de ancho fijo para precios y totales */
+.numero {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+}

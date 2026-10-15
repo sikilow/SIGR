@@ -1,0 +1,24 @@
+# Dependencias y compilación
+node_modules
+dist
+dist-ssr
+*.tsbuildinfo
+
+# Variables de entorno locales (.env.example sí se versiona)
+.env
+.env.*
+!.env.example
+*.local
+
+# Registros
+logs
+*.log
+npm-debug.log*
+
+# Editores y sistema
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.sw?
