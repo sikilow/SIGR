@@ -16,15 +16,15 @@ const noExiste = (que: string) => new ErrorServicio('no_encontrado', `${que} no 
 interface DatosExtra {
   correo: string
   telefono: string | null
-  creadoEn: string
-  ultimoAcceso: string | null
+  creadoEn: Date
+  ultimoAcceso: Date | null
 }
 const extra = new Map<number, DatosExtra>()
 
 function datosExtra(id: number, usuario: string): DatosExtra {
   let d = extra.get(id)
   if (!d) {
-    d = { correo: `${usuario}@sigr.com`, telefono: null, creadoEn: new Date().toISOString(), ultimoAcceso: null }
+    d = { correo: `${usuario}@sigr.com`, telefono: null, creadoEn: new Date(), ultimoAcceso: null }
     extra.set(id, d)
   }
   return d
@@ -78,7 +78,7 @@ export function crearUsuariosMock(): UsuariosService {
           contrasena: n.contrasena,
           activo: true,
         })
-        extra.set(id, { correo: n.correo.trim(), telefono: n.telefono?.trim() || null, creadoEn: new Date().toISOString(), ultimoAcceso: null })
+        extra.set(id, { correo: n.correo.trim(), telefono: n.telefono?.trim() || null, creadoEn: new Date(), ultimoAcceso: null })
         return aAdmin(id)
       })
     },

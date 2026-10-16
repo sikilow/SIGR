@@ -22,11 +22,11 @@ import type {
   Pedido,
   Producto,
   ProductoAdmin,
-  Rol,
   TipoPago,
   Usuario,
   UsuarioAdmin,
 } from '../../types'
+import { ErrorServicio } from '../errores'
 import {
   aBooleano,
   aEstadoCuenta,
@@ -69,7 +69,7 @@ export interface MesaDto {
   pedidos_activos: Numerico | null
   total_cuenta: Numerico | null
   pedidos_listos: Numerico | null
-  /** SIN COLUMNA EN BD (propuesta: cuenta.tipo_pago_solicitado). Opcional: si no llega, el panel muestra solo "Cuenta solicitada". */
+  /** cuenta.tipo_pago_solicitado ("fisico" | "digital"), de la cuenta activa. Opcional: si no llega, el panel muestra solo "Cuenta solicitada". */
   tipo_pago_solicitado?: string | null
 }
 
@@ -134,7 +134,7 @@ export interface CuentaDto {
   // --- CALCULADOS por la API (no son columnas de `cuenta`) ---
   pedidos: PedidoDto[]
   total: Numerico
-  /** SIN COLUMNA EN BD (propuesta: cuenta.tipo_pago_solicitado). */
+  /** cuenta.tipo_pago_solicitado (fisico o digital); NULL mientras no se solicite. */
   tipo_pago_solicitado: string | null
 }
 
@@ -260,12 +260,12 @@ export function deActualizacionPedido(detalle: LineaNuevoPedido[]) {
   return { detalle: deLineas(detalle) }
 }
 
-/** Cuerpo de POST /pedidos/{id}/cancelar: la `descripcion` de motivo_cancelacion (5 a 180 caracteres). */
+/** Cuerpo de POST /pedidos/{id}/cancelar: la `descripcion` de motivo_cancelacion (5 a 200 caracteres). */
 export function deCancelacion(descripcion: string) {
   return { descripcion: descripcion.trim() }
 }
 
-/** Cuerpo de POST /cuentas/{id}/solicitar-pago. SIN COLUMNA EN BD (propuesta: cuenta.tipo_pago_solicitado). */
+/** Cuerpo de POST /cuentas/{id}/solicitar-pago: la columna cuenta.tipo_pago_solicitado. */
 export function deSolicitudPago(tipo: TipoPago) {
   return { tipo_pago_solicitado: tipo }
 }
@@ -277,66 +277,82 @@ export function deItemsDisponibilidad(items: ItemDisponibilidad[]) {
 // ---------- Módulo del gerente ----------
 
 export interface UsuarioAdminDto {
-  id: number
+  id_usuario: Numerico
+  id_rol: Numerico
   nombre: string
   correo: string
-  usuario: string
-  rol: Rol
-  activo: boolean
+  /** credenciales.nombre_usuario */
+  nombre_usuario: string
+  /** CALCULADO por la API (JOIN con rol.nombre), p. ej. "Mesero". */
+  rol: string
+  activo: Booleano
+  /** perfil_usuario.telefono */
   telefono: string | null
   creado_en: string
+  /** credenciales.ultimo_acceso */
   ultimo_acceso: string | null
 }
 
 export interface CategoriaAdminDto {
-  id: number
+  id_categoria: Numerico
   nombre: string
-  total_productos: number
+  /** CALCULADO por la API: cantidad de productos de la categoría. */
+  total_productos: Numerico
 }
 
 export interface ProductoAdminDto {
-  id: number
-  categoria_id: number
+  id_producto: Numerico
+  id_categoria: Numerico
+  /** CALCULADO por la API (JOIN con categoria_menu.nombre). */
   categoria: string
   nombre: string
-  descripcion: string
-  precio: number
-  activo: boolean
-  existencia: number
-  stock_minimo: number
-  disponible: boolean
+  descripcion: string | null
+  precio: Numerico
+  /** producto.disponible: el gerente lo tiene activo en el menú. */
+  activo: Booleano
+  /** disponibilidadProducto.existencia / stock_minimo (tabla fuera del alcance del mesero). */
+  existencia: Numerico
+  stock_minimo: Numerico
+  /** CALCULADO por la API: activo y con existencia mayor a 0 (lo que ve el mesero). */
+  disponible: Booleano
 }
 
 export function aUsuarioAdmin(dto: UsuarioAdminDto): UsuarioAdmin {
+  const rol = aRol(dto.rol)
+  if (!rol) throw new ErrorServicio('desconocido', `Respuesta inválida de la API: el rol ${JSON.stringify(dto.rol)} no existe.`)
   return {
-    idUsuario: dto.id,
+    idUsuario: aNumero(dto.id_usuario, 'id_usuario'),
     nombre: dto.nombre,
     correo: dto.correo,
-    nombreUsuario: dto.usuario,
-    rol: dto.rol,
-    activo: dto.activo,
-    telefono: dto.telefono,
-    creadoEn: dto.creado_en,
-    ultimoAcceso: dto.ultimo_acceso,
+    nombreUsuario: dto.nombre_usuario,
+    rol,
+    activo: aBooleano(dto.activo, 'activo'),
+    telefono: dto.telefono ?? null,
+    creadoEn: parseFechaMySQL(dto.creado_en, 'creado_en'),
+    ultimoAcceso: parseFechaMySQLONula(dto.ultimo_acceso, 'ultimo_acceso'),
   }
 }
 
 export function aCategoriaAdmin(dto: CategoriaAdminDto): CategoriaAdmin {
-  return { idCategoria: dto.id, nombre: dto.nombre, totalProductos: dto.total_productos }
+  return {
+    idCategoria: aNumero(dto.id_categoria, 'id_categoria'),
+    nombre: dto.nombre,
+    totalProductos: aNumero(dto.total_productos, 'total_productos'),
+  }
 }
 
 export function aProductoAdmin(dto: ProductoAdminDto): ProductoAdmin {
   return {
-    idProducto: dto.id,
-    idCategoria: dto.categoria_id,
+    idProducto: aNumero(dto.id_producto, 'id_producto'),
+    idCategoria: aNumero(dto.id_categoria, 'id_categoria'),
     categoria: dto.categoria,
     nombre: dto.nombre,
-    descripcion: dto.descripcion,
-    precio: dto.precio,
-    activo: dto.activo,
-    existencia: dto.existencia,
-    stockMinimo: dto.stock_minimo,
-    disponible: dto.disponible,
+    descripcion: aTexto(dto.descripcion),
+    precio: aNumero(dto.precio, 'precio'),
+    activo: aBooleano(dto.activo, 'activo'),
+    existencia: aNumero(dto.existencia, 'existencia'),
+    stockMinimo: aNumero(dto.stock_minimo, 'stock_minimo'),
+    disponible: aBooleano(dto.disponible, 'disponible'),
   }
 }
 
@@ -344,7 +360,7 @@ export function deNuevoUsuario(u: NuevoUsuario) {
   return {
     nombre: u.nombre.trim(),
     correo: u.correo.trim(),
-    usuario: u.nombreUsuario.trim(),
+    nombre_usuario: u.nombreUsuario.trim(),
     contrasena: u.contrasena,
     rol: u.rol,
     ...(u.telefono?.trim() ? { telefono: u.telefono.trim() } : {}),
@@ -356,7 +372,7 @@ export function deCambioUsuario(c: CambioUsuario) {
   return {
     ...(c.nombre !== undefined ? { nombre: c.nombre.trim() } : {}),
     ...(c.correo !== undefined ? { correo: c.correo.trim() } : {}),
-    ...(c.nombreUsuario !== undefined ? { usuario: c.nombreUsuario.trim() } : {}),
+    ...(c.nombreUsuario !== undefined ? { nombre_usuario: c.nombreUsuario.trim() } : {}),
     ...(c.rol !== undefined ? { rol: c.rol } : {}),
     ...(c.activo !== undefined ? { activo: c.activo } : {}),
     ...(c.telefono !== undefined ? { telefono: c.telefono?.trim() ? c.telefono.trim() : null } : {}),
@@ -365,7 +381,7 @@ export function deCambioUsuario(c: CambioUsuario) {
 
 export function deNuevoProducto(p: NuevoProducto) {
   return {
-    categoria_id: p.idCategoria,
+    id_categoria: p.idCategoria,
     nombre: p.nombre.trim(),
     descripcion: p.descripcion.trim(),
     precio: p.precio,
@@ -377,7 +393,7 @@ export function deNuevoProducto(p: NuevoProducto) {
 
 export function deCambioProducto(c: CambioProducto) {
   return {
-    ...(c.idCategoria !== undefined ? { categoria_id: c.idCategoria } : {}),
+    ...(c.idCategoria !== undefined ? { id_categoria: c.idCategoria } : {}),
     ...(c.nombre !== undefined ? { nombre: c.nombre.trim() } : {}),
     ...(c.descripcion !== undefined ? { descripcion: c.descripcion.trim() } : {}),
     ...(c.precio !== undefined ? { precio: c.precio } : {}),

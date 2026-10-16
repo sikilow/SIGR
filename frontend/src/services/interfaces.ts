@@ -65,7 +65,7 @@ export interface PedidosService {
    * POST /pedidos/{id}/cancelar (con `Idempotency-Key`). Cuerpo: `{ descripcion }`.
    * El mesero solo cancela en `registrado` o `enviado` (`pendiente` cuenta como `enviado`); en `en_preparacion`
    * falla con `ErrorServicio('requiere_gerente')`. `descripcion` (motivo_cancelacion.descripcion) es texto
-   * libre de 5 a 180 caracteres.
+   * libre de 5 a 200 caracteres.
    */
   cancelar(id: number, descripcion: string, claveIdempotencia?: string): Promise<Pedido>
   /**

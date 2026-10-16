@@ -135,13 +135,16 @@ describe('estados de pedido (catálogo estado_pedido)', () => {
 describe('estados de mesa y de cuenta (texto libre en la BD)', () => {
   it('mesa: disponible, ocupada y reservada', () => {
     expect(aEstadoMesa('disponible')).toBe('disponible')
+    // La BD (CHECK de schema.sql) guarda `libre`: es el mismo estado que `disponible`.
+    expect(aEstadoMesa('libre')).toBe('disponible')
+    expect(aEstadoMesa('Libre')).toBe('disponible')
     expect(aEstadoMesa('Ocupada')).toBe('ocupada')
     expect(aEstadoMesa('RESERVADA')).toBe('reservada')
   })
 
-  it('mesa: lo que no esté en la lista (incluido "libre") es desconocido', () => {
-    expect(aEstadoMesa('libre')).toBe('desconocido')
+  it('mesa: lo que no esté en la lista es desconocido', () => {
     expect(aEstadoMesa('en limpieza')).toBe('desconocido')
+    expect(aEstadoMesa('')).toBe('desconocido')
     expect(advertencia).toHaveBeenCalledTimes(2)
   })
 

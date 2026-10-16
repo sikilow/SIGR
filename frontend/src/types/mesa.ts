@@ -22,6 +22,6 @@ export interface Mesa {
   /** Cantidad de pedidos en estado `listo` (cocina terminó; falta servirlos). */
   pedidosListos: number
 
-  /** SIN COLUMNA EN BD (propuesta: `cuenta.tipo_pago_solicitado`). `null` si no se solicitó o la API no lo envía. */
+  /** cuenta.tipo_pago_solicitado de la cuenta activa (columna de `cuenta`, no de `mesa`). `null` si no se solicitó o la API no lo envía. */
   tipoPagoSolicitado: TipoPago | null
 }

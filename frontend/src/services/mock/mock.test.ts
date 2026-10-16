@@ -73,16 +73,16 @@ describe('mock: cancelar pedido', () => {
     expect(pedido.idMotivo).toEqual(expect.any(Number))
   })
 
-  it('exige un motivo de 5 a 180 caracteres', async () => {
+  it('exige un motivo de 5 a 200 caracteres', async () => {
     const { pedidos } = await nuevoMock()
     expect(await codigoDeError(pedidos.cancelar(6, 'abc'))).toBe('estado_invalido')
-    expect(await codigoDeError(pedidos.cancelar(6, 'x'.repeat(181)))).toBe('estado_invalido')
+    expect(await codigoDeError(pedidos.cancelar(6, 'x'.repeat(201)))).toBe('estado_invalido')
   })
 
-  it('acepta un motivo de exactamente 180 caracteres', async () => {
+  it('acepta un motivo de exactamente 200 caracteres', async () => {
     const { pedidos } = await nuevoMock()
-    const pedido = await resolver(pedidos.cancelar(6, 'x'.repeat(180)))
-    expect(pedido.motivoDescripcion).toHaveLength(180)
+    const pedido = await resolver(pedidos.cancelar(6, 'x'.repeat(200)))
+    expect(pedido.motivoDescripcion).toHaveLength(200)
   })
 
   it('con la cuenta por_pagar devuelve estado_invalido (suposición documentada)', async () => {

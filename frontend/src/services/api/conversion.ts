@@ -109,8 +109,12 @@ function buscarCodigo<T extends string>(validos: readonly T[], original: unknown
   return validos.find((v) => v === codigo) ?? null
 }
 
-/** `mesa.estado` → código. Un valor fuera de la lista da `desconocido` (y una advertencia en consola). */
+/**
+ * `mesa.estado` → código. El CHECK de database/schema.sql admite `libre`, `ocupada` y `reservada`: `libre` es el
+ * mismo estado que la interfaz llama `disponible`. Un valor fuera de esas listas da `desconocido` (y una advertencia).
+ */
 export function aEstadoMesa(original: unknown): EstadoMesa {
+  if (normalizarCodigo(original) === 'libre') return 'disponible'
   const estado = buscarCodigo(ESTADOS_MESA, original)
   if (estado) return estado
   advertirDesconocido('Estado de mesa', original)

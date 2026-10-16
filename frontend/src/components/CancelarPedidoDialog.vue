@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Cancelar un pedido (diálogo modal), reutilizado desde Mis pedidos y desde Cuenta de mesa.
-// Pide un motivo OBLIGATORIO (texto libre de 5 a 180 caracteres = motivo_cancelacion.descripcion; los atajos solo rellenan el texto),
+// Pide un motivo OBLIGATORIO (texto libre de 5 a 200 caracteres = motivo_cancelacion.descripcion; los atajos solo rellenan el texto),
 // llama a POST /pedidos/{id}/cancelar y, si sale bien, anuncia el resultado y recarga pedidos,
 // cuenta y mesas. Los reintentos tras un fallo de red reutilizan la misma Idempotency-Key.
 import { computed, nextTick, ref, watch } from 'vue'

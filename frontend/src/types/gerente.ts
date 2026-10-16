@@ -14,10 +14,10 @@ export interface UsuarioAdmin {
   activo: boolean
   /** perfil_usuario.telefono (tabla fuera del alcance del mesero). */
   telefono: string | null
-  /** usuario.creado_en */
-  creadoEn: string
-  /** credenciales.ultimo_acceso */
-  ultimoAcceso: string | null
+  /** usuario.creado_en (DATETIME, hora local). */
+  creadoEn: Date
+  /** credenciales.ultimo_acceso (DATETIME, NULL si nunca entró). */
+  ultimoAcceso: Date | null
 }
 
 export interface NuevoUsuario {

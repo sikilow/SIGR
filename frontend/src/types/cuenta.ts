@@ -2,7 +2,7 @@
 import type { EstadoCuenta } from './estados'
 import type { Pedido } from './pedido'
 
-/** Forma de pago solicitada: cobro en caja física o pago digital. SIN COLUMNA EN BD (propuesta: `tipo_pago_solicitado`). */
+/** Forma de pago solicitada: cobro en caja física o pago digital (cuenta.tipo_pago_solicitado). */
 export type TipoPago = 'fisico' | 'digital'
 
 /** Una cuenta activa por mesa; agrupa varios pedidos. */
@@ -24,6 +24,6 @@ export interface Cuenta {
   /** Suma de cantidad × precio_unitario de los pedidos no cancelados, en MXN. */
   total: number
 
-  /** SIN COLUMNA EN BD (propuesta: `cuenta.tipo_pago_solicitado`). */
+  /** cuenta.tipo_pago_solicitado; NULL mientras no se solicite. */
   tipoPagoSolicitado: TipoPago | null
 }

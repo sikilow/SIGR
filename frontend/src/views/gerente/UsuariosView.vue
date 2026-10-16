@@ -130,8 +130,8 @@ async function confirmarCambioEstado() {
   }
 }
 
-const fechaCorta = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : 'Nunca'
+const fechaCorta = (fecha: Date | null) =>
+  fecha ? fecha.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : 'Nunca'
 
 const FILTROS: Array<{ clave: Filtro; texto: string }> = [
   { clave: 'activos', texto: 'Activos' },

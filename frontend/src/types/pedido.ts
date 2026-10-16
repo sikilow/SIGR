@@ -65,6 +65,6 @@ export interface MotivoCancelacion {
   descripcion: string
 }
 
-/** motivo_cancelacion.descripcion es VARCHAR(180): el texto de cancelación va de 5 a 180 caracteres. */
+/** motivo_cancelacion.descripcion es VARCHAR(200) en database/schema.sql: el texto de cancelación va de 5 a 200 caracteres. */
 export const DESCRIPCION_MOTIVO_MIN = 5
-export const DESCRIPCION_MOTIVO_MAX = 180
+export const DESCRIPCION_MOTIVO_MAX = 200

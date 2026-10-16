@@ -93,7 +93,7 @@ Pantalla de inicio del mesero y punto de partida hacia Pedido de mesa, Cuenta de
   Disponibles y reservadas se ven atenuadas. Toda la tarjeta es un botón.
 - **Resumen y filtros:** contadores por estado y chips Todas / Disponibles / Ocupadas / Reservadas /
   Pedido listo (`aria-pressed`). El filtro vive en la URL: `?estado=disponible|ocupada|reservada|listo`
-  (`?estado=libre`, el nombre anterior, se sigue aceptando como alias de `disponible`).
+  (`?estado=libre`, el valor que guarda la BD, se sigue aceptando como alias de `disponible`).
 - **Hoja de acciones** (`HojaAccionesMesa`, `<dialog>` modal): una mesa **ocupada** ofrece Nuevo
   pedido, Ver cuenta y Pedidos de la mesa (Nuevo pedido se bloquea si la cuenta está `por_pagar`).
   Una mesa disponible o reservada solo se puede cerrar: la hostess la asigna. Foco atrapado, Escape
@@ -216,7 +216,7 @@ Se llega desde "Ver cuenta" de la hoja de acciones del panel y desde la confirma
 ## Cancelar pedido (`CancelarPedidoDialog`)
 
 Diálogo modal reutilizado desde Mis pedidos y Cuenta de mesa: resumen del pedido, aviso "Esta acción no
-se puede deshacer", **motivo obligatorio** (texto de 5 a 180 caracteres con contador, el largo de `motivo_cancelacion.descripcion`) y atajos que solo
+se puede deshacer", **motivo obligatorio** (texto de 5 a 200 caracteres con contador, el largo de `motivo_cancelacion.descripcion`) y atajos que solo
 rellenan el texto. Botones "No cancelar" y "Cancelar pedido" (destructivo: `--color-peligro`, siempre con
 texto + ícono). Éxito: aviso "Pedido #N cancelado", recarga de pedidos, cuenta y mesas, y el foco vuelve
 al botón de origen (o al encabezado si ese botón ya no existe). Errores: `requiere_gerente` y
