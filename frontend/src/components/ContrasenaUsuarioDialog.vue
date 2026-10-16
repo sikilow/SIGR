@@ -51,7 +51,7 @@ async function guardar() {
   errorServidor.value = ''
   enCurso.value = true
   try {
-    await servicios.usuarios.cambiarContrasena(u.id, nueva.value)
+    await servicios.usuarios.cambiarContrasena(u.idUsuario, nueva.value)
     emit('cambiada', u)
   } catch (e) {
     errorServidor.value = e instanceof ErrorServicio ? e.message : 'Ocurrió un error inesperado.'
@@ -65,7 +65,7 @@ async function guardar() {
   <DialogoModal :abierto="abierto" etiqueta-id="pw-titulo" variante="centro" :cerrable="!enCurso" :origen-foco="origenFoco ?? null" @cerrar="emit('cerrar')">
     <form v-if="usuario" class="form" novalidate @submit.prevent="guardar">
       <h2 id="pw-titulo">Cambiar contraseña de {{ usuario.nombre }}</h2>
-      <p class="form__texto">Usuario: <strong>{{ usuario.usuario }}</strong>. La contraseña anterior deja de funcionar de inmediato.</p>
+      <p class="form__texto">Usuario: <strong>{{ usuario.nombreUsuario }}</strong>. La contraseña anterior deja de funcionar de inmediato.</p>
 
       <div class="campo">
         <label for="pw-nueva">Nueva contraseña</label>

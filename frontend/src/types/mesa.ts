@@ -1,27 +1,27 @@
-// PROVISIONAL: modelo de dominio pendiente de validar con el equipo de API.
-import type { EstadoCuentaActiva, TipoPago } from './cuenta'
-
-export type EstadoMesa = 'libre' | 'ocupada' | 'reservada'
+// Tipo `Mesa` (tabla `mesa`). Ver docs/equivalencias-bd.md.
+import type { TipoPago } from './cuenta'
+import type { EstadoCuentaActiva, EstadoMesa } from './estados'
 
 export interface Mesa {
-  id: number
-  /** Número visible en el salón (puede diferir del id). */
+  /** mesa.id_mesa */
+  idMesa: number
+  /** mesa.numero: número visible en el salón (puede diferir del id). */
   numero: number
+  /** mesa.capacidad (siempre mayor que 0). */
   capacidad: number
+  /** mesa.estado (texto libre en la BD). */
   estado: EstadoMesa
 
-  // --- CAMBIO PROPUESTO EN F3: resumen de la cuenta activa, para el Panel de mesas ---
+  // --- Campos CALCULADOS por la API (no son columnas de `mesa`) ---
   /** Estado de la cuenta activa de la mesa; `null` si no hay cuenta activa. */
   estadoCuenta: EstadoCuentaActiva | null
   /** Pedidos de la cuenta activa que no están cancelados ni pagados. */
   pedidosActivos: number
   /** Total acumulado de la cuenta activa (sin pedidos cancelados), en MXN. */
   totalCuenta: number
-  /**
-   * CAMBIO PROPUESTO EN F6: tipo de pago ya solicitado (`null` si la cuenta aún no se solicitó o si la
-   * API no lo envía). El panel lo usa para mostrar "Cuenta solicitada · Pago digital".
-   */
-  tipoPagoSolicitado: TipoPago | null
   /** Cantidad de pedidos en estado `listo` (cocina terminó; falta servirlos). */
   pedidosListos: number
+
+  /** cuenta.tipo_pago_solicitado de la cuenta activa (columna de `cuenta`, no de `mesa`). `null` si no se solicitó o la API no lo envía. */
+  tipoPagoSolicitado: TipoPago | null
 }

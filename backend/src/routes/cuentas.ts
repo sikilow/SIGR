@@ -8,9 +8,16 @@ import { requiereAuth } from "../middlewares/auth";
 
 export const cuentasRouter = Router();
 
-const SolicitudPago = z.object({ tipo: z.enum(["fisico", "digital"]) });
+// cuenta.tipo_pago_solicitado ('fisico' | 'digital'); se acepta `tipo` como alias para pruebas manuales.
+const SolicitudPago = z
+  .object({
+    tipo_pago_solicitado: z.enum(["fisico", "digital"]).optional(),
+    tipo: z.enum(["fisico", "digital"]).optional(),
+  })
+  .refine((d) => d.tipo_pago_solicitado ?? d.tipo, { message: "tipo_pago_solicitado es obligatorio" })
+  .transform((d) => ({ tipo: (d.tipo_pago_solicitado ?? d.tipo)! }));
 
-/** POST /api/cuentas/:id/solicitar-pago  { tipo }  →  cuenta en estado `por_pagar`. Acepta Idempotency-Key. */
+/** POST /api/cuentas/:id/solicitar-pago  { tipo_pago_solicitado }  →  cuenta en estado `por_pagar`. Acepta Idempotency-Key. */
 cuentasRouter.post("/:id/solicitar-pago", requiereAuth("mesero", "gerente"), async (req, res) => {
   const id = idDeRuta(req.params.id);
   const { tipo } = validar(SolicitudPago, req.body);

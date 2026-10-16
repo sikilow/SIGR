@@ -4,9 +4,9 @@ import { baseDatos } from './baseDatos'
 import { conRetraso } from './utiles'
 
 /** Busca un producto en todas las categorías. */
-export function buscarProducto(productoId: number): Producto | undefined {
+export function buscarProducto(idProducto: number): Producto | undefined {
   for (const categoria of baseDatos.categorias) {
-    const producto = categoria.productos.find((p) => p.id === productoId)
+    const producto = categoria.productos.find((p) => p.idProducto === idProducto)
     if (producto) return producto
   }
   return undefined
@@ -20,9 +20,9 @@ export function crearMenuMock(): MenuService {
 
     verificarDisponibilidad(items) {
       return conRetraso<DisponibilidadProducto[]>(() =>
-        items.map(({ productoId }) => ({
-          productoId,
-          disponible: buscarProducto(productoId)?.disponible ?? false,
+        items.map(({ idProducto }) => ({
+          idProducto,
+          disponible: buscarProducto(idProducto)?.disponible ?? false,
         })),
       )
     },

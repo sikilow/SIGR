@@ -7,7 +7,7 @@ defineEmits<{ 'update:modelValue': [filtro: FiltroMesas] }>()
 
 const opciones: Array<{ valor: FiltroMesas; etiqueta: string }> = [
   { valor: 'todas', etiqueta: 'Todas' },
-  { valor: 'libre', etiqueta: 'Libres' },
+  { valor: 'disponible', etiqueta: 'Disponibles' },
   { valor: 'ocupada', etiqueta: 'Ocupadas' },
   { valor: 'reservada', etiqueta: 'Reservadas' },
   { valor: 'listo', etiqueta: 'Pedido listo' },

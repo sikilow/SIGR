@@ -5,8 +5,8 @@ import { requiereAuth } from "../middlewares/auth";
 export const menuRouter = Router();
 
 interface ProductoMenu {
-  id: number;
-  categoria_id: number;
+  id_producto: number;
+  id_categoria: number;
   nombre: string;
   descripcion: string;
   precio: number;
@@ -15,7 +15,10 @@ interface ProductoMenu {
   existencia: number | null;
 }
 
-/** GET /api/menu  →  [{ id, nombre, productos: [...] }]  (solo categorías con productos) */
+/**
+ * GET /api/menu  →  [{ id_categoria, nombre, productos: [...] }]  (solo categorías con productos)
+ * `disponible` es calculado: producto.disponible (activo en el menú) Y existencia > 0.
+ */
 menuRouter.get("/", requiereAuth(), async (_req, res) => {
   const rows = await filas(
     pool,
@@ -29,17 +32,17 @@ menuRouter.get("/", requiereAuth(), async (_req, res) => {
       ORDER BY cm.id_categoria, p.id_producto`,
   );
 
-  const categorias = new Map<number, { id: number; nombre: string; productos: ProductoMenu[] }>();
+  const categorias = new Map<number, { id_categoria: number; nombre: string; productos: ProductoMenu[] }>();
   for (const r of rows) {
     const id = r.id_categoria as number;
     let categoria = categorias.get(id);
     if (!categoria) {
-      categoria = { id, nombre: r.categoria as string, productos: [] };
+      categoria = { id_categoria: id, nombre: r.categoria as string, productos: [] };
       categorias.set(id, categoria);
     }
     categoria.productos.push({
-      id: r.id_producto as number,
-      categoria_id: id,
+      id_producto: r.id_producto as number,
+      id_categoria: id,
       nombre: r.nombre as string,
       descripcion: r.descripcion as string,
       precio: Number(r.precio),

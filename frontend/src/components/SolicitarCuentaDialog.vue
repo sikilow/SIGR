@@ -67,17 +67,17 @@ watch(rechazo, async (texto) => {
   botonCerrar.value?.focus()
 })
 
-function textoSinEntregar(estado: EstadoPedido, id: number): string {
+function textoSinEntregar(estado: EstadoPedido, idPedido: number): string {
   return estado === 'registrado'
-    ? `#${id} · Registrado: aún no se envía a cocina`
-    : `#${id} · ${ETIQUETA_ESTADO_PEDIDO[estado]}`
+    ? `#${idPedido} · Registrado: aún no se envía a cocina`
+    : `#${idPedido} · ${ETIQUETA_ESTADO_PEDIDO[estado]}`
 }
 
 async function explicarRechazo(e: ErrorServicio, cuenta: Cuenta) {
   rechazo.value = e.message
   if (e.codigo === 'estado_invalido') {
     try {
-      const actual = await servicios.cuentas.obtenerPorMesa(cuenta.mesaId)
+      const actual = await servicios.cuentas.obtenerPorMesa(cuenta.idMesa)
       if (actual && actual.estado !== 'abierta') {
         const pago = actual.tipoPagoSolicitado ? ` (${ETIQUETA_TIPO_PAGO[actual.tipoPagoSolicitado]})` : ''
         rechazo.value = `La cuenta de la mesa ${props.mesaNumero} ya no estaba abierta: ya se había solicitado${pago}.`
@@ -101,10 +101,10 @@ async function solicitar() {
   enCurso.value = true
   errorReintentable.value = ''
   // Misma cuenta y mismo tipo de pago = reintento (misma clave); otro tipo = intención nueva.
-  const clave = claves.para(`solicitar|${cuenta.id}|${tipo.value}`)
+  const clave = claves.para(`solicitar|${cuenta.idCuenta}|${tipo.value}`)
   const elegido = tipo.value
   try {
-    const actualizada = await servicios.cuentas.solicitarPago(cuenta.id, elegido, clave)
+    const actualizada = await servicios.cuentas.solicitarPago(cuenta.idCuenta, elegido, clave)
     claves.soltar()
     void anuncios.anunciar(`Cuenta solicitada · ${ETIQUETA_TIPO_PAGO[elegido]} · Esperando al cajero`)
     await invalidarDatos()
@@ -184,7 +184,7 @@ async function solicitar() {
               Hay {{ sinEntregar.length }} {{ sinEntregar.length === 1 ? 'pedido sin entregar' : 'pedidos sin entregar' }}
             </strong>
             <ul>
-              <li v-for="p in sinEntregar" :key="p.id">{{ textoSinEntregar(p.estado, p.id) }}</li>
+              <li v-for="p in sinEntregar" :key="p.idPedido">{{ textoSinEntregar(p.estado, p.idPedido) }}</li>
             </ul>
             <p>Puedes solicitar la cuenta de todos modos.</p>
           </div>

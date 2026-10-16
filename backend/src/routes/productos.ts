@@ -7,13 +7,13 @@ import { requiereAuth } from "../middlewares/auth";
 export const productosRouter = Router();
 
 const Consulta = z.object({
-  items: z.array(z.object({ producto_id: z.number().int().positive() })).max(200),
+  items: z.array(z.object({ id_producto: z.number().int().positive() })).max(200),
 });
 
-/** POST /api/productos/disponibilidad  { items: [{ producto_id }] }  →  { items: [{ producto_id, disponible }] } */
+/** POST /api/productos/disponibilidad  { items: [{ id_producto }] }  →  { items: [{ id_producto, disponible }] } */
 productosRouter.post("/disponibilidad", requiereAuth(), async (req, res) => {
   const { items } = validar(Consulta, req.body);
-  const ids = [...new Set(items.map((i) => i.producto_id))];
+  const ids = [...new Set(items.map((i) => i.id_producto))];
   const productos = await productosPorId(pool, ids);
-  res.json({ items: ids.map((id) => ({ producto_id: id, disponible: productos.get(id)?.disponible ?? false })) });
+  res.json({ items: ids.map((id) => ({ id_producto: id, disponible: productos.get(id)?.disponible ?? false })) });
 });

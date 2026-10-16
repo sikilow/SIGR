@@ -29,7 +29,7 @@ const lista = computed(() => {
     if (filtro.value === 'activos' && !u.activo) return false
     if (filtro.value === 'inactivos' && u.activo) return false
     if (rolFiltro.value !== 'todos' && u.rol !== rolFiltro.value) return false
-    if (q && !`${u.nombre} ${u.usuario} ${u.correo}`.toLowerCase().includes(q)) return false
+    if (q && !`${u.nombre} ${u.nombreUsuario} ${u.correo}`.toLowerCase().includes(q)) return false
     return true
   })
 })
@@ -114,7 +114,7 @@ async function confirmarCambioEstado() {
   enCurso.value = true
   errorReintentable.value = ''
   try {
-    const nuevo = await servicios.usuarios.actualizar(u.id, { activo: !u.activo })
+    const nuevo = await servicios.usuarios.actualizar(u.idUsuario, { activo: !u.activo })
     objetivo.value = null
     void anuncios.anunciar(nuevo.activo ? `${nuevo.nombre} reactivado` : `${nuevo.nombre} desactivado`)
     await cargar()
@@ -130,8 +130,8 @@ async function confirmarCambioEstado() {
   }
 }
 
-const fechaCorta = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : 'Nunca'
+const fechaCorta = (fecha: Date | null) =>
+  fecha ? fecha.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : 'Nunca'
 
 const FILTROS: Array<{ clave: Filtro; texto: string }> = [
   { clave: 'activos', texto: 'Activos' },
@@ -201,19 +201,19 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
     </div>
 
     <ul v-else class="lista">
-      <li v-for="u in lista" :key="u.id" class="fila tarjeta" :class="{ 'fila--inactiva': !u.activo }">
+      <li v-for="u in lista" :key="u.idUsuario" class="fila tarjeta" :class="{ 'fila--inactiva': !u.activo }">
         <div class="fila__datos">
-          <h3>{{ u.nombre }} <span v-if="u.id === sesion.usuario?.id" class="fila__tu">(tú)</span></h3>
+          <h3>{{ u.nombre }} <span v-if="u.idUsuario === sesion.usuario?.idUsuario" class="fila__tu">(tú)</span></h3>
           <p class="fila__linea">
             <span class="fila__rol">{{ ETIQUETA_ROL[u.rol] }}</span>
-            · usuario <strong>{{ u.usuario }}</strong>
+            · usuario <strong>{{ u.nombreUsuario }}</strong>
           </p>
           <p class="fila__linea">{{ u.correo }}<template v-if="u.telefono"> · {{ u.telefono }}</template></p>
           <p class="fila__linea fila__meta">Último acceso: {{ fechaCorta(u.ultimoAcceso) }}</p>
         </div>
 
         <div class="fila__lado">
-          <InsigniaEstado :tono="u.activo ? 'libre' : 'cancelado'" :texto="u.activo ? 'Activo' : 'Inactivo'" />
+          <InsigniaEstado :tono="u.activo ? 'disponible' : 'cancelado'" :texto="u.activo ? 'Activo' : 'Inactivo'" />
           <div class="fila__acciones">
             <button type="button" class="btn btn--secundario" :aria-label="`Editar a ${u.nombre}`" @click="abrirEdicion(u, $event)">Editar</button>
             <button type="button" class="btn btn--secundario" :aria-label="`Cambiar contraseña de ${u.nombre}`" @click="abrirContrasena(u, $event)">Contraseña</button>
@@ -222,9 +222,9 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
               type="button"
               class="btn btn--peligro-suave"
               :aria-label="`Desactivar a ${u.nombre}`"
-              :aria-disabled="u.id === sesion.usuario?.id ? 'true' : undefined"
-              :title="u.id === sesion.usuario?.id ? 'No puedes desactivarte a ti mismo' : undefined"
-              @click="u.id !== sesion.usuario?.id && pedirCambioEstado(u, $event)"
+              :aria-disabled="u.idUsuario === sesion.usuario?.idUsuario ? 'true' : undefined"
+              :title="u.idUsuario === sesion.usuario?.idUsuario ? 'No puedes desactivarte a ti mismo' : undefined"
+              @click="u.idUsuario !== sesion.usuario?.idUsuario && pedirCambioEstado(u, $event)"
             >
               Desactivar
             </button>
@@ -237,7 +237,7 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
     <FormularioUsuarioDialog
       :abierto="formAbierto"
       :usuario="usuarioEnEdicion"
-      :es-yo="usuarioEnEdicion !== null && usuarioEnEdicion.id === sesion.usuario?.id"
+      :es-yo="usuarioEnEdicion !== null && usuarioEnEdicion.idUsuario === sesion.usuario?.idUsuario"
       :origen-foco="origenForm"
       @cerrar="formAbierto = false"
       @guardado="alGuardar"

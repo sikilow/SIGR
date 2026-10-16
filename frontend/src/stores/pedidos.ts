@@ -16,15 +16,15 @@ export const usePedidosStore = defineStore('pedidos', () => {
   const ultimaActualizacion = ref<number | null>(null)
   const filtro = ref<FiltroListaPedidos>('activos')
   /** Si no es `null`, solo se piden los pedidos de esa mesa (`?mesa=` en la URL). */
-  const mesaId = ref<number | null>(null)
+  const idMesa = ref<number | null>(null)
 
   /** Ids de los pedidos que pasaron a "listo" en la última actualización (para resaltarlos). */
   const nuevosListos = ref<number[]>([])
   /** Texto para anunciar ("Pedido #8, mesa 5: listo"); vacío si no hubo cambios. */
   const anuncio = ref('')
 
-  /** Pedido abierto en el detalle (`/mesero/pedidos/:pedidoId`). */
-  const seleccionadoId = ref<number | null>(null)
+  /** Pedido abierto en el detalle (`/mesero/pedidos/:idPedido`). */
+  const idPedidoSeleccionado = ref<number | null>(null)
   /** Pedido seleccionado que no está en la lista (otro filtro u otra mesa): se pide por separado. */
   const seleccionadoExtra = ref<Pedido | null>(null)
   /** El pedido seleccionado no existe (404). */
@@ -35,37 +35,37 @@ export const usePedidosStore = defineStore('pedidos', () => {
   let enCurso: Promise<void> | null = null
 
   const seleccionado = computed<Pedido | null>(
-    () => pedidos.value.find((p) => p.id === seleccionadoId.value) ?? seleccionadoExtra.value,
+    () => pedidos.value.find((p) => p.idPedido === idPedidoSeleccionado.value) ?? seleccionadoExtra.value,
   )
 
   /** Primero los listos (hay que servirlos) y luego los más recientes. */
   const ordenados = computed(() =>
     pedidos.value
       .filter((p) => coincideConFiltro(p.estado, filtro.value))
-      .sort((a, b) => Number(b.estado === 'listo') - Number(a.estado === 'listo') || b.creadoEn.localeCompare(a.creadoEn)),
+      .sort((a, b) => Number(b.estado === 'listo') - Number(a.estado === 'listo') || b.fechaHora.getTime() - a.fechaHora.getTime()),
   )
 
   /** Pedidos listos, para anunciarlos: compara con la carga anterior. */
   function detectarNuevosListos(anteriores: Pedido[], actuales: Pedido[]): Pedido[] {
-    const previos = new Map(anteriores.map((p) => [p.id, p.estado]))
-    return actuales.filter((p) => p.estado === 'listo' && previos.has(p.id) && previos.get(p.id) !== 'listo')
+    const previos = new Map(anteriores.map((p) => [p.idPedido, p.estado]))
+    return actuales.filter((p) => p.estado === 'listo' && previos.has(p.idPedido) && previos.get(p.idPedido) !== 'listo')
   }
 
   async function cargarSeleccionado(): Promise<void> {
-    const id = seleccionadoId.value
-    if (id === null || pedidos.value.some((p) => p.id === id)) {
+    const idPedido = idPedidoSeleccionado.value
+    if (idPedido === null || pedidos.value.some((p) => p.idPedido === idPedido)) {
       seleccionadoExtra.value = null
       seleccionadoNoEncontrado.value = false
       return
     }
     try {
-      const pedido = await servicios.pedidos.obtener(id)
-      if (seleccionadoId.value === id) {
+      const pedido = await servicios.pedidos.obtener(idPedido)
+      if (idPedidoSeleccionado.value === idPedido) {
         seleccionadoExtra.value = pedido
         seleccionadoNoEncontrado.value = false
       }
     } catch (e) {
-      if (seleccionadoId.value !== id) return
+      if (idPedidoSeleccionado.value !== idPedido) return
       seleccionadoExtra.value = null
       seleccionadoNoEncontrado.value = e instanceof ErrorServicio && e.codigo === 'no_encontrado'
       if (!seleccionadoNoEncontrado.value) throw e
@@ -75,15 +75,15 @@ export const usePedidosStore = defineStore('pedidos', () => {
   async function ejecutarCarga(): Promise<void> {
     cargando.value = ultimaActualizacion.value === null && pedidos.value.length === 0
     actualizando.value = true
-    const mesaPedida = mesaId.value
+    const mesaPedida = idMesa.value
     try {
-      const recibidos = await servicios.pedidos.listar({ mesaId: mesaPedida ?? undefined })
+      const recibidos = await servicios.pedidos.listar({ idMesa: mesaPedida ?? undefined })
       // Si cambió la mesa filtrada mientras llegaba la respuesta, esa lista ya no corresponde.
-      if (mesaId.value !== mesaPedida) return
+      if (idMesa.value !== mesaPedida) return
       const nuevos = lineaBase ? detectarNuevosListos(pedidos.value, recibidos) : []
       pedidos.value = recibidos
-      nuevosListos.value = nuevos.map((p) => p.id)
-      anuncio.value = nuevos.map((p) => `Pedido #${p.id}, mesa ${p.mesaNumero}: listo`).join('. ')
+      nuevosListos.value = nuevos.map((p) => p.idPedido)
+      anuncio.value = nuevos.map((p) => `Pedido #${p.idPedido}, mesa ${p.mesaNumero}: listo`).join('. ')
       lineaBase = true
       ultimaActualizacion.value = Date.now()
       error.value = null
@@ -113,9 +113,9 @@ export const usePedidosStore = defineStore('pedidos', () => {
   }
 
   /** Cambia la mesa filtrada; si es otra, descarta la lista anterior (era de otra mesa). */
-  function filtrarPorMesa(id: number | null) {
-    if (mesaId.value === id) return
-    mesaId.value = id
+  function filtrarPorMesa(idMesaFiltrada: number | null) {
+    if (idMesa.value === idMesaFiltrada) return
+    idMesa.value = idMesaFiltrada
     pedidos.value = []
     ultimaActualizacion.value = null
     lineaBase = false
@@ -123,13 +123,13 @@ export const usePedidosStore = defineStore('pedidos', () => {
     enCurso = null
   }
 
-  function seleccionar(id: number | null) {
-    if (seleccionadoId.value === id) return
-    seleccionadoId.value = id
+  function seleccionar(idPedido: number | null) {
+    if (idPedidoSeleccionado.value === idPedido) return
+    idPedidoSeleccionado.value = idPedido
     seleccionadoExtra.value = null
     seleccionadoNoEncontrado.value = false
     // Con la lista ya cargada, un pedido que no está en ella se pide aparte (p. ej. "Ver detalle" desde la cuenta).
-    if (id !== null && ultimaActualizacion.value !== null) {
+    if (idPedido !== null && ultimaActualizacion.value !== null) {
       void cargarSeleccionado().catch((e: unknown) => {
         error.value = e instanceof Error ? e.message : 'No se pudo cargar el pedido.'
       })
@@ -150,10 +150,10 @@ export const usePedidosStore = defineStore('pedidos', () => {
     error,
     ultimaActualizacion,
     filtro,
-    mesaId,
+    idMesa,
     nuevosListos,
     anuncio,
-    seleccionadoId,
+    idPedidoSeleccionado,
     seleccionado,
     seleccionadoNoEncontrado,
     ordenados,

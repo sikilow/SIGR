@@ -22,7 +22,7 @@ const quedan = computed(() => (props.producto.existencia === undefined ? null : 
 const sinMas = computed(() => !agotado.value && quedan.value !== null && quedan.value <= 0)
 const bloqueado = computed(() => agotado.value || sinMas.value)
 const hayEtiquetas = computed(() => agotado.value || props.enPedido > 0 || props.producto.existencia !== undefined)
-const idMotivo = computed(() => `producto-motivo-${props.producto.id}`)
+const idMotivo = computed(() => `producto-motivo-${props.producto.idProducto}`)
 
 function alTocar() {
   if (!bloqueado.value) emit('agregar', props.producto)

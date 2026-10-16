@@ -1,13 +1,17 @@
 // Traduce entre la base de datos (SIGR) y el JSON que espera el frontend,
 // y reúne las consultas que comparten varias rutas.
+//
+// CONTRATO JSON: las claves son los NOMBRES EXACTOS de las columnas de la BD (id_mesa, fecha_hora,
+// precio_unitario…). Lo que no es columna se marca como "calculado" (estado, id_mesa y mesa_numero del pedido,
+// motivo_descripcion, total, nombre_producto…). Ver docs/contrato-api-mesero.md y docs/equivalencias-bd.md.
 import type { RowDataPacket } from "mysql2/promise";
 import { z } from "zod";
 import { ejecutar, filas, type Ejecutor } from "./db";
 import { ErrorApi } from "./errores";
 
-// ---------- Estados de pedido: código del front  →  nombre en la tabla estado_pedido ----------
-// 'Pendiente' (ya existía en tu esquema) se usa como "enviado a cocina".
-// 'Registrado' y 'Pagado' los agrega database/migracion_01_front.sql.
+// ---------- Estados de pedido: código interno  →  nombre en la tabla estado_pedido ----------
+// 'Pendiente' se usa como "enviado a cocina" (la BD no tiene 'Enviado'). 'Registrado' y 'Pagado' ya vienen en
+// database/schema.sql. La API ENTREGA el nombre del catálogo ('En preparacion'); el frontend lo normaliza.
 export const ESTADO_PEDIDO_DB = {
   registrado: "Registrado",
   enviado: "Pendiente",
@@ -21,9 +25,27 @@ export const ESTADO_PEDIDO_DB = {
 export type EstadoPedido = keyof typeof ESTADO_PEDIDO_DB;
 export const ESTADOS_PEDIDO = Object.keys(ESTADO_PEDIDO_DB) as [EstadoPedido, ...EstadoPedido[]];
 
-const ESTADO_DESDE_DB = Object.fromEntries(
-  Object.entries(ESTADO_PEDIDO_DB).map(([codigo, nombre]) => [nombre, codigo]),
-) as Record<string, EstadoPedido>;
+/** 'En preparación' / 'en_preparacion' / 'EN PREPARACION' → 'en_preparacion' (minúsculas, sin acentos, `_`). */
+export function normalizarCodigo(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+/**
+ * Filtro `?estado=` de GET /pedidos: acepta el código interno (`enviado`), el nombre del catálogo
+ * (`Pendiente`, `En preparacion`) o su versión normalizada (`pendiente`). Devuelve el nombre en `estado_pedido`.
+ */
+export function nombreEstadoDeFiltro(texto: string): string | null {
+  const codigo = normalizarCodigo(texto);
+  const interno = ESTADOS_PEDIDO.find((e) => e === codigo);
+  if (interno) return ESTADO_PEDIDO_DB[interno];
+  const porNombre = Object.values(ESTADO_PEDIDO_DB).find((n) => normalizarCodigo(n) === codigo);
+  return porNombre ?? null;
+}
 
 // ---------- Utilidades ----------
 const redondear = (n: number): number => Math.round(n * 100) / 100;
@@ -112,7 +134,7 @@ export async function exigirDisponibles(ex: Ejecutor, ids: number[]): Promise<Ma
   const agotados = unicos.filter((id) => !productos.get(id)?.disponible);
   if (agotados.length > 0) {
     throw new ErrorApi(409, "producto_agotado", "Hay productos agotados en el pedido.", {
-      productos: agotados.map((producto_id) => ({ producto_id, disponible: false })),
+      productos: agotados.map((id_producto) => ({ id_producto, disponible: false })),
     });
   }
   return productos;
@@ -123,14 +145,14 @@ export async function exigirDisponibles(ex: Ejecutor, ids: number[]): Promise<Ma
 // Mientras el pedido solo está `registrado` no se descuenta (solo se avisa si ya no alcanza).
 // Solo cuentan los productos con `controla_existencia`: lo que se prepara al momento no se limita ni se descuenta.
 export interface LineaCantidad {
-  producto_id: number;
+  id_producto: number;
   cantidad: number;
 }
 
 /** Suma las cantidades por producto (el mismo producto puede venir en varias líneas). */
 function sumarPorProducto(lineas: LineaCantidad[]): Map<number, number> {
   const mapa = new Map<number, number>();
-  for (const l of lineas) mapa.set(l.producto_id, (mapa.get(l.producto_id) ?? 0) + l.cantidad);
+  for (const l of lineas) mapa.set(l.id_producto, (mapa.get(l.id_producto) ?? 0) + l.cantidad);
   return mapa;
 }
 
@@ -183,7 +205,7 @@ export async function verificarExistencia(ex: Ejecutor, lineas: LineaCantidad[],
       .map((f) => (f.queda === 0 ? `${f.nombre} (agotado)` : `${f.nombre} (pides ${f.pedidas}, solo quedan ${f.queda})`))
       .join("; ");
     throw new ErrorApi(409, "producto_agotado", `No hay existencia suficiente: ${texto}.`, {
-      productos: faltantes.map((f) => ({ producto_id: f.id, disponible: false, existencia: f.queda, solicitado: f.pedidas })),
+      productos: faltantes.map((f) => ({ id_producto: f.id, disponible: false, existencia: f.queda, solicitado: f.pedidas })),
     });
   }
 
@@ -216,30 +238,39 @@ export async function devolverExistencia(ex: Ejecutor, pedidoId: number): Promis
 
 // ---------- Pedidos ----------
 export interface DetallePedidoDto {
-  producto_id: number;
+  id_detalle: number;
+  id_producto: number;
+  /** Calculado: producto.nombre (JOIN). No es columna de detalle_pedido. */
   nombre_producto: string;
   cantidad: number;
-  observaciones: string;
+  indicaciones: string;
   precio_unitario: number;
 }
 
 export interface PedidoDto {
-  id: number;
-  mesa_id: number;
+  id_pedido: number;
+  id_cuenta: number;
+  id_mesero: number;
+  id_estado: number;
+  /** Calculado: estado_pedido.nombre (JOIN por pedido.id_estado), p. ej. "En preparacion". */
+  estado: string;
+  /** pedido.fecha_hora: DATETIME sin zona horaria, "2026-10-15 16:34:00". */
+  fecha_hora: string;
+  id_motivo: number | null;
+  /** Calculado: `pedido` no tiene id_mesa; sale de cuenta.id_mesa. */
+  id_mesa: number;
+  /** Calculado: mesa.numero (JOIN). */
   mesa_numero: number;
-  cuenta_id: number;
-  mesero_id: number;
-  estado: EstadoPedido;
-  detalle: DetallePedidoDto[];
+  /** Calculado: motivo_cancelacion.descripcion (JOIN); null si no está cancelado. */
+  motivo_descripcion: string | null;
+  /** Calculado: suma de cantidad × precio_unitario. */
   total: number;
-  creado_en: string;
-  /** Texto libre escrito al cancelar; null si no está cancelado. */
-  motivo_cancelacion: string | null;
+  detalle: DetallePedidoDto[];
 }
 
 const SELECT_PEDIDO = `
-  SELECT p.id_pedido AS id, c.id_mesa AS mesa_id, m.numero AS mesa_numero, p.id_cuenta AS cuenta_id, p.id_mesero AS mesero_id,
-         ep.nombre AS estado, p.fecha_hora AS creado_en, mc.descripcion AS motivo
+  SELECT p.id_pedido, p.id_cuenta, p.id_mesero, p.id_estado, ep.nombre AS estado, p.fecha_hora, p.id_motivo,
+         c.id_mesa, m.numero AS mesa_numero, mc.descripcion AS motivo_descripcion
     FROM pedido p
     JOIN cuenta c ON c.id_cuenta = p.id_cuenta
     JOIN mesa m ON m.id_mesa = c.id_mesa
@@ -253,42 +284,45 @@ export async function cargarPedidos(ex: Ejecutor, condicion = "", params: unknow
 
   const detalles = await filas(
     ex,
-    `SELECT dp.id_pedido AS pedido_id, dp.id_producto AS producto_id, pr.nombre AS nombre_producto,
-            dp.cantidad, dp.indicaciones AS observaciones, dp.precio_unitario
+    `SELECT dp.id_detalle, dp.id_pedido, dp.id_producto, pr.nombre AS nombre_producto,
+            dp.cantidad, dp.indicaciones, dp.precio_unitario
        FROM detalle_pedido dp
        JOIN producto pr ON pr.id_producto = dp.id_producto
       WHERE dp.id_pedido IN (?)
       ORDER BY dp.id_detalle`,
-    [pedidos.map((p) => p.id as number)],
+    [pedidos.map((p) => p.id_pedido as number)],
   );
 
   const porPedido = new Map<number, DetallePedidoDto[]>();
   for (const d of detalles) {
-    const lista = porPedido.get(d.pedido_id as number) ?? [];
+    const lista = porPedido.get(d.id_pedido as number) ?? [];
     lista.push({
-      producto_id: d.producto_id as number,
+      id_detalle: d.id_detalle as number,
+      id_producto: d.id_producto as number,
       nombre_producto: d.nombre_producto as string,
       cantidad: d.cantidad as number,
-      observaciones: (d.observaciones as string | null) ?? "",
+      indicaciones: (d.indicaciones as string | null) ?? "",
       precio_unitario: Number(d.precio_unitario),
     });
-    porPedido.set(d.pedido_id as number, lista);
+    porPedido.set(d.id_pedido as number, lista);
   }
 
   return pedidos.map((p) => {
-    const detalle = porPedido.get(p.id as number) ?? [];
+    const detalle = porPedido.get(p.id_pedido as number) ?? [];
     return {
-      id: p.id as number,
-      mesa_id: p.mesa_id as number,
+      id_pedido: p.id_pedido as number,
+      id_cuenta: p.id_cuenta as number,
+      id_mesero: p.id_mesero as number,
+      id_estado: p.id_estado as number,
+      estado: p.estado as string,
+      fecha_hora: p.fecha_hora as string,
+      id_motivo: (p.id_motivo as number | null) ?? null,
+      id_mesa: p.id_mesa as number,
       mesa_numero: p.mesa_numero as number,
-      cuenta_id: p.cuenta_id as number,
-      mesero_id: p.mesero_id as number,
-      estado: ESTADO_DESDE_DB[p.estado as string] ?? "registrado",
-      detalle,
+      motivo_descripcion: (p.motivo_descripcion as string | null) ?? null,
       // El total SIEMPRE se calcula aquí, nunca viene del cliente.
       total: redondear(detalle.reduce((suma, d) => suma + d.cantidad * d.precio_unitario, 0)),
-      creado_en: (p.creado_en as Date).toISOString(),
-      motivo_cancelacion: (p.motivo as string | null) ?? null,
+      detalle,
     };
   });
 }
@@ -300,31 +334,36 @@ export async function cargarPedido(ex: Ejecutor, id: number): Promise<PedidoDto 
 
 // ---------- Cuentas ----------
 export interface CuentaDto {
-  id: number;
-  mesa_id: number;
-  estado: "abierta" | "por_pagar" | "cerrada";
-  pedidos: PedidoDto[];
-  total: number;
+  id_cuenta: number;
+  id_mesa: number;
+  estado: string;
   abierta_en: string;
-  tipo_pago_solicitado: "fisico" | "digital" | null;
+  cerrada_en: string | null;
+  /** cuenta.tipo_pago_solicitado ("fisico" | "digital"); NULL mientras no se solicite. */
+  tipo_pago_solicitado: string | null;
+  /** Calculado: pedidos de la cuenta (pedido.id_cuenta). */
+  pedidos: PedidoDto[];
+  /** Calculado: suma de cantidad × precio_unitario de los pedidos NO cancelados. */
+  total: number;
 }
 
 /** Cuenta con sus pedidos. El total excluye los pedidos cancelados. */
 export async function cargarCuenta(ex: Ejecutor, idCuenta: number): Promise<CuentaDto | null> {
   const [c] = await filas(
     ex,
-    "SELECT id_cuenta, id_mesa, estado, abierta_en, tipo_pago_solicitado FROM cuenta WHERE id_cuenta = ?",
+    "SELECT id_cuenta, id_mesa, estado, abierta_en, cerrada_en, tipo_pago_solicitado FROM cuenta WHERE id_cuenta = ?",
     [idCuenta],
   );
   if (!c) return null;
   const pedidos = await cargarPedidos(ex, "WHERE p.id_cuenta = ?", [idCuenta]);
   return {
-    id: c.id_cuenta as number,
-    mesa_id: c.id_mesa as number,
-    estado: c.estado as CuentaDto["estado"],
+    id_cuenta: c.id_cuenta as number,
+    id_mesa: c.id_mesa as number,
+    estado: c.estado as string,
+    abierta_en: c.abierta_en as string,
+    cerrada_en: (c.cerrada_en as string | null) ?? null,
+    tipo_pago_solicitado: (c.tipo_pago_solicitado as string | null) ?? null,
     pedidos,
-    total: redondear(pedidos.filter((p) => p.estado !== "cancelado").reduce((suma, p) => suma + p.total, 0)),
-    abierta_en: (c.abierta_en as Date).toISOString(),
-    tipo_pago_solicitado: (c.tipo_pago_solicitado as CuentaDto["tipo_pago_solicitado"]) ?? null,
+    total: redondear(pedidos.filter((p) => p.estado !== ESTADO_PEDIDO_DB.cancelado).reduce((suma, p) => suma + p.total, 0)),
   };
 }

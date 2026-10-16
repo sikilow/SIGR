@@ -9,8 +9,8 @@ describe('formato', () => {
   })
 
   it('hora de 24 h y fecha inválida', () => {
-    expect(formatearHora('not-a-date')).toBe('')
-    expect(formatearHora(new Date(2026, 9, 14, 18, 5).toISOString())).toBe('18:05')
+    expect(formatearHora(new Date('not-a-date'))).toBe('')
+    expect(formatearHora(new Date(2026, 9, 14, 18, 5))).toBe('18:05')
   })
 
   it('plurales', () => {

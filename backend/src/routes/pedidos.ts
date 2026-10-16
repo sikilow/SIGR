@@ -12,6 +12,7 @@ import {
   idEstadoPedido,
   idMotivoTexto,
   devolverExistencia,
+  nombreEstadoDeFiltro,
   validar,
   verificarExistencia,
   type PedidoDto,
@@ -22,17 +23,19 @@ import { requiereAuth } from "../middlewares/auth";
 
 export const pedidosRouter = Router();
 
+// detalle_pedido: id_producto, cantidad (CHECK > 0) e indicaciones (VARCHAR(255)). El cliente NUNCA envía precios.
 const Linea = z.object({
-  producto_id: z.number().int().positive(),
+  id_producto: z.number().int().positive(),
   cantidad: z.number().int().min(1).max(99),
-  observaciones: z.string().max(120).default(""),
+  indicaciones: z.string().max(255).default(""),
 });
 type LineaPedido = z.infer<typeof Linea>;
 
-const NuevoPedido = z.object({ mesa_id: z.number().int().positive(), detalle: z.array(Linea).min(1, "El pedido no tiene productos") });
+const NuevoPedido = z.object({ id_mesa: z.number().int().positive(), detalle: z.array(Linea).min(1, "El pedido no tiene productos") });
 const Actualizacion = z.object({ detalle: z.array(Linea).min(1, "El pedido no tiene productos") });
+// motivo_cancelacion.descripcion es VARCHAR(200).
 const Cancelacion = z.object({
-  motivo: z
+  descripcion: z
     .string()
     .trim()
     .min(5, "El motivo debe tener al menos 5 caracteres")
@@ -40,14 +43,15 @@ const Cancelacion = z.object({
 });
 const CambioCocina = z.object({ estado: z.enum(["en_preparacion", "listo"]) });
 const Filtros = z.object({
-  mesa_id: z.coerce.number().int().positive().optional(),
-  estado: z.enum(ESTADOS_PEDIDO).optional(),
+  id_mesa: z.coerce.number().int().positive().optional(),
+  // Nombre del catálogo ("En preparacion"), su código ("en_preparacion") o el interno ("enviado").
+  estado: z.string().min(1).optional(),
 });
 
 /** Verifica que los productos existan y estén disponibles, y guarda las líneas con el precio VIGENTE de la BD. */
 async function guardarDetalle(cx: PoolConnection, pedidoId: number, lineas: LineaPedido[]): Promise<void> {
-  const productos = await exigirDisponibles(cx, lineas.map((l) => l.producto_id));
-  const valores = lineas.map((l) => [pedidoId, l.producto_id, l.cantidad, productos.get(l.producto_id)!.precio, l.observaciones || null]);
+  const productos = await exigirDisponibles(cx, lineas.map((l) => l.id_producto));
+  const valores = lineas.map((l) => [pedidoId, l.id_producto, l.cantidad, productos.get(l.id_producto)!.precio, l.indicaciones || null]);
   await cx.query("INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad, precio_unitario, indicaciones) VALUES ?", [valores]);
 }
 
@@ -74,31 +78,31 @@ async function pedidoOError(cx: PoolConnection, id: number): Promise<PedidoDto> 
 }
 
 /**
- * POST /api/pedidos  { mesa_id, detalle: [{ producto_id, cantidad, observaciones }] }   (acepta Idempotency-Key)
- * Crea el pedido en estado `registrado`. Si la mesa no tiene cuenta activa, abre una.
+ * POST /api/pedidos  { id_mesa, detalle: [{ id_producto, cantidad, indicaciones }] }   (acepta Idempotency-Key)
+ * Crea el pedido en estado `registrado`. `pedido` no tiene id_mesa: se usa para ubicar (o abrir) la cuenta de la mesa.
  */
 pedidosRouter.post("/", requiereAuth("mesero", "gerente"), async (req, res) => {
-  const { mesa_id, detalle } = validar(NuevoPedido, req.body);
+  const { id_mesa, detalle } = validar(NuevoPedido, req.body);
   const meseroId = req.usuario!.id;
 
   await conIdempotencia(req, res, 201, () =>
     transaccion(async (cx) => {
       // FOR UPDATE: dos meseros que piden a la vez en la misma mesa no pueden abrir dos cuentas.
-      const [mesa] = await filas(cx, "SELECT numero, estado FROM mesa WHERE id_mesa = ? FOR UPDATE", [mesa_id]);
-      if (!mesa) throw new ErrorApi(404, "no_encontrado", `La mesa ${mesa_id} no existe.`);
+      const [mesa] = await filas(cx, "SELECT numero, estado FROM mesa WHERE id_mesa = ? FOR UPDATE", [id_mesa]);
+      if (!mesa) throw new ErrorApi(404, "no_encontrado", `La mesa ${id_mesa} no existe.`);
       if (mesa.estado !== "ocupada") {
         throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está ocupada.`);
       }
 
       // Se valida antes de abrir la cuenta: si hay productos agotados no se crea nada.
-      await exigirDisponibles(cx, detalle.map((l) => l.producto_id));
+      await exigirDisponibles(cx, detalle.map((l) => l.id_producto));
       await verificarExistencia(cx, detalle, false); // aviso temprano; el descuento real es al enviar
 
-      const [activa] = await filas(cx, "SELECT id_cuenta, estado FROM cuenta WHERE id_mesa = ? AND estado <> 'cerrada' LIMIT 1", [mesa_id]);
+      const [activa] = await filas(cx, "SELECT id_cuenta, estado FROM cuenta WHERE id_mesa = ? AND estado <> 'cerrada' LIMIT 1", [id_mesa]);
       if (activa?.estado === "por_pagar") throw new ErrorApi(409, "estado_invalido", "La cuenta ya solicitó el pago.");
       const cuentaId = activa
         ? (activa.id_cuenta as number)
-        : (await ejecutar(cx, "INSERT INTO cuenta (id_mesa) VALUES (?)", [mesa_id])).insertId;
+        : (await ejecutar(cx, "INSERT INTO cuenta (id_mesa) VALUES (?)", [id_mesa])).insertId;
 
       const idEstado = await idEstadoPedido(cx, "registrado");
       const { insertId } = await ejecutar(cx, "INSERT INTO pedido (id_cuenta, id_mesero, id_estado) VALUES (?, ?, ?)", [cuentaId, meseroId, idEstado]);
@@ -109,21 +113,23 @@ pedidosRouter.post("/", requiereAuth("mesero", "gerente"), async (req, res) => {
 });
 
 /**
- * GET /api/pedidos?mesa_id=&estado=
+ * GET /api/pedidos?id_mesa=&estado=
  * Un mesero solo ve SUS pedidos; el resto de los roles ve todos.
  */
 pedidosRouter.get("/", requiereAuth(), async (req, res) => {
-  const { mesa_id, estado } = validar(Filtros, req.query);
+  const { id_mesa, estado } = validar(Filtros, req.query);
   const condiciones: string[] = [];
   const params: unknown[] = [];
 
-  if (mesa_id !== undefined) {
+  if (id_mesa !== undefined) {
     condiciones.push("c.id_mesa = ?");
-    params.push(mesa_id);
+    params.push(id_mesa);
   }
   if (estado !== undefined) {
+    const nombre = nombreEstadoDeFiltro(estado);
+    if (!nombre) throw new ErrorApi(422, "estado_invalido", `El estado '${estado}' no existe.`);
     condiciones.push("ep.nombre = ?");
-    params.push(ESTADO_PEDIDO_DB[estado]);
+    params.push(nombre);
   }
   if (req.usuario!.rol === "mesero") {
     condiciones.push("p.id_mesero = ?");
@@ -156,7 +162,7 @@ pedidosRouter.patch("/:id", requiereAuth("mesero", "gerente"), async (req, res) 
     if (cuentaPorPagar) {
       throw new ErrorApi(409, "estado_invalido", "La cuenta ya solicitó el pago: no se pueden editar pedidos.");
     }
-    await exigirDisponibles(cx, detalle.map((l) => l.producto_id));
+    await exigirDisponibles(cx, detalle.map((l) => l.id_producto));
     await verificarExistencia(cx, detalle, false);
     await ejecutar(cx, "DELETE FROM detalle_pedido WHERE id_pedido = ?", [id]);
     await guardarDetalle(cx, id, detalle);
@@ -181,7 +187,7 @@ pedidosRouter.post("/:id/enviar", requiereAuth("mesero", "gerente"), async (req,
       const detalle = await filas(cx, "SELECT id_producto, cantidad FROM detalle_pedido WHERE id_pedido = ?", [id]);
       await verificarExistencia(
         cx,
-        detalle.map((d) => ({ producto_id: d.id_producto as number, cantidad: d.cantidad as number })),
+        detalle.map((d) => ({ id_producto: d.id_producto as number, cantidad: d.cantidad as number })),
         true,
       );
 
@@ -192,15 +198,15 @@ pedidosRouter.post("/:id/enviar", requiereAuth("mesero", "gerente"), async (req,
 });
 
 /**
- * POST /api/pedidos/:id/cancelar  { motivo }   (motivo = texto libre de 5 a 200 caracteres; acepta Idempotency-Key)
- * El pedido NO se borra (queda el historial): pasa a `cancelado` con su motivo.
+ * POST /api/pedidos/:id/cancelar  { descripcion }   (motivo_cancelacion.descripcion: texto de 5 a 200 caracteres;
+ * acepta Idempotency-Key). El pedido NO se borra (queda el historial): pasa a `cancelado` con su id_motivo.
  *  - registrado / enviado: lo puede cancelar el mesero o el gerente. Si ya se había enviado, devuelve la existencia.
  *  - en_preparacion: solo el gerente (el mesero recibe 403 `requiere_gerente`).
  *  - cuenta por_pagar o cualquier otro estado: 409.
  */
 pedidosRouter.post("/:id/cancelar", requiereAuth("mesero", "gerente"), async (req, res) => {
   const id = idDeRuta(req.params.id);
-  const { motivo } = validar(Cancelacion, req.body);
+  const { descripcion } = validar(Cancelacion, req.body);
   const rol = req.usuario!.rol;
 
   await conIdempotencia(req, res, 200, () =>
@@ -219,7 +225,7 @@ pedidosRouter.post("/:id/cancelar", requiereAuth("mesero", "gerente"), async (re
       if (estado === "enviado" || estado === "en_preparacion") await devolverExistencia(cx, id);
       await ejecutar(cx, "UPDATE pedido SET id_estado = ?, id_motivo = ? WHERE id_pedido = ?", [
         await idEstadoPedido(cx, "cancelado"),
-        await idMotivoTexto(cx, motivo),
+        await idMotivoTexto(cx, descripcion),
         id,
       ]);
       return pedidoOError(cx, id);

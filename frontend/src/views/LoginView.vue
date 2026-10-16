@@ -13,7 +13,7 @@ const sesion = useSesionStore()
 const route = useRoute()
 const router = useRouter()
 
-const usuario = ref('')
+const nombreUsuario = ref('')
 const contrasena = ref('')
 const cargando = ref(false)
 const verContrasena = ref(false)
@@ -36,7 +36,7 @@ async function entrar() {
   error.value = ''
 
   // Validación propia (sin burbujas del navegador): el error queda escrito junto al formulario y enlazado.
-  const faltaUsuario = usuario.value.trim() === ''
+  const faltaUsuario = nombreUsuario.value.trim() === ''
   if (faltaUsuario || contrasena.value === '') {
     error.value = faltaUsuario ? 'Escribe tu usuario.' : 'Escribe tu contraseña.'
     await nextTick()
@@ -46,7 +46,7 @@ async function entrar() {
 
   cargando.value = true
   try {
-    await sesion.iniciarSesion({ usuario: usuario.value.trim(), contrasena: contrasena.value })
+    await sesion.iniciarSesion({ nombreUsuario: nombreUsuario.value.trim(), contrasena: contrasena.value })
     const porDefecto = sesion.usuario ? rutaInicial(sesion.usuario.rol) : '/mesero/mesas'
     const destino = typeof route.query.redirigir === 'string' ? route.query.redirigir : porDefecto
     await router.push(destino)
@@ -89,7 +89,7 @@ async function entrar() {
           <input
             id="login-usuario"
             ref="campoUsuario"
-            v-model="usuario"
+            v-model="nombreUsuario"
             type="text"
             autocomplete="username"
             autocapitalize="none"

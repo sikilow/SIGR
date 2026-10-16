@@ -17,9 +17,8 @@ export function formatearPedidosActivos(cantidad: number): string {
   return `${cantidad} ${cantidad === 1 ? 'pedido activo' : 'pedidos activos'}`
 }
 
-/** "2026-10-14T18:30:00Z" → "18:30" (hora local, 24 h) */
-export function formatearHora(iso: string): string {
-  const fecha = new Date(iso)
+/** Date (p. ej. pedido.fechaHora) → "18:30" (hora local, 24 h) */
+export function formatearHora(fecha: Date): string {
   if (Number.isNaN(fecha.getTime())) return ''
   return fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
 }

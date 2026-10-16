@@ -44,7 +44,7 @@ watch(
     if (!abierto) return
     nombre.value = props.usuario?.nombre ?? ''
     correo.value = props.usuario?.correo ?? ''
-    usuarioLogin.value = props.usuario?.usuario ?? ''
+    usuarioLogin.value = props.usuario?.nombreUsuario ?? ''
     rol.value = props.usuario?.rol ?? 'mesero'
     telefono.value = props.usuario?.telefono ?? ''
     contrasena.value = ''
@@ -87,7 +87,7 @@ function cambios(): CambioUsuario {
   const c: CambioUsuario = {}
   if (nombre.value.trim() !== u.nombre) c.nombre = nombre.value
   if (correo.value.trim() !== u.correo) c.correo = correo.value
-  if (usuarioLogin.value.trim() !== u.usuario) c.usuario = usuarioLogin.value
+  if (usuarioLogin.value.trim() !== u.nombreUsuario) c.nombreUsuario = usuarioLogin.value
   if (rol.value !== u.rol) c.rol = rol.value
   if (telefono.value.trim() !== (u.telefono ?? '')) c.telefono = telefono.value
   return c
@@ -111,14 +111,14 @@ async function guardar() {
         emit('cerrar')
         return
       }
-      emit('guardado', await servicios.usuarios.actualizar(props.usuario.id, c), false)
+      emit('guardado', await servicios.usuarios.actualizar(props.usuario.idUsuario, c), false)
     } else {
       emit(
         'guardado',
         await servicios.usuarios.crear({
           nombre: nombre.value,
           correo: correo.value,
-          usuario: usuarioLogin.value,
+          nombreUsuario: usuarioLogin.value,
           contrasena: contrasena.value,
           rol: rol.value,
           telefono: telefono.value,

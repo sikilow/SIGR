@@ -11,6 +11,9 @@ export const pool = mysql.createPool({
   connectionLimit: 10,
   // Sin esto, mysql2 devuelve los DECIMAL (precios, totales) como texto ("95.00") y el front mostraría NaN.
   decimalNumbers: true,
+  // Los DATETIME salen como texto "2026-10-15 16:34:00" (sin zona horaria), tal como los guarda MySQL.
+  // El frontend los interpreta como hora local; con Date + toISOString() se corrían por la zona horaria.
+  dateStrings: true,
 });
 
 /** Algo con lo que se puede consultar: el pool, o una conexión dentro de una transacción. */

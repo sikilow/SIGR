@@ -12,7 +12,7 @@ declare module 'vue-router' {
 }
 
 /** Pantalla de inicio de cada rol. Los roles que aún no tienen interfaz caen en el aviso "tu rol no tiene acceso". */
-export function rutaInicial(rol: Rol): string {
+export function rutaInicial(rol: Rol | null): string {
   return rol === 'gerente' ? '/gerente/usuarios' : '/mesero/mesas'
 }
 
@@ -38,18 +38,18 @@ export const router = createRouter({
           component: () => import('../views/mesero/MesasView.vue'),
         },
         {
-          path: String.raw`mesas/:mesaId(\d+)/pedido`,
+          path: String.raw`mesas/:idMesa(\d+)/pedido`,
           name: 'mesero-pedido-mesa',
           component: () => import('../views/mesero/PedidoMesaView.vue'),
         },
         {
-          path: String.raw`mesas/:mesaId(\d+)/cuenta`,
+          path: String.raw`mesas/:idMesa(\d+)/cuenta`,
           name: 'mesero-cuenta-mesa',
           component: () => import('../views/mesero/CuentaMesaView.vue'),
         },
         {
-          // Una sola ruta para la lista y el detalle: /mesero/pedidos y /mesero/pedidos/:pedidoId
-          path: String.raw`pedidos/:pedidoId(\d+)?`,
+          // Una sola ruta para la lista y el detalle: /mesero/pedidos y /mesero/pedidos/:idPedido
+          path: String.raw`pedidos/:idPedido(\d+)?`,
           name: 'mesero-pedidos',
           component: () => import('../views/mesero/PedidosView.vue'),
         },
@@ -94,7 +94,8 @@ router.beforeEach(async (to) => {
   if (!sesion.usuario) {
     return { name: 'login', query: { redirigir: to.fullPath } }
   }
-  if (!roles.includes(sesion.usuario.rol)) {
+  // Un rol que la API envía y no se reconoce (`null`) tampoco entra.
+  if (!sesion.usuario.rol || !roles.includes(sesion.usuario.rol)) {
     return { name: 'login', query: { motivo: 'rol' } }
   }
   return true

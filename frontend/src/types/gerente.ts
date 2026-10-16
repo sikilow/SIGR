@@ -2,40 +2,47 @@
 import type { Rol } from './usuario'
 
 export interface UsuarioAdmin {
-  id: number
+  /** usuario.id_usuario */
+  idUsuario: number
   nombre: string
   correo: string
-  /** Nombre de usuario para iniciar sesión (no es el nombre real). */
-  usuario: string
+  /** credenciales.nombre_usuario: nombre para iniciar sesión (no es el nombre real). */
+  nombreUsuario: string
+  /** CALCULADO por la API (JOIN con rol.nombre), normalizado. */
   rol: Rol
   /** `false` = desactivado: ya no puede iniciar sesión, pero conserva su historial. */
   activo: boolean
+  /** perfil_usuario.telefono (tabla fuera del alcance del mesero). */
   telefono: string | null
-  creadoEn: string
-  ultimoAcceso: string | null
+  /** usuario.creado_en (DATETIME, hora local). */
+  creadoEn: Date
+  /** credenciales.ultimo_acceso (DATETIME, NULL si nunca entró). */
+  ultimoAcceso: Date | null
 }
 
 export interface NuevoUsuario {
   nombre: string
   correo: string
-  usuario: string
+  nombreUsuario: string
   contrasena: string
   rol: Rol
   telefono?: string
 }
 
 /** Cualquier subconjunto de campos editables. */
-export type CambioUsuario = Partial<Pick<UsuarioAdmin, 'nombre' | 'correo' | 'usuario' | 'rol' | 'activo' | 'telefono'>>
+export type CambioUsuario = Partial<Pick<UsuarioAdmin, 'nombre' | 'correo' | 'nombreUsuario' | 'rol' | 'activo' | 'telefono'>>
 
 export interface CategoriaAdmin {
-  id: number
+  /** categoria_menu.id_categoria */
+  idCategoria: number
   nombre: string
   totalProductos: number
 }
 
 export interface ProductoAdmin {
-  id: number
-  categoriaId: number
+  /** producto.id_producto */
+  idProducto: number
+  idCategoria: number
   categoria: string
   nombre: string
   descripcion: string
@@ -52,7 +59,7 @@ export interface ProductoAdmin {
 }
 
 export interface NuevoProducto {
-  categoriaId: number
+  idCategoria: number
   nombre: string
   descripcion: string
   precio: number

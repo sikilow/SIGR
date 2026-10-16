@@ -1,23 +1,29 @@
-// PROVISIONAL: modelo de dominio pendiente de validar con el equipo de API.
+// Tipo `Cuenta` (tabla `cuenta`). Ver docs/equivalencias-bd.md.
+import type { EstadoCuenta } from './estados'
 import type { Pedido } from './pedido'
 
-export type EstadoCuenta = 'abierta' | 'por_pagar' | 'cerrada'
-
-/** Estados de una cuenta activa (la que una mesa puede tener a lo sumo una). */
-export type EstadoCuentaActiva = Exclude<EstadoCuenta, 'cerrada'>
-
-/** Forma de pago solicitada: cobro en caja física o pago digital. */
+/** Forma de pago solicitada: cobro en caja física o pago digital (cuenta.tipo_pago_solicitado). */
 export type TipoPago = 'fisico' | 'digital'
 
 /** Una cuenta activa por mesa; agrupa varios pedidos. */
 export interface Cuenta {
-  id: number
-  mesaId: number
+  /** cuenta.id_cuenta */
+  idCuenta: number
+  /** cuenta.id_mesa */
+  idMesa: number
+  /** cuenta.estado (texto libre en la BD). */
   estado: EstadoCuenta
+  /** cuenta.abierta_en (DATETIME). */
+  abiertaEn: Date
+  /** cuenta.cerrada_en (DATETIME, NULL mientras la cuenta no se cierra). */
+  cerradaEn: Date | null
+
+  // --- Campos CALCULADOS por la API (no son columnas de `cuenta`) ---
+  /** Pedidos de la cuenta (`pedido.id_cuenta`). */
   pedidos: Pedido[]
-  /** Suma de los pedidos no cancelados, en MXN. */
+  /** Suma de cantidad × precio_unitario de los pedidos no cancelados, en MXN. */
   total: number
-  /** Fecha ISO 8601. */
-  abiertaEn: string
+
+  /** cuenta.tipo_pago_solicitado; NULL mientras no se solicite. */
   tipoPagoSolicitado: TipoPago | null
 }

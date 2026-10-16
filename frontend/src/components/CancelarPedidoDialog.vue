@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Cancelar un pedido (diálogo modal), reutilizado desde Mis pedidos y desde Cuenta de mesa.
-// Pide un motivo OBLIGATORIO (texto libre de 5 a 200 caracteres; los atajos solo rellenan el texto),
+// Pide un motivo OBLIGATORIO (texto libre de 5 a 200 caracteres = motivo_cancelacion.descripcion; los atajos solo rellenan el texto),
 // llama a POST /pedidos/{id}/cancelar y, si sale bien, anuncia el resultado y recarga pedidos,
 // cuenta y mesas. Los reintentos tras un fallo de red reutilizan la misma Idempotency-Key.
 import { computed, nextTick, ref, watch } from 'vue'
@@ -9,8 +9,8 @@ import { useAnunciosStore } from '../stores/anuncios'
 import { invalidarDatos } from '../stores/invalidar'
 import {
   ETIQUETA_ESTADO_PEDIDO,
-  MOTIVO_MAX,
-  MOTIVO_MIN,
+  DESCRIPCION_MOTIVO_MAX,
+  DESCRIPCION_MOTIVO_MIN,
   MOTIVOS_RAPIDOS,
   type Pedido,
 } from '../types'
@@ -36,24 +36,24 @@ const emit = defineEmits<{
 const anuncios = useAnunciosStore()
 const claves = crearClaveIdempotencia()
 
-const motivo = ref('')
+const descripcion = ref('')
 const tocado = ref(false)
 const enCurso = ref(false)
 /** Fallo de red (o inesperado): lo escrito se conserva y se puede reintentar con la misma clave. */
 const errorReintentable = ref('')
 /** Rechazo definitivo del servidor: ya no hay nada que reintentar, solo explicar y cerrar. */
 const rechazo = ref('')
-const campoMotivo = ref<HTMLTextAreaElement | null>(null)
+const campoDescripcion = ref<HTMLTextAreaElement | null>(null)
 const botonCerrar = ref<HTMLButtonElement | null>(null)
 
-const motivoLimpio = computed(() => motivo.value.trim())
-const faltan = computed(() => Math.max(0, MOTIVO_MIN - motivoLimpio.value.length))
-const valido = computed(() => motivoLimpio.value.length >= MOTIVO_MIN && motivoLimpio.value.length <= MOTIVO_MAX)
+const descripcionLimpia = computed(() => descripcion.value.trim())
+const faltan = computed(() => Math.max(0, DESCRIPCION_MOTIVO_MIN - descripcionLimpia.value.length))
+const valido = computed(() => descripcionLimpia.value.length >= DESCRIPCION_MOTIVO_MIN && descripcionLimpia.value.length <= DESCRIPCION_MOTIVO_MAX)
 const errorCampo = computed(() => {
   if (!tocado.value || valido.value) return ''
-  return motivoLimpio.value.length === 0
-    ? `El motivo es obligatorio: escribe al menos ${MOTIVO_MIN} caracteres.`
-    : `Escribe al menos ${MOTIVO_MIN} caracteres (faltan ${faltan.value}).`
+  return descripcionLimpia.value.length === 0
+    ? `El motivo es obligatorio: escribe al menos ${DESCRIPCION_MOTIVO_MIN} caracteres.`
+    : `Escribe al menos ${DESCRIPCION_MOTIVO_MIN} caracteres (faltan ${faltan.value}).`
 })
 
 // Cada vez que se abre se empieza de cero: es una intención nueva (clave nueva).
@@ -61,7 +61,7 @@ watch(
   () => props.abierto,
   (abierto) => {
     if (!abierto) return
-    motivo.value = ''
+    descripcion.value = ''
     tocado.value = false
     enCurso.value = false
     errorReintentable.value = ''
@@ -78,21 +78,21 @@ watch(rechazo, async (texto) => {
 })
 
 function usarMotivoRapido(texto: string) {
-  motivo.value = texto
+  descripcion.value = texto
   errorReintentable.value = ''
 }
 
 /** Explica el rechazo del servidor y recarga los datos para que la pantalla muestre el estado real. */
 async function explicarRechazo(e: ErrorServicio, pedido: Pedido) {
   if (e.codigo === 'requiere_gerente') {
-    rechazo.value = `El pedido #${pedido.id} ya está en preparación. Solo el gerente puede autorizar su cancelación.`
+    rechazo.value = `El pedido #${pedido.idPedido} ya está en preparación. Solo el gerente puede autorizar su cancelación.`
   } else if (e.codigo === 'estado_invalido') {
     rechazo.value = e.message
     try {
-      const actual = await servicios.pedidos.obtener(pedido.id)
+      const actual = await servicios.pedidos.obtener(pedido.idPedido)
       // Si el estado cambió, se explica cuál es ahora; si no, vale el motivo que da el servidor.
       if (actual.estado !== pedido.estado) {
-        rechazo.value = `El pedido #${pedido.id} cambió mientras lo revisabas: ahora está «${ETIQUETA_ESTADO_PEDIDO[actual.estado]}» y ya no se puede cancelar desde aquí.`
+        rechazo.value = `El pedido #${pedido.idPedido} cambió mientras lo revisabas: ahora está «${ETIQUETA_ESTADO_PEDIDO[actual.estado]}» y ya no se puede cancelar desde aquí.`
       }
     } catch {
       // Sin red para consultarlo: se queda el mensaje del servidor.
@@ -108,18 +108,18 @@ async function cancelar() {
   if (enCurso.value || !pedido) return
   tocado.value = true
   if (!valido.value) {
-    campoMotivo.value?.focus()
+    campoDescripcion.value?.focus()
     return
   }
 
   enCurso.value = true
   errorReintentable.value = ''
   // La clave depende de qué se quiere hacer: mismo pedido y mismo motivo = reintento.
-  const clave = claves.para(`cancelar|${pedido.id}|${motivoLimpio.value}`)
+  const clave = claves.para(`cancelar|${pedido.idPedido}|${descripcionLimpia.value}`)
   try {
-    const cancelado = await servicios.pedidos.cancelar(pedido.id, motivoLimpio.value, clave)
+    const cancelado = await servicios.pedidos.cancelar(pedido.idPedido, descripcionLimpia.value, clave)
     claves.soltar()
-    void anuncios.anunciar(`Pedido #${pedido.id} cancelado`)
+    void anuncios.anunciar(`Pedido #${pedido.idPedido} cancelado`)
     // Se espera la recarga para que, al cerrar, el foco ya sepa si su origen sigue existiendo.
     await invalidarDatos()
     emit('cancelado', cancelado)
@@ -152,15 +152,15 @@ async function cancelar() {
   >
     <form v-if="pedido" class="cancelar" novalidate @submit.prevent="cancelar">
       <header class="cancelar__cabecera">
-        <h2 id="cancelar-titulo">Cancelar pedido #{{ pedido.id }}</h2>
+        <h2 id="cancelar-titulo">Cancelar pedido #{{ pedido.idPedido }}</h2>
         <InsigniaEstado :tono="pedido.estado" :texto="ETIQUETA_ESTADO_PEDIDO[pedido.estado]" />
       </header>
 
       <!-- Resumen del pedido -->
       <section class="cancelar__resumen" aria-label="Resumen del pedido">
-        <p class="cancelar__meta">Mesa {{ pedido.mesaNumero }} · {{ formatearHora(pedido.creadoEn) }}</p>
+        <p class="cancelar__meta">Mesa {{ pedido.mesaNumero }} · {{ formatearHora(pedido.fechaHora) }}</p>
         <ul class="cancelar__lineas">
-          <li v-for="d in pedido.detalle" :key="d.productoId">
+          <li v-for="d in pedido.detalle" :key="d.idProducto">
             <span class="numero">{{ d.cantidad }}×</span> {{ d.nombreProducto }}
           </li>
         </ul>
@@ -198,21 +198,21 @@ async function cancelar() {
           </label>
           <textarea
             id="motivo-cancelacion"
-            ref="campoMotivo"
-            v-model="motivo"
-            :maxlength="MOTIVO_MAX"
+            ref="campoDescripcion"
+            v-model="descripcion"
+            :maxlength="DESCRIPCION_MOTIVO_MAX"
             :aria-invalid="errorCampo ? 'true' : undefined"
             :aria-describedby="`motivo-ayuda${errorCampo ? ' motivo-error' : ''}`"
             aria-required="true"
             :readonly="enCurso"
             autofocus
-            @blur="tocado = motivo.length > 0 || tocado"
+            @blur="tocado = descripcion.length > 0 || tocado"
           />
           <div class="cancelar__pie-campo">
             <p v-if="errorCampo" id="motivo-error" class="texto-error cancelar__error">{{ errorCampo }}</p>
             <p id="motivo-ayuda" class="cancelar__ayuda">
-              De {{ MOTIVO_MIN }} a {{ MOTIVO_MAX }} caracteres ·
-              <span class="numero">{{ motivo.length }}/{{ MOTIVO_MAX }}</span>
+              De {{ DESCRIPCION_MOTIVO_MIN }} a {{ DESCRIPCION_MOTIVO_MAX }} caracteres ·
+              <span class="numero">{{ descripcion.length }}/{{ DESCRIPCION_MOTIVO_MAX }}</span>
             </p>
           </div>
         </div>
@@ -223,8 +223,8 @@ async function cancelar() {
             :key="texto"
             type="button"
             class="chip"
-            :class="{ 'chip--activo': motivoLimpio === texto }"
-            :aria-pressed="motivoLimpio === texto"
+            :class="{ 'chip--activo': descripcionLimpia === texto }"
+            :aria-pressed="descripcionLimpia === texto"
             :disabled="enCurso"
             @click="usarMotivoRapido(texto)"
           >

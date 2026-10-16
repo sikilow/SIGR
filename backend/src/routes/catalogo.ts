@@ -18,8 +18,9 @@ function esDuplicado(error: unknown): boolean {
 
 // ======================= Categorías =======================
 
+/** categoria_menu.* + total_productos (calculado: COUNT de producto.id_categoria). */
 interface CategoriaAdminDto {
-  id: number;
+  id_categoria: number;
   nombre: string;
   total_productos: number;
 }
@@ -27,24 +28,24 @@ interface CategoriaAdminDto {
 async function cargarCategoria(ex: Ejecutor, id: number): Promise<CategoriaAdminDto | null> {
   const [f] = await filas(
     ex,
-    `SELECT c.id_categoria AS id, c.nombre, COUNT(p.id_producto) AS total_productos
+    `SELECT c.id_categoria, c.nombre, COUNT(p.id_producto) AS total_productos
        FROM categoria_menu c LEFT JOIN producto p ON p.id_categoria = c.id_categoria
       WHERE c.id_categoria = ? GROUP BY c.id_categoria, c.nombre`,
     [id],
   );
-  return f ? { id: f.id as number, nombre: f.nombre as string, total_productos: Number(f.total_productos) } : null;
+  return f ? { id_categoria: f.id_categoria as number, nombre: f.nombre as string, total_productos: Number(f.total_productos) } : null;
 }
 
 /** GET /api/catalogo/categorias */
 catalogoRouter.get("/categorias", async (_req, res) => {
   const rows = await filas(
     pool,
-    `SELECT c.id_categoria AS id, c.nombre, COUNT(p.id_producto) AS total_productos
+    `SELECT c.id_categoria, c.nombre, COUNT(p.id_producto) AS total_productos
        FROM categoria_menu c LEFT JOIN producto p ON p.id_categoria = c.id_categoria
       GROUP BY c.id_categoria, c.nombre ORDER BY c.id_categoria`,
   );
   res.json(
-    rows.map((f) => ({ id: f.id as number, nombre: f.nombre as string, total_productos: Number(f.total_productos) })),
+    rows.map((f) => ({ id_categoria: f.id_categoria as number, nombre: f.nombre as string, total_productos: Number(f.total_productos) })),
   );
 });
 
@@ -98,25 +99,27 @@ catalogoRouter.delete("/categorias/:id", async (req, res) => {
 
 // ======================= Productos + inventario =======================
 
+/** producto.* + categoria (JOIN), existencia y stock_minimo (disponibilidadProducto) y `disponible` calculado. */
 interface ProductoAdminDto {
-  id: number;
-  categoria_id: number;
+  id_producto: number;
+  id_categoria: number;
+  /** Calculado: categoria_menu.nombre (JOIN). */
   categoria: string;
   nombre: string;
   descripcion: string;
   precio: number;
-  /** El gerente lo tiene activo en el menú (producto.disponible). */
+  /** El gerente lo tiene activo en el menú (columna producto.disponible). */
   activo: boolean;
   existencia: number;
   stock_minimo: number;
   /** false = se prepara al momento: no tiene existencia que controlar (el mesero puede pedir cualquier cantidad). */
   controla_existencia: boolean;
-  /** Lo que ve el mesero: activo Y (no controla existencia O existencia > 0). */
+  /** Calculado: lo que ve el mesero (activo Y, si controla existencia, con existencia > 0). */
   disponible: boolean;
 }
 
 const SELECT_PRODUCTO = `
-  SELECT p.id_producto AS id, p.id_categoria AS categoria_id, c.nombre AS categoria, p.nombre,
+  SELECT p.id_producto, p.id_categoria, c.nombre AS categoria, p.nombre,
          COALESCE(p.descripcion, '') AS descripcion, p.precio, p.disponible AS activo, p.controla_existencia,
          COALESCE(i.existencia, 0) AS existencia, COALESCE(i.stock_minimo, 0) AS stock_minimo
     FROM producto p
@@ -128,8 +131,8 @@ function aProductoDto(f: Record<string, unknown>): ProductoAdminDto {
   const existencia = Number(f.existencia);
   const controla = Boolean(f.controla_existencia);
   return {
-    id: f.id as number,
-    categoria_id: f.categoria_id as number,
+    id_producto: f.id_producto as number,
+    id_categoria: f.id_categoria as number,
     categoria: f.categoria as string,
     nombre: f.nombre as string,
     descripcion: f.descripcion as string,
@@ -167,7 +170,7 @@ const Precio = z
 const Entero = z.number().int("debe ser un número entero").min(0, "no puede ser negativo").max(1_000_000, "es demasiado grande");
 
 const CrearProducto = z.object({
-  categoria_id: z.number().int().positive(),
+  id_categoria: z.number().int().positive(),
   nombre: Texto(100),
   descripcion: z.string().trim().max(255).optional(),
   precio: Precio,
@@ -182,11 +185,11 @@ const CrearProducto = z.object({
 catalogoRouter.post("/productos", async (req, res) => {
   const d = validar(CrearProducto, req.body);
   const id = await transaccion(async (cx) => {
-    await exigirCategoria(cx, d.categoria_id);
+    await exigirCategoria(cx, d.id_categoria);
     const p = await ejecutar(
       cx,
       "INSERT INTO producto (id_categoria, nombre, descripcion, precio, disponible, controla_existencia) VALUES (?, ?, ?, ?, ?, ?)",
-      [d.categoria_id, d.nombre, d.descripcion || null, d.precio, d.activo ?? true, d.controla_existencia ?? true],
+      [d.id_categoria, d.nombre, d.descripcion || null, d.precio, d.activo ?? true, d.controla_existencia ?? true],
     );
     await ejecutar(cx, "INSERT INTO disponibilidadProducto (id_producto, existencia, stock_minimo) VALUES (?, ?, ?)", [
       p.insertId,
@@ -200,7 +203,7 @@ catalogoRouter.post("/productos", async (req, res) => {
 
 const EditarProducto = z
   .object({
-    categoria_id: z.number().int().positive(),
+    id_categoria: z.number().int().positive(),
     nombre: Texto(100),
     descripcion: z.string().trim().max(255),
     precio: Precio,
@@ -224,11 +227,11 @@ catalogoRouter.patch("/productos/:id", async (req, res) => {
   await transaccion(async (cx) => {
     const [existe] = await filas(cx, "SELECT 1 AS x FROM producto WHERE id_producto = ? FOR UPDATE", [id]);
     if (!existe) throw new ErrorApi(404, "no_encontrado", "El producto no existe.");
-    if (d.categoria_id !== undefined) await exigirCategoria(cx, d.categoria_id);
+    if (d.id_categoria !== undefined) await exigirCategoria(cx, d.id_categoria);
 
     const sets: string[] = [];
     const params: unknown[] = [];
-    if (d.categoria_id !== undefined) (sets.push("id_categoria = ?"), params.push(d.categoria_id));
+    if (d.id_categoria !== undefined) (sets.push("id_categoria = ?"), params.push(d.id_categoria));
     if (d.nombre !== undefined) (sets.push("nombre = ?"), params.push(d.nombre));
     if (d.descripcion !== undefined) (sets.push("descripcion = ?"), params.push(d.descripcion || null));
     if (d.precio !== undefined) (sets.push("precio = ?"), params.push(d.precio));

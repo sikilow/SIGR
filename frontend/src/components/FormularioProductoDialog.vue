@@ -20,7 +20,7 @@ const emit = defineEmits<{ cerrar: []; guardado: [producto: ProductoAdmin, cread
 
 const nombre = ref('')
 const descripcion = ref('')
-const categoriaId = ref<number | ''>('')
+const idCategoria = ref<number | ''>('')
 // Los números se editan como texto para poder validar "vacío" y "12.5" con claridad.
 const precio = ref('')
 const existencia = ref('0')
@@ -40,7 +40,7 @@ watch(
     const p = props.producto
     nombre.value = p?.nombre ?? ''
     descripcion.value = p?.descripcion ?? ''
-    categoriaId.value = p?.categoriaId ?? props.categoriaInicial ?? props.categorias[0]?.id ?? ''
+    idCategoria.value = p?.idCategoria ?? props.categoriaInicial ?? props.categorias[0]?.idCategoria ?? ''
     precio.value = p ? String(p.precio) : ''
     existencia.value = p ? String(p.existencia) : '0'
     stockMinimo.value = p ? String(p.stockMinimo) : '0'
@@ -60,7 +60,7 @@ const errores = computed(() => {
   const n = nombre.value.trim()
   if (!n) e.nombre = 'Escribe el nombre del producto.'
   else if (n.length > 100) e.nombre = 'Máximo 100 caracteres.'
-  if (categoriaId.value === '') e.categoria = 'Elige una categoría.'
+  if (idCategoria.value === '') e.categoria = 'Elige una categoría.'
   const p = aNumero(precio.value)
   if (Number.isNaN(p)) e.precio = 'Escribe el precio (ejemplo: 85 o 85.50).'
   else if (p < 0) e.precio = 'El precio no puede ser negativo.'
@@ -82,7 +82,7 @@ function cambios(): CambioProducto {
   const c: CambioProducto = {}
   if (nombre.value.trim() !== p.nombre) c.nombre = nombre.value
   if (descripcion.value.trim() !== p.descripcion) c.descripcion = descripcion.value
-  if (categoriaId.value !== '' && categoriaId.value !== p.categoriaId) c.categoriaId = categoriaId.value
+  if (idCategoria.value !== '' && idCategoria.value !== p.idCategoria) c.idCategoria = idCategoria.value
   if (aNumero(precio.value) !== p.precio) c.precio = aNumero(precio.value)
   if (activo.value !== p.activo) c.activo = activo.value
   if (controlaExistencia.value !== p.controlaExistencia) c.controlaExistencia = controlaExistencia.value
@@ -111,12 +111,12 @@ async function guardar() {
         emit('cerrar')
         return
       }
-      emit('guardado', await servicios.catalogo.actualizarProducto(props.producto.id, c), false)
+      emit('guardado', await servicios.catalogo.actualizarProducto(props.producto.idProducto, c), false)
     } else {
       emit(
         'guardado',
         await servicios.catalogo.crearProducto({
-          categoriaId: categoriaId.value as number,
+          idCategoria: idCategoria.value as number,
           nombre: nombre.value,
           descripcion: descripcion.value,
           precio: aNumero(precio.value),
@@ -158,9 +158,9 @@ async function guardar() {
       <div class="form__fila">
         <div class="campo">
           <label for="prod-categoria">Categoría</label>
-          <select id="prod-categoria" v-model="categoriaId" :aria-invalid="campoErr('categoria') ? 'true' : undefined">
+          <select id="prod-categoria" v-model="idCategoria" :aria-invalid="campoErr('categoria') ? 'true' : undefined">
             <option v-if="categorias.length === 0" value="" disabled>Primero crea una categoría</option>
-            <option v-for="c in categorias" :key="c.id" :value="c.id">{{ c.nombre }}</option>
+            <option v-for="c in categorias" :key="c.idCategoria" :value="c.idCategoria">{{ c.nombre }}</option>
           </select>
           <p v-if="campoErr('categoria')" class="texto-error form__error">{{ campoErr('categoria') }}</p>
         </div>

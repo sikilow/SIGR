@@ -17,13 +17,13 @@ type Operacion = 'registrar' | 'enviar' | 'reintentar' | 'guardar'
 
 const props = defineProps<{
   abierto: boolean
-  mesaId: number
+  idMesa: number
   mesaNumero: number
   lineas: LineaCarrito[]
   /** Total ESTIMADO en el cliente; el real lo devuelve el servidor. */
   total: number
   /** Pedido que se está editando; `null` si es nuevo. */
-  pedidoId: number | null
+  idPedido: number | null
   origenFoco: HTMLElement | null
 }>()
 
@@ -44,13 +44,13 @@ const errorGeneral = ref('')
 const registradoSinEnviar = ref<Pedido | null>(null)
 const errorEnvio = ref('')
 
-// Idempotency-Key (CAMBIO PROPUESTO EN F5): una clave por intención. Reintentar la MISMA intención
+// Idempotency-Key: una clave por intención. Reintentar la MISMA intención
 // (mismo pedido, mismo envío) reutiliza la clave; abrir la revisión de nuevo es una intención nueva.
 const claveRegistro = crearClaveIdempotencia()
 const claveEnvio = crearClaveIdempotencia()
 
-const editando = computed(() => props.pedidoId !== null)
-const nombrePorProducto = computed(() => new Map(props.lineas.map((l) => [l.productoId, l.nombre])))
+const editando = computed(() => props.idPedido !== null)
+const nombrePorProducto = computed(() => new Map(props.lineas.map((l) => [l.idProducto, l.nombre])))
 
 /** Hay algo que impide registrar/enviar: verificación pendiente, fallida o con faltantes. */
 const sinPermiso = computed(
@@ -76,7 +76,7 @@ const textoEstado = computed(() => {
 
 /** "Tacos al pastor: agotado" o "Tacos al pastor: solo quedan 3" */
 function describirAgotado(f: DisponibilidadProducto): string {
-  const nombre = nombrePorProducto.value.get(f.productoId) ?? `Producto ${f.productoId}`
+  const nombre = nombrePorProducto.value.get(f.idProducto) ?? `Producto ${f.idProducto}`
   if (f.existencia !== undefined && f.existencia > 0) return `${nombre}: solo quedan ${f.existencia}`
   return `${nombre}: agotado`
 }
@@ -86,7 +86,7 @@ async function verificarDisponibilidad() {
   errorVerificacion.value = ''
   faltantes.value = []
   try {
-    const items = [...new Set(props.lineas.map((l) => l.productoId))].map((productoId) => ({ productoId }))
+    const items = [...new Set(props.lineas.map((l) => l.idProducto))].map((idProducto) => ({ idProducto }))
     const resultado = await servicios.menu.verificarDisponibilidad(items)
     faltantes.value = resultado.filter((r) => !r.disponible)
   } catch (e) {
@@ -128,8 +128,8 @@ async function registrar(enviarACocina: boolean) {
   try {
     const detalle = aLineasNuevoPedido(props.lineas)
     // Mismos productos en la misma mesa = reintento del mismo registro (misma clave).
-    const clave = claveRegistro.para(`registrar|${props.mesaId}|${JSON.stringify(detalle)}`)
-    pedido = await servicios.pedidos.crear({ mesaId: props.mesaId, detalle }, clave)
+    const clave = claveRegistro.para(`registrar|${props.idMesa}|${JSON.stringify(detalle)}`)
+    pedido = await servicios.pedidos.crear({ idMesa: props.idMesa, detalle }, clave)
     claveRegistro.soltar()
   } catch (e) {
     // Si el resultado es desconocido (red) se conserva la clave para el reintento; si no, se cierra la intención.
@@ -154,7 +154,7 @@ async function enviar(pedido: Pedido, operacion: Operacion) {
   errorEnvio.value = ''
   try {
     // "Reintentar envío" es la misma intención: reutiliza la clave y no repite el envío.
-    const enviado = await servicios.pedidos.enviar(pedido.id, claveEnvio.para(`enviar|${pedido.id}`))
+    const enviado = await servicios.pedidos.enviar(pedido.idPedido, claveEnvio.para(`enviar|${pedido.idPedido}`))
     claveEnvio.soltar()
     registradoSinEnviar.value = null
     enCurso.value = null
@@ -181,11 +181,11 @@ function dejarRegistrado() {
 }
 
 async function guardarCambios() {
-  if (bloqueado.value || props.pedidoId === null) return
+  if (bloqueado.value || props.idPedido === null) return
   errorGeneral.value = ''
   enCurso.value = 'guardar'
   try {
-    const pedido = await servicios.pedidos.actualizar(props.pedidoId, aLineasNuevoPedido(props.lineas))
+    const pedido = await servicios.pedidos.actualizar(props.idPedido, aLineasNuevoPedido(props.lineas))
     enCurso.value = null
     emit('completado', pedido, 'actualizado')
   } catch (e) {
@@ -214,7 +214,7 @@ function modificar() {
           {{ editando ? '¿Los cambios son correctos?' : '¿El pedido es correcto?' }}
         </h2>
         <p class="revision__sub">
-          Mesa {{ mesaNumero }}<template v-if="editando"> · Pedido #{{ pedidoId }}</template>
+          Mesa {{ mesaNumero }}<template v-if="editando"> · Pedido #{{ idPedido }}</template>
         </p>
       </header>
 
@@ -225,7 +225,7 @@ function modificar() {
       <div v-if="faltantes.length > 0" class="revision__alerta" role="alert">
         <strong>Hay productos agotados o sin existencia suficiente:</strong>
         <ul>
-          <li v-for="f in faltantes" :key="f.productoId">{{ describirAgotado(f) }}</li>
+          <li v-for="f in faltantes" :key="f.idProducto">{{ describirAgotado(f) }}</li>
         </ul>
         <p v-if="!registradoSinEnviar">Ajusta las cantidades o quita los productos para continuar.</p>
       </div>
@@ -246,15 +246,15 @@ function modificar() {
       <!-- Registrado pero sin enviar -->
       <div v-if="registradoSinEnviar" class="revision__alerta" role="alert">
         <strong>El pedido se registró pero no se pudo enviar a cocina</strong>
-        <p>Pedido #{{ registradoSinEnviar.id }} · {{ errorEnvio }}</p>
+        <p>Pedido #{{ registradoSinEnviar.idPedido }} · {{ errorEnvio }}</p>
       </div>
 
       <ul class="revision__lineas" aria-label="Resumen del pedido">
-        <li v-for="linea in lineas" :key="linea.productoId" class="revision__linea">
+        <li v-for="linea in lineas" :key="linea.idProducto" class="revision__linea">
           <span class="revision__cantidad numero">{{ linea.cantidad }}×</span>
           <span class="revision__nombre">
             {{ linea.nombre }}
-            <small v-if="linea.observaciones" class="revision__nota">Obs.: {{ linea.observaciones }}</small>
+            <small v-if="linea.indicaciones" class="revision__nota">Obs.: {{ linea.indicaciones }}</small>
           </span>
           <span class="numero">{{ formatearMoneda(subtotalDe(linea)) }}</span>
         </li>

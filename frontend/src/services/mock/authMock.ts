@@ -6,11 +6,15 @@ import { conRetraso } from './utiles'
 
 const CLAVE_SESION = 'sigr.mock.sesion'
 
-/** Lee la sesión simulada; sessionStorage permite que sobreviva a recargar la página. */
+/**
+ * Lee la sesión simulada; sessionStorage permite que sobreviva a recargar la página. Una sesión guardada con
+ * la forma anterior (`id` en lugar de `idUsuario`) se descarta: obliga a iniciar sesión de nuevo.
+ */
 export function usuarioActual(): Usuario | null {
   try {
     const guardado = sessionStorage.getItem(CLAVE_SESION)
-    return guardado ? (JSON.parse(guardado) as Usuario) : null
+    const usuario = guardado ? (JSON.parse(guardado) as Partial<Usuario>) : null
+    return usuario && typeof usuario.idUsuario === 'number' ? (usuario as Usuario) : null
   } catch {
     return null
   }
@@ -30,12 +34,21 @@ export function crearAuthMock(): AuthService {
     iniciarSesion(credenciales) {
       return conRetraso(() => {
         const encontrado = baseDatos.usuarios.find(
-          (u) => u.activo !== false && u.usuario === credenciales.usuario && u.contrasena === credenciales.contrasena,
+          (u) =>
+            u.activo !== false && u.nombreUsuario === credenciales.nombreUsuario && u.contrasena === credenciales.contrasena,
         )
         if (!encontrado) {
           throw new ErrorServicio('credenciales_invalidas', 'Usuario o contraseña incorrectos.', 401)
         }
-        const usuario: Usuario = { id: encontrado.id, nombre: encontrado.nombre, rol: encontrado.rol }
+        // Al cliente solo llega el perfil: nunca el acceso (`nombreUsuario`, `contrasena`).
+        const usuario: Usuario = {
+          idUsuario: encontrado.idUsuario,
+          idRol: encontrado.idRol,
+          nombre: encontrado.nombre,
+          correo: encontrado.correo,
+          activo: encontrado.activo !== false,
+          rol: encontrado.rol,
+        }
         guardarSesion(usuario)
         return usuario
       })

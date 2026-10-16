@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import type { EstadoPedido, Mesa } from '../types'
+import { estadoParaReglas, type EstadoPedido, type Mesa } from '../types'
 import {
   accionesDePedido,
   coincideConFiltro,
   esPedidoActivo,
   estaSinEntregar,
   filtroListaDesdeConsulta,
+  meseroPuedeCancelar,
   motivoPedidoBloqueado,
   puedeRegistrarPedido,
   sumaAlTotal,
   textoCancelarBloqueado,
 } from './reglas'
 
-const ESTADOS: EstadoPedido[] = ['registrado', 'enviado', 'en_preparacion', 'listo', 'entregado', 'cancelado', 'pagado']
+const ESTADOS: EstadoPedido[] = ['registrado', 'enviado', 'pendiente', 'en_preparacion', 'listo', 'entregado', 'cancelado', 'pagado', 'desconocido']
 
 describe('accionesDePedido (qué permite cada estado)', () => {
   it('registrado: se puede editar, enviar y cancelar; no entregar', () => {
@@ -76,7 +77,7 @@ describe('motivoPedidoBloqueado / puedeRegistrarPedido (mesa y cuenta)', () => {
     expect(puedeRegistrarPedido(mesa({ estadoCuenta: null }))).toBe(true)
   })
 
-  it.each(['libre', 'reservada'] as const)('mesa %s: no se puede', (estado) => {
+  it.each(['disponible', 'reservada', 'desconocido'] as const)('mesa %s: no se puede', (estado) => {
     expect(motivoPedidoBloqueado(mesa({ estado, estadoCuenta: null }))).toBe('La mesa 7 no está ocupada.')
     expect(puedeRegistrarPedido(mesa({ estado, estadoCuenta: null }))).toBe(false)
   })
@@ -88,7 +89,7 @@ describe('motivoPedidoBloqueado / puedeRegistrarPedido (mesa y cuenta)', () => {
 
 describe('estados y filtros', () => {
   it('activo = todo menos cancelado y pagado', () => {
-    expect(ESTADOS.filter(esPedidoActivo)).toEqual(['registrado', 'enviado', 'en_preparacion', 'listo', 'entregado'])
+    expect(ESTADOS.filter(esPedidoActivo)).toEqual(['registrado', 'enviado', 'pendiente', 'en_preparacion', 'listo', 'entregado', 'desconocido'])
   })
 
   it('el filtro "activos" y los filtros por estado', () => {
@@ -106,8 +107,42 @@ describe('estados y filtros', () => {
   })
 
   it('"sin entregar" y "suma al total"', () => {
-    expect(ESTADOS.filter(estaSinEntregar)).toEqual(['registrado', 'enviado', 'en_preparacion', 'listo'])
+    expect(ESTADOS.filter(estaSinEntregar)).toEqual(['registrado', 'enviado', 'pendiente', 'en_preparacion', 'listo'])
     expect(sumaAlTotal({ estado: 'cancelado' })).toBe(false)
     expect(sumaAlTotal({ estado: 'entregado' })).toBe(true)
+  })
+})
+
+describe('pendiente (catálogo de la BD) se trata exactamente igual que enviado', () => {
+  it('estadoParaReglas solo reinterpreta pendiente', () => {
+    expect(estadoParaReglas('pendiente')).toBe('enviado')
+    expect(ESTADOS.filter((e) => e !== 'pendiente').every((e) => estadoParaReglas(e) === e)).toBe(true)
+  })
+
+  it('mismas acciones: cancelable, no editable, no enviable', () => {
+    expect(accionesDePedido('pendiente')).toEqual(accionesDePedido('enviado'))
+    expect(accionesDePedido('pendiente')).toEqual({ editar: 'no_aplica', enviar: false, cancelar: 'permitida', entregar: false })
+    expect(accionesDePedido('pendiente', true)).toEqual(accionesDePedido('enviado', true))
+    expect(meseroPuedeCancelar('pendiente')).toBe(true)
+  })
+
+  it('mismos filtros, avisos y suma al total', () => {
+    expect(coincideConFiltro('pendiente', 'enviado')).toBe(true)
+    expect(coincideConFiltro('pendiente', 'registrado')).toBe(false)
+    expect(coincideConFiltro('pendiente', 'activos')).toBe(true)
+    expect(estaSinEntregar('pendiente')).toBe(true)
+    expect(sumaAlTotal({ estado: 'pendiente' })).toBe(true)
+  })
+})
+
+describe('estado desconocido: la pantalla no se rompe y no habilita acciones', () => {
+  it('no permite editar, enviar, cancelar ni entregar', () => {
+    expect(accionesDePedido('desconocido')).toEqual({ editar: 'no_aplica', enviar: false, cancelar: 'no_aplica', entregar: false })
+    expect(meseroPuedeCancelar('desconocido')).toBe(false)
+  })
+
+  it('se ve en la lista de activos y suma al total (no se oculta información)', () => {
+    expect(coincideConFiltro('desconocido', 'activos')).toBe(true)
+    expect(sumaAlTotal({ estado: 'desconocido' })).toBe(true)
   })
 })

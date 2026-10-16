@@ -75,7 +75,7 @@ async function crear() {
 }
 
 function empezarEdicion(c: CategoriaAdmin) {
-  editandoId.value = c.id
+  editandoId.value = c.idCategoria
   nombreEditado.value = c.nombre
   aBorrar.value = null
   error.value = ''
@@ -95,7 +95,7 @@ async function guardarEdicion() {
 async function borrar() {
   const c = aBorrar.value
   if (!c) return
-  await correr(() => servicios.catalogo.eliminarCategoria(c.id))
+  await correr(() => servicios.catalogo.eliminarCategoria(c.idCategoria))
   aBorrar.value = null
 }
 </script>
@@ -119,16 +119,16 @@ async function borrar() {
       <p v-else-if="categorias.length === 0" class="cat__vacio">Todavía no hay categorías.</p>
 
       <ul v-else class="cat__lista">
-        <li v-for="c in categorias" :key="c.id" class="cat__fila">
-          <template v-if="editandoId === c.id">
+        <li v-for="c in categorias" :key="c.idCategoria" class="cat__fila">
+          <template v-if="editandoId === c.idCategoria">
             <form class="cat__edicion" novalidate @submit.prevent="guardarEdicion">
-              <label class="solo-lectores" :for="`cat-edit-${c.id}`">Nuevo nombre de {{ c.nombre }}</label>
-              <input :id="`cat-edit-${c.id}`" v-model="nombreEditado" type="text" maxlength="80" autocomplete="off" autofocus />
+              <label class="solo-lectores" :for="`cat-edit-${c.idCategoria}`">Nuevo nombre de {{ c.nombre }}</label>
+              <input :id="`cat-edit-${c.idCategoria}`" v-model="nombreEditado" type="text" maxlength="80" autocomplete="off" autofocus />
               <button type="submit" class="btn" :aria-disabled="enCurso ? 'true' : undefined">Guardar</button>
               <button type="button" class="btn btn--secundario" @click="editandoId = null">Cancelar</button>
             </form>
           </template>
-          <template v-else-if="aBorrar?.id === c.id">
+          <template v-else-if="aBorrar?.idCategoria === c.idCategoria">
             <p class="cat__confirmar" role="alert">
               ¿Borrar «{{ c.nombre }}»? No se puede deshacer.
             </p>

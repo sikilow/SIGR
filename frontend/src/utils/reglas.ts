@@ -1,12 +1,16 @@
 // Reglas de negocio PROVISIONALES que la interfaz necesita para habilitar o
 // deshabilitar acciones. La API debe validar las mismas reglas del lado servidor.
-import type { EstadoPedido, Mesa, Pedido } from '../types'
+//
+// `pendiente` (catálogo de la BD) se trata EXACTAMENTE igual que `enviado` mientras la BD no tenga `enviado`:
+// cancelable, no editable y visible para cocina. Por eso todas las reglas pasan por `estadoParaReglas`.
+// Un estado `desconocido` no habilita ninguna acción.
+import { estadoParaReglas, type EstadoPedido, type Mesa, type Pedido } from '../types'
 
 /** El mesero solo puede cancelar pedidos en estos estados. */
 const ESTADOS_CANCELABLES_POR_MESERO: readonly EstadoPedido[] = ['registrado', 'enviado']
 
 export function meseroPuedeCancelar(estado: EstadoPedido): boolean {
-  return ESTADOS_CANCELABLES_POR_MESERO.includes(estado)
+  return ESTADOS_CANCELABLES_POR_MESERO.includes(estadoParaReglas(estado))
 }
 
 /** En preparación solo el gerente puede cancelar. */
@@ -20,14 +24,15 @@ export function esPedidoActivo(estado: EstadoPedido): boolean {
 }
 
 /** Solo un pedido `registrado` se edita (PATCH) y se envía a cocina. */
-export const puedeEditarOEnviar = (estado: EstadoPedido): boolean => estado === 'registrado'
+export const puedeEditarOEnviar = (estado: EstadoPedido): boolean => estadoParaReglas(estado) === 'registrado'
 
 /** Solo un pedido `listo` se marca como entregado. */
 export const puedeEntregar = (estado: EstadoPedido): boolean => estado === 'listo'
 
 /** Pedidos que aún no llegaron a la mesa: se avisa al solicitar la cuenta, sin bloquear. */
 export function estaSinEntregar(estado: EstadoPedido): boolean {
-  return estado === 'registrado' || estado === 'enviado' || estado === 'en_preparacion' || estado === 'listo'
+  const efectivo = estadoParaReglas(estado)
+  return efectivo === 'registrado' || efectivo === 'enviado' || efectivo === 'en_preparacion' || efectivo === 'listo'
 }
 
 /** Pedidos que cuentan en el total de la cuenta (todos menos los cancelados). */
@@ -47,7 +52,7 @@ export const FILTROS_LISTA_PEDIDOS: readonly FiltroListaPedidos[] = [
 ]
 
 export function coincideConFiltro(estado: EstadoPedido, filtro: FiltroListaPedidos): boolean {
-  return filtro === 'activos' ? esPedidoActivo(estado) : estado === filtro
+  return filtro === 'activos' ? esPedidoActivo(estado) : estadoParaReglas(estado) === filtro
 }
 
 /** Convierte un valor de la URL (?estado=) en un filtro válido; si no lo es, `activos`. */

@@ -33,7 +33,7 @@ const lista = computed(() => {
     if (estado.value === 'activos' && !p.activo) return false
     if (estado.value === 'inactivos' && p.activo) return false
     if (estado.value === 'poco_stock' && !(pocoStock(p) || agotadoPorExistencia(p))) return false
-    if (categoriaFiltro.value !== 'todas' && p.categoriaId !== categoriaFiltro.value) return false
+    if (categoriaFiltro.value !== 'todas' && p.idCategoria !== categoriaFiltro.value) return false
     if (q && !`${p.nombre} ${p.descripcion}`.toLowerCase().includes(q)) return false
     return true
   })
@@ -53,7 +53,7 @@ async function cargar(conEsqueleto = false) {
     productos.value = prods
     categorias.value = cats
     // Si la categoría filtrada ya no existe (se borró), se vuelve a "todas".
-    if (categoriaFiltro.value !== 'todas' && !cats.some((c) => c.id === categoriaFiltro.value)) categoriaFiltro.value = 'todas'
+    if (categoriaFiltro.value !== 'todas' && !cats.some((c) => c.idCategoria === categoriaFiltro.value)) categoriaFiltro.value = 'todas'
     error.value = ''
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudieron cargar los productos.'
@@ -117,7 +117,7 @@ async function confirmarCambioEstado() {
   enCurso.value = true
   errorReintentable.value = ''
   try {
-    const nuevo = await servicios.catalogo.actualizarProducto(p.id, { activo: !p.activo })
+    const nuevo = await servicios.catalogo.actualizarProducto(p.idProducto, { activo: !p.activo })
     objetivo.value = null
     void anuncios.anunciar(nuevo.activo ? `«${nuevo.nombre}» activado` : `«${nuevo.nombre}» desactivado`)
     await cargar()
@@ -179,7 +179,7 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
           <label for="prod-filtro-cat">Categoría</label>
           <select id="prod-filtro-cat" v-model="categoriaFiltro">
             <option value="todas">Todas las categorías</option>
-            <option v-for="c in categorias" :key="c.id" :value="c.id">{{ c.nombre }} ({{ c.totalProductos }})</option>
+            <option v-for="c in categorias" :key="c.idCategoria" :value="c.idCategoria">{{ c.nombre }} ({{ c.totalProductos }})</option>
           </select>
         </div>
       </div>
@@ -205,7 +205,7 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
     </div>
 
     <ul v-else class="lista">
-      <li v-for="p in lista" :key="p.id" class="fila tarjeta" :class="{ 'fila--inactiva': !p.activo }">
+      <li v-for="p in lista" :key="p.idProducto" class="fila tarjeta" :class="{ 'fila--inactiva': !p.activo }">
         <div class="fila__datos">
           <h3>{{ p.nombre }}</h3>
           <p class="fila__linea fila__meta">{{ p.categoria }}<template v-if="p.descripcion"> · {{ p.descripcion }}</template></p>
@@ -219,7 +219,7 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
 
         <div class="fila__lado">
           <div class="fila__insignias">
-            <InsigniaEstado :tono="p.activo ? 'libre' : 'cancelado'" :texto="p.activo ? 'Activo' : 'Inactivo'" />
+            <InsigniaEstado :tono="p.activo ? 'disponible' : 'cancelado'" :texto="p.activo ? 'Activo' : 'Inactivo'" />
             <InsigniaEstado v-if="agotadoPorExistencia(p)" tono="agotado" texto="Agotado" />
             <InsigniaEstado v-else-if="pocoStock(p)" tono="listo" texto="Poco stock" />
           </div>

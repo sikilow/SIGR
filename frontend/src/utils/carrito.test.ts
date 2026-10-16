@@ -7,10 +7,10 @@ import {
   cambiarCantidad,
   cantidadDe,
   carritosIguales,
-  establecerObservaciones,
+  establecerIndicaciones,
   lineasDesdeDetalle,
   MAX_CANTIDAD,
-  MAX_OBSERVACIONES,
+  MAX_INDICACIONES,
   quitarLinea,
   topeCantidad,
   totalEstimado,
@@ -18,9 +18,9 @@ import {
   type LineaCarrito,
 } from './carrito'
 
-const taco: Producto = { id: 16, categoriaId: 2, nombre: 'Tacos al pastor', descripcion: '', precio: 120, disponible: true }
-const cafe: Producto = { id: 14, categoriaId: 4, nombre: 'Café de olla', descripcion: '', precio: 40, disponible: true }
-const ceviche: Producto = { id: 4, categoriaId: 1, nombre: 'Ceviche', descripcion: '', precio: 140, disponible: false }
+const taco: Producto = { idProducto: 16, idCategoria: 2, nombre: 'Tacos al pastor', descripcion: '', precio: 120, disponible: true }
+const cafe: Producto = { idProducto: 14, idCategoria: 4, nombre: 'Café de olla', descripcion: '', precio: 40, disponible: true }
+const ceviche: Producto = { idProducto: 4, idCategoria: 1, nombre: 'Ceviche', descripcion: '', precio: 140, disponible: false }
 
 describe('carrito: agregar y cantidades', () => {
   it('agrega un producto nuevo con cantidad 1 y lo suma si ya estaba', () => {
@@ -53,7 +53,7 @@ describe('carrito: agregar y cantidades', () => {
 
   it('quita una línea sin tocar las demás', () => {
     const lineas = agregarProducto(agregarProducto([], taco), cafe)
-    expect(quitarLinea(lineas, 16).map((l) => l.productoId)).toEqual([14])
+    expect(quitarLinea(lineas, 16).map((l) => l.idProducto)).toEqual([14])
   })
 })
 
@@ -72,12 +72,12 @@ describe('carrito: total estimado y unidades', () => {
   })
 })
 
-describe('carrito: observaciones', () => {
-  it('guarda el texto y lo recorta a MAX_OBSERVACIONES', () => {
+describe('carrito: indicaciones', () => {
+  it('guarda el texto y lo recorta a MAX_INDICACIONES', () => {
     const base = agregarProducto([], taco)
-    expect(establecerObservaciones(base, 16, 'Sin cebolla')[0]?.observaciones).toBe('Sin cebolla')
-    const larga = establecerObservaciones(base, 16, 'x'.repeat(MAX_OBSERVACIONES + 30))[0]?.observaciones
-    expect(larga).toHaveLength(MAX_OBSERVACIONES)
+    expect(establecerIndicaciones(base, 16, 'Sin cebolla')[0]?.indicaciones).toBe('Sin cebolla')
+    const larga = establecerIndicaciones(base, 16, 'x'.repeat(MAX_INDICACIONES + 30))[0]?.indicaciones
+    expect(larga).toHaveLength(MAX_INDICACIONES)
   })
 
   it('las sugerencias se agregan sin duplicarse', () => {
@@ -87,21 +87,21 @@ describe('carrito: observaciones', () => {
   })
 
   it('una sugerencia que no cabe no se agrega', () => {
-    const casiLleno = 'a'.repeat(MAX_OBSERVACIONES - 3)
+    const casiLleno = 'a'.repeat(MAX_INDICACIONES - 3)
     expect(agregarSugerencia(casiLleno, 'Extra queso')).toBe(casiLleno)
   })
 
-  it('a la API se envían las líneas sin precios y con observaciones recortadas de espacios', () => {
-    const lineas = establecerObservaciones(agregarProducto([], taco), 16, '  Sin piña  ')
-    expect(aLineasNuevoPedido(lineas)).toEqual([{ productoId: 16, cantidad: 1, observaciones: 'Sin piña' }])
+  it('a la API se envían las líneas sin precios y con indicaciones recortadas de espacios', () => {
+    const lineas = establecerIndicaciones(agregarProducto([], taco), 16, '  Sin piña  ')
+    expect(aLineasNuevoPedido(lineas)).toEqual([{ idProducto: 16, cantidad: 1, indicaciones: 'Sin piña' }])
   })
 })
 
 describe('carrito: edición de un pedido existente', () => {
   it('convierte el detalle en líneas editables y detecta si hubo cambios', () => {
-    const detalle = [{ productoId: 14, nombreProducto: 'Café de olla', cantidad: 2, observaciones: '', precioUnitario: 40 }]
+    const detalle = [{ idProducto: 14, nombreProducto: 'Café de olla', cantidad: 2, indicaciones: '', precioUnitario: 40 }]
     const lineas = lineasDesdeDetalle(detalle)
-    expect(lineas).toEqual([{ productoId: 14, nombre: 'Café de olla', precioUnitario: 40, cantidad: 2, observaciones: '' }])
+    expect(lineas).toEqual([{ idProducto: 14, nombre: 'Café de olla', precioUnitario: 40, cantidad: 2, indicaciones: '' }])
     expect(carritosIguales(lineas, lineasDesdeDetalle(detalle))).toBe(true)
     expect(carritosIguales(lineas, cambiarCantidad(lineas, 14, 1))).toBe(false)
   })
@@ -109,8 +109,7 @@ describe('carrito: edición de un pedido existente', () => {
 
 describe('carrito: tope por existencia', () => {
   // Cerveza viene embotellada: controla existencia (quedan 2). El taco se prepara al momento: sin existencia.
-  const cerveza: Producto = { id: 15, categoriaId: 4, nombre: 'Cerveza artesanal', descripcion: '', precio: 75, disponible: true, existencia: 2 }
-
+  const cerveza: Producto = { idProducto: 15, idCategoria: 4, nombre: 'Cerveza artesanal', descripcion: '', precio: 75, disponible: true, existencia: 2 }
   it('topeCantidad: sin existencia usa el máximo general; con existencia, lo que hay (sin pasar del máximo)', () => {
     expect(topeCantidad(undefined)).toBe(MAX_CANTIDAD)
     expect(topeCantidad(5)).toBe(5)

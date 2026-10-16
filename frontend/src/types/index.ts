@@ -1,4 +1,5 @@
 export * from './cuenta'
+export * from './estados'
 export * from './etiquetas'
 export * from './gerente'
 export * from './menu'

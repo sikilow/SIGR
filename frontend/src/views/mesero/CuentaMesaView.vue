@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Cuenta de mesa (/mesero/mesas/:mesaId/cuenta). Muestra los pedidos de la cuenta activa, su total
+// Cuenta de mesa (/mesero/mesas/:idMesa/cuenta). Muestra los pedidos de la cuenta activa, su total
 // (calculado por el servidor, sin pedidos cancelados) y permite agregar pedidos o solicitar la cuenta.
 // El mesero NO cobra: solo indica a caja si el pago será físico o digital.
 import { computed, ref, watch } from 'vue'
@@ -30,9 +30,9 @@ function entero(valor: unknown): number | null {
   return typeof valor === 'string' && /^[1-9]\d*$/.test(valor) ? Number(valor) : null
 }
 
-const mesaId = computed(() => entero(route.params.mesaId))
+const idMesa = computed(() => entero(route.params.idMesa))
 /** La mesa se lee del store de mesas, así su número se mantiene al día. */
-const mesa = computed(() => mesas.mesas.find((m) => m.id === mesaId.value) ?? null)
+const mesa = computed(() => mesas.mesas.find((m) => m.idMesa === idMesa.value) ?? null)
 const cuenta = computed(() => store.cuenta)
 const porPagar = computed(() => cuenta.value?.estado === 'por_pagar')
 const textoPago = computed(() =>
@@ -50,18 +50,18 @@ async function volverConAviso(texto: string) {
   await router.replace({ name: 'mesero-mesas' })
 }
 
-const polling = usePolling(() => (mesaId.value === null ? Promise.resolve() : store.cargar(mesaId.value)))
+const polling = usePolling(() => (idMesa.value === null ? Promise.resolve() : store.cargar(idMesa.value)))
 
 async function iniciar() {
   fase.value = 'validando'
   errorGuardia.value = ''
-  const id = mesaId.value
+  const id = idMesa.value
   if (id === null) return volverConAviso('La mesa indicada no es válida.')
 
   try {
     await mesas.cargar()
     if (mesas.mesas.length === 0 && mesas.error) throw new Error(mesas.error)
-    const encontrada = mesas.mesas.find((m) => m.id === id)
+    const encontrada = mesas.mesas.find((m) => m.idMesa === id)
     if (!encontrada) return volverConAviso(`La mesa ${id} no existe.`)
     if (encontrada.estado !== 'ocupada') return volverConAviso(`La mesa ${encontrada.numero} no está ocupada.`)
     fase.value = 'listo'
@@ -74,7 +74,7 @@ async function iniciar() {
 
 // Carga inicial y recarga si cambia la mesa (se ignora al salir hacia otra ruta).
 watch(
-  () => route.params.mesaId,
+  () => route.params.idMesa,
   () => {
     if (route.name === 'mesero-cuenta-mesa') void iniciar()
   },
@@ -121,7 +121,7 @@ function alSolicitarse() {
           Panel de mesas
         </RouterLink>
         <h2 ref="titulo" tabindex="-1">
-          <span class="cuenta__etiqueta">Cuenta ·</span> Mesa {{ mesa?.numero ?? mesaId }}
+          <span class="cuenta__etiqueta">Cuenta ·</span> Mesa {{ mesa?.numero ?? idMesa }}
         </h2>
         <p v-if="fase === 'listo'" class="cuenta__resumen">
           <InsigniaEstado v-if="cuenta && porPagar" tono="cuenta" :texto="`Por pagar · ${textoPago}`" />
@@ -181,35 +181,35 @@ function alSolicitarse() {
       <!-- Vacío -->
       <div v-else-if="sinPedidos" class="vacio">
         <h3>Aún no hay pedidos en esta mesa</h3>
-        <RouterLink class="btn" :to="{ name: 'mesero-pedido-mesa', params: { mesaId: mesaId ?? 0 } }">Nuevo pedido</RouterLink>
+        <RouterLink class="btn" :to="{ name: 'mesero-pedido-mesa', params: { idMesa: idMesa ?? 0 } }">Nuevo pedido</RouterLink>
       </div>
 
       <template v-else-if="store.cargada">
         <ul class="pedidos" aria-label="Pedidos de la cuenta">
           <li
             v-for="p in store.pedidos"
-            :key="p.id"
+            :key="p.idPedido"
             class="pedido tarjeta"
             :class="{ 'pedido--cancelado': esCancelado(p) }"
           >
             <header class="pedido__cabecera">
-              <h3 :id="`pedido-titulo-${p.id}`" class="numero">Pedido #{{ p.id }}</h3>
-              <span class="pedido__hora numero">{{ formatearHora(p.creadoEn) }}</span>
+              <h3 :id="`pedido-titulo-${p.idPedido}`" class="numero">Pedido #{{ p.idPedido }}</h3>
+              <span class="pedido__hora numero">{{ formatearHora(p.fechaHora) }}</span>
               <InsigniaEstado :tono="p.estado" :texto="ETIQUETA_ESTADO_PEDIDO[p.estado]" />
             </header>
 
             <!-- Cancelado: no suma al total, y el motivo si viene -->
             <div v-if="esCancelado(p)" class="pedido__cancelado">
               <InsigniaEstado tono="cancelado" texto="No suma al total" />
-              <p v-if="p.motivoCancelacion">Motivo: {{ p.motivoCancelacion }}</p>
+              <p v-if="p.motivoDescripcion">Motivo: {{ p.motivoDescripcion }}</p>
             </div>
 
-            <ul class="pedido__lineas" :aria-labelledby="`pedido-titulo-${p.id}`">
-              <li v-for="d in p.detalle" :key="d.productoId" class="linea">
+            <ul class="pedido__lineas" :aria-labelledby="`pedido-titulo-${p.idPedido}`">
+              <li v-for="d in p.detalle" :key="d.idProducto" class="linea">
                 <span class="linea__cantidad numero">{{ d.cantidad }}×</span>
                 <span class="linea__nombre">
                   {{ d.nombreProducto }}
-                  <small v-if="d.observaciones" class="linea__nota">Obs.: {{ d.observaciones }}</small>
+                  <small v-if="d.indicaciones" class="linea__nota">Obs.: {{ d.indicaciones }}</small>
                 </span>
                 <span class="numero">{{ formatearMoneda(d.cantidad * d.precioUnitario) }}</span>
               </li>
@@ -223,8 +223,8 @@ function alSolicitarse() {
             <div class="pedido__acciones">
               <RouterLink
                 class="btn btn--secundario"
-                :to="{ name: 'mesero-pedidos', params: { pedidoId: p.id } }"
-                :aria-label="`Ver detalle del pedido ${p.id}`"
+                :to="{ name: 'mesero-pedidos', params: { idPedido: p.idPedido } }"
+                :aria-label="`Ver detalle del pedido ${p.idPedido}`"
               >
                 Ver detalle
               </RouterLink>
@@ -233,8 +233,8 @@ function alSolicitarse() {
                   type="button"
                   class="btn btn--peligro-suave"
                   :aria-disabled="bloqueoCancelar(p) ? 'true' : undefined"
-                  :aria-describedby="bloqueoCancelar(p) ? `bloqueo-${p.id}` : undefined"
-                  :aria-label="`Cancelar pedido ${p.id}`"
+                  :aria-describedby="bloqueoCancelar(p) ? `bloqueo-${p.idPedido}` : undefined"
+                  :aria-label="`Cancelar pedido ${p.idPedido}`"
                   aria-haspopup="dialog"
                   @click="cancelar(p, $event)"
                 >
@@ -244,7 +244,7 @@ function alSolicitarse() {
                   </svg>
                   Cancelar pedido
                 </button>
-                <p v-if="bloqueoCancelar(p)" :id="`bloqueo-${p.id}`" class="pedido__bloqueo">{{ bloqueoCancelar(p) }}</p>
+                <p v-if="bloqueoCancelar(p)" :id="`bloqueo-${p.idPedido}`" class="pedido__bloqueo">{{ bloqueoCancelar(p) }}</p>
               </template>
             </div>
           </li>
@@ -263,7 +263,7 @@ function alSolicitarse() {
             <RouterLink
               v-if="!porPagar"
               class="btn btn--secundario btn--grande"
-              :to="{ name: 'mesero-pedido-mesa', params: { mesaId: mesaId ?? 0 } }"
+              :to="{ name: 'mesero-pedido-mesa', params: { idMesa: idMesa ?? 0 } }"
             >
               Agregar pedido
             </RouterLink>
@@ -311,7 +311,7 @@ function alSolicitarse() {
     <SolicitarCuentaDialog
       :abierto="solicitando"
       :cuenta="cuenta"
-      :mesa-numero="mesa?.numero ?? mesaId ?? 0"
+      :mesa-numero="mesa?.numero ?? idMesa ?? 0"
       :origen-foco="botonSolicitar"
       :foco-alternativo="titulo"
       @cerrar="solicitando = false"
