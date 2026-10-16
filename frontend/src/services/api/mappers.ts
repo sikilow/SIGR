@@ -6,6 +6,9 @@
 //  - Estados y roles llegan con el nombre del catálogo ('En preparacion', 'Mesero') y se normalizan a código.
 // Ver docs/equivalencias-bd.md y docs/contrato-api-mesero.md.
 import type {
+  CambioProducto,
+  CambioUsuario,
+  CategoriaAdmin,
   CategoriaMenu,
   Credenciales,
   Cuenta,
@@ -14,10 +17,15 @@ import type {
   LineaNuevoPedido,
   Mesa,
   NuevoPedido,
+  NuevoProducto,
+  NuevoUsuario,
   Pedido,
   Producto,
+  ProductoAdmin,
+  Rol,
   TipoPago,
   Usuario,
+  UsuarioAdmin,
 } from '../../types'
 import {
   aBooleano,
@@ -84,6 +92,8 @@ export interface CategoriaMenuDto {
 export interface DisponibilidadDto {
   id_producto: Numerico
   disponible: Booleano
+  /** Unidades que quedan (solo cuando la API rechaza por existencia insuficiente). */
+  existencia?: Numerico
 }
 
 export interface DetallePedidoDto {
@@ -186,6 +196,7 @@ export function aDisponibilidad(dto: DisponibilidadDto): DisponibilidadProducto 
   return {
     idProducto: aNumero(dto.id_producto, 'id_producto'),
     disponible: aBooleano(dto.disponible, 'disponible'),
+    ...(dto.existencia !== undefined ? { existencia: aNumero(dto.existencia, 'existencia') } : {}),
   }
 }
 
@@ -261,4 +272,117 @@ export function deSolicitudPago(tipo: TipoPago) {
 
 export function deItemsDisponibilidad(items: ItemDisponibilidad[]) {
   return { items: items.map((i) => ({ id_producto: i.idProducto })) }
+}
+
+// ---------- Módulo del gerente ----------
+
+export interface UsuarioAdminDto {
+  id: number
+  nombre: string
+  correo: string
+  usuario: string
+  rol: Rol
+  activo: boolean
+  telefono: string | null
+  creado_en: string
+  ultimo_acceso: string | null
+}
+
+export interface CategoriaAdminDto {
+  id: number
+  nombre: string
+  total_productos: number
+}
+
+export interface ProductoAdminDto {
+  id: number
+  categoria_id: number
+  categoria: string
+  nombre: string
+  descripcion: string
+  precio: number
+  activo: boolean
+  existencia: number
+  stock_minimo: number
+  disponible: boolean
+}
+
+export function aUsuarioAdmin(dto: UsuarioAdminDto): UsuarioAdmin {
+  return {
+    idUsuario: dto.id,
+    nombre: dto.nombre,
+    correo: dto.correo,
+    nombreUsuario: dto.usuario,
+    rol: dto.rol,
+    activo: dto.activo,
+    telefono: dto.telefono,
+    creadoEn: dto.creado_en,
+    ultimoAcceso: dto.ultimo_acceso,
+  }
+}
+
+export function aCategoriaAdmin(dto: CategoriaAdminDto): CategoriaAdmin {
+  return { idCategoria: dto.id, nombre: dto.nombre, totalProductos: dto.total_productos }
+}
+
+export function aProductoAdmin(dto: ProductoAdminDto): ProductoAdmin {
+  return {
+    idProducto: dto.id,
+    idCategoria: dto.categoria_id,
+    categoria: dto.categoria,
+    nombre: dto.nombre,
+    descripcion: dto.descripcion,
+    precio: dto.precio,
+    activo: dto.activo,
+    existencia: dto.existencia,
+    stockMinimo: dto.stock_minimo,
+    disponible: dto.disponible,
+  }
+}
+
+export function deNuevoUsuario(u: NuevoUsuario) {
+  return {
+    nombre: u.nombre.trim(),
+    correo: u.correo.trim(),
+    usuario: u.nombreUsuario.trim(),
+    contrasena: u.contrasena,
+    rol: u.rol,
+    ...(u.telefono?.trim() ? { telefono: u.telefono.trim() } : {}),
+  }
+}
+
+/** Solo viajan los campos que cambiaron (PATCH parcial). */
+export function deCambioUsuario(c: CambioUsuario) {
+  return {
+    ...(c.nombre !== undefined ? { nombre: c.nombre.trim() } : {}),
+    ...(c.correo !== undefined ? { correo: c.correo.trim() } : {}),
+    ...(c.nombreUsuario !== undefined ? { usuario: c.nombreUsuario.trim() } : {}),
+    ...(c.rol !== undefined ? { rol: c.rol } : {}),
+    ...(c.activo !== undefined ? { activo: c.activo } : {}),
+    ...(c.telefono !== undefined ? { telefono: c.telefono?.trim() ? c.telefono.trim() : null } : {}),
+  }
+}
+
+export function deNuevoProducto(p: NuevoProducto) {
+  return {
+    categoria_id: p.idCategoria,
+    nombre: p.nombre.trim(),
+    descripcion: p.descripcion.trim(),
+    precio: p.precio,
+    activo: p.activo,
+    existencia: p.existencia,
+    stock_minimo: p.stockMinimo,
+  }
+}
+
+export function deCambioProducto(c: CambioProducto) {
+  return {
+    ...(c.idCategoria !== undefined ? { categoria_id: c.idCategoria } : {}),
+    ...(c.nombre !== undefined ? { nombre: c.nombre.trim() } : {}),
+    ...(c.descripcion !== undefined ? { descripcion: c.descripcion.trim() } : {}),
+    ...(c.precio !== undefined ? { precio: c.precio } : {}),
+    ...(c.activo !== undefined ? { activo: c.activo } : {}),
+    ...(c.existencia !== undefined ? { existencia: c.existencia } : {}),
+    ...(c.stockMinimo !== undefined ? { stock_minimo: c.stockMinimo } : {}),
+  }
 }

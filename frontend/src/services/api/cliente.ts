@@ -1,12 +1,13 @@
 // Cliente fetch tipado hacia VITE_API_URL.
-// PROVISIONAL: se asume sesión por cookie de PHP (`credentials: 'include'`). Si el equipo
-// de API decide usar token, el único cambio es agregar aquí el encabezado Authorization.
+// Sesión por token (JWT): se manda en `Authorization: Bearer <token>` en cada petición.
+// El token lo guarda `token.ts` al iniciar sesión.
 import { ErrorServicio, type CodigoError } from '../errores'
 import { aDisponibilidad, type DisponibilidadDto } from './mappers'
+import { leerToken, limpiarToken } from './token'
 
 const URL_BASE = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
 
-type Metodo = 'GET' | 'POST' | 'PATCH'
+type Metodo = 'GET' | 'POST' | 'PATCH' | 'DELETE'
 type ValorConsulta = string | number | undefined
 
 interface Opciones {
@@ -69,12 +70,13 @@ function construirUrl(ruta: string, consulta?: Record<string, ValorConsulta>): s
 /** Hace la petición y devuelve el JSON tipado como `T` (o `undefined` si no hay cuerpo). */
 export async function solicitar<T>(metodo: Metodo, ruta: string, opciones: Opciones = {}): Promise<T> {
   let respuesta: Response
+  const token = leerToken()
   try {
     respuesta = await fetch(construirUrl(ruta, opciones.consulta), {
       method: metodo,
-      credentials: 'include',
       headers: {
         Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(opciones.cuerpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(opciones.claveIdempotencia ? { 'Idempotency-Key': opciones.claveIdempotencia } : {}),
       },
@@ -95,6 +97,13 @@ export async function solicitar<T>(metodo: Metodo, ruta: string, opciones: Opcio
   }
 
   if (!respuesta.ok) {
+    // Token vencido o inválido en plena sesión: se limpia y se manda al login.
+    // (En login y /auth/me un 401 es normal y lo maneja quien llama.)
+    const esRutaDeSesion = ruta === '/auth/login' || ruta === '/auth/me'
+    if (respuesta.status === 401 && !esRutaDeSesion) {
+      limpiarToken()
+      if (window.location.pathname !== '/login') window.location.assign('/login?motivo=expirada')
+    }
     throw aErrorServicio(respuesta.status, json as CuerpoError | null)
   }
   return json as T

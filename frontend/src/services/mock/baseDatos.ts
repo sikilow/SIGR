@@ -1,12 +1,16 @@
 // "Base de datos" en memoria para el mock. Se reinicia al recargar la página.
 // PROVISIONAL: datos de ejemplo del restaurante "La Madalena", con la misma forma y los mismos nombres que
 // el esquema de la BD (ids numéricos, `fechaHora`, `indicaciones`…). Ver docs/equivalencias-bd.md.
-import type { CategoriaMenu, Cuenta, Mesa, MotivoCancelacion, Pedido, Usuario } from '../../types'
+import type { CategoriaMenu, Cuenta, Mesa, MotivoCancelacion, Pedido, Rol, Usuario } from '../../types'
 
 /** Usuario de demostración: además del perfil guarda el acceso (`credenciales.nombre_usuario` y su contraseña). */
-export interface UsuarioMock extends Usuario {
+export interface UsuarioMock extends Omit<Usuario, 'rol' | 'activo'> {
+  /** En el mock todo usuario tiene un rol conocido. */
+  rol: Rol
   nombreUsuario: string
   contrasena: string
+  /** `false` = desactivado por el gerente (no puede iniciar sesión). Si falta, está activo. */
+  activo?: boolean
 }
 
 /** Cuenta tal como se guarda: los pedidos se consultan aparte y el total se calcula. */

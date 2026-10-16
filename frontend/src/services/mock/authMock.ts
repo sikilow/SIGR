@@ -34,7 +34,8 @@ export function crearAuthMock(): AuthService {
     iniciarSesion(credenciales) {
       return conRetraso(() => {
         const encontrado = baseDatos.usuarios.find(
-          (u) => u.nombreUsuario === credenciales.nombreUsuario && u.contrasena === credenciales.contrasena,
+          (u) =>
+            u.activo !== false && u.nombreUsuario === credenciales.nombreUsuario && u.contrasena === credenciales.contrasena,
         )
         if (!encontrado) {
           throw new ErrorServicio('credenciales_invalidas', 'Usuario o contraseña incorrectos.', 401)
@@ -45,7 +46,7 @@ export function crearAuthMock(): AuthService {
           idRol: encontrado.idRol,
           nombre: encontrado.nombre,
           correo: encontrado.correo,
-          activo: encontrado.activo,
+          activo: encontrado.activo !== false,
           rol: encontrado.rol,
         }
         guardarSesion(usuario)

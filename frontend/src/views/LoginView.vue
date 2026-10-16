@@ -5,6 +5,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import FranjaDemo from '../components/FranjaDemo.vue'
 import LogoMarca from '../components/LogoMarca.vue'
+import { rutaInicial } from '../router'
 import { ErrorServicio, usandoMock } from '../services'
 import { useSesionStore } from '../stores/sesion'
 
@@ -24,9 +25,11 @@ const campoContrasena = ref<HTMLInputElement | null>(null)
 // se enfoca el usuario a mano para que se pueda escribir de inmediato, con teclado o lector de pantalla.
 onMounted(() => campoUsuario.value?.focus())
 
-const aviso = computed(() =>
-  route.query.motivo === 'rol' ? 'Tu rol no tiene acceso a esa pantalla. Inicia sesión con otro usuario.' : '',
-)
+const aviso = computed(() => {
+  if (route.query.motivo === 'rol') return 'Tu rol no tiene acceso a esa pantalla. Inicia sesión con otro usuario.'
+  if (route.query.motivo === 'expirada') return 'Tu sesión venció. Inicia sesión de nuevo.'
+  return ''
+})
 
 async function entrar() {
   if (cargando.value) return
@@ -44,7 +47,8 @@ async function entrar() {
   cargando.value = true
   try {
     await sesion.iniciarSesion({ nombreUsuario: nombreUsuario.value.trim(), contrasena: contrasena.value })
-    const destino = typeof route.query.redirigir === 'string' ? route.query.redirigir : '/mesero/mesas'
+    const porDefecto = sesion.usuario ? rutaInicial(sesion.usuario.rol) : '/mesero/mesas'
+    const destino = typeof route.query.redirigir === 'string' ? route.query.redirigir : porDefecto
     await router.push(destino)
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo iniciar sesión.'

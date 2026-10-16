@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import GerenteLayout from '../layouts/GerenteLayout.vue'
 import MeseroLayout from '../layouts/MeseroLayout.vue'
 import { useSesionStore } from '../stores/sesion'
 import type { Rol } from '../types'
@@ -10,10 +11,16 @@ declare module 'vue-router' {
   }
 }
 
+/** Pantalla de inicio de cada rol. Los roles que aún no tienen interfaz caen en el aviso "tu rol no tiene acceso". */
+export function rutaInicial(rol: Rol | null): string {
+  return rol === 'gerente' ? '/gerente/usuarios' : '/mesero/mesas'
+}
+
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/mesero/mesas' },
+    // "/" no tiene pantalla: la guardia de abajo manda a cada quien a la suya (según su rol).
+    { path: '/', name: 'inicio', component: { render: () => null } },
     {
       path: '/login',
       name: 'login',
@@ -48,12 +55,36 @@ export const router = createRouter({
         },
       ],
     },
+    {
+      path: '/gerente',
+      component: GerenteLayout,
+      meta: { roles: ['gerente'] },
+      redirect: '/gerente/usuarios',
+      children: [
+        {
+          path: 'usuarios',
+          name: 'gerente-usuarios',
+          component: () => import('../views/gerente/UsuariosView.vue'),
+        },
+        {
+          path: 'productos',
+          name: 'gerente-productos',
+          component: () => import('../views/gerente/ProductosView.vue'),
+        },
+      ],
+    },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 
 // Guardia: sin sesión o con un rol que no corresponde, se redirige a /login.
 router.beforeEach(async (to) => {
+  if (to.name === 'inicio') {
+    const sesion = useSesionStore()
+    if (!sesion.restaurada) await sesion.restaurar()
+    return sesion.usuario ? rutaInicial(sesion.usuario.rol) : { name: 'login' }
+  }
+
   const roles = to.matched.find((r) => r.meta.roles)?.meta.roles
   if (!roles) return true
 

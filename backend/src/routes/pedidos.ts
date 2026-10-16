@@ -1,0 +1,266 @@
+import { Router } from "express";
+import type { PoolConnection } from "mysql2/promise";
+import { z } from "zod";
+import { ejecutar, filas, pool, transaccion } from "../db";
+import {
+  ESTADO_PEDIDO_DB,
+  ESTADOS_PEDIDO,
+  cargarPedido,
+  cargarPedidos,
+  exigirDisponibles,
+  idDeRuta,
+  idEstadoPedido,
+  idMotivoTexto,
+  devolverExistencia,
+  validar,
+  verificarExistencia,
+  type PedidoDto,
+} from "../dominio";
+import { ErrorApi } from "../errores";
+import { conIdempotencia } from "../idempotencia";
+import { requiereAuth } from "../middlewares/auth";
+
+export const pedidosRouter = Router();
+
+const Linea = z.object({
+  producto_id: z.number().int().positive(),
+  cantidad: z.number().int().min(1).max(99),
+  observaciones: z.string().max(120).default(""),
+});
+type LineaPedido = z.infer<typeof Linea>;
+
+const NuevoPedido = z.object({ mesa_id: z.number().int().positive(), detalle: z.array(Linea).min(1, "El pedido no tiene productos") });
+const Actualizacion = z.object({ detalle: z.array(Linea).min(1, "El pedido no tiene productos") });
+const Cancelacion = z.object({
+  motivo: z
+    .string()
+    .trim()
+    .min(5, "El motivo debe tener al menos 5 caracteres")
+    .max(200, "El motivo no puede pasar de 200 caracteres"),
+});
+const CambioCocina = z.object({ estado: z.enum(["en_preparacion", "listo"]) });
+const Filtros = z.object({
+  mesa_id: z.coerce.number().int().positive().optional(),
+  estado: z.enum(ESTADOS_PEDIDO).optional(),
+});
+
+/** Verifica que los productos existan y estén disponibles, y guarda las líneas con el precio VIGENTE de la BD. */
+async function guardarDetalle(cx: PoolConnection, pedidoId: number, lineas: LineaPedido[]): Promise<void> {
+  const productos = await exigirDisponibles(cx, lineas.map((l) => l.producto_id));
+  const valores = lineas.map((l) => [pedidoId, l.producto_id, l.cantidad, productos.get(l.producto_id)!.precio, l.observaciones || null]);
+  await cx.query("INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad, precio_unitario, indicaciones) VALUES ?", [valores]);
+}
+
+/** Bloquea la fila del pedido durante la transacción y devuelve su estado (código del front). */
+async function bloquearPedido(cx: PoolConnection, id: number) {
+  const [fila] = await filas(
+    cx,
+    `SELECT p.id_pedido, ep.nombre AS estado, c.estado AS estado_cuenta
+       FROM pedido p
+       JOIN estado_pedido ep ON ep.id_estado = p.id_estado
+       JOIN cuenta c ON c.id_cuenta = p.id_cuenta
+      WHERE p.id_pedido = ? FOR UPDATE OF p`, // OF p: bloquea solo el pedido, no las filas compartidas
+    [id],
+  );
+  if (!fila) throw new ErrorApi(404, "no_encontrado", `El pedido ${id} no existe.`);
+  const estado = ESTADOS_PEDIDO.find((e) => ESTADO_PEDIDO_DB[e] === fila.estado) ?? "registrado";
+  return { estado, cuentaPorPagar: fila.estado_cuenta === "por_pagar" };
+}
+
+async function pedidoOError(cx: PoolConnection, id: number): Promise<PedidoDto> {
+  const pedido = await cargarPedido(cx, id);
+  if (!pedido) throw new ErrorApi(404, "no_encontrado", `El pedido ${id} no existe.`);
+  return pedido;
+}
+
+/**
+ * POST /api/pedidos  { mesa_id, detalle: [{ producto_id, cantidad, observaciones }] }   (acepta Idempotency-Key)
+ * Crea el pedido en estado `registrado`. Si la mesa no tiene cuenta activa, abre una.
+ */
+pedidosRouter.post("/", requiereAuth("mesero", "gerente"), async (req, res) => {
+  const { mesa_id, detalle } = validar(NuevoPedido, req.body);
+  const meseroId = req.usuario!.id;
+
+  await conIdempotencia(req, res, 201, () =>
+    transaccion(async (cx) => {
+      // FOR UPDATE: dos meseros que piden a la vez en la misma mesa no pueden abrir dos cuentas.
+      const [mesa] = await filas(cx, "SELECT numero, estado FROM mesa WHERE id_mesa = ? FOR UPDATE", [mesa_id]);
+      if (!mesa) throw new ErrorApi(404, "no_encontrado", `La mesa ${mesa_id} no existe.`);
+      if (mesa.estado !== "ocupada") {
+        throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está ocupada.`);
+      }
+
+      // Se valida antes de abrir la cuenta: si hay productos agotados no se crea nada.
+      await exigirDisponibles(cx, detalle.map((l) => l.producto_id));
+      await verificarExistencia(cx, detalle, false); // aviso temprano; el descuento real es al enviar
+
+      const [activa] = await filas(cx, "SELECT id_cuenta, estado FROM cuenta WHERE id_mesa = ? AND estado <> 'cerrada' LIMIT 1", [mesa_id]);
+      if (activa?.estado === "por_pagar") throw new ErrorApi(409, "estado_invalido", "La cuenta ya solicitó el pago.");
+      const cuentaId = activa
+        ? (activa.id_cuenta as number)
+        : (await ejecutar(cx, "INSERT INTO cuenta (id_mesa) VALUES (?)", [mesa_id])).insertId;
+
+      const idEstado = await idEstadoPedido(cx, "registrado");
+      const { insertId } = await ejecutar(cx, "INSERT INTO pedido (id_cuenta, id_mesero, id_estado) VALUES (?, ?, ?)", [cuentaId, meseroId, idEstado]);
+      await guardarDetalle(cx, insertId, detalle);
+      return pedidoOError(cx, insertId);
+    }),
+  );
+});
+
+/**
+ * GET /api/pedidos?mesa_id=&estado=
+ * Un mesero solo ve SUS pedidos; el resto de los roles ve todos.
+ */
+pedidosRouter.get("/", requiereAuth(), async (req, res) => {
+  const { mesa_id, estado } = validar(Filtros, req.query);
+  const condiciones: string[] = [];
+  const params: unknown[] = [];
+
+  if (mesa_id !== undefined) {
+    condiciones.push("c.id_mesa = ?");
+    params.push(mesa_id);
+  }
+  if (estado !== undefined) {
+    condiciones.push("ep.nombre = ?");
+    params.push(ESTADO_PEDIDO_DB[estado]);
+  }
+  if (req.usuario!.rol === "mesero") {
+    condiciones.push("p.id_mesero = ?");
+    params.push(req.usuario!.id);
+  }
+
+  res.json(await cargarPedidos(pool, condiciones.length ? `WHERE ${condiciones.join(" AND ")}` : "", params));
+});
+
+/** GET /api/pedidos/:id */
+pedidosRouter.get("/:id", requiereAuth(), async (req, res) => {
+  const pedido = await cargarPedido(pool, idDeRuta(req.params.id));
+  if (!pedido) throw new ErrorApi(404, "no_encontrado", "El pedido no existe.");
+  res.json(pedido);
+});
+
+/**
+ * PATCH /api/pedidos/:id  { detalle }  → reemplaza TODO el detalle.
+ * Solo si el pedido sigue `registrado` y su cuenta no ha solicitado el pago.
+ */
+pedidosRouter.patch("/:id", requiereAuth("mesero", "gerente"), async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const { detalle } = validar(Actualizacion, req.body);
+
+  const pedido = await transaccion(async (cx) => {
+    const { estado, cuentaPorPagar } = await bloquearPedido(cx, id);
+    if (estado !== "registrado") {
+      throw new ErrorApi(409, "estado_invalido", "El pedido ya no está en estado registrado.");
+    }
+    if (cuentaPorPagar) {
+      throw new ErrorApi(409, "estado_invalido", "La cuenta ya solicitó el pago: no se pueden editar pedidos.");
+    }
+    await exigirDisponibles(cx, detalle.map((l) => l.producto_id));
+    await verificarExistencia(cx, detalle, false);
+    await ejecutar(cx, "DELETE FROM detalle_pedido WHERE id_pedido = ?", [id]);
+    await guardarDetalle(cx, id, detalle);
+    return pedidoOError(cx, id);
+  });
+
+  res.json(pedido);
+});
+
+/** POST /api/pedidos/:id/enviar  → `registrado` pasa a `enviado` (a cocina). Acepta Idempotency-Key. */
+pedidosRouter.post("/:id/enviar", requiereAuth("mesero", "gerente"), async (req, res) => {
+  const id = idDeRuta(req.params.id);
+
+  await conIdempotencia(req, res, 200, () =>
+    transaccion(async (cx) => {
+      const { estado } = await bloquearPedido(cx, id);
+      if (estado !== "registrado") {
+        throw new ErrorApi(409, "estado_invalido", "Solo se puede enviar un pedido registrado.");
+      }
+      // Un producto pudo agotarse entre el registro y el envío: se bloquea el inventario, se verifica que
+      // alcance y se descuenta. Si no alcanza, lanza 409 y la transacción se deshace (nada se descuenta).
+      const detalle = await filas(cx, "SELECT id_producto, cantidad FROM detalle_pedido WHERE id_pedido = ?", [id]);
+      await verificarExistencia(
+        cx,
+        detalle.map((d) => ({ producto_id: d.id_producto as number, cantidad: d.cantidad as number })),
+        true,
+      );
+
+      await ejecutar(cx, "UPDATE pedido SET id_estado = ? WHERE id_pedido = ?", [await idEstadoPedido(cx, "enviado"), id]);
+      return pedidoOError(cx, id);
+    }),
+  );
+});
+
+/**
+ * POST /api/pedidos/:id/cancelar  { motivo }   (motivo = texto libre de 5 a 200 caracteres; acepta Idempotency-Key)
+ * El pedido NO se borra (queda el historial): pasa a `cancelado` con su motivo.
+ *  - registrado / enviado: lo puede cancelar el mesero o el gerente. Si ya se había enviado, devuelve la existencia.
+ *  - en_preparacion: solo el gerente (el mesero recibe 403 `requiere_gerente`).
+ *  - cuenta por_pagar o cualquier otro estado: 409.
+ */
+pedidosRouter.post("/:id/cancelar", requiereAuth("mesero", "gerente"), async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const { motivo } = validar(Cancelacion, req.body);
+  const rol = req.usuario!.rol;
+
+  await conIdempotencia(req, res, 200, () =>
+    transaccion(async (cx) => {
+      const { estado, cuentaPorPagar } = await bloquearPedido(cx, id);
+      if (estado === "en_preparacion" && rol !== "gerente") {
+        throw new ErrorApi(403, "requiere_gerente", "El pedido está en preparación: solo el gerente puede cancelarlo.");
+      }
+      if (estado !== "registrado" && estado !== "enviado" && estado !== "en_preparacion") {
+        throw new ErrorApi(409, "estado_invalido", "Este pedido ya no se puede cancelar.");
+      }
+      if (cuentaPorPagar) {
+        throw new ErrorApi(409, "estado_invalido", "La cuenta ya solicitó el pago: no se pueden cancelar pedidos.");
+      }
+      // Si ya se había enviado a cocina, su existencia ya estaba descontada: se devuelve al inventario.
+      if (estado === "enviado" || estado === "en_preparacion") await devolverExistencia(cx, id);
+      await ejecutar(cx, "UPDATE pedido SET id_estado = ?, id_motivo = ? WHERE id_pedido = ?", [
+        await idEstadoPedido(cx, "cancelado"),
+        await idMotivoTexto(cx, motivo),
+        id,
+      ]);
+      return pedidoOError(cx, id);
+    }),
+  );
+});
+
+/** POST /api/pedidos/:id/entregar  → `listo` pasa a `entregado` (el mesero lo sirvió). Acepta Idempotency-Key. */
+pedidosRouter.post("/:id/entregar", requiereAuth("mesero", "gerente"), async (req, res) => {
+  const id = idDeRuta(req.params.id);
+
+  await conIdempotencia(req, res, 200, () =>
+    transaccion(async (cx) => {
+      const { estado } = await bloquearPedido(cx, id);
+      if (estado !== "listo") {
+        throw new ErrorApi(409, "estado_invalido", "Solo se puede entregar un pedido que está listo.");
+      }
+      await ejecutar(cx, "UPDATE pedido SET id_estado = ? WHERE id_pedido = ?", [await idEstadoPedido(cx, "entregado"), id]);
+      return pedidoOError(cx, id);
+    }),
+  );
+});
+
+/**
+ * PATCH /api/pedidos/:id/estado  { estado: "en_preparacion" | "listo" }
+ * Acción de la cocina (aún no hay pantalla para el cocinero; sirve para probar el flujo del mesero).
+ * Solo avanza: enviado → en_preparacion → listo.
+ */
+pedidosRouter.patch("/:id/estado", requiereAuth("cocinero", "gerente"), async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const { estado: nuevo } = validar(CambioCocina, req.body);
+  const requerido = nuevo === "en_preparacion" ? "enviado" : "en_preparacion";
+
+  const pedido = await transaccion(async (cx) => {
+    const { estado } = await bloquearPedido(cx, id);
+    if (estado !== requerido) {
+      throw new ErrorApi(409, "estado_invalido", `Para pasar a ${nuevo} el pedido debe estar en ${requerido}.`);
+    }
+    await ejecutar(cx, "UPDATE pedido SET id_estado = ? WHERE id_pedido = ?", [await idEstadoPedido(cx, nuevo), id]);
+    return pedidoOError(cx, id);
+  });
+
+  res.json(pedido);
+});

@@ -74,9 +74,10 @@ const textoEstado = computed(() => {
   }
 })
 
-/** "Tacos al pastor: agotado" */
+/** "Tacos al pastor: agotado" o "Tacos al pastor: solo quedan 3" */
 function describirAgotado(f: DisponibilidadProducto): string {
   const nombre = nombrePorProducto.value.get(f.idProducto) ?? `Producto ${f.idProducto}`
+  if (f.existencia !== undefined && f.existencia > 0) return `${nombre}: solo quedan ${f.existencia}`
   return `${nombre}: agotado`
 }
 
@@ -222,11 +223,11 @@ function modificar() {
 
       <!-- Productos que no alcanzan -->
       <div v-if="faltantes.length > 0" class="revision__alerta" role="alert">
-        <strong>Hay productos agotados:</strong>
+        <strong>Hay productos agotados o sin existencia suficiente:</strong>
         <ul>
           <li v-for="f in faltantes" :key="f.idProducto">{{ describirAgotado(f) }}</li>
         </ul>
-        <p v-if="!registradoSinEnviar">Modifica el pedido para quitarlos y continuar.</p>
+        <p v-if="!registradoSinEnviar">Ajusta las cantidades o quita los productos para continuar.</p>
       </div>
 
       <div v-if="errorVerificacion" class="revision__alerta" role="alert">
