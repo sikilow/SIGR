@@ -15,7 +15,7 @@ interface Opciones {
   /** Parámetros de consulta; los `undefined` se omiten. */
   consulta?: Record<string, ValorConsulta>
   /**
-   * CAMBIO PROPUESTO EN F5: se envía como cabecera `Idempotency-Key`. Todos los reintentos de una
+   * Se envía como cabecera `Idempotency-Key`. Todos los reintentos de una
    * misma intención del usuario llevan la misma clave. El servidor debe permitir esta cabecera en CORS
    * (`Access-Control-Allow-Headers`).
    */
@@ -28,7 +28,7 @@ interface CuerpoError {
   mensaje?: string
   message?: string
   error?: string
-  /** CAMBIO PROPUESTO EN F4: en errores `producto_agotado`, los productos agotados. */
+  /** En errores `producto_agotado`, los productos agotados (`id_producto`, `disponible`). */
   productos?: DisponibilidadDto[]
 }
 

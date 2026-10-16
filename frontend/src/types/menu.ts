@@ -1,29 +1,34 @@
-// PROVISIONAL: modelo de dominio pendiente de validar con el equipo de API.
+// Tipos `Producto` y `CategoriaMenu` (tablas `producto` y `categoria_menu`). Ver docs/equivalencias-bd.md.
 // El menú NO maneja cantidades en existencia: un producto solo está disponible o agotado.
 
 export interface Producto {
-  id: number
-  categoriaId: number
+  /** producto.id_producto */
+  idProducto: number
+  /** producto.id_categoria */
+  idCategoria: number
   nombre: string
   descripcion: string
-  /** Precio en pesos mexicanos (MXN). */
+  /** producto.precio (DECIMAL(10,2), mayor o igual que 0), en pesos mexicanos (MXN). */
   precio: number
-  /** `false` = agotado: no se puede agregar a un pedido. */
+  /** producto.disponible. `false` = agotado: no se puede agregar a un pedido. */
   disponible: boolean
 }
 
 export interface CategoriaMenu {
-  id: number
+  /** categoria_menu.id_categoria */
+  idCategoria: number
   nombre: string
+  /** CALCULADO por la API: productos de la categoría (`producto.id_categoria`). */
   productos: Producto[]
 }
 
 /** Producto cuya disponibilidad se quiere verificar antes de registrar un pedido. */
 export interface ItemDisponibilidad {
-  productoId: number
+  idProducto: number
 }
 
+/** Resultado de verificar `producto.disponible`. */
 export interface DisponibilidadProducto {
-  productoId: number
+  idProducto: number
   disponible: boolean
 }

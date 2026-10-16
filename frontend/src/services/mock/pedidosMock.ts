@@ -1,5 +1,5 @@
-import { MOTIVO_MAX, MOTIVO_MIN, type DetallePedido, type DisponibilidadProducto, type LineaNuevoPedido, type Pedido } from '../../types'
-import { cancelacionRequiereGerente, meseroPuedeCancelar } from '../../utils/reglas'
+import { DESCRIPCION_MOTIVO_MAX, DESCRIPCION_MOTIVO_MIN, type DetallePedido, type DisponibilidadProducto, type LineaNuevoPedido, type Pedido } from '../../types'
+import { cancelacionRequiereGerente, meseroPuedeCancelar, puedeEditarOEnviar } from '../../utils/reglas'
 import { ErrorServicio } from '../errores'
 import type { PedidosService } from '../interfaces'
 import { usuarioActual } from './authMock'
@@ -8,7 +8,7 @@ import { buscarProducto } from './menuMock'
 import { conRetraso, conRetrasoIdempotente, consumirFalloSimulado } from './utiles'
 
 function buscarPedido(id: number): Pedido {
-  const pedido = baseDatos.pedidos.find((p) => p.id === id)
+  const pedido = baseDatos.pedidos.find((p) => p.idPedido === id)
   if (!pedido) throw new ErrorServicio('no_encontrado', `El pedido ${id} no existe.`, 404)
   return pedido
 }
@@ -17,11 +17,11 @@ const totalDe = (detalle: DetallePedido[]): number =>
   detalle.reduce((suma, d) => suma + d.cantidad * d.precioUnitario, 0)
 
 /** Productos de las líneas que están agotados (o ya no existen en el menú). */
-function productosAgotados(lineas: Array<{ productoId: number }>): DisponibilidadProducto[] {
-  const ids = [...new Set(lineas.map((l) => l.productoId))]
+function productosAgotados(lineas: Array<{ idProducto: number }>): DisponibilidadProducto[] {
+  const ids = [...new Set(lineas.map((l) => l.idProducto))]
   return ids
-    .filter((productoId) => !buscarProducto(productoId)?.disponible)
-    .map((productoId) => ({ productoId, disponible: false }))
+    .filter((idProducto) => !buscarProducto(idProducto)?.disponible)
+    .map((idProducto) => ({ idProducto, disponible: false }))
 }
 
 function errorProductoAgotado(agotados: DisponibilidadProducto[]): ErrorServicio {
@@ -37,18 +37,18 @@ function construirDetalle(lineas: LineaNuevoPedido[]): DetallePedido[] {
   if (agotados.length > 0) throw errorProductoAgotado(agotados)
 
   return lineas.map((linea) => {
-    const producto = buscarProducto(linea.productoId)
+    const producto = buscarProducto(linea.idProducto)
     if (!producto) {
-      throw new ErrorServicio('no_encontrado', `El producto ${linea.productoId} no existe.`, 404)
+      throw new ErrorServicio('no_encontrado', `El producto ${linea.idProducto} no existe.`, 404)
     }
     if (!Number.isInteger(linea.cantidad) || linea.cantidad < 1) {
       throw new ErrorServicio('estado_invalido', 'La cantidad debe ser mayor que cero.', 422)
     }
     return {
-      productoId: producto.id,
+      idProducto: producto.idProducto,
       nombreProducto: producto.nombre,
       cantidad: linea.cantidad,
-      observaciones: linea.observaciones,
+      indicaciones: linea.indicaciones,
       precioUnitario: producto.precio,
     }
   })
@@ -58,8 +58,8 @@ export function crearPedidosMock(): PedidosService {
   return {
     crear(nuevo, claveIdempotencia) {
       return conRetrasoIdempotente(claveIdempotencia, () => {
-        const mesa = baseDatos.mesas.find((m) => m.id === nuevo.mesaId)
-        if (!mesa) throw new ErrorServicio('no_encontrado', `La mesa ${nuevo.mesaId} no existe.`, 404)
+        const mesa = baseDatos.mesas.find((m) => m.idMesa === nuevo.idMesa)
+        if (!mesa) throw new ErrorServicio('no_encontrado', `La mesa ${nuevo.idMesa} no existe.`, 404)
         // Regla: solo se registran pedidos en mesas OCUPADAS (la hostess las ocupa).
         if (mesa.estado !== 'ocupada') {
           throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesa.numero} no está ocupada.`, 409)
@@ -68,32 +68,34 @@ export function crearPedidosMock(): PedidosService {
 
         // Una cuenta activa por mesa. Suposición: el primer pedido de una mesa ocupada sin
         // cuenta abre la cuenta (pregunta abierta para el equipo de API).
-        let cuenta = baseDatos.cuentas.find((c) => c.mesaId === mesa.id && c.estado !== 'cerrada')
+        let cuenta = baseDatos.cuentas.find((c) => c.idMesa === mesa.idMesa && c.estado !== 'cerrada')
         if (cuenta?.estado === 'por_pagar') {
           throw new ErrorServicio('estado_invalido', 'La cuenta ya solicitó el pago.', 409)
         }
         if (!cuenta) {
           cuenta = {
-            id: baseDatos.siguienteIdCuenta++,
-            mesaId: mesa.id,
+            idCuenta: baseDatos.siguienteIdCuenta++,
+            idMesa: mesa.idMesa,
             estado: 'abierta',
-            abiertaEn: new Date().toISOString(),
+            abiertaEn: new Date(),
+            cerradaEn: null,
             tipoPagoSolicitado: null,
           }
           baseDatos.cuentas.push(cuenta)
         }
 
         const pedido: Pedido = {
-          id: baseDatos.siguienteIdPedido++,
-          mesaId: mesa.id,
+          idPedido: baseDatos.siguienteIdPedido++,
+          idMesa: mesa.idMesa,
           mesaNumero: mesa.numero,
-          cuentaId: cuenta.id,
-          meseroId: usuarioActual()?.id ?? 1,
+          idCuenta: cuenta.idCuenta,
+          idMesero: usuarioActual()?.idUsuario ?? 1,
           estado: 'registrado',
           detalle,
           total: totalDe(detalle),
-          creadoEn: new Date().toISOString(),
-          motivoCancelacion: null,
+          fechaHora: new Date(),
+          idMotivo: null,
+          motivoDescripcion: null,
         }
         baseDatos.pedidos.push(pedido)
         return pedido
@@ -104,11 +106,11 @@ export function crearPedidosMock(): PedidosService {
       return conRetraso(() => {
         const usuario = usuarioActual()
         return baseDatos.pedidos
-          .filter((p) => filtro.mesaId === undefined || p.mesaId === filtro.mesaId)
+          .filter((p) => filtro.idMesa === undefined || p.idMesa === filtro.idMesa)
           .filter((p) => filtro.estado === undefined || p.estado === filtro.estado)
           // Un mesero solo ve sus propios pedidos
-          .filter((p) => usuario?.rol !== 'mesero' || p.meseroId === usuario.id)
-          .sort((a, b) => b.creadoEn.localeCompare(a.creadoEn))
+          .filter((p) => usuario?.rol !== 'mesero' || p.idMesero === usuario.idUsuario)
+          .sort((a, b) => b.fechaHora.getTime() - a.fechaHora.getTime())
       })
     },
 
@@ -120,7 +122,7 @@ export function crearPedidosMock(): PedidosService {
       return conRetraso(() => {
         const pedido = buscarPedido(id)
         // Solo se modifica mientras no se haya enviado a cocina.
-        if (pedido.estado !== 'registrado') {
+        if (!puedeEditarOEnviar(pedido.estado)) {
           throw new ErrorServicio('estado_invalido', 'El pedido ya no está en estado registrado.', 409)
         }
         pedido.detalle = construirDetalle(lineas)
@@ -133,26 +135,32 @@ export function crearPedidosMock(): PedidosService {
       return conRetrasoIdempotente(claveIdempotencia, () => {
         const pedido = buscarPedido(id)
         // Fallo simulado (ver utiles.ts) para probar "Reintentar envío": falla ANTES de aplicar la acción.
-        if (pedido.estado === 'registrado' && consumirFalloSimulado('sigr.mock.fallarEnvio')) {
+        if (puedeEditarOEnviar(pedido.estado) && consumirFalloSimulado('sigr.mock.fallarEnvio')) {
           throw new ErrorServicio('desconocido', 'Fallo simulado al enviar a cocina.', 500)
         }
-        if (pedido.estado !== 'registrado') {
+        if (!puedeEditarOEnviar(pedido.estado)) {
           throw new ErrorServicio('estado_invalido', 'Solo se puede enviar un pedido registrado.', 409)
         }
         // Se verifica de nuevo: un producto pudo agotarse entre el registro y el envío.
         const agotados = productosAgotados(pedido.detalle)
         if (agotados.length > 0) throw errorProductoAgotado(agotados)
-        pedido.estado = 'enviado'
+        // El catálogo de la BD no tiene `enviado`: un pedido enviado a cocina queda `pendiente`
+        // (las reglas lo tratan igual que `enviado`).
+        pedido.estado = 'pendiente'
         return pedido
       })
     },
 
-    cancelar(id, motivo, claveIdempotencia) {
+    cancelar(id, descripcion, claveIdempotencia) {
       return conRetrasoIdempotente(claveIdempotencia, () => {
         const pedido = buscarPedido(id)
-        const texto = motivo.trim()
-        if (texto.length < MOTIVO_MIN || texto.length > MOTIVO_MAX) {
-          throw new ErrorServicio('estado_invalido', `El motivo debe tener entre ${MOTIVO_MIN} y ${MOTIVO_MAX} caracteres.`, 422)
+        const texto = descripcion.trim()
+        if (texto.length < DESCRIPCION_MOTIVO_MIN || texto.length > DESCRIPCION_MOTIVO_MAX) {
+          throw new ErrorServicio(
+            'estado_invalido',
+            `El motivo debe tener entre ${DESCRIPCION_MOTIVO_MIN} y ${DESCRIPCION_MOTIVO_MAX} caracteres.`,
+            422,
+          )
         }
         if (cancelacionRequiereGerente(pedido.estado)) {
           throw new ErrorServicio('requiere_gerente', 'El pedido está en preparación: solo el gerente puede cancelarlo.', 403)
@@ -161,17 +169,20 @@ export function crearPedidosMock(): PedidosService {
           throw new ErrorServicio('estado_invalido', 'Este pedido ya no se puede cancelar.', 409)
         }
         // SUPOSICIÓN (pregunta abierta c): con la cuenta ya solicitada no se cancelan pedidos.
-        const cuenta = baseDatos.cuentas.find((c) => c.id === pedido.cuentaId)
+        const cuenta = baseDatos.cuentas.find((c) => c.idCuenta === pedido.idCuenta)
         if (cuenta?.estado === 'por_pagar') {
           throw new ErrorServicio('estado_invalido', 'La cuenta ya solicitó el pago: no se pueden cancelar pedidos.', 409)
         }
+        // Como en la BD: cada cancelación crea una fila en `motivo_cancelacion` y el pedido guarda su `id_motivo`.
+        const motivo = { idMotivo: baseDatos.siguienteIdMotivo++, descripcion: texto }
+        baseDatos.motivos.push(motivo)
         pedido.estado = 'cancelado'
-        pedido.motivoCancelacion = texto
+        pedido.idMotivo = motivo.idMotivo
+        pedido.motivoDescripcion = motivo.descripcion
         return pedido
       })
     },
 
-    // CAMBIO PROPUESTO EN F5
     entregar(id, claveIdempotencia) {
       return conRetrasoIdempotente(claveIdempotencia, () => {
         const pedido = buscarPedido(id)

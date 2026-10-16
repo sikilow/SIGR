@@ -2,12 +2,16 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { LineaCarrito } from '../utils/carrito'
 
-const CLAVE_ALMACEN = 'sigr.borradores'
+// La forma de las líneas cambió (`idProducto`, `indicaciones`): por eso la clave lleva versión y la anterior
+// se elimina para que un borrador viejo no se lea con los nombres nuevos.
+const CLAVE_ALMACEN = 'sigr.borradores.v2'
+const CLAVE_ALMACEN_ANTERIOR = 'sigr.borradores'
 
 type Borradores = Record<number, LineaCarrito[]>
 
 function leer(): Borradores {
   try {
+    sessionStorage.removeItem(CLAVE_ALMACEN_ANTERIOR)
     const texto = sessionStorage.getItem(CLAVE_ALMACEN)
     return texto ? (JSON.parse(texto) as Borradores) : {}
   } catch {
@@ -27,24 +31,24 @@ export const usePedidoBorradorStore = defineStore('pedidoBorrador', () => {
     }
   }
 
-  function lineasDe(mesaId: number): LineaCarrito[] {
-    return porMesa.value[mesaId] ?? []
+  function lineasDe(idMesa: number): LineaCarrito[] {
+    return porMesa.value[idMesa] ?? []
   }
 
-  function tieneBorrador(mesaId: number): boolean {
-    return lineasDe(mesaId).length > 0
+  function tieneBorrador(idMesa: number): boolean {
+    return lineasDe(idMesa).length > 0
   }
 
   /** Reemplaza el carrito de la mesa; si queda vacío, elimina el borrador. */
-  function establecer(mesaId: number, lineas: LineaCarrito[]) {
-    if (lineas.length === 0) delete porMesa.value[mesaId]
-    else porMesa.value[mesaId] = lineas
+  function establecer(idMesa: number, lineas: LineaCarrito[]) {
+    if (lineas.length === 0) delete porMesa.value[idMesa]
+    else porMesa.value[idMesa] = lineas
     persistir()
   }
 
   /** Se llama al registrar con éxito. */
-  function vaciar(mesaId: number) {
-    establecer(mesaId, [])
+  function vaciar(idMesa: number) {
+    establecer(idMesa, [])
   }
 
   return { porMesa, lineasDe, tieneBorrador, establecer, vaciar }

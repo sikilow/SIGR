@@ -1,12 +1,12 @@
 <script setup lang="ts">
-// Pedido en armado: líneas con cantidad, observaciones y quitar, más el total ESTIMADO
+// Pedido en armado: líneas con cantidad, indicaciones y quitar, más el total ESTIMADO
 // (el total real lo calcula el servidor). No guarda estado del carrito: solo emite cambios.
 import { computed, nextTick, ref } from 'vue'
 import { formatearMoneda } from '../utils/formato'
-import { MAX_CANTIDAD, MAX_OBSERVACIONES, subtotalDe, type LineaCarrito } from '../utils/carrito'
+import { MAX_CANTIDAD, MAX_INDICACIONES, subtotalDe, type LineaCarrito } from '../utils/carrito'
 import InsigniaEstado from './InsigniaEstado.vue'
 
-/** Atajos que solo rellenan el texto de observaciones (no son datos del modelo). */
+/** Atajos que solo rellenan el texto de indicaciones (no son datos del modelo). */
 const SUGERENCIAS = ['Sin cebolla', 'Extra queso', 'Sin picante']
 
 const props = defineProps<{
@@ -20,54 +20,54 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  cambiarCantidad: [productoId: number, delta: number]
-  quitar: [productoId: number]
-  observaciones: [productoId: number, texto: string]
-  sugerencia: [productoId: number, sugerencia: string]
+  cambiarCantidad: [idProducto: number, delta: number]
+  quitar: [idProducto: number]
+  indicaciones: [idProducto: number, texto: string]
+  sugerencia: [idProducto: number, sugerencia: string]
   revisar: []
 }>()
 
 const titulo = ref<HTMLElement | null>(null)
 const botonCancelarQuitar = ref<HTMLElement[]>([])
 const confirmandoQuitar = ref<number | null>(null)
-const observacionesAbiertas = ref<Set<number>>(new Set())
+const indicacionesAbiertas = ref<Set<number>>(new Set())
 
 const vacio = computed(() => props.lineas.length === 0)
 const motivoVacio = 'Agrega al menos un producto para revisar el pedido.'
 
 const topeAlcanzado = (linea: LineaCarrito): boolean => linea.cantidad >= MAX_CANTIDAD
-const estaAgotado = (linea: LineaCarrito): boolean => props.agotados.includes(linea.productoId)
+const estaAgotado = (linea: LineaCarrito): boolean => props.agotados.includes(linea.idProducto)
 
-function alternarObservaciones(productoId: number) {
-  const abiertas = new Set(observacionesAbiertas.value)
-  if (abiertas.has(productoId)) abiertas.delete(productoId)
-  else abiertas.add(productoId)
-  observacionesAbiertas.value = abiertas
+function alternarIndicaciones(idProducto: number) {
+  const abiertas = new Set(indicacionesAbiertas.value)
+  if (abiertas.has(idProducto)) abiertas.delete(idProducto)
+  else abiertas.add(idProducto)
+  indicacionesAbiertas.value = abiertas
 }
 
-const observacionesVisibles = (linea: LineaCarrito): boolean =>
-  observacionesAbiertas.value.has(linea.productoId)
+const indicacionesVisibles = (linea: LineaCarrito): boolean =>
+  indicacionesAbiertas.value.has(linea.idProducto)
 
-async function pedirConfirmacion(productoId: number) {
-  confirmandoQuitar.value = productoId
+async function pedirConfirmacion(idProducto: number) {
+  confirmandoQuitar.value = idProducto
   await nextTick()
   // El foco cae en la opción segura ("Conservar").
   botonCancelarQuitar.value[0]?.focus()
 }
 
-function confirmarQuitar(productoId: number) {
+function confirmarQuitar(idProducto: number) {
   confirmandoQuitar.value = null
-  emit('quitar', productoId)
+  emit('quitar', idProducto)
   // La línea desaparece: el foco pasa al título del pedido para no perderse.
   void nextTick(() => titulo.value?.focus())
 }
 
 function aumentar(linea: LineaCarrito) {
-  if (!topeAlcanzado(linea)) emit('cambiarCantidad', linea.productoId, 1)
+  if (!topeAlcanzado(linea)) emit('cambiarCantidad', linea.idProducto, 1)
 }
 
 function disminuir(linea: LineaCarrito) {
-  if (linea.cantidad > 1) emit('cambiarCantidad', linea.productoId, -1)
+  if (linea.cantidad > 1) emit('cambiarCantidad', linea.idProducto, -1)
 }
 
 function revisar() {
@@ -87,7 +87,7 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
     <p v-if="vacio" class="pedido__vacio">Aún no hay productos. Toca un producto del menú para agregarlo.</p>
 
     <ul v-else class="pedido__lineas">
-      <li v-for="linea in lineas" :key="linea.productoId" class="linea">
+      <li v-for="linea in lineas" :key="linea.idProducto" class="linea">
         <div class="linea__fila">
           <div class="linea__datos">
             <strong>{{ linea.nombre }}</strong>
@@ -99,13 +99,13 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
         <InsigniaEstado v-if="estaAgotado(linea)" class="linea__agotado" tono="agotado" texto="Agotado: quítalo para continuar" />
 
         <!-- Confirmación breve para quitar -->
-        <div v-if="confirmandoQuitar === linea.productoId" class="linea__confirmar" role="group" :aria-label="`Quitar ${linea.nombre}`">
+        <div v-if="confirmandoQuitar === linea.idProducto" class="linea__confirmar" role="group" :aria-label="`Quitar ${linea.nombre}`">
           <p>¿Quitar «{{ linea.nombre }}» del pedido?</p>
           <div class="linea__confirmar-botones">
             <button ref="botonCancelarQuitar" type="button" class="btn btn--secundario" @click="confirmandoQuitar = null">
               Conservar
             </button>
-            <button type="button" class="btn btn--peligro" @click="confirmarQuitar(linea.productoId)">Quitar</button>
+            <button type="button" class="btn btn--peligro" @click="confirmarQuitar(linea.idProducto)">Quitar</button>
           </div>
         </div>
 
@@ -132,43 +132,43 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
             </button>
           </div>
 
-          <button type="button" class="btn btn--secundario linea__quitar" :aria-label="`Quitar ${linea.nombre}`" @click="pedirConfirmacion(linea.productoId)">
+          <button type="button" class="btn btn--secundario linea__quitar" :aria-label="`Quitar ${linea.nombre}`" @click="pedirConfirmacion(linea.idProducto)">
             Quitar
           </button>
           <button
             type="button"
             class="btn btn--secundario linea__observar"
-            :aria-expanded="observacionesVisibles(linea)"
-            :aria-controls="`obs-${linea.productoId}`"
-            @click="alternarObservaciones(linea.productoId)"
+            :aria-expanded="indicacionesVisibles(linea)"
+            :aria-controls="`obs-${linea.idProducto}`"
+            @click="alternarIndicaciones(linea.idProducto)"
           >
             Observaciones
           </button>
         </div>
 
-        <p v-if="linea.observaciones && !observacionesVisibles(linea)" class="linea__nota">Nota: {{ linea.observaciones }}</p>
+        <p v-if="linea.indicaciones && !indicacionesVisibles(linea)" class="linea__nota">Nota: {{ linea.indicaciones }}</p>
 
-        <div v-if="observacionesVisibles(linea)" :id="`obs-${linea.productoId}`" class="linea__observaciones">
+        <div v-if="indicacionesVisibles(linea)" :id="`obs-${linea.idProducto}`" class="linea__indicaciones">
           <div class="campo">
-            <label :for="`obs-texto-${linea.productoId}`">Observaciones de {{ linea.nombre }}</label>
+            <label :for="`obs-texto-${linea.idProducto}`">Observaciones de {{ linea.nombre }}</label>
             <input
-              :id="`obs-texto-${linea.productoId}`"
+              :id="`obs-texto-${linea.idProducto}`"
               type="text"
-              :value="linea.observaciones"
-              :maxlength="MAX_OBSERVACIONES"
+              :value="linea.indicaciones"
+              :maxlength="MAX_INDICACIONES"
               autocomplete="off"
               placeholder="Opcional"
-              @input="emit('observaciones', linea.productoId, ($event.target as HTMLInputElement).value)"
+              @input="emit('indicaciones', linea.idProducto, ($event.target as HTMLInputElement).value)"
             />
           </div>
-          <p class="linea__contador numero">{{ linea.observaciones.length }}/{{ MAX_OBSERVACIONES }}</p>
+          <p class="linea__contador numero">{{ linea.indicaciones.length }}/{{ MAX_INDICACIONES }}</p>
           <div class="linea__sugerencias" role="group" :aria-label="`Sugerencias para ${linea.nombre}`">
             <button
               v-for="sugerencia in SUGERENCIAS"
               :key="sugerencia"
               type="button"
               class="chip"
-              @click="emit('sugerencia', linea.productoId, sugerencia)"
+              @click="emit('sugerencia', linea.idProducto, sugerencia)"
             >
               {{ sugerencia }}
             </button>
@@ -338,13 +338,13 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
   overflow-wrap: anywhere;
 }
 
-.linea__observaciones {
+.linea__indicaciones {
   display: flex;
   flex-direction: column;
   gap: var(--espacio-2);
 }
 
-.linea__observaciones .campo {
+.linea__indicaciones .campo {
   font-size: var(--texto-sm);
 }
 

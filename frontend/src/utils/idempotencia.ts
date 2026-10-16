@@ -1,4 +1,4 @@
-// Claves de idempotencia (cabecera `Idempotency-Key`, CAMBIO PROPUESTO EN F5).
+// Claves de idempotencia (cabecera `Idempotency-Key`).
 // Regla: una clave por INTENCIÓN del usuario. Los reintentos de esa misma intención reutilizan la
 // clave (el servidor devuelve el resultado anterior en vez de repetir la acción); una intención
 // nueva genera una clave nueva.

@@ -6,8 +6,8 @@ import { conRetraso } from './utiles'
 
 /** Agrega a la mesa el resumen de su cuenta activa y de sus pedidos. */
 function conResumen(mesa: MesaGuardada): Mesa {
-  const cuenta = baseDatos.cuentas.find((c) => c.mesaId === mesa.id && c.estado !== 'cerrada')
-  const pedidos = cuenta ? baseDatos.pedidos.filter((p) => p.cuentaId === cuenta.id) : []
+  const cuenta = baseDatos.cuentas.find((c) => c.idMesa === mesa.idMesa && c.estado !== 'cerrada')
+  const pedidos = cuenta ? baseDatos.pedidos.filter((p) => p.idCuenta === cuenta.idCuenta) : []
 
   return {
     ...mesa,

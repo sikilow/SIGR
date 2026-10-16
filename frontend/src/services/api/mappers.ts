@@ -1,200 +1,264 @@
-// ÚNICO lugar donde se traduce entre el JSON de la API (snake_case, PROVISIONAL)
-// y los tipos del frontend (camelCase). Si la API cambia de convención, solo se edita este archivo.
+// ÚNICO lugar donde se traduce entre el JSON de la API y los tipos del frontend.
+//  - Las claves del JSON son los nombres EXACTOS de las columnas de la BD (snake_case): `id_mesa`, `fecha_hora`…
+//    Los campos que NO son columnas (calculados por la API) se marcan en cada DTO.
+//  - PHP/PDO puede devolver INT, DECIMAL y BOOLEAN como texto y los DATETIME sin zona horaria: los DTO
+//    admiten esas formas y los helpers de `conversion.ts` las convierten.
+//  - Estados y roles llegan con el nombre del catálogo ('En preparacion', 'Mesero') y se normalizan a código.
+// Ver docs/equivalencias-bd.md y docs/contrato-api-mesero.md.
 import type {
   CategoriaMenu,
+  Credenciales,
   Cuenta,
   DisponibilidadProducto,
-  EstadoCuenta,
-  EstadoCuentaActiva,
-  EstadoMesa,
-  EstadoPedido,
   ItemDisponibilidad,
   LineaNuevoPedido,
   Mesa,
-  MotivoCancelacion,
   NuevoPedido,
   Pedido,
   Producto,
-  Rol,
   TipoPago,
   Usuario,
 } from '../../types'
+import {
+  aBooleano,
+  aEstadoCuenta,
+  aEstadoMesa,
+  aEstadoPedido,
+  aNumero,
+  aNumeroONulo,
+  aRol,
+  aTexto,
+  normalizarCodigo,
+  parseFechaMySQL,
+  parseFechaMySQLONula,
+} from './conversion'
+
+/** INT o DECIMAL tal como puede llegar desde PDO: número o texto ("12", "120.00"). */
+type Numerico = number | string
+/** BOOLEAN tal como puede llegar desde PDO: `true`/`false`, `0`/`1` o `"0"`/`"1"`. */
+type Booleano = boolean | number | string
 
 // ---------- DTOs: formato de la API ----------
 
 export interface UsuarioDto {
-  id: number
+  id_usuario: Numerico
+  id_rol: Numerico
   nombre: string
-  rol: Rol
+  correo: string
+  activo: Booleano
+  /** CALCULADO por la API (JOIN con rol.nombre), p. ej. "Mesero". */
+  rol: string
 }
 
 export interface MesaDto {
-  id: number
-  numero: number
-  capacidad: number
-  estado: EstadoMesa
-  // CAMBIO PROPUESTO EN F3 (ver docs/contrato-api-mesero.md)
-  estado_cuenta: EstadoCuentaActiva | null
-  pedidos_activos: number
-  total_cuenta: number
-  pedidos_listos: number
-  // CAMBIO PROPUESTO EN F6 (opcional: si la API no lo envía, el panel muestra solo "Cuenta solicitada")
-  tipo_pago_solicitado?: TipoPago | null
+  id_mesa: Numerico
+  numero: Numerico
+  capacidad: Numerico
+  /** mesa.estado (texto libre), p. ej. "disponible". */
+  estado: string
+  // --- CALCULADOS por la API (no son columnas de `mesa`) ---
+  estado_cuenta: string | null
+  pedidos_activos: Numerico | null
+  total_cuenta: Numerico | null
+  pedidos_listos: Numerico | null
+  /** SIN COLUMNA EN BD (propuesta: cuenta.tipo_pago_solicitado). Opcional: si no llega, el panel muestra solo "Cuenta solicitada". */
+  tipo_pago_solicitado?: string | null
 }
 
 export interface ProductoDto {
-  id: number
-  categoria_id: number
+  id_producto: Numerico
+  id_categoria: Numerico
   nombre: string
-  descripcion: string
-  precio: number
-  disponible: boolean
+  descripcion: string | null
+  precio: Numerico
+  disponible: Booleano
 }
 
 export interface CategoriaMenuDto {
-  id: number
+  id_categoria: Numerico
   nombre: string
+  /** CALCULADO por la API: productos de la categoría. */
   productos: ProductoDto[]
 }
 
 export interface DisponibilidadDto {
-  producto_id: number
-  disponible: boolean
+  id_producto: Numerico
+  disponible: Booleano
 }
 
 export interface DetallePedidoDto {
-  producto_id: number
+  id_producto: Numerico
+  /** CALCULADO por la API (JOIN con producto.nombre). */
   nombre_producto: string
-  cantidad: number
-  observaciones: string
-  precio_unitario: number
+  cantidad: Numerico
+  indicaciones: string | null
+  precio_unitario: Numerico
 }
 
 export interface PedidoDto {
-  id: number
-  mesa_id: number
-  // CAMBIO PROPUESTO EN F5 (ver docs/contrato-api-mesero.md)
-  mesa_numero: number
-  cuenta_id: number
-  mesero_id: number
-  estado: EstadoPedido
+  id_pedido: Numerico
+  id_cuenta: Numerico
+  id_mesero: Numerico
+  /** CALCULADO por la API (JOIN con estado_pedido.nombre), p. ej. "En preparacion". La columna es `id_estado`. */
+  estado: string
+  /** DATETIME de MySQL sin zona horaria, p. ej. "2026-10-15 16:34:00". */
+  fecha_hora: string
+  id_motivo: Numerico | null
+  // --- CALCULADOS por la API (no son columnas de `pedido`) ---
+  /** `pedido` NO tiene `id_mesa`: sale de cuenta.id_mesa. */
+  id_mesa: Numerico
+  /** mesa.numero (JOIN). */
+  mesa_numero: Numerico
+  /** motivo_cancelacion.descripcion (JOIN). */
+  motivo_descripcion: string | null
+  total: Numerico
   detalle: DetallePedidoDto[]
-  total: number
-  creado_en: string
-  // CAMBIO PROPUESTO EN F5: texto libre (5 a 200 caracteres), no un código
-  motivo_cancelacion: MotivoCancelacion | null
 }
 
 export interface CuentaDto {
-  id: number
-  mesa_id: number
-  estado: EstadoCuenta
-  pedidos: PedidoDto[]
-  total: number
+  id_cuenta: Numerico
+  id_mesa: Numerico
+  estado: string
   abierta_en: string
-  tipo_pago_solicitado: TipoPago | null
+  cerrada_en: string | null
+  // --- CALCULADOS por la API (no son columnas de `cuenta`) ---
+  pedidos: PedidoDto[]
+  total: Numerico
+  /** SIN COLUMNA EN BD (propuesta: cuenta.tipo_pago_solicitado). */
+  tipo_pago_solicitado: string | null
 }
 
 // ---------- API → frontend ----------
 
 export function aUsuario(dto: UsuarioDto): Usuario {
-  return { id: dto.id, nombre: dto.nombre, rol: dto.rol }
+  return {
+    idUsuario: aNumero(dto.id_usuario, 'id_usuario'),
+    idRol: aNumero(dto.id_rol, 'id_rol'),
+    nombre: dto.nombre,
+    correo: aTexto(dto.correo),
+    activo: aBooleano(dto.activo, 'activo'),
+    rol: aRol(dto.rol),
+  }
+}
+
+/** Tipo de pago solicitado: solo `fisico` o `digital`; cualquier otra cosa (o ausente) es `null`. */
+function aTipoPago(valor: unknown): TipoPago | null {
+  const codigo = normalizarCodigo(valor)
+  return codigo === 'fisico' || codigo === 'digital' ? codigo : null
 }
 
 export function aMesa(dto: MesaDto): Mesa {
+  // La cuenta "activa" nunca está cerrada: si la API enviara `cerrada`, la mesa se muestra sin cuenta.
+  const estadoCuenta = dto.estado_cuenta === null || dto.estado_cuenta === undefined ? null : aEstadoCuenta(dto.estado_cuenta)
   return {
-    id: dto.id,
-    numero: dto.numero,
-    capacidad: dto.capacidad,
-    estado: dto.estado,
-    estadoCuenta: dto.estado_cuenta,
-    pedidosActivos: dto.pedidos_activos,
-    totalCuenta: dto.total_cuenta,
-    tipoPagoSolicitado: dto.tipo_pago_solicitado ?? null,
-    pedidosListos: dto.pedidos_listos,
+    idMesa: aNumero(dto.id_mesa, 'id_mesa'),
+    numero: aNumero(dto.numero, 'numero'),
+    capacidad: aNumero(dto.capacidad, 'capacidad'),
+    estado: aEstadoMesa(dto.estado),
+    estadoCuenta: estadoCuenta === 'cerrada' ? null : estadoCuenta,
+    pedidosActivos: aNumeroONulo(dto.pedidos_activos, 'pedidos_activos') ?? 0,
+    totalCuenta: aNumeroONulo(dto.total_cuenta, 'total_cuenta') ?? 0,
+    tipoPagoSolicitado: aTipoPago(dto.tipo_pago_solicitado),
+    pedidosListos: aNumeroONulo(dto.pedidos_listos, 'pedidos_listos') ?? 0,
   }
 }
 
 export function aProducto(dto: ProductoDto): Producto {
   return {
-    id: dto.id,
-    categoriaId: dto.categoria_id,
+    idProducto: aNumero(dto.id_producto, 'id_producto'),
+    idCategoria: aNumero(dto.id_categoria, 'id_categoria'),
     nombre: dto.nombre,
-    descripcion: dto.descripcion,
-    precio: dto.precio,
-    disponible: dto.disponible,
+    descripcion: aTexto(dto.descripcion),
+    precio: aNumero(dto.precio, 'precio'),
+    disponible: aBooleano(dto.disponible, 'disponible'),
   }
 }
 
 export function aCategoriaMenu(dto: CategoriaMenuDto): CategoriaMenu {
-  return { id: dto.id, nombre: dto.nombre, productos: dto.productos.map(aProducto) }
+  return {
+    idCategoria: aNumero(dto.id_categoria, 'id_categoria'),
+    nombre: dto.nombre,
+    productos: (dto.productos ?? []).map(aProducto),
+  }
 }
 
 export function aDisponibilidad(dto: DisponibilidadDto): DisponibilidadProducto {
   return {
-    productoId: dto.producto_id,
-    disponible: dto.disponible,
+    idProducto: aNumero(dto.id_producto, 'id_producto'),
+    disponible: aBooleano(dto.disponible, 'disponible'),
   }
 }
 
 export function aPedido(dto: PedidoDto): Pedido {
   return {
-    id: dto.id,
-    mesaId: dto.mesa_id,
-    mesaNumero: dto.mesa_numero,
-    cuentaId: dto.cuenta_id,
-    meseroId: dto.mesero_id,
-    estado: dto.estado,
-    detalle: dto.detalle.map((d) => ({
-      productoId: d.producto_id,
+    idPedido: aNumero(dto.id_pedido, 'id_pedido'),
+    idCuenta: aNumero(dto.id_cuenta, 'id_cuenta'),
+    idMesero: aNumero(dto.id_mesero, 'id_mesero'),
+    estado: aEstadoPedido(dto.estado),
+    fechaHora: parseFechaMySQL(dto.fecha_hora, 'fecha_hora'),
+    idMotivo: aNumeroONulo(dto.id_motivo, 'id_motivo'),
+    detalle: (dto.detalle ?? []).map((d) => ({
+      idProducto: aNumero(d.id_producto, 'id_producto'),
       nombreProducto: d.nombre_producto,
-      cantidad: d.cantidad,
-      observaciones: d.observaciones,
-      precioUnitario: d.precio_unitario,
+      cantidad: aNumero(d.cantidad, 'cantidad'),
+      indicaciones: aTexto(d.indicaciones),
+      precioUnitario: aNumero(d.precio_unitario, 'precio_unitario'),
     })),
-    total: dto.total,
-    creadoEn: dto.creado_en,
-    motivoCancelacion: dto.motivo_cancelacion,
+    idMesa: aNumero(dto.id_mesa, 'id_mesa'),
+    mesaNumero: aNumero(dto.mesa_numero, 'mesa_numero'),
+    motivoDescripcion: dto.motivo_descripcion ?? null,
+    total: aNumero(dto.total, 'total'),
   }
 }
 
 export function aCuenta(dto: CuentaDto): Cuenta {
   return {
-    id: dto.id,
-    mesaId: dto.mesa_id,
-    estado: dto.estado,
-    pedidos: dto.pedidos.map(aPedido),
-    total: dto.total,
-    abiertaEn: dto.abierta_en,
-    tipoPagoSolicitado: dto.tipo_pago_solicitado,
+    idCuenta: aNumero(dto.id_cuenta, 'id_cuenta'),
+    idMesa: aNumero(dto.id_mesa, 'id_mesa'),
+    estado: aEstadoCuenta(dto.estado),
+    abiertaEn: parseFechaMySQL(dto.abierta_en, 'abierta_en'),
+    cerradaEn: parseFechaMySQLONula(dto.cerrada_en, 'cerrada_en'),
+    pedidos: (dto.pedidos ?? []).map(aPedido),
+    total: aNumero(dto.total, 'total'),
+    tipoPagoSolicitado: aTipoPago(dto.tipo_pago_solicitado),
   }
 }
 
 // ---------- frontend → API (cuerpos de petición) ----------
 
-/** Líneas de pedido sin precios (los calcula el servidor). */
+export function deCredenciales(credenciales: Credenciales) {
+  return { nombre_usuario: credenciales.nombreUsuario, contrasena: credenciales.contrasena }
+}
+
+/** Líneas de pedido sin precios (los fija la API con `producto.precio`). */
 function deLineas(detalle: LineaNuevoPedido[]) {
   return detalle.map((d) => ({
-    producto_id: d.productoId,
+    id_producto: d.idProducto,
     cantidad: d.cantidad,
-    observaciones: d.observaciones,
+    indicaciones: d.indicaciones,
   }))
 }
 
+/** Cuerpo de POST /pedidos. `pedido` no tiene `id_mesa`: la API lo usa para resolver (o abrir) la cuenta de la mesa. */
 export function deNuevoPedido(pedido: NuevoPedido) {
-  return { mesa_id: pedido.mesaId, detalle: deLineas(pedido.detalle) }
+  return { id_mesa: pedido.idMesa, detalle: deLineas(pedido.detalle) }
 }
 
-/** CAMBIO PROPUESTO EN F4: cuerpo de PATCH /pedidos/{id} (detalle completo). */
+/** Cuerpo de PATCH /pedidos/{id}: reemplaza el detalle completo. */
 export function deActualizacionPedido(detalle: LineaNuevoPedido[]) {
   return { detalle: deLineas(detalle) }
 }
 
-/** CAMBIO PROPUESTO EN F5: el motivo es texto libre (ya no un código). */
-export function deCancelacion(motivo: MotivoCancelacion) {
-  return { motivo: motivo.trim() }
+/** Cuerpo de POST /pedidos/{id}/cancelar: la `descripcion` de motivo_cancelacion (5 a 180 caracteres). */
+export function deCancelacion(descripcion: string) {
+  return { descripcion: descripcion.trim() }
+}
+
+/** Cuerpo de POST /cuentas/{id}/solicitar-pago. SIN COLUMNA EN BD (propuesta: cuenta.tipo_pago_solicitado). */
+export function deSolicitudPago(tipo: TipoPago) {
+  return { tipo_pago_solicitado: tipo }
 }
 
 export function deItemsDisponibilidad(items: ItemDisponibilidad[]) {
-  return { items: items.map((i) => ({ producto_id: i.productoId })) }
+  return { items: items.map((i) => ({ id_producto: i.idProducto })) }
 }

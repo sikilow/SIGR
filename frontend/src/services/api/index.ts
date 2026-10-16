@@ -12,8 +12,10 @@ import {
   aUsuario,
   deActualizacionPedido,
   deCancelacion,
+  deCredenciales,
   deItemsDisponibilidad,
   deNuevoPedido,
+  deSolicitudPago,
   type CategoriaMenuDto,
   type CuentaDto,
   type DisponibilidadDto,
@@ -26,7 +28,7 @@ export function crearServiciosApi(): Servicios {
   return {
     auth: {
       async iniciarSesion(credenciales) {
-        const r = await solicitar<{ usuario: UsuarioDto }>('POST', '/auth/login', { cuerpo: credenciales })
+        const r = await solicitar<{ usuario: UsuarioDto }>('POST', '/auth/login', { cuerpo: deCredenciales(credenciales) })
         return aUsuario(r.usuario)
       },
 
@@ -75,7 +77,7 @@ export function crearServiciosApi(): Servicios {
 
       async listar(filtro = {}) {
         const r = await solicitar<PedidoDto[]>('GET', '/pedidos', {
-          consulta: { mesa_id: filtro.mesaId, estado: filtro.estado },
+          consulta: { id_mesa: filtro.idMesa, estado: filtro.estado },
         })
         return r.map(aPedido)
       },
@@ -93,32 +95,31 @@ export function crearServiciosApi(): Servicios {
         return aPedido(await solicitar<PedidoDto>('POST', `/pedidos/${id}/enviar`, { claveIdempotencia }))
       },
 
-      async cancelar(id, motivo, claveIdempotencia) {
-        const cuerpo = deCancelacion(motivo)
+      async cancelar(id, descripcion, claveIdempotencia) {
+        const cuerpo = deCancelacion(descripcion)
         return aPedido(await solicitar<PedidoDto>('POST', `/pedidos/${id}/cancelar`, { cuerpo, claveIdempotencia }))
       },
 
-      // CAMBIO PROPUESTO EN F5
       async entregar(id, claveIdempotencia) {
         return aPedido(await solicitar<PedidoDto>('POST', `/pedidos/${id}/entregar`, { claveIdempotencia }))
       },
     },
 
     cuentas: {
-      async obtenerPorMesa(mesaId) {
+      async obtenerPorMesa(idMesa) {
         try {
-          return aCuenta(await solicitar<CuentaDto>('GET', `/mesas/${mesaId}/cuenta`))
+          return aCuenta(await solicitar<CuentaDto>('GET', `/mesas/${idMesa}/cuenta`))
         } catch (error) {
-          // Una mesa libre no tiene cuenta activa: la API responde 404 con `no_encontrado`.
+          // Una mesa sin cuenta activa (p. ej. disponible): la API responde 404 con `no_encontrado`.
           if (error instanceof ErrorServicio && error.codigo === 'no_encontrado') return null
           throw error
         }
       },
 
-      async solicitarPago(cuentaId, tipo, claveIdempotencia) {
-        const cuerpo = { tipo }
+      async solicitarPago(idCuenta, tipo, claveIdempotencia) {
+        const cuerpo = deSolicitudPago(tipo)
         return aCuenta(
-          await solicitar<CuentaDto>('POST', `/cuentas/${cuentaId}/solicitar-pago`, { cuerpo, claveIdempotencia }),
+          await solicitar<CuentaDto>('POST', `/cuentas/${idCuenta}/solicitar-pago`, { cuerpo, claveIdempotencia }),
         )
       },
     },

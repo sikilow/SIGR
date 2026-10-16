@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Ícono de estado (decorativo: siempre va junto a un texto visible, por eso se oculta a lectores).
 export type TonoEstado =
-  | 'libre'
+  | 'disponible'
   | 'ocupada'
   | 'reservada'
   | 'listo'
@@ -12,10 +12,13 @@ export type TonoEstado =
   // Estados del pedido (`listo` se comparte con el aviso "Pedido listo" del panel)
   | 'registrado'
   | 'enviado'
+  | 'pendiente'
   | 'en_preparacion'
   | 'entregado'
   | 'cancelado'
   | 'pagado'
+  // Estado que la API envió y la interfaz no reconoce
+  | 'desconocido'
 
 withDefaults(defineProps<{ tono: TonoEstado; tamano?: number }>(), { tamano: 20 })
 </script>
@@ -33,8 +36,8 @@ withDefaults(defineProps<{ tono: TonoEstado; tamano?: number }>(), { tamano: 20 
     stroke-linecap="round"
     stroke-linejoin="round"
   >
-    <!-- libre: check -->
-    <template v-if="tono === 'libre'">
+    <!-- disponible: check -->
+    <template v-if="tono === 'disponible'">
       <circle cx="12" cy="12" r="9" />
       <path d="m8 12 3 3 5-6" />
     </template>
@@ -75,8 +78,8 @@ withDefaults(defineProps<{ tono: TonoEstado; tamano?: number }>(), { tamano: 20 
       <path d="M5 3h9l5 5v13H5z" />
       <path d="M14 3v5h5M9 13h6M9 17h4" />
     </template>
-    <!-- enviado: avión de papel -->
-    <template v-else-if="tono === 'enviado'">
+    <!-- enviado (y `pendiente` del catálogo de la BD): avión de papel -->
+    <template v-else-if="tono === 'enviado' || tono === 'pendiente'">
       <path d="M21 3 10 14" />
       <path d="M21 3l-7 18-4-7-7-4z" />
     </template>
@@ -98,6 +101,11 @@ withDefaults(defineProps<{ tono: TonoEstado; tamano?: number }>(), { tamano: 20 
     <template v-else-if="tono === 'pagado'">
       <rect x="3" y="6" width="18" height="12" rx="2" />
       <circle cx="12" cy="12" r="2.5" />
+    </template>
+    <!-- desconocido: círculo con signo de interrogación -->
+    <template v-else-if="tono === 'desconocido'">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8M12 16.5v.01" />
     </template>
     <!-- pedido listo: campana -->
     <template v-else>

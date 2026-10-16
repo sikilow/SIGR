@@ -34,7 +34,7 @@ function cambiarFiltro(filtro: FiltroMesas) {
 
 const MENSAJE_VACIO: Record<FiltroMesas, string> = {
   todas: 'No hay mesas registradas',
-  libre: 'No hay mesas libres',
+  disponible: 'No hay mesas disponibles',
   ocupada: 'No hay mesas ocupadas',
   reservada: 'No hay mesas reservadas',
   listo: 'No hay pedidos listos por servir',
@@ -61,7 +61,7 @@ watch(
 const mesaSeleccionadaId = ref<number | null>(null)
 // Se deriva de las mesas vivas: si la mesa cambia mientras la hoja está abierta, se actualiza.
 const mesaSeleccionada = computed<Mesa | null>(
-  () => store.mesas.find((m) => m.id === mesaSeleccionadaId.value) ?? null,
+  () => store.mesas.find((m) => m.idMesa === mesaSeleccionadaId.value) ?? null,
 )
 
 onMounted(iniciar)
@@ -104,7 +104,7 @@ onBeforeUnmount(() => {
 
     <template v-if="store.mesas.length > 0">
       <ResumenMesas
-        :libres="store.contadores.libre"
+        :disponibles="store.contadores.disponible"
         :ocupadas="store.contadores.ocupada"
         :reservadas="store.contadores.reservada"
         :pedidos-listos="store.contadores.pedidosListos"
@@ -135,8 +135,8 @@ onBeforeUnmount(() => {
 
     <!-- Cuadrícula de mesas -->
     <ul v-else class="cuadricula" aria-label="Mesas">
-      <li v-for="mesa in store.mesasFiltradas" :key="mesa.id">
-        <MesaCard :mesa="mesa" :resaltada="resaltadas.includes(mesa.id)" @seleccionar="mesaSeleccionadaId = $event.id" />
+      <li v-for="mesa in store.mesasFiltradas" :key="mesa.idMesa">
+        <MesaCard :mesa="mesa" :resaltada="resaltadas.includes(mesa.idMesa)" @seleccionar="mesaSeleccionadaId = $event.idMesa" />
       </li>
     </ul>
 

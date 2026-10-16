@@ -3,12 +3,16 @@ import { computed, ref } from 'vue'
 import { servicios } from '../services'
 import type { EstadoMesa, Mesa } from '../types'
 
-export type FiltroMesas = 'todas' | EstadoMesa | 'listo'
+export type FiltroMesas = 'todas' | Exclude<EstadoMesa, 'desconocido'> | 'listo'
 
-export const FILTROS_MESAS: readonly FiltroMesas[] = ['todas', 'libre', 'ocupada', 'reservada', 'listo']
+export const FILTROS_MESAS: readonly FiltroMesas[] = ['todas', 'disponible', 'ocupada', 'reservada', 'listo']
+
+/** Alias de URL: `?estado=libre` (nombre anterior de «disponible») se sigue aceptando. */
+const ALIAS_FILTRO_URL: Record<string, FiltroMesas> = { libre: 'disponible' }
 
 /** Convierte un valor de la URL (?estado=) en un filtro válido; si no lo es, `todas`. */
 export function filtroDesdeConsulta(valor: unknown): FiltroMesas {
+  if (typeof valor === 'string' && valor in ALIAS_FILTRO_URL) return ALIAS_FILTRO_URL[valor]!
   return FILTROS_MESAS.find((f) => f === valor) ?? 'todas'
 }
 
@@ -33,7 +37,7 @@ export const useMesasStore = defineStore('mesas', () => {
 
   const contadores = computed(() => ({
     todas: mesas.value.length,
-    libre: mesas.value.filter((m) => m.estado === 'libre').length,
+    disponible: mesas.value.filter((m) => m.estado === 'disponible').length,
     ocupada: mesas.value.filter((m) => m.estado === 'ocupada').length,
     reservada: mesas.value.filter((m) => m.estado === 'reservada').length,
     listo: mesas.value.filter((m) => m.pedidosListos > 0).length,
@@ -54,8 +58,8 @@ export const useMesasStore = defineStore('mesas', () => {
 
   /** Detecta mesas cuyo número de pedidos listos aumentó respecto a la carga anterior. */
   function detectarNuevasListas(anteriores: Mesa[], actuales: Mesa[]): Mesa[] {
-    const previos = new Map(anteriores.map((m) => [m.id, m.pedidosListos]))
-    return actuales.filter((m) => m.pedidosListos > (previos.get(m.id) ?? m.pedidosListos))
+    const previos = new Map(anteriores.map((m) => [m.idMesa, m.pedidosListos]))
+    return actuales.filter((m) => m.pedidosListos > (previos.get(m.idMesa) ?? m.pedidosListos))
   }
 
   async function ejecutarCarga(): Promise<void> {
@@ -66,7 +70,7 @@ export const useMesasStore = defineStore('mesas', () => {
       const recibidas = await servicios.mesas.listar()
       const nuevas = primeraCarga ? [] : detectarNuevasListas(mesas.value, recibidas)
       mesas.value = recibidas
-      nuevasListas.value = nuevas.map((m) => m.id)
+      nuevasListas.value = nuevas.map((m) => m.idMesa)
       anuncio.value = nuevas.map((m) => `Mesa ${m.numero}: pedido listo`).join('. ')
       ultimaActualizacion.value = Date.now()
       error.value = null

@@ -16,7 +16,7 @@ const props = defineProps<{
 const emit = defineEmits<{ agregar: [producto: Producto] }>()
 
 const agotado = computed(() => !props.producto.disponible)
-const idMotivo = computed(() => `producto-motivo-${props.producto.id}`)
+const idMotivo = computed(() => `producto-motivo-${props.producto.idProducto}`)
 
 function alTocar() {
   if (!agotado.value) emit('agregar', props.producto)

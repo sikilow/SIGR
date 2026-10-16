@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Mis pedidos (/mesero/pedidos y /mesero/pedidos/:pedidoId). Con 1024 px o más, lista a la izquierda y
+// Mis pedidos (/mesero/pedidos y /mesero/pedidos/:idPedido). Con 1024 px o más, lista a la izquierda y
 // detalle a la derecha; con menos, el detalle es una pantalla aparte ("Volver a pedidos").
 // Los filtros viven en la URL: ?estado=registrado|enviado|en_preparacion|listo|entregado|cancelado
-// (sin valor = "Activos") y ?mesa=:mesaId.
+// (sin valor = "Activos") y ?mesa=:idMesa.
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import IndicadorActualizacion from '../../components/IndicadorActualizacion.vue'
@@ -50,7 +50,7 @@ function entero(valor: unknown): number | null {
   return typeof valor === 'string' && /^[1-9]\d*$/.test(valor) ? Number(valor) : null
 }
 
-const pedidoId = computed(() => entero(route.params.pedidoId))
+const idPedido = computed(() => entero(route.params.idPedido))
 const mesaFiltroId = computed(() => entero(route.query.mesa))
 
 // ---------- Filtros sincronizados con la URL ----------
@@ -67,14 +67,14 @@ const listo = ref(false) // `true` una vez montada la pantalla (antes no hay nad
 watch(
   mesaFiltroId,
   (id) => {
-    const cambio = store.mesaId !== id
+    const cambio = store.idMesa !== id
     store.filtrarPorMesa(id)
     if (cambio && listo.value) void store.cargar()
   },
   { immediate: true },
 )
 
-watch(pedidoId, (id) => store.seleccionar(id), { immediate: true })
+watch(idPedido, (id) => store.seleccionar(id), { immediate: true })
 
 function consultaCon(cambios: Record<string, string | undefined>) {
   const consulta = { ...route.query }
@@ -96,8 +96,8 @@ function quitarFiltroMesa() {
 const numeroMesaFiltro = computed(() => {
   if (mesaFiltroId.value === null) return null
   return (
-    mesas.mesas.find((m) => m.id === mesaFiltroId.value)?.numero ??
-    store.pedidos.find((p) => p.mesaId === mesaFiltroId.value)?.mesaNumero ??
+    mesas.mesas.find((m) => m.idMesa === mesaFiltroId.value)?.numero ??
+    store.pedidos.find((p) => p.idMesa === mesaFiltroId.value)?.mesaNumero ??
     mesaFiltroId.value
   )
 })
@@ -131,12 +131,12 @@ const detalle = ref<InstanceType<typeof PedidoDetalle> | null>(null)
 const tituloLista = ref<HTMLElement | null>(null)
 
 const cuentaPorPagar = computed(() => {
-  const mesaId = store.seleccionado?.mesaId
-  return mesaId !== undefined && mesas.mesas.find((m) => m.id === mesaId)?.estadoCuenta === 'por_pagar'
+  const idMesa = store.seleccionado?.idMesa
+  return idMesa !== undefined && mesas.mesas.find((m) => m.idMesa === idMesa)?.estadoCuenta === 'por_pagar'
 })
 
-const mostrarLista = computed(() => !compacto.value || pedidoId.value === null)
-const mostrarDetalle = computed(() => !compacto.value || pedidoId.value !== null)
+const mostrarLista = computed(() => !compacto.value || idPedido.value === null)
+const mostrarDetalle = computed(() => !compacto.value || idPedido.value !== null)
 
 // En pantalla compacta, abrir un pedido es cambiar de pantalla: el foco pasa al detalle; al volver, a su fila.
 let enfocarDetalle = false
@@ -148,14 +148,14 @@ function intentarEnfocarDetalle() {
   }
 }
 
-watch(pedidoId, async (nuevo, anterior) => {
+watch(idPedido, async (nuevo, anterior) => {
   if (!compacto.value) return
   await nextTick()
   if (nuevo !== null) {
     enfocarDetalle = true
     intentarEnfocarDetalle()
   } else if (anterior !== null) {
-    const fila = document.querySelector<HTMLElement>(`[data-pedido-id="${anterior}"]`)
+    const fila = document.querySelector<HTMLElement>(`[data-id-pedido="${anterior}"]`)
     ;(fila ?? tituloLista.value)?.focus({ preventScroll: false })
   }
 })
@@ -163,8 +163,8 @@ watch(detalle, intentarEnfocarDetalle)
 
 const enlaceVolver = computed(() => ({ name: 'mesero-pedidos' as const, query: route.query }))
 
-function enlaceAPedido(id: number) {
-  return { name: 'mesero-pedidos' as const, params: { pedidoId: id }, query: route.query }
+function enlaceAPedido(idPedido: number) {
+  return { name: 'mesero-pedidos' as const, params: { idPedido: idPedido }, query: route.query }
 }
 
 onMounted(() => {
@@ -258,17 +258,17 @@ onMounted(() => {
 
         <!-- Filas -->
         <ul v-else class="filas" aria-label="Pedidos">
-          <li v-for="p in store.ordenados" :key="p.id">
+          <li v-for="p in store.ordenados" :key="p.idPedido">
             <RouterLink
               class="fila"
-              :class="{ 'fila--resaltada': resaltados.includes(p.id), 'fila--listo': p.estado === 'listo' }"
-              :to="enlaceAPedido(p.id)"
-              :data-pedido-id="p.id"
+              :class="{ 'fila--resaltada': resaltados.includes(p.idPedido), 'fila--listo': p.estado === 'listo' }"
+              :to="enlaceAPedido(p.idPedido)"
+              :data-id-pedido="p.idPedido"
             >
               <span class="fila__cabecera">
-                <strong class="numero">#{{ p.id }}</strong>
+                <strong class="numero">#{{ p.idPedido }}</strong>
                 <span>Mesa {{ p.mesaNumero }}</span>
-                <span class="fila__hora numero">{{ formatearHora(p.creadoEn) }}</span>
+                <span class="fila__hora numero">{{ formatearHora(p.fechaHora) }}</span>
               </span>
               <InsigniaEstado :tono="p.estado" :texto="ETIQUETA_ESTADO_PEDIDO[p.estado]" />
               <span class="fila__datos">
@@ -289,7 +289,7 @@ onMounted(() => {
           Volver a pedidos
         </RouterLink>
 
-        <div v-if="pedidoId === null" class="vacio">
+        <div v-if="idPedido === null" class="vacio">
           <h3>Selecciona un pedido</h3>
           <p>Toca un pedido de la lista para ver su detalle y sus acciones.</p>
         </div>
@@ -297,12 +297,12 @@ onMounted(() => {
         <PedidoDetalle v-else-if="store.seleccionado" ref="detalle" :pedido="store.seleccionado" :cuenta-por-pagar="cuentaPorPagar" />
 
         <div v-else-if="store.seleccionadoNoEncontrado" class="vacio" role="alert">
-          <h3>El pedido #{{ pedidoId }} no existe</h3>
+          <h3>El pedido #{{ idPedido }} no existe</h3>
           <RouterLink class="btn" :to="enlaceVolver">Ver mis pedidos</RouterLink>
         </div>
 
         <div v-else-if="store.error" class="vacio" role="alert">
-          <h3>No se pudo cargar el pedido #{{ pedidoId }}</h3>
+          <h3>No se pudo cargar el pedido #{{ idPedido }}</h3>
           <p>{{ store.error }}</p>
           <button type="button" class="btn" :disabled="store.actualizando" @click="polling.ejecutarAhora()">Reintentar</button>
         </div>

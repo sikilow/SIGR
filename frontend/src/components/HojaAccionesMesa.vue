@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Hoja de acciones (bottom sheet) de una mesa, sobre DialogoModal (foco atrapado, Escape,
-// foco de regreso a la tarjeta). Solo una mesa OCUPADA ofrece acciones de pedido; libre o
+// foco de regreso a la tarjeta). Solo una mesa OCUPADA ofrece acciones de pedido; disponible o
 // reservada solo se puede cerrar (la hostess asigna la mesa).
 import { computed, ref } from 'vue'
 import { ETIQUETA_ESTADO_MESA, type Mesa } from '../types'
@@ -41,7 +41,7 @@ function bloquear(evento: Event) {
           <RouterLink
             v-if="!cuentaSolicitada"
             class="btn btn--grande hoja__boton"
-            :to="{ name: 'mesero-pedido-mesa', params: { mesaId: mesa.id } }"
+            :to="{ name: 'mesero-pedido-mesa', params: { idMesa: mesa.idMesa } }"
             autofocus
           >
             Nuevo pedido
@@ -64,20 +64,20 @@ function bloquear(evento: Event) {
 
           <RouterLink
             class="btn btn--secundario btn--grande hoja__boton"
-            :to="{ name: 'mesero-cuenta-mesa', params: { mesaId: mesa.id } }"
+            :to="{ name: 'mesero-cuenta-mesa', params: { idMesa: mesa.idMesa } }"
           >
             Ver cuenta
           </RouterLink>
           <RouterLink
             class="btn btn--secundario btn--grande hoja__boton"
-            :to="{ name: 'mesero-pedidos', query: { mesa: mesa.id } }"
+            :to="{ name: 'mesero-pedidos', query: { mesa: mesa.idMesa } }"
           >
             Pedidos de la mesa
           </RouterLink>
         </div>
       </template>
 
-      <!-- Mesa libre o reservada: sin acciones de pedido (la hostess asigna la mesa) -->
+      <!-- Mesa disponible o reservada: sin acciones de pedido (la hostess asigna la mesa) -->
       <p v-else class="hoja__resumen">Esta mesa no tiene clientes sentados; la hostess la asigna.</p>
 
       <button

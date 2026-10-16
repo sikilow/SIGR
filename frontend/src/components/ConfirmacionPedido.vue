@@ -45,7 +45,7 @@ onMounted(async () => {
       </div>
       <div>
         <dt>Pedido</dt>
-        <dd class="numero">#{{ pedido.id }}</dd>
+        <dd class="numero">#{{ pedido.idPedido }}</dd>
       </div>
       <div>
         <dt>Estado</dt>
@@ -62,16 +62,16 @@ onMounted(async () => {
     </p>
 
     <ul class="confirmacion__lineas" aria-label="Productos del pedido">
-      <li v-for="d in pedido.detalle" :key="d.productoId">
+      <li v-for="d in pedido.detalle" :key="d.idProducto">
         <span class="numero">{{ d.cantidad }}×</span> {{ d.nombreProducto }}
-        <small v-if="d.observaciones" class="confirmacion__obs">Obs.: {{ d.observaciones }}</small>
+        <small v-if="d.indicaciones" class="confirmacion__obs">Obs.: {{ d.indicaciones }}</small>
       </li>
     </ul>
 
     <div class="fila-botones confirmacion__acciones">
       <RouterLink class="btn" :to="{ name: 'mesero-mesas' }">Volver al panel</RouterLink>
       <button type="button" class="btn btn--secundario" @click="$emit('nuevo')">Nuevo pedido en esta mesa</button>
-      <RouterLink class="btn btn--secundario" :to="{ name: 'mesero-cuenta-mesa', params: { mesaId: pedido.mesaId } }">
+      <RouterLink class="btn btn--secundario" :to="{ name: 'mesero-cuenta-mesa', params: { idMesa: pedido.idMesa } }">
         Ver cuenta
       </RouterLink>
     </div>
@@ -90,7 +90,7 @@ onMounted(async () => {
 }
 
 .confirmacion__icono {
-  color: var(--color-libre);
+  color: var(--color-disponible);
 }
 
 .confirmacion h2:focus {

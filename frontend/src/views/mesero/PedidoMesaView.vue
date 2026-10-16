@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Pedido de mesa (/mesero/mesas/:mesaId/pedido[?editar=:pedidoId]).
+// Pedido de mesa (/mesero/mesas/:idMesa/pedido[?editar=:idPedido]).
 // Arma un pedido (menú + carrito), lo revisa, lo registra y lo envía a cocina; o edita un
 // pedido registrado. Solo usa services/index.ts (a través de las tarjetas y del store).
 import { computed, ref, watch } from 'vue'
@@ -20,7 +20,7 @@ import {
   cambiarCantidad,
   cantidadDe,
   carritosIguales,
-  establecerObservaciones,
+  establecerIndicaciones,
   lineasDesdeDetalle,
   quitarLinea,
   totalEstimado,
@@ -28,7 +28,7 @@ import {
   type LineaCarrito,
 } from '../../utils/carrito'
 import { formatearMoneda } from '../../utils/formato'
-import { motivoPedidoBloqueado } from '../../utils/reglas'
+import { motivoPedidoBloqueado, puedeEditarOEnviar } from '../../utils/reglas'
 
 type Fase = 'cargando' | 'error' | 'editor' | 'confirmacion'
 
@@ -58,29 +58,29 @@ function entero(valor: unknown): number | null {
   return typeof valor === 'string' && /^[1-9]\d*$/.test(valor) ? Number(valor) : null
 }
 
-const mesaId = computed(() => entero(route.params.mesaId))
+const idMesa = computed(() => entero(route.params.idMesa))
 
 // ---------- Carrito: borrador por mesa (pedido nuevo) o copia local (edición) ----------
 const editando = computed(() => pedidoEditando.value !== null)
 const lineas = computed<LineaCarrito[]>(() =>
-  editando.value ? lineasEdicion.value : borrador.lineasDe(mesaId.value ?? -1),
+  editando.value ? lineasEdicion.value : borrador.lineasDe(idMesa.value ?? -1),
 )
 const total = computed(() => totalEstimado(lineas.value))
 
 function establecer(nuevas: LineaCarrito[]) {
   if (editando.value) lineasEdicion.value = nuevas
-  else if (mesaId.value !== null) borrador.establecer(mesaId.value, nuevas)
+  else if (idMesa.value !== null) borrador.establecer(idMesa.value, nuevas)
 }
 
 /** Productos del pedido que, según el menú actual, ya están agotados. */
 const agotados = computed<number[]>(() => {
   const agotadosDelMenu = new Set(
-    categorias.value.flatMap((c) => c.productos).filter((p) => !p.disponible).map((p) => p.id),
+    categorias.value.flatMap((c) => c.productos).filter((p) => !p.disponible).map((p) => p.idProducto),
   )
-  return lineas.value.filter((l) => agotadosDelMenu.has(l.productoId)).map((l) => l.productoId)
+  return lineas.value.filter((l) => agotadosDelMenu.has(l.idProducto)).map((l) => l.idProducto)
 })
 const cantidades = computed<Record<number, number>>(() =>
-  Object.fromEntries(lineas.value.map((l) => [l.productoId, l.cantidad])),
+  Object.fromEntries(lineas.value.map((l) => [l.idProducto, l.cantidad])),
 )
 
 const hayCambiosSinGuardar = computed(() =>
@@ -109,7 +109,7 @@ async function iniciar() {
   pedidoEditando.value = null
   salidaLibre.value = false
 
-  const id = mesaId.value
+  const id = idMesa.value
   if (id === null) return volverConAviso('La mesa indicada no es válida.')
   let idEditar: number | null = null
   if (route.query.editar !== undefined) {
@@ -121,7 +121,7 @@ async function iniciar() {
     await mesasStore.cargar()
     if (mesasStore.mesas.length === 0 && mesasStore.error) throw new Error(mesasStore.error)
 
-    const encontrada = mesasStore.mesas.find((m) => m.id === id)
+    const encontrada = mesasStore.mesas.find((m) => m.idMesa === id)
     if (!encontrada) return volverConAviso(`La mesa ${id} no existe.`)
     const bloqueo = motivoPedidoBloqueado(encontrada)
     if (bloqueo) return volverConAviso(bloqueo)
@@ -136,12 +136,12 @@ async function iniciar() {
         }
         throw e
       }
-      if (pedido.mesaId !== id) {
-        return volverConAviso(`El pedido #${pedido.id} no pertenece a la mesa ${encontrada.numero}.`)
+      if (pedido.idMesa !== id) {
+        return volverConAviso(`El pedido #${pedido.idPedido} no pertenece a la mesa ${encontrada.numero}.`)
       }
-      if (pedido.estado !== 'registrado') {
+      if (!puedeEditarOEnviar(pedido.estado)) {
         const estado = ETIQUETA_ESTADO_PEDIDO[pedido.estado].toLowerCase()
-        return volverConAviso(`El pedido #${pedido.id} ya no se puede editar: está ${estado}.`)
+        return volverConAviso(`El pedido #${pedido.idPedido} ya no se puede editar: está ${estado}.`)
       }
     }
 
@@ -160,7 +160,7 @@ async function iniciar() {
 // Carga inicial y recarga si cambia la mesa o el pedido a editar. Se ignora al salir hacia otra
 // ruta (ahí los parámetros ya no existen y no hay nada que cargar).
 watch(
-  () => [route.params.mesaId, route.query.editar],
+  () => [route.params.idMesa, route.query.editar],
   () => {
     if (route.name === 'mesero-pedido-mesa') void iniciar()
   },
@@ -175,30 +175,30 @@ function agregar(producto: Producto) {
     return
   }
   establecer(nuevas)
-  anunciar(`${producto.nombre}: ${cantidadDe(nuevas, producto.id)}. ${textoTotal(nuevas)}`)
+  anunciar(`${producto.nombre}: ${cantidadDe(nuevas, producto.idProducto)}. ${textoTotal(nuevas)}`)
 }
 
-function cambiarCantidadLinea(productoId: number, delta: number) {
-  const nuevas = cambiarCantidad(lineas.value, productoId, delta)
+function cambiarCantidadLinea(idProducto: number, delta: number) {
+  const nuevas = cambiarCantidad(lineas.value, idProducto, delta)
   establecer(nuevas)
-  const linea = nuevas.find((l) => l.productoId === productoId)
+  const linea = nuevas.find((l) => l.idProducto === idProducto)
   if (linea) anunciar(`${linea.nombre}: ${linea.cantidad}. ${textoTotal(nuevas)}`)
 }
 
-function quitar(productoId: number) {
-  const nombre = lineas.value.find((l) => l.productoId === productoId)?.nombre ?? 'Producto'
-  const nuevas = quitarLinea(lineas.value, productoId)
+function quitar(idProducto: number) {
+  const nombre = lineas.value.find((l) => l.idProducto === idProducto)?.nombre ?? 'Producto'
+  const nuevas = quitarLinea(lineas.value, idProducto)
   establecer(nuevas)
   anunciar(`${nombre} quitado. ${textoTotal(nuevas)}`)
 }
 
-function cambiarObservaciones(productoId: number, texto: string) {
-  establecer(establecerObservaciones(lineas.value, productoId, texto))
+function cambiarIndicaciones(idProducto: number, texto: string) {
+  establecer(establecerIndicaciones(lineas.value, idProducto, texto))
 }
 
-function usarSugerencia(productoId: number, sugerencia: string) {
-  const actual = lineas.value.find((l) => l.productoId === productoId)?.observaciones ?? ''
-  establecer(establecerObservaciones(lineas.value, productoId, agregarSugerencia(actual, sugerencia)))
+function usarSugerencia(idProducto: number, sugerencia: string) {
+  const actual = lineas.value.find((l) => l.idProducto === idProducto)?.indicaciones ?? ''
+  establecer(establecerIndicaciones(lineas.value, idProducto, agregarSugerencia(actual, sugerencia)))
   anunciar(`Observación agregada: ${sugerencia}.`)
 }
 
@@ -227,7 +227,7 @@ async function abrirRevision() {
 
 /** El pedido ya existe en el servidor: se limpia el borrador y se refresca el panel. */
 function alRegistrarse() {
-  if (mesaId.value !== null && !editando.value) borrador.vaciar(mesaId.value)
+  if (idMesa.value !== null && !editando.value) borrador.vaciar(idMesa.value)
   void mesasStore.cargar()
 }
 
@@ -269,7 +269,7 @@ async function confirmarSiHayCambios(): Promise<boolean> {
 
 onBeforeRouteLeave(confirmarSiHayCambios)
 onBeforeRouteUpdate((a, b) =>
-  a.params.mesaId === b.params.mesaId && a.query.editar === b.query.editar ? true : confirmarSiHayCambios(),
+  a.params.idMesa === b.params.idMesa && a.query.editar === b.query.editar ? true : confirmarSiHayCambios(),
 )
 </script>
 
@@ -318,10 +318,10 @@ onBeforeRouteUpdate((a, b) =>
           :lineas="lineas"
           :total="total"
           :agotados="agotados"
-          :editando-id="pedidoEditando?.id ?? null"
+          :editando-id="pedidoEditando?.idPedido ?? null"
           @cambiar-cantidad="cambiarCantidadLinea"
           @quitar="quitar"
-          @observaciones="cambiarObservaciones"
+          @indicaciones="cambiarIndicaciones"
           @sugerencia="usarSugerencia"
           @revisar="abrirRevision"
         />
@@ -355,10 +355,10 @@ onBeforeRouteUpdate((a, b) =>
           :lineas="lineas"
           :total="total"
           :agotados="agotados"
-          :editando-id="pedidoEditando?.id ?? null"
+          :editando-id="pedidoEditando?.idPedido ?? null"
           @cambiar-cantidad="cambiarCantidadLinea"
           @quitar="quitar"
-          @observaciones="cambiarObservaciones"
+          @indicaciones="cambiarIndicaciones"
           @sugerencia="usarSugerencia"
           @revisar="abrirRevision"
         />
@@ -371,11 +371,11 @@ onBeforeRouteUpdate((a, b) =>
     <RevisionPedido
       v-if="mesa"
       :abierto="revisionAbierta"
-      :mesa-id="mesa.id"
+      :id-mesa="mesa.idMesa"
       :mesa-numero="mesa.numero"
       :lineas="lineasRevision"
       :total="totalEstimado(lineasRevision)"
-      :pedido-id="pedidoEditando?.id ?? null"
+      :id-pedido="pedidoEditando?.idPedido ?? null"
       :origen-foco="origenRevision"
       @modificar="revisionAbierta = false"
       @registrado="alRegistrarse"

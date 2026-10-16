@@ -10,7 +10,7 @@ import { computed, ref } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import { useAnunciosStore } from '../stores/anuncios'
 import { invalidarDatos } from '../stores/invalidar'
-import { ETIQUETA_ESTADO_PEDIDO, type Pedido } from '../types'
+import { estadoParaReglas, ETIQUETA_ESTADO_PEDIDO, type Pedido } from '../types'
 import { formatearHora, formatearMoneda } from '../utils/formato'
 import { crearClaveIdempotencia, esFalloReintentable } from '../utils/idempotencia'
 import { accionesDePedido, PASOS_AVANCE, textoCancelarBloqueado } from '../utils/reglas'
@@ -53,11 +53,12 @@ const ETIQUETA_PASO: Record<string, string> = {
 type FasePaso = 'hecho' | 'actual' | 'pendiente'
 
 const pasos = computed(() => {
-  // Un pedido pagado ya pasó por todos los pasos.
-  const indice = props.pedido.estado === 'pagado' ? PASOS_AVANCE.length : PASOS_AVANCE.indexOf(props.pedido.estado)
-  return PASOS_AVANCE.map((estado, i) => ({
-    estado,
-    texto: ETIQUETA_PASO[estado] ?? estado,
+  // Un pedido pagado ya pasó por todos los pasos; `pendiente` (BD) ocupa el paso de `enviado`.
+  const estado = estadoParaReglas(props.pedido.estado)
+  const indice = estado === 'pagado' ? PASOS_AVANCE.length : PASOS_AVANCE.indexOf(estado)
+  return PASOS_AVANCE.map((paso, i) => ({
+    estado: paso,
+    texto: ETIQUETA_PASO[paso] ?? paso,
     fase: (i < indice ? 'hecho' : i === indice ? 'actual' : 'pendiente') as FasePaso,
   }))
 })
@@ -87,13 +88,13 @@ const rechazo = ref('')
 
 const TEXTOS: Record<Accion, { titulo: (p: Pedido) => string; descripcion: (p: Pedido) => string; confirmar: string }> = {
   enviar: {
-    titulo: (p) => `Enviar el pedido #${p.id} a cocina`,
+    titulo: (p) => `Enviar el pedido #${p.idPedido} a cocina`,
     descripcion: () => 'Después de enviarlo ya no podrás editarlo; solo podrás cancelarlo mientras cocina no lo esté preparando.',
     confirmar: 'Enviar a cocina',
   },
   entregar: {
-    titulo: (p) => `Marcar el pedido #${p.id} como entregado`,
-    descripcion: (p) => `Confirma que el pedido #${p.id} ya llegó a la mesa ${p.mesaNumero}.`,
+    titulo: (p) => `Marcar el pedido #${p.idPedido} como entregado`,
+    descripcion: (p) => `Confirma que el pedido #${p.idPedido} ya llegó a la mesa ${p.mesaNumero}.`,
     confirmar: 'Marcar como entregado',
   },
 }
@@ -116,14 +117,14 @@ async function explicarRechazo(e: ErrorServicio, pedido: Pedido) {
   rechazo.value = e.message
   if (e.codigo === 'estado_invalido') {
     try {
-      const actual = await servicios.pedidos.obtener(pedido.id)
-      rechazo.value = `El pedido #${pedido.id} cambió mientras lo revisabas: ahora está «${ETIQUETA_ESTADO_PEDIDO[actual.estado]}».`
+      const actual = await servicios.pedidos.obtener(pedido.idPedido)
+      rechazo.value = `El pedido #${pedido.idPedido} cambió mientras lo revisabas: ahora está «${ETIQUETA_ESTADO_PEDIDO[actual.estado]}».`
     } catch {
       // Sin red para consultarlo: se queda el mensaje del servidor.
     }
   } else if (e.codigo === 'producto_agotado' && e.faltantes.length > 0) {
     const nombres = e.faltantes
-      .map((f) => pedido.detalle.find((d) => d.productoId === f.productoId)?.nombreProducto ?? `Producto ${f.productoId}`)
+      .map((f) => pedido.detalle.find((d) => d.idProducto === f.idProducto)?.nombreProducto ?? `Producto ${f.idProducto}`)
       .join(', ')
     rechazo.value = `Hay productos agotados: ${nombres}. Edita el pedido para quitarlos.`
   }
@@ -137,12 +138,12 @@ async function confirmarAccion() {
   enCurso.value = true
   errorReintentable.value = ''
   // Misma acción sobre el mismo pedido = reintento (misma clave).
-  const clave = claves.para(`${cual}|${pedido.id}`)
+  const clave = claves.para(`${cual}|${pedido.idPedido}`)
   try {
-    if (cual === 'enviar') await servicios.pedidos.enviar(pedido.id, clave)
-    else await servicios.pedidos.entregar(pedido.id, clave)
+    if (cual === 'enviar') await servicios.pedidos.enviar(pedido.idPedido, clave)
+    else await servicios.pedidos.entregar(pedido.idPedido, clave)
     claves.soltar()
-    void anuncios.anunciar(cual === 'enviar' ? `Pedido #${pedido.id} enviado a cocina` : `Pedido #${pedido.id} entregado`)
+    void anuncios.anunciar(cual === 'enviar' ? `Pedido #${pedido.idPedido} enviado a cocina` : `Pedido #${pedido.idPedido} entregado`)
     await invalidarDatos()
     accion.value = null
   } catch (e) {
@@ -169,8 +170,8 @@ const cancelando = ref(false)
   <article class="detalle" aria-labelledby="detalle-titulo" :data-estado="pedido.estado">
     <header class="detalle__cabecera">
       <div>
-        <h2 id="detalle-titulo" ref="titulo" tabindex="-1">Pedido #{{ pedido.id }}</h2>
-        <p class="detalle__meta">Mesa {{ pedido.mesaNumero }} · {{ formatearHora(pedido.creadoEn) }}</p>
+        <h2 id="detalle-titulo" ref="titulo" tabindex="-1">Pedido #{{ pedido.idPedido }}</h2>
+        <p class="detalle__meta">Mesa {{ pedido.mesaNumero }} · {{ formatearHora(pedido.fechaHora) }}</p>
       </div>
       <InsigniaEstado :tono="pedido.estado" :texto="ETIQUETA_ESTADO_PEDIDO[pedido.estado]" />
     </header>
@@ -180,7 +181,7 @@ const cancelando = ref(false)
       <IconoEstado class="cancelado__icono" tono="cancelado" :tamano="28" />
       <div>
         <strong>Pedido cancelado</strong>
-        <p v-if="pedido.motivoCancelacion">Motivo: {{ pedido.motivoCancelacion }}</p>
+        <p v-if="pedido.motivoDescripcion">Motivo: {{ pedido.motivoDescripcion }}</p>
         <p v-else>El servidor no informó el motivo.</p>
         <p class="cancelado__nota">No suma al total de la cuenta.</p>
       </div>
@@ -207,11 +208,11 @@ const cancelando = ref(false)
     </ol>
 
     <ul class="lineas" aria-label="Productos del pedido">
-      <li v-for="d in pedido.detalle" :key="d.productoId" class="linea" :class="{ 'linea--cancelada': cancelado }">
+      <li v-for="d in pedido.detalle" :key="d.idProducto" class="linea" :class="{ 'linea--cancelada': cancelado }">
         <span class="linea__cantidad numero">{{ d.cantidad }}×</span>
         <span class="linea__nombre">
           {{ d.nombreProducto }}
-          <small v-if="d.observaciones" class="linea__nota">Obs.: {{ d.observaciones }}</small>
+          <small v-if="d.indicaciones" class="linea__nota">Obs.: {{ d.indicaciones }}</small>
         </span>
         <span class="numero">{{ formatearMoneda(d.cantidad * d.precioUnitario) }}</span>
       </li>
@@ -261,7 +262,7 @@ const cancelando = ref(false)
           <RouterLink
             v-if="!motivoEditarBloqueado"
             class="btn btn--secundario"
-            :to="{ name: 'mesero-pedido-mesa', params: { mesaId: pedido.mesaId }, query: { editar: pedido.id } }"
+            :to="{ name: 'mesero-pedido-mesa', params: { idMesa: pedido.idMesa }, query: { editar: pedido.idPedido } }"
           >
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 20h4L19 9l-4-4L4 16z" />

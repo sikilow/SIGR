@@ -3,7 +3,7 @@
 import IconoEstado, { type TonoEstado } from './IconoEstado.vue'
 
 const props = defineProps<{
-  libres: number
+  disponibles: number
   ocupadas: number
   reservadas: number
   pedidosListos: number
@@ -16,7 +16,7 @@ interface Contador {
 }
 
 const contadores = (): Contador[] => [
-  { tono: 'libre', etiqueta: 'Libres', valor: props.libres },
+  { tono: 'disponible', etiqueta: 'Disponibles', valor: props.disponibles },
   { tono: 'ocupada', etiqueta: 'Ocupadas', valor: props.ocupadas },
   { tono: 'reservada', etiqueta: 'Reservadas', valor: props.reservadas },
   { tono: 'listo', etiqueta: 'Pedidos listos por servir', valor: props.pedidosListos },
@@ -57,8 +57,8 @@ const contadores = (): Contador[] => [
   background: var(--color-surface);
 }
 
-.resumen__item--libre {
-  --tono: var(--color-libre);
+.resumen__item--disponible {
+  --tono: var(--color-disponible);
 }
 
 .resumen__item--ocupada {

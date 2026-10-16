@@ -35,7 +35,7 @@ onMounted(() => contenido.value?.focus({ preventScroll: true }))
 // "Mesas" sigue activa en las pantallas de una mesa (/mesero/mesas/:id/...)
 const enMesas = computed(() => route.path.startsWith('/mesero/mesas'))
 
-// "Pedidos" sigue activa en sus pantallas hijas (/mesero/pedidos/:pedidoId)
+// "Pedidos" sigue activa en sus pantallas hijas (/mesero/pedidos/:idPedido)
 const enPedidos = computed(() => route.path.startsWith('/mesero/pedidos'))
 
 const rolVisible = computed(() => (sesion.rol ? ETIQUETA_ROL[sesion.rol] : ''))

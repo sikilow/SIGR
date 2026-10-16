@@ -49,9 +49,9 @@ defineProps<{
   color: var(--tono);
 }
 
-.insignia--libre {
-  --tono: var(--color-libre);
-  --tono-texto: var(--color-libre-texto);
+.insignia--disponible {
+  --tono: var(--color-disponible);
+  --tono-texto: var(--color-disponible-texto);
 }
 
 .insignia--ocupada {
@@ -94,7 +94,9 @@ defineProps<{
   --tono-texto: var(--color-registrado-texto);
 }
 
-.insignia--enviado {
+.insignia--enviado,
+/* `pendiente` (catálogo de la BD) se ve igual que `enviado` */
+.insignia--pendiente {
   --tono: var(--color-enviado);
   --tono-texto: var(--color-enviado-texto);
 }
@@ -117,5 +119,11 @@ defineProps<{
 .insignia--pagado {
   --tono: var(--color-pagado);
   --tono-texto: var(--color-pagado-texto);
+}
+
+/* Estado que la API envió y la interfaz no reconoce: neutro, con ícono y texto */
+.insignia--desconocido {
+  --tono: var(--color-muted);
+  --tono-texto: var(--color-text);
 }
 </style>

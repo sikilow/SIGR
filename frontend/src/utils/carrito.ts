@@ -4,46 +4,46 @@ import type { DetallePedido, LineaNuevoPedido, Producto } from '../types'
 
 /** Línea del carrito: lo mínimo para mostrarla y estimar el total. Los precios NO se envían a la API. */
 export interface LineaCarrito {
-  productoId: number
+  idProducto: number
   nombre: string
   /** Precio visto al agregar; solo sirve para el total ESTIMADO. */
   precioUnitario: number
   cantidad: number
-  observaciones: string
+  indicaciones: string
 }
 
-export const MAX_OBSERVACIONES = 120
+export const MAX_INDICACIONES = 120
 /** Tope por línea para evitar cantidades absurdas por error al tocar. */
 export const MAX_CANTIDAD = 99
 
 export function lineaDesdeProducto(producto: Producto): LineaCarrito {
   return {
-    productoId: producto.id,
+    idProducto: producto.idProducto,
     nombre: producto.nombre,
     precioUnitario: producto.precio,
     cantidad: 1,
-    observaciones: '',
+    indicaciones: '',
   }
 }
 
 /** Convierte el detalle de un pedido existente en líneas editables. */
 export function lineasDesdeDetalle(detalle: DetallePedido[]): LineaCarrito[] {
   return detalle.map((d) => ({
-    productoId: d.productoId,
+    idProducto: d.idProducto,
     nombre: d.nombreProducto,
     precioUnitario: d.precioUnitario,
     cantidad: d.cantidad,
-    observaciones: d.observaciones,
+    indicaciones: d.indicaciones,
   }))
 }
 
 /** Líneas en el formato que espera la API (sin precios). */
 export function aLineasNuevoPedido(lineas: LineaCarrito[]): LineaNuevoPedido[] {
-  return lineas.map((l) => ({ productoId: l.productoId, cantidad: l.cantidad, observaciones: l.observaciones.trim() }))
+  return lineas.map((l) => ({ idProducto: l.idProducto, cantidad: l.cantidad, indicaciones: l.indicaciones.trim() }))
 }
 
-export function cantidadDe(lineas: LineaCarrito[], productoId: number): number {
-  return lineas.find((l) => l.productoId === productoId)?.cantidad ?? 0
+export function cantidadDe(lineas: LineaCarrito[], idProducto: number): number {
+  return lineas.find((l) => l.idProducto === idProducto)?.cantidad ?? 0
 }
 
 /**
@@ -52,39 +52,39 @@ export function cantidadDe(lineas: LineaCarrito[], productoId: number): number {
  */
 export function agregarProducto(lineas: LineaCarrito[], producto: Producto): LineaCarrito[] {
   if (!producto.disponible) return lineas
-  const actual = cantidadDe(lineas, producto.id)
+  const actual = cantidadDe(lineas, producto.idProducto)
   if (actual >= MAX_CANTIDAD) return lineas
   if (actual === 0) return [...lineas, lineaDesdeProducto(producto)]
-  return lineas.map((l) => (l.productoId === producto.id ? { ...l, cantidad: l.cantidad + 1 } : l))
+  return lineas.map((l) => (l.idProducto === producto.idProducto ? { ...l, cantidad: l.cantidad + 1 } : l))
 }
 
 /**
  * Cambia la cantidad en `delta`. Nunca baja de 1 (para quitar un producto se usa `quitarLinea`)
  * ni sube de MAX_CANTIDAD.
  */
-export function cambiarCantidad(lineas: LineaCarrito[], productoId: number, delta: number): LineaCarrito[] {
+export function cambiarCantidad(lineas: LineaCarrito[], idProducto: number, delta: number): LineaCarrito[] {
   return lineas.map((l) =>
-    l.productoId === productoId ? { ...l, cantidad: Math.min(MAX_CANTIDAD, Math.max(1, l.cantidad + delta)) } : l,
+    l.idProducto === idProducto ? { ...l, cantidad: Math.min(MAX_CANTIDAD, Math.max(1, l.cantidad + delta)) } : l,
   )
 }
 
-export function quitarLinea(lineas: LineaCarrito[], productoId: number): LineaCarrito[] {
-  return lineas.filter((l) => l.productoId !== productoId)
+export function quitarLinea(lineas: LineaCarrito[], idProducto: number): LineaCarrito[] {
+  return lineas.filter((l) => l.idProducto !== idProducto)
 }
 
-export function establecerObservaciones(lineas: LineaCarrito[], productoId: number, texto: string): LineaCarrito[] {
-  return lineas.map((l) => (l.productoId === productoId ? { ...l, observaciones: texto.slice(0, MAX_OBSERVACIONES) } : l))
+export function establecerIndicaciones(lineas: LineaCarrito[], idProducto: number, texto: string): LineaCarrito[] {
+  return lineas.map((l) => (l.idProducto === idProducto ? { ...l, indicaciones: texto.slice(0, MAX_INDICACIONES) } : l))
 }
 
 /**
- * Agrega una sugerencia rápida al texto de observaciones (solo rellena el campo; no es un dato
+ * Agrega una sugerencia rápida al texto de indicaciones (solo rellena el campo; no es un dato
  * del modelo). Evita duplicarla y respeta el máximo de caracteres.
  */
 export function agregarSugerencia(textoActual: string, sugerencia: string): string {
   const actual = textoActual.trim()
   if (actual.toLowerCase().includes(sugerencia.toLowerCase())) return textoActual
   const combinado = actual ? `${actual}, ${sugerencia}` : sugerencia
-  return combinado.length <= MAX_OBSERVACIONES ? combinado : textoActual
+  return combinado.length <= MAX_INDICACIONES ? combinado : textoActual
 }
 
 export const subtotalDe = (linea: LineaCarrito): number => linea.cantidad * linea.precioUnitario

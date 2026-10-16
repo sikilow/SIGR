@@ -15,13 +15,13 @@
   --color-error: #b91c1c;
 
   /* Estados de mesa y de pedido (para íconos y bordes; contraste ≥ 3:1 sobre blanco) */
-  --color-libre: #16a34a;
+  --color-disponible: #16a34a;
   --color-ocupada: #dc2626;
   --color-reservada: #2563eb;
   --color-listo: #d97706;
 
   /* Variantes oscuras para TEXTO de estado (contraste AA ≥ 4.5:1 sobre blanco) */
-  --color-libre-texto: #166534;
+  --color-disponible-texto: #166534;
   --color-ocupada-texto: #991b1b;
   --color-reservada-texto: #1e40af;
   --color-listo-texto: #92400e;

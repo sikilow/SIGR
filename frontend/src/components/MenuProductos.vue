@@ -8,7 +8,7 @@ import ProductoCard from './ProductoCard.vue'
 
 const props = defineProps<{
   categorias: CategoriaMenu[]
-  /** Unidades por producto que ya están en el pedido (productoId → cantidad). */
+  /** Unidades por producto que ya están en el pedido (idProducto → cantidad). */
   cantidades: Record<number, number>
 }>()
 
@@ -18,7 +18,7 @@ const seleccionada = ref<number | null>(null)
 const busqueda = ref('')
 
 /** La primera categoría queda seleccionada por defecto. */
-const categoriaActiva = computed(() => seleccionada.value ?? props.categorias[0]?.id ?? null)
+const categoriaActiva = computed(() => seleccionada.value ?? props.categorias[0]?.idCategoria ?? null)
 const buscando = computed(() => busqueda.value.trim() !== '')
 
 /** Minúsculas y sin acentos, para que "cafe" encuentre "Café". */
@@ -31,12 +31,12 @@ const productos = computed<Producto[]>(() => {
     const consulta = normalizar(busqueda.value.trim())
     return props.categorias.flatMap((c) => c.productos).filter((p) => normalizar(p.nombre).includes(consulta))
   }
-  return props.categorias.find((c) => c.id === categoriaActiva.value)?.productos ?? []
+  return props.categorias.find((c) => c.idCategoria === categoriaActiva.value)?.productos ?? []
 })
 
-function elegirCategoria(id: number) {
+function elegirCategoria(idCategoria: number) {
   busqueda.value = ''
-  seleccionada.value = id
+  seleccionada.value = idCategoria
 }
 </script>
 
@@ -57,15 +57,15 @@ function elegirCategoria(id: number) {
       <div class="menu__categorias" role="group" aria-label="Categorías del menú">
         <button
           v-for="categoria in categorias"
-          :key="categoria.id"
+          :key="categoria.idCategoria"
           type="button"
           class="chip"
-          :class="{ 'chip--activo': !buscando && categoria.id === categoriaActiva }"
-          :aria-pressed="!buscando && categoria.id === categoriaActiva"
-          @click="elegirCategoria(categoria.id)"
+          :class="{ 'chip--activo': !buscando && categoria.idCategoria === categoriaActiva }"
+          :aria-pressed="!buscando && categoria.idCategoria === categoriaActiva"
+          @click="elegirCategoria(categoria.idCategoria)"
         >
           <svg
-            v-if="!buscando && categoria.id === categoriaActiva"
+            v-if="!buscando && categoria.idCategoria === categoriaActiva"
             viewBox="0 0 24 24"
             width="18"
             height="18"
@@ -91,8 +91,8 @@ function elegirCategoria(id: number) {
     </p>
 
     <ul v-if="productos.length > 0" class="menu__cuadricula">
-      <li v-for="producto in productos" :key="producto.id">
-        <ProductoCard :producto="producto" :en-pedido="cantidades[producto.id] ?? 0" @agregar="$emit('agregar', $event)" />
+      <li v-for="producto in productos" :key="producto.idProducto">
+        <ProductoCard :producto="producto" :en-pedido="cantidades[producto.idProducto] ?? 0" @agregar="$emit('agregar', $event)" />
       </li>
     </ul>
 

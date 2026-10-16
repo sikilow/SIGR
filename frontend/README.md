@@ -34,8 +34,10 @@ aparece.
 ## Pruebas
 
 `npm test` ejecuta Vitest sobre la lógica sin navegador: reglas de negocio (`utils/reglas.ts`: acciones por
-estado de pedido y cuándo se puede registrar un pedido), carrito, claves de idempotencia, mappers
-snake_case ↔ camelCase y las reglas del mock (cancelar, entregar, solicitar cuenta, `Idempotency-Key`).
+estado de pedido y cuándo se puede registrar un pedido; `pendiente` se trata como `enviado`), carrito, claves de
+idempotencia, la conversión de datos de la API (`conversion.ts`: números, booleanos y fechas MySQL que llegan como
+texto, normalización de estados y roles), los mappers (columnas de la BD en snake_case ↔ camelCase) y las reglas del
+mock (cancelar, entregar, solicitar cuenta, `Idempotency-Key`).
 Los archivos son `src/**/*.test.ts`.
 
 ## Configuración
@@ -64,10 +66,10 @@ src/
 │   ├── interfaces.ts   contratos: Auth, Mesas, Menu, Pedidos, Cuentas
 │   ├── index.ts        elige mock o API según VITE_USE_MOCK
 │   ├── mock/           datos en memoria, retraso de 300 ms
-│   └── api/            cliente fetch + mappers.ts (único mapeo snake_case ↔ camelCase)
+│   └── api/            cliente fetch + mappers.ts (único mapeo JSON de la API ↔ tipos) + conversion.ts (PDO/MySQL)
 ├── stores/        Pinia (sesión, mesas, pedidos, cuenta, borrador, anuncios)
 ├── styles/        tokens.css (variables) y base.css
-├── types/         tipos del dominio (PROVISIONAL)
+├── types/         tipos del dominio con los nombres de la BD; estados.ts = fuente de verdad de los estados
 ├── utils/         reglas de negocio de la interfaz, formato e idempotencia
 └── views/         LoginView y views/mesero/*
 ```
@@ -81,12 +83,13 @@ Pantalla de inicio del mesero y punto de partida hacia Pedido de mesa, Cuenta de
 
 - **Tarjetas de mesa** (`MesaCard`): número, capacidad y estado con ícono + texto. Las ocupadas
   muestran pedidos activos, total acumulado y los avisos "Pedido listo" y "Cuenta solicitada".
-  Libres y reservadas se ven atenuadas. Toda la tarjeta es un botón.
-- **Resumen y filtros:** contadores por estado y chips Todas / Libres / Ocupadas / Reservadas /
-  Pedido listo (`aria-pressed`). El filtro vive en la URL: `?estado=libre|ocupada|reservada|listo`.
+  Disponibles y reservadas se ven atenuadas. Toda la tarjeta es un botón.
+- **Resumen y filtros:** contadores por estado y chips Todas / Disponibles / Ocupadas / Reservadas /
+  Pedido listo (`aria-pressed`). El filtro vive en la URL: `?estado=disponible|ocupada|reservada|listo`
+  (`?estado=libre`, el nombre anterior, se sigue aceptando como alias de `disponible`).
 - **Hoja de acciones** (`HojaAccionesMesa`, `<dialog>` modal): una mesa **ocupada** ofrece Nuevo
   pedido, Ver cuenta y Pedidos de la mesa (Nuevo pedido se bloquea si la cuenta está `por_pagar`).
-  Una mesa libre o reservada solo se puede cerrar: la hostess la asigna. Foco atrapado, Escape
+  Una mesa disponible o reservada solo se puede cerrar: la hostess la asigna. Foco atrapado, Escape
   cierra y el foco regresa a la tarjeta.
 - **Actualización automática** (`usePolling`, store `stores/mesas.ts`): cada `VITE_POLL_MS` ms, en
   pausa con la pestaña oculta, sin peticiones encimadas y con botón de actualizar manual. Si falla
@@ -95,21 +98,22 @@ Pantalla de inicio del mesero y punto de partida hacia Pedido de mesa, Cuenta de
   desactiva con `prefers-reduced-motion`).
 - **Mock:** a los ~30 s la mesa 5 pasa a "Pedido listo"; la mesa 11 pasa por preparación y queda
   lista a los ~60 s (ver `services/mock/simulacion.ts`).
-- **API:** el panel necesita campos nuevos en `GET /mesas`; ver "CAMBIO PROPUESTO EN F3" en el contrato.
+- **API:** el panel necesita en `GET /mesas` los campos calculados `estado_cuenta`, `pedidos_activos`, `total_cuenta` y
+  `pedidos_listos` (no son columnas); ver el contrato.
 
-## Pedido de mesa (`/mesero/mesas/:mesaId/pedido`)
+## Pedido de mesa (`/mesero/mesas/:idMesa/pedido`)
 
 Se llega desde la hoja de acciones del panel ("Nuevo pedido"). Arma un pedido, lo revisa, lo
-registra y lo envía a cocina; con `?editar=:pedidoId` edita un pedido `registrado`.
+registra y lo envía a cocina; con `?editar=:idPedido` edita un pedido `registrado`.
 
 - **Guardia:** al entrar carga la mesa. Si no existe, no está ocupada o su cuenta está `por_pagar`,
   vuelve al panel con un aviso (banner + región `aria-live` del layout). Los parámetros se validan
-  (`mesaId` numérico en la ruta; `editar` entero positivo).
+  (`idMesa` numérico en la ruta; `editar` entero positivo).
 - **Menú** (`MenuProductos`, `ProductoCard`): chips de categoría (`aria-pressed`, la primera
   seleccionada), búsqueda por nombre en todas las categorías (sin importar acentos) y tarjetas con
   precio. **El menú no maneja cantidades en existencia:** un producto disponible no lleva
   insignia y uno agotado muestra "Agotado"; un agotado queda `aria-disabled` con el motivo escrito y no se puede agregar.
-- **Pedido actual** (`PedidoActual`): líneas con cantidad (− / +, mínimo 1), observaciones (máx. 120
+- **Pedido actual** (`PedidoActual`): líneas con cantidad (− / +, mínimo 1), observaciones (`indicaciones` en la BD; máx. 120
   caracteres, con atajos "Sin cebolla", "Extra queso" y "Sin picante" que solo rellenan el texto),
   "Quitar" con confirmación breve y total **estimado**. Los cambios y el total se anuncian en una
   región `aria-live`. En 768 px la columna pasa a una barra inferior con "Ver pedido" (diálogo modal).
@@ -119,10 +123,10 @@ registra y lo envía a cocina; con `?editar=:pedidoId` edita un pedido `registra
   registrado y "Reintentar envío" repite **solo** el envío (no se duplica).
 - **Confirmación** (`ConfirmacionPedido`): número, estado y total reales del servidor, y los
   caminos "Volver al panel", "Nuevo pedido en esta mesa" y "Ver cuenta".
-- **Borrador por mesa** (`stores/pedidoBorrador.ts`, en `sessionStorage`): al salir con productos sin
-  registrar se pide confirmación; se limpia al registrar.
+- **Borrador por mesa** (`stores/pedidoBorrador.ts`, en `sessionStorage`, clave `sigr.borradores.v2`; la clave
+  anterior se elimina): al salir con productos sin registrar se pide confirmación; se limpia al registrar.
 - **Edición:** solo pedidos `registrado` de esa mesa; "Guardar cambios" usa `PATCH /pedidos/{id}`
-  (propuesto en el contrato como CAMBIO PROPUESTO EN F4).
+  (propuesto en el contrato). Ojo: el catálogo de la BD no tiene `Registrado` (ver el contrato).
 
 ### Probar fallos con el mock
 
@@ -145,7 +149,7 @@ const m = await import('/src/services/mock/baseDatos.ts')
 m.baseDatos.categorias.flatMap((c) => c.productos).find((p) => p.nombre.startsWith('Tacos')).disponible = false
 ```
 
-## Cuenta de mesa (`/mesero/mesas/:mesaId/cuenta`)
+## Cuenta de mesa (`/mesero/mesas/:idMesa/cuenta`)
 
 Se llega desde "Ver cuenta" de la hoja de acciones del panel y desde la confirmación de un pedido.
 
@@ -154,9 +158,9 @@ Se llega desde "Ver cuenta" de la hoja de acciones del panel y desde la confirma
 - **Encabezado:** "Mesa N", estado de la cuenta con ícono + texto (Abierta, o "Por pagar · Pago físico")
   y cantidad de pedidos (y cuántos están cancelados).
 - **Pedidos** (una tarjeta cada uno): número, hora, estado, líneas (cantidad × producto, observaciones,
-  subtotal) y subtotal del pedido; "Ver detalle" lleva a `/mesero/pedidos/:pedidoId`. Un pedido
+  subtotal) y subtotal del pedido; "Ver detalle" lleva a `/mesero/pedidos/:idPedido`. Un pedido
   **cancelado** va atenuado y tachado, con la etiqueta "No suma al total" y su motivo. Los pedidos
-  `registrado` y `enviado` ofrecen "Cancelar pedido" (en preparación queda bloqueado con "Requiere
+  `registrado` y `enviado` (o `pendiente`) ofrecen "Cancelar pedido" (en preparación queda bloqueado con "Requiere
   autorización del gerente").
 - **Total** grande en una barra fija ("$1,250.00 MXN"), **tomado de la respuesta del servidor**: el
   cliente no recalcula (solo calcula `cantidad × precio` por línea para mostrarla).
@@ -173,14 +177,14 @@ Se llega desde "Ver cuenta" de la hoja de acciones del panel y desde la confirma
   la cuenta ya no estaba abierta (`estado_invalido`) se explica y se recarga.
 - **Actualización automática:** `usePolling` + `stores/cuenta.ts`, igual que el panel.
 
-## Mis pedidos (`/mesero/pedidos` y `/mesero/pedidos/:pedidoId`)
+## Mis pedidos (`/mesero/pedidos` y `/mesero/pedidos/:idPedido`)
 
 - **Lista:** número, mesa, hora, estado, cantidad de productos y total. Chips con `aria-pressed`
   reflejados en la URL: Activos (por defecto: todo menos cancelado y pagado), Registrado, Enviado, En
-  preparación, Listo, Entregado y Cancelado (`?estado=listo`). Con `?mesa=:mesaId` aparece el chip
+  preparación, Listo, Entregado y Cancelado (`?estado=listo`). Con `?mesa=:idMesa` aparece el chip
   "Mesa N ×" que lo quita. Orden: primero los listos, luego los más recientes. Estados de carga, error
   con "Reintentar" y vacío por filtro.
-- **Diseño:** a 1024 px o más, lista a la izquierda y detalle a la derecha (la ruta con `:pedidoId`
+- **Diseño:** a 1024 px o más, lista a la izquierda y detalle a la derecha (la ruta con `:idPedido`
   selecciona el pedido sin perder la lista); por debajo de 1024 px el detalle es una pantalla aparte con
   "Volver a pedidos" (el foco pasa al detalle y, al volver, a la fila). El enlace "Pedidos" de la
   navegación inferior sigue activo en las pantallas hijas.
@@ -191,8 +195,8 @@ Se llega desde "Ver cuenta" de la hoja de acciones del panel y desde la confirma
 
   | Estado | Acciones |
   |---|---|
-  | `registrado` | Editar (`/mesero/mesas/:mesaId/pedido?editar=:id`), Enviar a cocina (con confirmación breve), Cancelar pedido |
-  | `enviado` | Cancelar pedido |
+  | `registrado` | Editar (`/mesero/mesas/:idMesa/pedido?editar=:id`), Enviar a cocina (con confirmación breve), Cancelar pedido |
+  | `enviado` o `pendiente` (BD) | Cancelar pedido |
   | `en_preparacion` | Cancelar pedido bloqueado (`aria-disabled`) con "Requiere autorización del gerente" visible |
   | `listo` | Marcar como entregado (con confirmación breve; `POST /pedidos/{id}/entregar`, propuesto) |
   | `entregado`, `pagado`, `cancelado` | solo lectura |
@@ -205,7 +209,7 @@ Se llega desde "Ver cuenta" de la hoja de acciones del panel y desde la confirma
 ## Cancelar pedido (`CancelarPedidoDialog`)
 
 Diálogo modal reutilizado desde Mis pedidos y Cuenta de mesa: resumen del pedido, aviso "Esta acción no
-se puede deshacer", **motivo obligatorio** (texto de 5 a 200 caracteres con contador) y atajos que solo
+se puede deshacer", **motivo obligatorio** (texto de 5 a 180 caracteres con contador, el largo de `motivo_cancelacion.descripcion`) y atajos que solo
 rellenan el texto. Botones "No cancelar" y "Cancelar pedido" (destructivo: `--color-peligro`, siempre con
 texto + ícono). Éxito: aviso "Pedido #N cancelado", recarga de pedidos, cuenta y mesas, y el foco vuelve
 al botón de origen (o al encabezado si ese botón ya no existe). Errores: `requiere_gerente` y
@@ -217,7 +221,7 @@ Cada intención del usuario (registrar pedido, enviar, cancelar, solicitar cuent
 genera un UUID que viaja en la cabecera `Idempotency-Key` (`utils/idempotencia.ts`). Los reintentos de la
 **misma** intención reutilizan la clave; una intención nueva genera otra. Solo se reutiliza cuando el
 resultado es desconocido (sin conexión o error inesperado); un rechazo claro del servidor cierra la
-intención. El mock devuelve el resultado anterior si la clave ya se usó. Es un **CAMBIO PROPUESTO EN F5**
+intención. El mock devuelve el resultado anterior si la clave ya se usó. Es una propuesta
 que el servidor debe aceptar y permitir en CORS (ver contrato y pregunta abierta 12).
 
 ## Diseño
@@ -232,7 +236,8 @@ que el servidor debe aceptar y permitir en CORS (ver contrato y pregunta abierta
 
 | Documento | Para qué sirve |
 |---|---|
-| [`../docs/contrato-api-mesero.md`](../docs/contrato-api-mesero.md) | Contrato de API que espera el frontend: endpoints, JSON de ejemplo, cambios propuestos y preguntas abiertas |
+| [`../docs/equivalencias-bd.md`](../docs/equivalencias-bd.md) | Cada identificador del frontend frente a su tabla y columna de la BD, su nombre en TypeScript y en el JSON, y si es columna, calculado por la API o sin columna |
+| [`../docs/contrato-api-mesero.md`](../docs/contrato-api-mesero.md) | Contrato de API que espera el frontend (con los nombres de columna de la BD): endpoints, JSON de ejemplo, preguntas abiertas y diferencias con la BD |
 | [`../docs/integracion-api.md`](../docs/integracion-api.md) | Guía para conectar la API real: `VITE_USE_MOCK`, proxy de Vite/CORS, orden de integración, pruebas manuales y tabla de diferencias |
 | [`../docs/pantallas-mesero.md`](../docs/pantallas-mesero.md) | Pantallas, rutas y caso de uso de cada una, con capturas (`../docs/capturas/`, datos simulados) |
 

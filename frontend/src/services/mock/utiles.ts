@@ -37,7 +37,7 @@ export function consumirFalloSimulado(clave: string): boolean {
 const resultadosPorClave = new Map<string, unknown>()
 
 /**
- * Como `conRetraso`, pero respeta `Idempotency-Key` (CAMBIO PROPUESTO EN F5): si la clave ya se usó,
+ * Como `conRetraso`, pero respeta `Idempotency-Key`: si la clave ya se usó,
  * devuelve el resultado anterior en vez de repetir la acción. Solo se guardan los éxitos; un error
  * (p. ej. `estado_invalido`) no consume la clave.
  *
