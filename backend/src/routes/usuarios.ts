@@ -12,6 +12,11 @@ export const usuariosRouter = Router();
 usuariosRouter.use(requiereAuth("gerente"));
 
 const ROLES = ["gerente", "mesero", "cocinero", "cajero", "hostess"] as const;
+// `rol` llega como el nombre del catálogo ("Mesero") o en minúsculas ("mesero").
+const Rol = z
+  .string()
+  .transform((r) => r.trim().toLowerCase())
+  .pipe(z.enum(ROLES));
 
 const Texto = (max: number) => z.string().trim().min(1, "es obligatorio").max(max, `máximo ${max} caracteres`);
 const Correo = z
@@ -28,12 +33,15 @@ const NombreUsuario = z
 // bcrypt solo usa los primeros 72 bytes: se limita para que no haya contraseñas "recortadas" sin avisar.
 const Contrasena = z.string().min(6, "mínimo 6 caracteres").max(72, "máximo 72 caracteres");
 
+/** Claves = columnas: usuario.*, credenciales.nombre_usuario/ultimo_acceso, perfil_usuario.telefono. `rol` es calculado (rol.nombre). */
 export interface UsuarioAdminDto {
-  id: number;
+  id_usuario: number;
+  id_rol: number;
   nombre: string;
   correo: string;
-  usuario: string;
-  rol: (typeof ROLES)[number];
+  nombre_usuario: string;
+  /** Calculado: rol.nombre (JOIN), p. ej. "Mesero". */
+  rol: string;
   activo: boolean;
   telefono: string | null;
   creado_en: string;
@@ -41,7 +49,7 @@ export interface UsuarioAdminDto {
 }
 
 const SELECT_USUARIO = `
-  SELECT u.id_usuario AS id, u.nombre, u.correo, c.nombre_usuario AS usuario, r.nombre AS rol, u.activo,
+  SELECT u.id_usuario, u.id_rol, u.nombre, u.correo, c.nombre_usuario, r.nombre AS rol, u.activo,
          p.telefono, u.creado_en, c.ultimo_acceso
     FROM usuario u
     JOIN rol r ON r.id_rol = u.id_rol
@@ -50,15 +58,17 @@ const SELECT_USUARIO = `
 
 function aDto(r: Record<string, unknown>): UsuarioAdminDto {
   return {
-    id: r.id as number,
+    id_usuario: r.id_usuario as number,
+    id_rol: r.id_rol as number,
     nombre: r.nombre as string,
     correo: r.correo as string,
-    usuario: (r.usuario as string | null) ?? "",
-    rol: (r.rol as string).toLowerCase() as UsuarioAdminDto["rol"],
+    nombre_usuario: (r.nombre_usuario as string | null) ?? "",
+    rol: r.rol as string,
     activo: Boolean(r.activo),
     telefono: (r.telefono as string | null) ?? null,
-    creado_en: (r.creado_en as Date).toISOString(),
-    ultimo_acceso: r.ultimo_acceso ? (r.ultimo_acceso as Date).toISOString() : null,
+    // DATETIME tal cual ("2026-10-15 16:34:00"); el pool usa dateStrings.
+    creado_en: r.creado_en as string,
+    ultimo_acceso: (r.ultimo_acceso as string | null) ?? null,
   };
 }
 
@@ -92,9 +102,9 @@ usuariosRouter.get("/", async (_req, res) => {
 const Crear = z.object({
   nombre: Texto(100),
   correo: Correo,
-  usuario: NombreUsuario,
+  nombre_usuario: NombreUsuario,
   contrasena: Contrasena,
-  rol: z.enum(ROLES),
+  rol: Rol,
   telefono: z.string().trim().max(20).optional(),
 });
 
@@ -104,7 +114,7 @@ usuariosRouter.post("/", async (req, res) => {
   const hash = await bcrypt.hash(d.contrasena, 10);
 
   const id = await transaccion(async (cx) => {
-    const [existe] = await filas(cx, "SELECT 1 AS x FROM credenciales WHERE nombre_usuario = ?", [d.usuario]);
+    const [existe] = await filas(cx, "SELECT 1 AS x FROM credenciales WHERE nombre_usuario = ?", [d.nombre_usuario]);
     if (existe) throw new ErrorApi(409, "estado_invalido", "Ya existe otro usuario con ese nombre de usuario.");
     try {
       const u = await ejecutar(cx, "INSERT INTO usuario (id_rol, nombre, correo) VALUES (?, ?, ?)", [
@@ -114,7 +124,7 @@ usuariosRouter.post("/", async (req, res) => {
       ]);
       await ejecutar(cx, "INSERT INTO credenciales (id_usuario, nombre_usuario, password_hash) VALUES (?, ?, ?)", [
         u.insertId,
-        d.usuario,
+        d.nombre_usuario,
         hash,
       ]);
       await ejecutar(cx, "INSERT INTO perfil_usuario (id_usuario, telefono) VALUES (?, ?)", [
@@ -134,8 +144,8 @@ const Editar = z
   .object({
     nombre: Texto(100),
     correo: Correo,
-    usuario: NombreUsuario,
-    rol: z.enum(ROLES),
+    nombre_usuario: NombreUsuario,
+    rol: Rol,
     activo: z.boolean(),
     telefono: z.string().trim().max(20).nullable(),
   })
@@ -190,8 +200,8 @@ usuariosRouter.patch("/:id", async (req, res) => {
       if (d.rol !== undefined) (sets.push("id_rol = ?"), params.push(await idRol(cx, d.rol)));
       if (sets.length > 0) await ejecutar(cx, `UPDATE usuario SET ${sets.join(", ")} WHERE id_usuario = ?`, [...params, id]);
 
-      if (d.usuario !== undefined) {
-        await ejecutar(cx, "UPDATE credenciales SET nombre_usuario = ? WHERE id_usuario = ?", [d.usuario, id]);
+      if (d.nombre_usuario !== undefined) {
+        await ejecutar(cx, "UPDATE credenciales SET nombre_usuario = ? WHERE id_usuario = ?", [d.nombre_usuario, id]);
       }
       if (d.telefono !== undefined) {
         await ejecutar(

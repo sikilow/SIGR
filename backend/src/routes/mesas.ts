@@ -8,14 +8,15 @@ import { requiereAuth } from "../middlewares/auth";
 export const mesasRouter = Router();
 
 /**
- * GET /api/mesas
- * Cada mesa trae el resumen de su cuenta activa (la que no está cerrada), que el Panel de mesas necesita:
- * estado_cuenta, pedidos_activos (no cancelados ni pagados), total_cuenta (sin cancelados) y pedidos_listos.
+ * GET /api/mesas  →  [{ id_mesa, numero, capacidad, estado, ... }]
+ * Las primeras cuatro son columnas de `mesa`. El resto es el resumen CALCULADO de su cuenta activa (la que no
+ * está cerrada), que el Panel de mesas necesita: estado_cuenta, pedidos_activos (no cancelados ni pagados),
+ * total_cuenta (sin cancelados) y pedidos_listos. tipo_pago_solicitado es la columna de `cuenta`.
  */
 mesasRouter.get("/", requiereAuth(), async (_req, res) => {
   const rows = await filas(
     pool,
-    `SELECT m.id_mesa AS id, m.numero, m.capacidad, m.estado,
+    `SELECT m.id_mesa, m.numero, m.capacidad, m.estado,
             c.estado AS estado_cuenta, c.tipo_pago_solicitado,
             COALESCE(pa.pedidos_activos, 0) AS pedidos_activos,
             COALESCE(pa.pedidos_listos, 0)  AS pedidos_listos,
@@ -42,7 +43,7 @@ mesasRouter.get("/", requiereAuth(), async (_req, res) => {
 
   res.json(
     rows.map((r) => ({
-      id: r.id as number,
+      id_mesa: r.id_mesa as number,
       numero: r.numero as number,
       capacidad: r.capacidad as number,
       estado: r.estado as string,
@@ -68,6 +69,7 @@ mesasRouter.get("/:id/cuenta", requiereAuth(), async (req, res) => {
   res.json(cuenta);
 });
 
+// Valores de mesa.estado que permite el CHECK de schema.sql (libre, ocupada, reservada).
 const CambioEstado = z.object({ estado: z.enum(["libre", "ocupada", "reservada"]) });
 
 /**
@@ -88,5 +90,5 @@ mesasRouter.patch("/:id/estado", requiereAuth("hostess", "gerente"), async (req,
   }
 
   await ejecutar(pool, "UPDATE mesa SET estado = ? WHERE id_mesa = ?", [estado, mesaId]);
-  res.json({ id: mesaId, estado });
+  res.json({ id_mesa: mesaId, estado });
 });
