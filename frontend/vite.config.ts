@@ -17,13 +17,12 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       // Proxy opcional: solo se activa si se define API_PROXY_TARGET.
-      // Evita CORS en desarrollo; `/api/mesas` llega al destino como `/mesas`.
+      // Conserva el prefijo `/api`, que forma parte de las rutas del backend.
       proxy: env.API_PROXY_TARGET
         ? {
             [prefijoApi]: {
               target: env.API_PROXY_TARGET,
               changeOrigin: true,
-              rewrite: (ruta: string) => ruta.slice(prefijoApi.length) || '/',
             },
           }
         : undefined,

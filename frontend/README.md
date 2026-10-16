@@ -11,7 +11,8 @@ API son **PROVISIONALES** hasta validarlos con el equipo de API.
 
 ```bash
 npm install        # instalar dependencias
-npm run dev        # servidor de desarrollo (http://localhost:5173)
+npm run dev        # desarrollo conectado a la API local (http://localhost:5173 -> backend :3000)
+npm run dev:demo   # servidor de desarrollo con datos simulados
 npm run build      # tipos (vue-tsc) + build; usa el mock salvo que VITE_USE_MOCK=false
 npm run build:api  # igual, pero con la API real (VITE_USE_MOCK=false, ver .env.api): sin mock ni franja demo
 npm test           # pruebas automáticas (Vitest)
@@ -22,6 +23,12 @@ npm run preview    # servir el build
 **`build` vs `build:api`:** `npm run build` genera el paquete para demostraciones con datos simulados
 (incluye el mock y muestra la franja "Modo demo"). `npm run build:api` es el que se entrega junto con la
 API real: el mock y sus usuarios de prueba **no viajan** en el paquete.
+
+Para usar la API mientras desarrollas, inicia el backend (`cd backend && npm run dev`) y el frontend
+en otra terminal con `npm run dev`. Ese comando carga `.env.api`, desactiva el mock y configura el proxy
+de Vite hacia `http://localhost:3000`. Los usuarios que crees se guardan en MySQL y no se pierden al
+recargar. Para volver a los datos simulados, usa `npm run dev:demo`. Si el backend usa otro puerto,
+ajusta `API_PROXY_TARGET` en `.env.api.local`.
 
 ## Modo demo
 
