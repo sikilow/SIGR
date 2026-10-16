@@ -12,6 +12,7 @@ import {
   MAX_CANTIDAD,
   MAX_OBSERVACIONES,
   quitarLinea,
+  topeCantidad,
   totalEstimado,
   totalUnidades,
   type LineaCarrito,
@@ -103,5 +104,52 @@ describe('carrito: edición de un pedido existente', () => {
     expect(lineas).toEqual([{ productoId: 14, nombre: 'Café de olla', precioUnitario: 40, cantidad: 2, observaciones: '' }])
     expect(carritosIguales(lineas, lineasDesdeDetalle(detalle))).toBe(true)
     expect(carritosIguales(lineas, cambiarCantidad(lineas, 14, 1))).toBe(false)
+  })
+})
+
+describe('carrito: tope por existencia', () => {
+  // Cerveza viene embotellada: controla existencia (quedan 2). El taco se prepara al momento: sin existencia.
+  const cerveza: Producto = { id: 15, categoriaId: 4, nombre: 'Cerveza artesanal', descripcion: '', precio: 75, disponible: true, existencia: 2 }
+
+  it('topeCantidad: sin existencia usa el máximo general; con existencia, lo que hay (sin pasar del máximo)', () => {
+    expect(topeCantidad(undefined)).toBe(MAX_CANTIDAD)
+    expect(topeCantidad(5)).toBe(5)
+    expect(topeCantidad(5000)).toBe(MAX_CANTIDAD)
+    expect(topeCantidad(0)).toBe(0)
+  })
+
+  it('no deja agregar más unidades de las que hay en existencia', () => {
+    const una = agregarProducto([], cerveza)
+    const dos = agregarProducto(una, cerveza)
+    expect(cantidadDe(dos, 15)).toBe(2)
+    const tres = agregarProducto(dos, cerveza)
+    expect(tres).toBe(dos) // mismo arreglo: no cambió nada
+    expect(cantidadDe(tres, 15)).toBe(2)
+  })
+
+  it('lo que se prepara al momento (sin existencia) no tiene tope por existencia', () => {
+    let lineas: LineaCarrito[] = []
+    for (let i = 0; i < 50; i++) lineas = agregarProducto(lineas, taco)
+    expect(cantidadDe(lineas, 16)).toBe(50)
+  })
+
+  it('con existencia justa se puede pedir todo lo que hay y ni una más', () => {
+    const ultima: Producto = { ...cerveza, existencia: 1 }
+    const una = agregarProducto([], ultima)
+    expect(cantidadDe(una, 15)).toBe(1)
+    expect(agregarProducto(una, ultima)).toBe(una)
+  })
+
+  it('cambiarCantidad respeta el máximo indicado y nunca baja de 1', () => {
+    const dos = agregarProducto(agregarProducto([], cerveza), cerveza)
+    expect(cantidadDe(cambiarCantidad(dos, 15, 1, topeCantidad(2)), 15)).toBe(2) // ya está en el tope
+    expect(cantidadDe(cambiarCantidad(dos, 15, -1, topeCantidad(2)), 15)).toBe(1)
+    expect(cantidadDe(cambiarCantidad(dos, 15, -5, topeCantidad(2)), 15)).toBe(1)
+  })
+
+  it('si la existencia bajó después de agregar, "−" deja la línea dentro del nuevo tope', () => {
+    const cinco = cambiarCantidad(agregarProducto([], taco), 16, 4) // 5 unidades
+    expect(cantidadDe(cinco, 16)).toBe(5)
+    expect(cantidadDe(cambiarCantidad(cinco, 16, -1, topeCantidad(3)), 16)).toBe(3)
   })
 })

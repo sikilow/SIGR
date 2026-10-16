@@ -109,13 +109,15 @@ interface ProductoAdminDto {
   activo: boolean;
   existencia: number;
   stock_minimo: number;
-  /** Lo que ve el mesero: activo Y con existencia > 0. */
+  /** false = se prepara al momento: no tiene existencia que controlar (el mesero puede pedir cualquier cantidad). */
+  controla_existencia: boolean;
+  /** Lo que ve el mesero: activo Y (no controla existencia O existencia > 0). */
   disponible: boolean;
 }
 
 const SELECT_PRODUCTO = `
   SELECT p.id_producto AS id, p.id_categoria AS categoria_id, c.nombre AS categoria, p.nombre,
-         COALESCE(p.descripcion, '') AS descripcion, p.precio, p.disponible AS activo,
+         COALESCE(p.descripcion, '') AS descripcion, p.precio, p.disponible AS activo, p.controla_existencia,
          COALESCE(i.existencia, 0) AS existencia, COALESCE(i.stock_minimo, 0) AS stock_minimo
     FROM producto p
     JOIN categoria_menu c ON c.id_categoria = p.id_categoria
@@ -124,6 +126,7 @@ const SELECT_PRODUCTO = `
 function aProductoDto(f: Record<string, unknown>): ProductoAdminDto {
   const activo = Boolean(f.activo);
   const existencia = Number(f.existencia);
+  const controla = Boolean(f.controla_existencia);
   return {
     id: f.id as number,
     categoria_id: f.categoria_id as number,
@@ -134,7 +137,8 @@ function aProductoDto(f: Record<string, unknown>): ProductoAdminDto {
     activo,
     existencia,
     stock_minimo: Number(f.stock_minimo),
-    disponible: activo && existencia > 0,
+    controla_existencia: controla,
+    disponible: activo && (!controla || existencia > 0),
   };
 }
 
@@ -170,6 +174,8 @@ const CrearProducto = z.object({
   activo: z.boolean().optional(),
   existencia: Entero.optional(),
   stock_minimo: Entero.optional(),
+  /** Por defecto true. false = se prepara al momento (sin existencia que contar). */
+  controla_existencia: z.boolean().optional(),
 });
 
 /** POST /api/catalogo/productos  →  201. Crea el producto y su fila de inventario en una transacción. */
@@ -179,8 +185,8 @@ catalogoRouter.post("/productos", async (req, res) => {
     await exigirCategoria(cx, d.categoria_id);
     const p = await ejecutar(
       cx,
-      "INSERT INTO producto (id_categoria, nombre, descripcion, precio, disponible) VALUES (?, ?, ?, ?, ?)",
-      [d.categoria_id, d.nombre, d.descripcion || null, d.precio, d.activo ?? true],
+      "INSERT INTO producto (id_categoria, nombre, descripcion, precio, disponible, controla_existencia) VALUES (?, ?, ?, ?, ?, ?)",
+      [d.categoria_id, d.nombre, d.descripcion || null, d.precio, d.activo ?? true, d.controla_existencia ?? true],
     );
     await ejecutar(cx, "INSERT INTO disponibilidadProducto (id_producto, existencia, stock_minimo) VALUES (?, ?, ?)", [
       p.insertId,
@@ -201,6 +207,7 @@ const EditarProducto = z
     activo: z.boolean(),
     existencia: Entero,
     stock_minimo: Entero,
+    controla_existencia: z.boolean(),
   })
   .partial();
 
@@ -226,6 +233,7 @@ catalogoRouter.patch("/productos/:id", async (req, res) => {
     if (d.descripcion !== undefined) (sets.push("descripcion = ?"), params.push(d.descripcion || null));
     if (d.precio !== undefined) (sets.push("precio = ?"), params.push(d.precio));
     if (d.activo !== undefined) (sets.push("disponible = ?"), params.push(d.activo));
+    if (d.controla_existencia !== undefined) (sets.push("controla_existencia = ?"), params.push(d.controla_existencia));
     if (sets.length > 0) await ejecutar(cx, `UPDATE producto SET ${sets.join(", ")} WHERE id_producto = ?`, [...params, id]);
 
     if (d.existencia !== undefined || d.stock_minimo !== undefined) {

@@ -73,7 +73,8 @@ export async function idMotivoTexto(ex: Ejecutor, texto: string): Promise<number
 }
 
 // ---------- Productos y disponibilidad ----------
-// Un producto está disponible si está activo (producto.disponible) Y tiene existencia > 0.
+// Un producto está disponible si está activo (producto.disponible) Y (no controla existencia O tiene existencia > 0).
+// `controla_existencia = FALSE` es para lo que se prepara al momento: no tiene existencia que contar.
 export interface ProductoPrecio {
   id: number;
   nombre: string;
@@ -87,7 +88,7 @@ export async function productosPorId(ex: Ejecutor, ids: number[]): Promise<Map<n
   const rows = await filas(
     ex,
     `SELECT p.id_producto AS id, p.nombre, p.precio,
-            (p.disponible AND COALESCE(i.existencia, 0) > 0) AS disponible
+            (p.disponible AND (p.controla_existencia = 0 OR COALESCE(i.existencia, 0) > 0)) AS disponible
        FROM producto p
        LEFT JOIN disponibilidadProducto i ON i.id_producto = p.id_producto
       WHERE p.id_producto IN (?)`,
@@ -120,6 +121,7 @@ export async function exigirDisponibles(ex: Ejecutor, ids: number[]): Promise<Ma
 // ---------- Existencia (inventario) ----------
 // La existencia se DESCUENTA al enviar el pedido a cocina y se DEVUELVE si se cancela después de enviarlo.
 // Mientras el pedido solo está `registrado` no se descuenta (solo se avisa si ya no alcanza).
+// Solo cuentan los productos con `controla_existencia`: lo que se prepara al momento no se limita ni se descuenta.
 export interface LineaCantidad {
   producto_id: number;
   cantidad: number;
@@ -143,22 +145,38 @@ export async function verificarExistencia(ex: Ejecutor, lineas: LineaCantidad[],
   const ids = [...pedidas.keys()].sort((a, b) => a - b);
   if (ids.length === 0) return;
 
-  const inventario = await filas(
+  const productos = await filas(
     ex,
-    `SELECT id_producto, existencia FROM disponibilidadProducto WHERE id_producto IN (?) ORDER BY id_producto${descontar ? " FOR UPDATE" : ""}`,
+    "SELECT id_producto, nombre, disponible, controla_existencia FROM producto WHERE id_producto IN (?)",
     [ids],
   );
-  const existencias = new Map(inventario.map((r) => [r.id_producto as number, r.existencia as number]));
-  const productos = await filas(ex, "SELECT id_producto, nombre, disponible FROM producto WHERE id_producto IN (?)", [ids]);
-  const infoProducto = new Map(productos.map((r) => [r.id_producto as number, { nombre: r.nombre as string, activo: Boolean(r.disponible) }]));
+  const infoProducto = new Map(
+    productos.map((r) => [
+      r.id_producto as number,
+      { nombre: r.nombre as string, activo: Boolean(r.disponible), controla: Boolean(r.controla_existencia) },
+    ]),
+  );
 
-  const faltantes = ids
-    .map((id) => {
-      const info = infoProducto.get(id);
-      const queda = info?.activo ? (existencias.get(id) ?? 0) : 0;
-      return { id, nombre: info?.nombre ?? `Producto ${id}`, pedidas: pedidas.get(id)!, queda };
-    })
-    .filter((f) => f.queda < f.pedidas);
+  // Solo los productos que controlan existencia entran al inventario. Lo que se prepara al momento
+  // (controla_existencia = 0) no se limita ni se descuenta, aunque tenga una fila de inventario.
+  const controlados = ids.filter((id) => infoProducto.get(id)?.controla);
+  const existencias = new Map<number, number>();
+  if (controlados.length > 0) {
+    const inventario = await filas(
+      ex,
+      `SELECT id_producto, existencia FROM disponibilidadProducto WHERE id_producto IN (?) ORDER BY id_producto${descontar ? " FOR UPDATE" : ""}`,
+      [controlados],
+    );
+    for (const r of inventario) existencias.set(r.id_producto as number, r.existencia as number);
+  }
+
+  const faltantes = ids.flatMap((id) => {
+    const info = infoProducto.get(id);
+    if (info?.activo && !info.controla) return []; // se prepara al momento: sin límite
+    const queda = info?.activo ? (existencias.get(id) ?? 0) : 0;
+    const pedido = pedidas.get(id)!;
+    return queda < pedido ? [{ id, nombre: info?.nombre ?? `Producto ${id}`, pedidas: pedido, queda }] : [];
+  });
 
   if (faltantes.length > 0) {
     const texto = faltantes
@@ -170,17 +188,22 @@ export async function verificarExistencia(ex: Ejecutor, lineas: LineaCantidad[],
   }
 
   if (descontar) {
-    for (const id of ids) {
+    for (const id of controlados) {
       await ejecutar(ex, "UPDATE disponibilidadProducto SET existencia = existencia - ? WHERE id_producto = ?", [pedidas.get(id)!, id]);
     }
   }
 }
 
-/** Devuelve al inventario lo que consumió un pedido ya enviado (al cancelarlo). Dentro de una transacción. */
+/** Devuelve al inventario lo que consumió un pedido ya enviado (al cancelarlo); solo productos que controlan existencia. Dentro de una transacción. */
 export async function devolverExistencia(ex: Ejecutor, pedidoId: number): Promise<void> {
   const lineas = await filas(
     ex,
-    "SELECT id_producto, SUM(cantidad) AS cantidad FROM detalle_pedido WHERE id_pedido = ? GROUP BY id_producto ORDER BY id_producto",
+    `SELECT dp.id_producto, SUM(dp.cantidad) AS cantidad
+       FROM detalle_pedido dp
+       JOIN producto p ON p.id_producto = dp.id_producto
+      WHERE dp.id_pedido = ? AND p.controla_existencia = 1
+      GROUP BY dp.id_producto
+      ORDER BY dp.id_producto`,
     [pedidoId],
   );
   for (const l of lineas) {

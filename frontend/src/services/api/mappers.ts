@@ -56,6 +56,8 @@ export interface ProductoDto {
   descripcion: string
   precio: number
   disponible: boolean
+  /** Unidades en inventario; null o ausente = no controla existencia (se prepara al momento). */
+  existencia?: number | null
 }
 
 export interface CategoriaMenuDto {
@@ -131,6 +133,7 @@ export function aProducto(dto: ProductoDto): Producto {
     descripcion: dto.descripcion,
     precio: dto.precio,
     disponible: dto.disponible,
+    ...(dto.existencia != null ? { existencia: dto.existencia } : {}),
   }
 }
 
@@ -238,6 +241,8 @@ export interface ProductoAdminDto {
   activo: boolean
   existencia: number
   stock_minimo: number
+  /** Ausente se interpreta como true (el comportamiento de antes). */
+  controla_existencia?: boolean
   disponible: boolean
 }
 
@@ -270,6 +275,7 @@ export function aProductoAdmin(dto: ProductoAdminDto): ProductoAdmin {
     activo: dto.activo,
     existencia: dto.existencia,
     stockMinimo: dto.stock_minimo,
+    controlaExistencia: dto.controla_existencia ?? true,
     disponible: dto.disponible,
   }
 }
@@ -304,6 +310,7 @@ export function deNuevoProducto(p: NuevoProducto) {
     descripcion: p.descripcion.trim(),
     precio: p.precio,
     activo: p.activo,
+    controla_existencia: p.controlaExistencia,
     existencia: p.existencia,
     stock_minimo: p.stockMinimo,
   }
@@ -316,6 +323,7 @@ export function deCambioProducto(c: CambioProducto) {
     ...(c.descripcion !== undefined ? { descripcion: c.descripcion.trim() } : {}),
     ...(c.precio !== undefined ? { precio: c.precio } : {}),
     ...(c.activo !== undefined ? { activo: c.activo } : {}),
+    ...(c.controlaExistencia !== undefined ? { controla_existencia: c.controlaExistencia } : {}),
     ...(c.existencia !== undefined ? { existencia: c.existencia } : {}),
     ...(c.stockMinimo !== undefined ? { stock_minimo: c.stockMinimo } : {}),
   }

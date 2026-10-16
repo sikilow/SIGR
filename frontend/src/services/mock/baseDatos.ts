@@ -56,9 +56,9 @@ function crearCategorias(): CategoriaMenu[] {
       id: 3,
       nombre: 'Postres',
       productos: [
-        { id: 9, categoriaId: 3, nombre: 'Flan napolitano', descripcion: 'Con caramelo casero', precio: 70, disponible: true },
+        { id: 9, categoriaId: 3, nombre: 'Flan napolitano', descripcion: 'Con caramelo casero', precio: 70, disponible: true, existencia: 8 },
         { id: 10, categoriaId: 3, nombre: 'Churros con chocolate', descripcion: 'Seis piezas con salsa de chocolate', precio: 85, disponible: true },
-        { id: 11, categoriaId: 3, nombre: 'Pastel de tres leches', descripcion: 'Rebanada individual', precio: 80, disponible: true },
+        { id: 11, categoriaId: 3, nombre: 'Pastel de tres leches', descripcion: 'Rebanada individual', precio: 80, disponible: true, existencia: 5 },
       ],
     },
     {
@@ -66,9 +66,9 @@ function crearCategorias(): CategoriaMenu[] {
       nombre: 'Bebidas',
       productos: [
         { id: 12, categoriaId: 4, nombre: 'Agua de horchata', descripcion: 'Jarra de 1 litro', precio: 55, disponible: true },
-        { id: 13, categoriaId: 4, nombre: 'Limonada mineral', descripcion: 'Vaso grande', precio: 45, disponible: true },
+        { id: 13, categoriaId: 4, nombre: 'Limonada mineral', descripcion: 'Vaso grande', precio: 45, disponible: true, existencia: 12 },
         { id: 14, categoriaId: 4, nombre: 'Café de olla', descripcion: 'Con canela y piloncillo', precio: 40, disponible: true },
-        { id: 15, categoriaId: 4, nombre: 'Cerveza artesanal', descripcion: 'Botella de 355 ml', precio: 75, disponible: true },
+        { id: 15, categoriaId: 4, nombre: 'Cerveza artesanal', descripcion: 'Botella de 355 ml', precio: 75, disponible: true, existencia: 24 },
       ],
     },
   ]

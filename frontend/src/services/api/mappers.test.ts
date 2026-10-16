@@ -5,11 +5,15 @@ import {
   aDisponibilidad,
   aMesa,
   aPedido,
+  aProducto,
+  aProductoAdmin,
   aUsuario,
   deActualizacionPedido,
+  deCambioProducto,
   deCancelacion,
   deItemsDisponibilidad,
   deNuevoPedido,
+  deNuevoProducto,
   type CuentaDto,
   type MesaDto,
   type PedidoDto,
@@ -163,5 +167,32 @@ describe('frontend → API (cuerpos de petición)', () => {
     expect(deItemsDisponibilidad([{ productoId: 3 }, { productoId: 7 }])).toEqual({
       items: [{ producto_id: 3 }, { producto_id: 7 }],
     })
+  })
+})
+
+describe('existencia: productos que la controlan y productos que se preparan al momento', () => {
+  const base = { id: 12, categoria_id: 4, nombre: 'Cerveza', descripcion: '', precio: 50, disponible: true }
+
+  it('aProducto conserva la existencia de lo que la controla', () => {
+    expect(aProducto({ ...base, existencia: 7 }).existencia).toBe(7)
+    expect(aProducto({ ...base, existencia: 0 }).existencia).toBe(0)
+  })
+
+  it('aProducto no inventa existencia: null o ausente significa "sin control" (sin tope)', () => {
+    expect('existencia' in aProducto({ ...base, existencia: null })).toBe(false)
+    expect('existencia' in aProducto(base)).toBe(false)
+  })
+
+  it('aProductoAdmin: controla_existencia ausente se interpreta como true (como antes)', () => {
+    const dto = { id: 1, categoria_id: 1, categoria: 'Bebidas', nombre: 'Refresco', descripcion: '', precio: 30, activo: true, existencia: 4, stock_minimo: 5, disponible: true }
+    expect(aProductoAdmin(dto).controlaExistencia).toBe(true)
+    expect(aProductoAdmin({ ...dto, controla_existencia: false }).controlaExistencia).toBe(false)
+  })
+
+  it('el alta envía controla_existencia y el PATCH solo lo manda si cambió', () => {
+    const nuevo = { categoriaId: 1, nombre: ' Tacos ', descripcion: '', precio: 90, activo: true, controlaExistencia: false, existencia: 0, stockMinimo: 0 }
+    expect(deNuevoProducto(nuevo).controla_existencia).toBe(false)
+    expect(deCambioProducto({ precio: 95 })).toEqual({ precio: 95 })
+    expect(deCambioProducto({ controlaExistencia: true })).toEqual({ controla_existencia: true })
   })
 })

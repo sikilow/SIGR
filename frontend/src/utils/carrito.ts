@@ -16,6 +16,14 @@ export const MAX_OBSERVACIONES = 120
 /** Tope por línea para evitar cantidades absurdas por error al tocar. */
 export const MAX_CANTIDAD = 99
 
+/**
+ * Máximo de unidades de una línea: lo que hay en existencia (si el producto la controla) o el tope general.
+ * Un producto sin `existencia` se prepara al momento y no tiene tope por existencia.
+ */
+export function topeCantidad(existencia: number | undefined): number {
+  return existencia === undefined ? MAX_CANTIDAD : Math.min(MAX_CANTIDAD, Math.max(0, existencia))
+}
+
 export function lineaDesdeProducto(producto: Producto): LineaCarrito {
   return {
     productoId: producto.id,
@@ -47,24 +55,29 @@ export function cantidadDe(lineas: LineaCarrito[], productoId: number): number {
 }
 
 /**
- * Suma 1 unidad del producto (lo agrega si no estaba). Un producto agotado no se puede agregar:
- * en ese caso devuelve el mismo arreglo, sin cambios.
+ * Suma 1 unidad del producto (lo agrega si no estaba). Un producto agotado no se puede agregar, ni más
+ * unidades de las que hay en existencia (si la controla): en esos casos devuelve el mismo arreglo, sin cambios.
  */
 export function agregarProducto(lineas: LineaCarrito[], producto: Producto): LineaCarrito[] {
   if (!producto.disponible) return lineas
   const actual = cantidadDe(lineas, producto.id)
-  if (actual >= MAX_CANTIDAD) return lineas
+  if (actual >= topeCantidad(producto.existencia)) return lineas
   if (actual === 0) return [...lineas, lineaDesdeProducto(producto)]
   return lineas.map((l) => (l.productoId === producto.id ? { ...l, cantidad: l.cantidad + 1 } : l))
 }
 
 /**
  * Cambia la cantidad en `delta`. Nunca baja de 1 (para quitar un producto se usa `quitarLinea`)
- * ni sube de MAX_CANTIDAD.
+ * ni sube de `maximo` (por defecto MAX_CANTIDAD; para un producto con existencia, `topeCantidad(existencia)`).
  */
-export function cambiarCantidad(lineas: LineaCarrito[], productoId: number, delta: number): LineaCarrito[] {
+export function cambiarCantidad(
+  lineas: LineaCarrito[],
+  productoId: number,
+  delta: number,
+  maximo: number = MAX_CANTIDAD,
+): LineaCarrito[] {
   return lineas.map((l) =>
-    l.productoId === productoId ? { ...l, cantidad: Math.min(MAX_CANTIDAD, Math.max(1, l.cantidad + delta)) } : l,
+    l.productoId === productoId ? { ...l, cantidad: Math.max(1, Math.min(maximo, l.cantidad + delta)) } : l,
   )
 }
 

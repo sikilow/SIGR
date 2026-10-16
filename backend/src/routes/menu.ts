@@ -11,6 +11,8 @@ interface ProductoMenu {
   descripcion: string;
   precio: number;
   disponible: boolean;
+  /** Unidades en inventario; `null` = no controla existencia (se prepara al momento, sin tope). */
+  existencia: number | null;
 }
 
 /** GET /api/menu  →  [{ id, nombre, productos: [...] }]  (solo categorías con productos) */
@@ -19,7 +21,8 @@ menuRouter.get("/", requiereAuth(), async (_req, res) => {
     pool,
     `SELECT cm.id_categoria, cm.nombre AS categoria,
             p.id_producto, p.nombre, COALESCE(p.descripcion, '') AS descripcion, p.precio,
-            (p.disponible AND COALESCE(i.existencia, 0) > 0) AS disponible
+            p.controla_existencia AS controla, COALESCE(i.existencia, 0) AS existencia,
+            (p.disponible AND (p.controla_existencia = 0 OR COALESCE(i.existencia, 0) > 0)) AS disponible
        FROM categoria_menu cm
        JOIN producto p ON p.id_categoria = cm.id_categoria
        LEFT JOIN disponibilidadProducto i ON i.id_producto = p.id_producto
@@ -41,6 +44,7 @@ menuRouter.get("/", requiereAuth(), async (_req, res) => {
       descripcion: r.descripcion as string,
       precio: Number(r.precio),
       disponible: Boolean(r.disponible),
+      existencia: r.controla ? Number(r.existencia) : null,
     });
   }
   res.json([...categorias.values()]);

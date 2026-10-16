@@ -23,14 +23,16 @@ const estado = ref<Estado>('todos')
 const categoriaFiltro = ref<number | 'todas'>('todas')
 const busqueda = ref('')
 
-const pocoStock = (p: ProductoAdmin) => p.activo && p.existencia > 0 && p.existencia <= p.stockMinimo
+// Solo los productos que controlan existencia pueden estar agotados o con poco stock.
+const agotadoPorExistencia = (p: ProductoAdmin) => p.activo && p.controlaExistencia && p.existencia === 0
+const pocoStock = (p: ProductoAdmin) => p.activo && p.controlaExistencia && p.existencia > 0 && p.existencia <= p.stockMinimo
 
 const lista = computed(() => {
   const q = busqueda.value.trim().toLowerCase()
   return productos.value.filter((p) => {
     if (estado.value === 'activos' && !p.activo) return false
     if (estado.value === 'inactivos' && p.activo) return false
-    if (estado.value === 'poco_stock' && !(pocoStock(p) || (p.activo && p.existencia === 0))) return false
+    if (estado.value === 'poco_stock' && !(pocoStock(p) || agotadoPorExistencia(p))) return false
     if (categoriaFiltro.value !== 'todas' && p.categoriaId !== categoriaFiltro.value) return false
     if (q && !`${p.nombre} ${p.descripcion}`.toLowerCase().includes(q)) return false
     return true
@@ -41,7 +43,7 @@ const cuenta = computed(() => ({
   todos: productos.value.length,
   activos: productos.value.filter((p) => p.activo).length,
   inactivos: productos.value.filter((p) => !p.activo).length,
-  poco_stock: productos.value.filter((p) => p.activo && (p.existencia === 0 || pocoStock(p))).length,
+  poco_stock: productos.value.filter((p) => agotadoPorExistencia(p) || pocoStock(p)).length,
 }))
 
 async function cargar(conEsqueleto = false) {
@@ -208,16 +210,17 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
           <h3>{{ p.nombre }}</h3>
           <p class="fila__linea fila__meta">{{ p.categoria }}<template v-if="p.descripcion"> · {{ p.descripcion }}</template></p>
           <p class="fila__precio numero">{{ formatearMoneda(p.precio) }}</p>
-          <p class="fila__linea">
+          <p v-if="p.controlaExistencia" class="fila__linea">
             Existencia: <strong class="numero">{{ p.existencia }}</strong>
             <span class="fila__meta"> · mínimo {{ p.stockMinimo }}</span>
           </p>
+          <p v-else class="fila__linea fila__meta">Sin control de existencia (se prepara al momento)</p>
         </div>
 
         <div class="fila__lado">
           <div class="fila__insignias">
             <InsigniaEstado :tono="p.activo ? 'libre' : 'cancelado'" :texto="p.activo ? 'Activo' : 'Inactivo'" />
-            <InsigniaEstado v-if="p.activo && p.existencia === 0" tono="agotado" texto="Agotado" />
+            <InsigniaEstado v-if="agotadoPorExistencia(p)" tono="agotado" texto="Agotado" />
             <InsigniaEstado v-else-if="pocoStock(p)" tono="listo" texto="Poco stock" />
           </div>
           <div class="fila__acciones">

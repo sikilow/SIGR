@@ -45,7 +45,9 @@ export interface ProductoAdmin {
   activo: boolean
   existencia: number
   stockMinimo: number
-  /** Lo que ve el mesero: activo Y con existencia mayor a 0. */
+  /** `false` = se prepara al momento: no tiene existencia que controlar (el mesero puede pedir cualquier cantidad). */
+  controlaExistencia: boolean
+  /** Lo que ve el mesero: activo Y (no controla existencia, o existencia mayor a 0). */
   disponible: boolean
 }
 
@@ -55,6 +57,7 @@ export interface NuevoProducto {
   descripcion: string
   precio: number
   activo: boolean
+  controlaExistencia: boolean
   existencia: number
   stockMinimo: number
 }

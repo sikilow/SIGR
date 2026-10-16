@@ -109,13 +109,17 @@ export function crearUsuariosMock(): UsuariosService {
 interface Inventario {
   existencia: number
   stockMinimo: number
+  /** false = se prepara al momento: sin existencia que controlar. */
+  controla: boolean
 }
 const inventario = new Map<number, Inventario>()
 
 function inv(id: number, disponible: boolean): Inventario {
   let i = inventario.get(id)
   if (!i) {
-    i = { existencia: disponible ? 50 : 0, stockMinimo: 5 }
+    // En la demo controlan existencia los productos del menú que ya traen `existencia`.
+    const inicial = baseDatos.categorias.flatMap((c) => c.productos).find((x) => x.id === id)?.existencia
+    i = { existencia: inicial ?? (disponible ? 50 : 0), stockMinimo: 5, controla: inicial !== undefined }
     inventario.set(id, i)
   }
   return i
@@ -137,7 +141,8 @@ function aProductoAdmin(id: number): ProductoAdmin {
         activo,
         existencia: i.existencia,
         stockMinimo: i.stockMinimo,
-        disponible: activo && i.existencia > 0,
+        controlaExistencia: i.controla,
+        disponible: activo && (!i.controla || i.existencia > 0),
       }
     }
   }
@@ -150,7 +155,10 @@ function sincronizarDisponible(id: number): void {
     const p = c.productos.find((x) => x.id === id)
     if (p) {
       // `activo` vive en un mapa aparte para no perderlo cuando la existencia llega a 0.
-      p.disponible = aProductoAdmin(id).disponible
+      const admin = aProductoAdmin(id)
+      p.disponible = admin.disponible
+      if (admin.controlaExistencia) p.existencia = admin.existencia
+      else delete p.existencia
     }
   }
 }
@@ -214,9 +222,9 @@ export function crearCatalogoMock(): CatalogoService {
         const c = baseDatos.categorias.find((x) => x.id === n.categoriaId)
         if (!c) throw new ErrorServicio('estado_invalido', 'La categoría indicada no existe.', 422)
         const id = Math.max(0, ...baseDatos.categorias.flatMap((k) => k.productos.map((p) => p.id))) + 1
-        c.productos.push({ id, categoriaId: c.id, nombre: n.nombre.trim(), descripcion: n.descripcion.trim(), precio: n.precio, disponible: n.activo && n.existencia > 0 })
+        c.productos.push({ id, categoriaId: c.id, nombre: n.nombre.trim(), descripcion: n.descripcion.trim(), precio: n.precio, disponible: n.activo && (!n.controlaExistencia || n.existencia > 0), ...(n.controlaExistencia ? { existencia: n.existencia } : {}) })
         activos.set(id, n.activo)
-        inventario.set(id, { existencia: n.existencia, stockMinimo: n.stockMinimo })
+        inventario.set(id, { existencia: n.existencia, stockMinimo: n.stockMinimo, controla: n.controlaExistencia })
         return aProductoAdmin(id)
       })
     },
@@ -239,6 +247,7 @@ export function crearCatalogoMock(): CatalogoService {
         const i = inv(id, actual.activo)
         if (c.existencia !== undefined) i.existencia = c.existencia
         if (c.stockMinimo !== undefined) i.stockMinimo = c.stockMinimo
+        if (c.controlaExistencia !== undefined) i.controla = c.controlaExistencia
         activos.set(id, c.activo ?? activos.get(id) ?? actual.activo)
         sincronizarDisponible(id)
         return aProductoAdmin(id)

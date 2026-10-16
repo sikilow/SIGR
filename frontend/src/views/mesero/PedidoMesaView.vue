@@ -22,7 +22,9 @@ import {
   carritosIguales,
   establecerObservaciones,
   lineasDesdeDetalle,
+  MAX_CANTIDAD,
   quitarLinea,
+  topeCantidad,
   totalEstimado,
   totalUnidades,
   type LineaCarrito,
@@ -81,6 +83,12 @@ const agotados = computed<number[]>(() => {
 })
 const cantidades = computed<Record<number, number>>(() =>
   Object.fromEntries(lineas.value.map((l) => [l.productoId, l.cantidad])),
+)
+/** Existencia por producto (solo los que la controlan): topa las cantidades del pedido. */
+const existencias = computed<Record<number, number>>(() =>
+  Object.fromEntries(
+    categorias.value.flatMap((c) => c.productos).flatMap((p) => (p.existencia === undefined ? [] : [[p.id, p.existencia] as const])),
+  ),
 )
 
 const hayCambiosSinGuardar = computed(() =>
@@ -171,7 +179,10 @@ watch(
 function agregar(producto: Producto) {
   const nuevas = agregarProducto(lineas.value, producto)
   if (nuevas === lineas.value) {
-    anunciar(`${producto.nombre} está agotado.`)
+    if (!producto.disponible) anunciar(`${producto.nombre} está agotado.`)
+    else if (producto.existencia !== undefined && cantidadDe(lineas.value, producto.id) >= producto.existencia) {
+      anunciar(`Ya agregaste todo lo que hay de ${producto.nombre}: solo quedan ${producto.existencia}.`)
+    } else anunciar(`${producto.nombre}: máximo ${MAX_CANTIDAD} por pedido.`)
     return
   }
   establecer(nuevas)
@@ -179,7 +190,7 @@ function agregar(producto: Producto) {
 }
 
 function cambiarCantidadLinea(productoId: number, delta: number) {
-  const nuevas = cambiarCantidad(lineas.value, productoId, delta)
+  const nuevas = cambiarCantidad(lineas.value, productoId, delta, topeCantidad(existencias.value[productoId]))
   establecer(nuevas)
   const linea = nuevas.find((l) => l.productoId === productoId)
   if (linea) anunciar(`${linea.nombre}: ${linea.cantidad}. ${textoTotal(nuevas)}`)
@@ -318,6 +329,7 @@ onBeforeRouteUpdate((a, b) =>
           :lineas="lineas"
           :total="total"
           :agotados="agotados"
+          :existencias="existencias"
           :editando-id="pedidoEditando?.id ?? null"
           @cambiar-cantidad="cambiarCantidadLinea"
           @quitar="quitar"
@@ -355,6 +367,7 @@ onBeforeRouteUpdate((a, b) =>
           :lineas="lineas"
           :total="total"
           :agotados="agotados"
+          :existencias="existencias"
           :editando-id="pedidoEditando?.id ?? null"
           @cambiar-cantidad="cambiarCantidadLinea"
           @quitar="quitar"

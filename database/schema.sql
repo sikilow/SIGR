@@ -59,6 +59,8 @@ CREATE TABLE producto (
   descripcion VARCHAR(255) NULL,
   precio DECIMAL(10,2) NOT NULL CHECK (precio >= 0),
   disponible BOOLEAN NOT NULL DEFAULT TRUE,
+  -- FALSE = se prepara al momento: no tiene existencia que controlar (ni se limita ni se descuenta).
+  controla_existencia BOOLEAN NOT NULL DEFAULT TRUE,
   CONSTRAINT fk_producto_id_categoria FOREIGN KEY (id_categoria) REFERENCES categoria_menu (id_categoria) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 

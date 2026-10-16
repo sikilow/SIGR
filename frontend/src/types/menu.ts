@@ -1,5 +1,6 @@
 // PROVISIONAL: modelo de dominio pendiente de validar con el equipo de API.
-// El menú NO maneja cantidades en existencia: un producto solo está disponible o agotado.
+// La existencia solo existe para los productos que la controlan (postres de vitrina, refrescos...). Lo que se
+// prepara al momento no la tiene: no hay tope, solo disponible o agotado (lo decide el gerente).
 
 export interface Producto {
   id: number
@@ -10,6 +11,8 @@ export interface Producto {
   precio: number
   /** `false` = agotado: no se puede agregar a un pedido. */
   disponible: boolean
+  /** Unidades que quedan. Ausente = no controla existencia (se prepara al momento): sin tope por existencia. */
+  existencia?: number
 }
 
 export interface CategoriaMenu {

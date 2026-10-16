@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // Alta y edición de un producto, con su inventario (existencia y stock mínimo). `producto = null` crea.
+// "Controlar existencia" se desmarca para lo que se prepara al momento: no tiene inventario que contar.
 // Al editar solo se manda lo que cambió. Cambiar el precio no altera pedidos ya hechos.
 import { computed, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
@@ -25,6 +26,7 @@ const precio = ref('')
 const existencia = ref('0')
 const stockMinimo = ref('0')
 const activo = ref(true)
+const controlaExistencia = ref(true)
 const tocado = ref(false)
 const enCurso = ref(false)
 const errorServidor = ref('')
@@ -43,6 +45,7 @@ watch(
     existencia.value = p ? String(p.existencia) : '0'
     stockMinimo.value = p ? String(p.stockMinimo) : '0'
     activo.value = p?.activo ?? true
+    controlaExistencia.value = p?.controlaExistencia ?? true
     tocado.value = false
     enCurso.value = false
     errorServidor.value = ''
@@ -63,8 +66,10 @@ const errores = computed(() => {
   else if (p < 0) e.precio = 'El precio no puede ser negativo.'
   else if (Math.abs(p * 100 - Math.round(p * 100)) > 1e-6) e.precio = 'Máximo 2 decimales.'
   else if (p > 99_999_999) e.precio = 'El precio es demasiado grande.'
-  if (!esEnteroNoNegativo(aNumero(existencia.value))) e.existencia = 'Escribe un número entero de 0 en adelante.'
-  if (!esEnteroNoNegativo(aNumero(stockMinimo.value))) e.stockMinimo = 'Escribe un número entero de 0 en adelante.'
+  if (controlaExistencia.value) {
+    if (!esEnteroNoNegativo(aNumero(existencia.value))) e.existencia = 'Escribe un número entero de 0 en adelante.'
+    if (!esEnteroNoNegativo(aNumero(stockMinimo.value))) e.stockMinimo = 'Escribe un número entero de 0 en adelante.'
+  }
   if (descripcion.value.trim().length > 255) e.descripcion = 'Máximo 255 caracteres.'
   return e
 })
@@ -80,8 +85,12 @@ function cambios(): CambioProducto {
   if (categoriaId.value !== '' && categoriaId.value !== p.categoriaId) c.categoriaId = categoriaId.value
   if (aNumero(precio.value) !== p.precio) c.precio = aNumero(precio.value)
   if (activo.value !== p.activo) c.activo = activo.value
-  if (aNumero(existencia.value) !== p.existencia) c.existencia = aNumero(existencia.value)
-  if (aNumero(stockMinimo.value) !== p.stockMinimo) c.stockMinimo = aNumero(stockMinimo.value)
+  if (controlaExistencia.value !== p.controlaExistencia) c.controlaExistencia = controlaExistencia.value
+  // Si no controla existencia no se mandan los campos de inventario (se conservan los que había).
+  if (controlaExistencia.value) {
+    if (aNumero(existencia.value) !== p.existencia) c.existencia = aNumero(existencia.value)
+    if (aNumero(stockMinimo.value) !== p.stockMinimo) c.stockMinimo = aNumero(stockMinimo.value)
+  }
   return c
 }
 
@@ -112,8 +121,9 @@ async function guardar() {
           descripcion: descripcion.value,
           precio: aNumero(precio.value),
           activo: activo.value,
-          existencia: aNumero(existencia.value),
-          stockMinimo: aNumero(stockMinimo.value),
+          controlaExistencia: controlaExistencia.value,
+          existencia: controlaExistencia.value ? aNumero(existencia.value) : 0,
+          stockMinimo: controlaExistencia.value ? aNumero(stockMinimo.value) : 0,
         }),
         true,
       )
@@ -163,7 +173,15 @@ async function guardar() {
         </div>
       </div>
 
-      <fieldset class="form__inventario">
+      <label class="form__casilla">
+        <input v-model="controlaExistencia" type="checkbox" />
+        <span>
+          Controlar existencia
+          <span class="form__opcional">(desmárcalo si se prepara al momento: el mesero podrá pedir cualquier cantidad)</span>
+        </span>
+      </label>
+
+      <fieldset v-if="controlaExistencia" class="form__inventario">
         <legend>Inventario</legend>
         <div class="form__fila">
           <div class="campo">
@@ -179,7 +197,7 @@ async function guardar() {
             <p v-if="campoErr('stockMinimo')" id="prod-stockMinimo-e" class="texto-error form__error">{{ campoErr('stockMinimo') }}</p>
           </div>
         </div>
-        <p class="form__ayuda">Con existencia 0 el mesero lo ve como agotado. La existencia se descuenta sola al enviar un pedido a cocina, y se bloquea el envío si no alcanza.</p>
+        <p class="form__ayuda">Con existencia 0 el mesero lo ve como agotado y no puede agregar más de lo que hay. La existencia se descuenta sola al enviar un pedido a cocina, y se bloquea el envío si no alcanza.</p>
       </fieldset>
 
       <label class="form__casilla">

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Tarjeta de producto del menú. Tocarla agrega 1 unidad. El menú no maneja cantidades en
-// existencia: un producto disponible no lleva insignia y uno agotado muestra "Agotado". Si está
-// agotado la tarjeta queda aria-disabled (sigue enfocable) y explica el motivo con texto.
+// Tarjeta de producto del menú. Tocarla agrega 1 unidad. Lo que se prepara al momento no lleva existencia;
+// lo que la controla muestra "Quedan N" y no deja agregar más de lo que hay. Un producto agotado (o ya
+// agregado por completo) queda aria-disabled (sigue enfocable) y explica el motivo con texto.
 import { computed } from 'vue'
 import type { Producto } from '../types'
 import { formatearMoneda } from '../utils/formato'
@@ -16,10 +16,16 @@ const props = defineProps<{
 const emit = defineEmits<{ agregar: [producto: Producto] }>()
 
 const agotado = computed(() => !props.producto.disponible)
+/** Unidades que todavía se pueden agregar; `null` = no controla existencia (sin tope). */
+const quedan = computed(() => (props.producto.existencia === undefined ? null : props.producto.existencia - props.enPedido))
+/** Disponible, pero el pedido ya lleva todo lo que hay en existencia. */
+const sinMas = computed(() => !agotado.value && quedan.value !== null && quedan.value <= 0)
+const bloqueado = computed(() => agotado.value || sinMas.value)
+const hayEtiquetas = computed(() => agotado.value || props.enPedido > 0 || props.producto.existencia !== undefined)
 const idMotivo = computed(() => `producto-motivo-${props.producto.id}`)
 
 function alTocar() {
-  if (!agotado.value) emit('agregar', props.producto)
+  if (!bloqueado.value) emit('agregar', props.producto)
 }
 </script>
 
@@ -27,20 +33,23 @@ function alTocar() {
   <button
     type="button"
     class="producto"
-    :class="{ 'producto--bloqueado': agotado, 'producto--en-pedido': enPedido > 0 }"
-    :aria-disabled="agotado ? 'true' : undefined"
-    :aria-describedby="agotado ? idMotivo : undefined"
+    :class="{ 'producto--bloqueado': bloqueado, 'producto--en-pedido': enPedido > 0 }"
+    :aria-disabled="bloqueado ? 'true' : undefined"
+    :aria-describedby="bloqueado ? idMotivo : undefined"
     @click="alTocar"
   >
     <span class="producto__nombre">{{ producto.nombre }}</span>
     <span class="producto__precio numero">{{ formatearMoneda(producto.precio) }}</span>
 
-    <span v-if="agotado || enPedido > 0" class="producto__etiquetas">
+    <span v-if="hayEtiquetas" class="producto__etiquetas">
       <InsigniaEstado v-if="agotado" tono="agotado" texto="Agotado" />
+      <InsigniaEstado v-else-if="producto.existencia !== undefined" tono="registrado" :texto="`Quedan ${producto.existencia}`" />
       <InsigniaEstado v-if="enPedido > 0" tono="carrito" :texto="`En pedido: ${enPedido}`" />
     </span>
 
-    <span v-if="agotado" :id="idMotivo" class="producto__motivo">No se puede agregar: producto agotado.</span>
+    <span v-if="bloqueado" :id="idMotivo" class="producto__motivo">{{
+      agotado ? 'No se puede agregar: producto agotado.' : `Ya agregaste todo lo que hay (${producto.existencia}).`
+    }}</span>
   </button>
 </template>
 

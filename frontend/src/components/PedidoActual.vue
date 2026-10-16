@@ -3,7 +3,7 @@
 // (el total real lo calcula el servidor). No guarda estado del carrito: solo emite cambios.
 import { computed, nextTick, ref } from 'vue'
 import { formatearMoneda } from '../utils/formato'
-import { MAX_CANTIDAD, MAX_OBSERVACIONES, subtotalDe, type LineaCarrito } from '../utils/carrito'
+import { MAX_OBSERVACIONES, subtotalDe, topeCantidad, type LineaCarrito } from '../utils/carrito'
 import InsigniaEstado from './InsigniaEstado.vue'
 
 /** Atajos que solo rellenan el texto de observaciones (no son datos del modelo). */
@@ -15,6 +15,8 @@ const props = defineProps<{
   total: number
   /** Ids de los productos del pedido que ahora están agotados (se marcan en su línea). */
   agotados: number[]
+  /** Existencia por producto (productoId → unidades); solo los que la controlan. Topa las cantidades. */
+  existencias?: Record<number, number>
   /** Número del pedido que se está editando; `null` si es un pedido nuevo. */
   editandoId: number | null
 }>()
@@ -35,7 +37,16 @@ const observacionesAbiertas = ref<Set<number>>(new Set())
 const vacio = computed(() => props.lineas.length === 0)
 const motivoVacio = 'Agrega al menos un producto para revisar el pedido.'
 
-const topeAlcanzado = (linea: LineaCarrito): boolean => linea.cantidad >= MAX_CANTIDAD
+/** Unidades en existencia; `undefined` = no controla existencia (se prepara al momento). */
+const existenciaDe = (linea: LineaCarrito): number | undefined => props.existencias?.[linea.productoId]
+/** Tope de la línea: lo que hay en existencia (si la controla) o el máximo general. */
+const topeDe = (linea: LineaCarrito): number => topeCantidad(existenciaDe(linea))
+const topeAlcanzado = (linea: LineaCarrito): boolean => linea.cantidad >= topeDe(linea)
+/** La línea pide más de lo que hay (la existencia bajó después de agregarla). */
+const excedeExistencia = (linea: LineaCarrito): boolean => {
+  const existencia = existenciaDe(linea)
+  return existencia !== undefined && linea.cantidad > existencia
+}
 const estaAgotado = (linea: LineaCarrito): boolean => props.agotados.includes(linea.productoId)
 
 function alternarObservaciones(productoId: number) {
@@ -92,11 +103,18 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
           <div class="linea__datos">
             <strong>{{ linea.nombre }}</strong>
             <span class="linea__precio numero">{{ formatearMoneda(linea.precioUnitario) }} c/u</span>
+            <span v-if="existenciaDe(linea) !== undefined" class="linea__precio numero">Quedan {{ existenciaDe(linea) }}</span>
           </div>
           <strong class="numero linea__subtotal">{{ formatearMoneda(subtotalDe(linea)) }}</strong>
         </div>
 
         <InsigniaEstado v-if="estaAgotado(linea)" class="linea__agotado" tono="agotado" texto="Agotado: quítalo para continuar" />
+        <InsigniaEstado
+          v-else-if="excedeExistencia(linea)"
+          class="linea__agotado"
+          tono="agotado"
+          :texto="`Solo quedan ${existenciaDe(linea)}: reduce la cantidad`"
+        />
 
         <!-- Confirmación breve para quitar -->
         <div v-if="confirmandoQuitar === linea.productoId" class="linea__confirmar" role="group" :aria-label="`Quitar ${linea.nombre}`">
@@ -124,7 +142,7 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
             <button
               type="button"
               class="cantidad__boton"
-              :aria-label="topeAlcanzado(linea) ? `Aumentar cantidad de ${linea.nombre} (máximo ${MAX_CANTIDAD})` : `Aumentar cantidad de ${linea.nombre}`"
+              :aria-label="topeAlcanzado(linea) ? `Aumentar cantidad de ${linea.nombre} (máximo ${topeDe(linea)})` : `Aumentar cantidad de ${linea.nombre}`"
               :aria-disabled="topeAlcanzado(linea) ? 'true' : undefined"
               @click="aumentar(linea)"
             >
