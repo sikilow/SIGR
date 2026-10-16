@@ -11,6 +11,7 @@
     "build:api": "vue-tsc -b && vite build --mode api",
     "preview": "vite preview",
     "test": "vitest run",
+    "contraste": "node scripts/contraste.mjs",
     "check": "vue-tsc -b && vitest run && vite build"
   },
   "dependencies": {

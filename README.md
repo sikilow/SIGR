@@ -15,7 +15,7 @@
 
 </div>
 
-> 🚧 **Estado del repositorio:** el código se está desarrollando en las ramas `frontend-api` y `frontend-mesero` y se integrará a `main` próximamente. Por ahora `main` solo contiene este README.
+> 🚧 **Estado del repositorio:** el rol **hostess** (Salón, Reservaciones y Lista de espera) se desarrolla en la rama `frontend-hostess`, hoy solo sobre el modo *mock*: sus rutas de API están **propuestas**, no implementadas (ver [`docs/contrato-api-hostess.md`](docs/contrato-api-hostess.md)).
 
 ---
 
@@ -37,7 +37,9 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 | 📦 **Productos e inventario** *(gerente)* | Categorías, precios, stock mínimo y existencia opcional por producto | ✅ |
 | 👨‍🍳 **Cocina** | Cola de pedidos en preparación y marcado como listos | 🚧 |
 | 💵 **Caja** | Cobro, pagos divididos y corte de caja (el esquema ya existe) | 🚧 |
-| 🪑 **Hostess** | Asignar mesas, reservaciones y lista de espera (el esquema ya existe) | 🚧 |
+| 🪑 **Hostess: Salón** | Estado de las mesas (libres, ocupadas, reservadas), próximas reservaciones y lista de espera; asignar mesa a un grupo. No ve pedidos ni cuentas | ✅ *mock* · API 🚧 |
+| 📅 **Hostess: Reservaciones** | Lista por día, alta y edición con búsqueda de clientes, confirmar, cancelar y registrar la llegada | ✅ *mock* · API 🚧 |
+| ⏳ **Hostess: Lista de espera** | Grupos por orden de llegada, tiempo de espera con marca de espera larga, agregar, sentar y quitar | ✅ *mock* · API 🚧 |
 | 🧮 **Facturación** | Datos fiscales y facturas (el esquema ya existe) | 🚧 |
 
 ---
@@ -80,16 +82,18 @@ SIGR/
 │       └── routes/             # auth, mesas, menu, pedidos, cuentas, catalogo, usuarios…
 ├── frontend/
 │   └── src/
-│       ├── views/              # Pantallas por rol (mesero, gerente)
+│       ├── views/              # Pantallas por rol (mesero, hostess, gerente)
 │       ├── components/         # Componentes reutilizables
 │       ├── services/           # api/ (backend real) y mock/ (datos simulados)
 │       ├── stores/             # Estado con Pinia
 │       ├── types/              # Modelos del dominio
 │       ├── router/             # Rutas y guardas por rol
-│       └── utils/              # Carrito, reglas de negocio, formato
+│       └── utils/              # Carrito, reglas de negocio, formato, contraste
+├── docs/                       # Contratos de API, equivalencias con la BD y pantallas (ver el índice abajo)
 ├── database/
 │   ├── schema.sql              # Esquema completo
 │   ├── seed.sql                # Datos de prueba (mesas, menú…)
+│   ├── seed_demo.sql           # Datos de demostración (mesas 7-12, cuentas, clientes, reservaciones, lista de espera)
 │   └── migracion_0N_*.sql      # Cambios incrementales sobre una base existente
 ```
 
@@ -119,6 +123,8 @@ npm install
 cp .env.example .env        # edita DB_PASSWORD y JWT_SECRET
 npx tsx src/seed.ts         # crea los usuarios de prueba
 npm run dev                 # http://localhost:3000
+# (opcional, base recién creada) datos de demostración, ver el encabezado de database/seed_demo.sql:
+# mysql --default-character-set=utf8mb4 -u root -p SIGR < ../database/seed_demo.sql   (crea además a mesero2)
 
 # 4. Frontend (otra terminal)
 cd frontend
@@ -150,7 +156,7 @@ VITE_USE_MOCK=false
 VITE_API_URL=http://localhost:3000/api
 ```
 
-Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, ideal para trabajar solo en las pantallas.
+Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, ideal para trabajar solo en las pantallas. En ese modo el login lista los usuarios demo: `mesero`, `hostess`, `cajero` y `gerente` (contraseña `1234`).
 
 ### Comandos útiles
 
@@ -161,6 +167,8 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 | `frontend/` | `npm run dev` | Servidor de desarrollo |
 | `frontend/` | `npm run build` | Revisa tipos y genera el build |
 | `frontend/` | `npx vitest run` | Corre las pruebas |
+| `frontend/` | `npm run check` | Tipos + pruebas + build (debe pasar antes de entregar) |
+| `frontend/` | `npm run contraste` | Informe de contraste WCAG de los pares de color de la hostess |
 
 ---
 
@@ -172,9 +180,24 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 | --- | --- | --- | --- |
 | Gerente | `gerente` | `1234` | Usuarios, productos e inventario |
 | Mesero | `mesero` | `1234` | Mesas, pedidos y cuentas |
+| Mesero 2 | `mesero2` | `1234` | Igual que el mesero (solo con `seed_demo.sql`) |
 | Cocinero | `cocinero` | `1234` | *(pantalla pendiente)* |
 | Cajero | `cajero` | `1234` | *(pantalla pendiente)* |
-| Hostess | `hostess` | `1234` | *(pantalla pendiente)* |
+| Hostess | `hostess` | `1234` | Salón, Reservaciones y Lista de espera *(solo en modo mock hasta que exista su API)* |
+
+---
+
+## Documentación (`docs/`)
+
+| Documento | Para qué sirve |
+| --- | --- |
+| [`contrato-api-mesero.md`](docs/contrato-api-mesero.md) | Contrato de la API que usa el mesero (implementada en `backend/`) y diferencias con la BD |
+| [`contrato-api-hostess.md`](docs/contrato-api-hostess.md) | Endpoints **propuestos** (no implementados) para Salón, Reservaciones, Lista de espera y clientes |
+| [`equivalencias-bd.md`](docs/equivalencias-bd.md) | Tabla columna ↔ JSON ↔ TypeScript, qué es columna y qué es calculado, y los estados |
+| [`integracion-api.md`](docs/integracion-api.md) | Lista de comprobación para conectar el frontend con la API real |
+| [`pantallas-mesero.md`](docs/pantallas-mesero.md) | Pantallas del mesero con su ruta, caso de uso y captura |
+| [`pantallas-hostess.md`](docs/pantallas-hostess.md) | Pantallas de la hostess con su ruta y captura, y cómo funciona cada una |
+| [`capturas/`](docs/capturas/) | Capturas de las pantallas (1024×768 y 768×1024) |
 
 ---
 

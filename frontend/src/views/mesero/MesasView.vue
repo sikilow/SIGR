@@ -34,7 +34,7 @@ function cambiarFiltro(filtro: FiltroMesas) {
 
 const MENSAJE_VACIO: Record<FiltroMesas, string> = {
   todas: 'No hay mesas registradas',
-  disponible: 'No hay mesas disponibles',
+  libre: 'No hay mesas libres',
   ocupada: 'No hay mesas ocupadas',
   reservada: 'No hay mesas reservadas',
   listo: 'No hay pedidos listos por servir',
@@ -104,7 +104,7 @@ onBeforeUnmount(() => {
 
     <template v-if="store.mesas.length > 0">
       <ResumenMesas
-        :disponibles="store.contadores.disponible"
+        :libres="store.contadores.libre"
         :ocupadas="store.contadores.ocupada"
         :reservadas="store.contadores.reservada"
         :pedidos-listos="store.contadores.pedidosListos"

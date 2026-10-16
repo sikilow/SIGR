@@ -213,7 +213,7 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
         </div>
 
         <div class="fila__lado">
-          <InsigniaEstado :tono="u.activo ? 'disponible' : 'cancelado'" :texto="u.activo ? 'Activo' : 'Inactivo'" />
+          <InsigniaEstado :tono="u.activo ? 'activo' : 'cancelado'" :texto="u.activo ? 'Activo' : 'Inactivo'" />
           <div class="fila__acciones">
             <button type="button" class="btn btn--secundario" :aria-label="`Editar a ${u.nombre}`" @click="abrirEdicion(u, $event)">Editar</button>
             <button type="button" class="btn btn--secundario" :aria-label="`Cambiar contraseña de ${u.nombre}`" @click="abrirContrasena(u, $event)">Contraseña</button>

@@ -1,5 +1,5 @@
 // Textos visibles para cada estado. Los estados nunca se comunican solo con color.
-import type { EstadoCuenta, EstadoMesa, EstadoPedido } from './estados'
+import type { EstadoCuenta, EstadoEspera, EstadoMesa, EstadoPedido, EstadoReservacion } from './estados'
 import type { TipoPago } from './cuenta'
 import type { Rol } from './usuario'
 
@@ -7,7 +7,7 @@ import type { Rol } from './usuario'
 export const ETIQUETA_ESTADO_DESCONOCIDO = 'Estado desconocido'
 
 export const ETIQUETA_ESTADO_MESA: Record<EstadoMesa, string> = {
-  disponible: 'Disponible',
+  libre: 'Libre',
   ocupada: 'Ocupada',
   reservada: 'Reservada',
   desconocido: ETIQUETA_ESTADO_DESCONOCIDO,
@@ -52,4 +52,19 @@ export const ETIQUETA_ROL: Record<Rol, string> = {
   cocinero: 'Cocinero',
   cajero: 'Cajero',
   hostess: 'Hostess',
+}
+
+export const ETIQUETA_ESTADO_RESERVACION: Record<EstadoReservacion, string> = {
+  pendiente: 'Pendiente',
+  confirmada: 'Confirmada',
+  llego: 'Llegó',
+  cancelada: 'Cancelada',
+  desconocido: ETIQUETA_ESTADO_DESCONOCIDO,
+}
+
+export const ETIQUETA_ESTADO_ESPERA: Record<EstadoEspera, string> = {
+  esperando: 'Esperando',
+  asignada: 'Asignada',
+  cancelada: 'Cancelada',
+  desconocido: ETIQUETA_ESTADO_DESCONOCIDO,
 }

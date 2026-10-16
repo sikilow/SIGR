@@ -1,7 +1,9 @@
-# Equivalencias frontend ↔ base de datos (rol mesero)
+# Equivalencias frontend ↔ base de datos (mesero, hostess y gerente)
 
-> **Fuente de verdad:** el esquema MySQL del equipo de base de datos, [`database/schema.sql`](../database/schema.sql)
-> (con `migracion_01_front.sql` y `migracion_02_api.sql`). El backend de `backend/` ya entrega y recibe los nombres de esta tabla.
+> **Fuente de verdad:** el esquema MySQL del equipo de base de datos, [`database/schema.sql`](../database/schema.sql) (ya incluye lo de
+> `migracion_01_front.sql`, `migracion_02_api.sql` y `migracion_03_existencia.sql`; no hay tabla `estado_mesa`). El backend de `backend/` ya
+> entrega y recibe los nombres de esta tabla para el mesero y el gerente; **las rutas de la hostess están solo propuestas**
+> ([`contrato-api-hostess.md`](contrato-api-hostess.md)).
 
 ## Reglas de nombres
 
@@ -17,8 +19,9 @@
 
 ## Tablas del alcance del mesero
 
-`rol`, `usuario`, `credenciales`, `mesa`, `categoria_menu`, `producto`, `cuenta`, `estado_pedido`, `motivo_cancelacion`, `pedido`, `detalle_pedido`.
-**Fuera de alcance (no se usan):** `venta`, `pago`, `metodo_pago`, `corte_caja`, `datos_fiscales`, `factura`, `reservacion`, `lista_espera`, `cliente`, `perfil_usuario`, `disponibilidadProducto`.
+**Mesero:** `rol`, `usuario`, `credenciales`, `mesa`, `categoria_menu`, `producto`, `cuenta`, `estado_pedido`, `motivo_cancelacion`, `pedido`, `detalle_pedido`.
+**Hostess:** `mesa`, `reservacion`, `lista_espera`, `cliente` (nunca pedidos ni cuentas). **Gerente:** `usuario`, `credenciales`, `perfil_usuario`, `categoria_menu`, `producto`, `disponibilidadProducto`.
+**Todavía sin interfaz (no se usan):** `venta`, `pago`, `metodo_pago`, `corte_caja`, `datos_fiscales`, `factura`. La tabla `idempotencia` es del backend.
 
 ## Mesas — tipo `Mesa` (tabla `mesa`)
 
@@ -27,7 +30,7 @@
 | `Mesa.id` | `mesa.id_mesa` | `idMesa` | `id_mesa` | columna |
 | `Mesa.numero` | `mesa.numero` | `numero` | `numero` | columna |
 | `Mesa.capacidad` | `mesa.capacidad` | `capacidad` | `capacidad` | columna |
-| `Mesa.estado` (`libre`…) | `mesa.estado` | `estado` (`disponible` \| `ocupada` \| `reservada`) | `estado` (`libre` \| `ocupada` \| `reservada`) | columna con `CHECK`. **La BD guarda `libre`**; la interfaz lo muestra como «Disponible» y el mapper lo convierte a `disponible` |
+| `Mesa.estado` | `mesa.estado` | `estado` (`libre` \| `ocupada` \| `reservada`) | `estado` (`libre` \| `ocupada` \| `reservada`) | columna con `CHECK` (default `libre`). Mismo código en BD, API y frontend; la interfaz muestra «Libre». `disponible` se sigue entendiendo como `libre` al leer |
 | `Mesa.estadoCuenta` | — (de `cuenta.estado` de la cuenta activa) | `estadoCuenta` | `estado_cuenta` | calculado por la API |
 | `Mesa.pedidosActivos` | — | `pedidosActivos` | `pedidos_activos` | calculado por la API |
 | `Mesa.totalCuenta` | — | `totalCuenta` | `total_cuenta` | calculado por la API |
@@ -90,12 +93,13 @@
 | `Producto.descripcion` | `producto.descripcion` | `descripcion` | `descripcion` | columna |
 | `Producto.precio` | `producto.precio` | `precio` | `precio` | columna (DECIMAL(10,2), llega como texto) |
 | `Producto.disponible` | `producto.disponible` | `disponible` | `disponible` | columna (BOOLEAN; llega como `0`/`1`) |
+| — (solo gerente) | `producto.controla_existencia` | `controla` | `controla_existencia` | columna (BOOLEAN, default `TRUE`; `FALSE` = se prepara al momento, sin existencia que contar) |
 | `CategoriaMenu.id` | `categoria_menu.id_categoria` | `idCategoria` | `id_categoria` | columna |
 | `CategoriaMenu.nombre` | `categoria_menu.nombre` | `nombre` | `nombre` | columna |
 | `CategoriaMenu.productos` | — | `productos` | `productos` | calculado (composición) |
 | `DisponibilidadProducto.productoId` | `producto.id_producto` | `idProducto` | `id_producto` | columna (el resultado de `producto.disponible`) |
 
-Para el mesero, `disponible` es **calculado por la API**: `producto.disponible` (activo en el menú) **y** existencia mayor a 0 (tabla `disponibilidadProducto`). La interfaz solo ve disponible/agotado, sin cantidades; las existencias las administra el gerente.
+Para el mesero, `disponible` es **calculado por la API**: `producto.disponible` (activo en el menú) **y** (`controla_existencia = 0` **o** existencia mayor a 0 en la tabla `disponibilidadProducto`). La interfaz solo ve disponible/agotado, sin cantidades; las existencias las administra el gerente.
 
 ## Motivo de cancelación — tipo `MotivoCancelacion` (tabla `motivo_cancelacion`)
 
@@ -119,7 +123,27 @@ Para el mesero, `disponible` es **calculado por la API**: `producto.disponible` 
 | `Credenciales.usuario` | `credenciales.nombre_usuario` | `nombreUsuario` | `nombre_usuario` | columna |
 | `Credenciales.contrasena` | `credenciales.password_hash` (la API compara el hash) | `contrasena` | `contrasena` | solo frontend (se envía en texto por HTTPS; **nunca** se guarda) |
 
-## Módulo del gerente (fuera del alcance del mesero)
+## Hostess — tipos `MesaSalon`, `Reservacion`, `ListaEspera`, `Cliente` (tablas `mesa`, `reservacion`, `lista_espera`, `cliente`)
+
+Todo lo de esta sección usa rutas **propuestas** (no implementadas); los nombres son los de las columnas. La hostess **no ve** pedidos, cuentas ni totales:
+`MesaSalon` solo toma las columnas de `mesa`.
+
+| Tipo en TypeScript | Tabla.columna | Nombre en TypeScript | Nombre en JSON | Naturaleza |
+|---|---|---|---|---|
+| `MesaSalon` | `mesa.id_mesa`, `numero`, `capacidad`, `estado` | `idMesa`, `numero`, `capacidad`, `estado` | `id_mesa`, `numero`, `capacidad`, `estado` | columnas (el resumen de cuenta de `GET /mesas` se ignora) |
+| `Cliente` | `cliente.id_cliente`, `nombre` | `idCliente`, `nombre` | `id_cliente`, `nombre` | columnas |
+| `Cliente` | `cliente.telefono`, `cliente.correo` | `telefono`, `correo` (`string \| null`) | `telefono`, `correo` | columnas (VARCHAR 20 / 120, **admiten NULL**) |
+| `Reservacion` | `reservacion.id_reservacion`, `id_cliente`, `personas` | `idReservacion`, `idCliente`, `personas` | igual en snake_case | columnas. **No existe folio** |
+| `Reservacion` | `reservacion.id_mesa` | `idMesa` (`number \| null`) | `id_mesa` | columna (NULL = aún sin mesa) |
+| `Reservacion` | `reservacion.fecha_hora`, `llegada_en` | `fechaHora` (`Date`), `llegadaEn` (`Date \| null`) | `fecha_hora`, `llegada_en` | columnas DATETIME (`llegada_en` NULL hasta que llega) |
+| `Reservacion` | `reservacion.estado` | `estado` (`pendiente` \| `confirmada` \| `llego` \| `cancelada`) | `estado` | columna **de texto libre, sin `CHECK`** (default `pendiente`); valores sin confirmar |
+| `Reservacion` | `cliente.nombre`, `cliente.telefono`, `mesa.numero` (JOIN) | `clienteNombre`, `clienteTelefono`, `mesaNumero` | `cliente_nombre`, `cliente_telefono`, `mesa_numero` | **calculados** (JOIN) |
+| `ListaEspera` | `lista_espera.id_espera`, `id_cliente`, `personas`, `registrado_en` | `idEspera`, `idCliente`, `personas`, `registradoEn` (`Date`) | snake_case | columnas (`registrado_en` DATETIME, default ahora) |
+| `ListaEspera` | `lista_espera.estado` | `estado` (`esperando` \| `asignada` \| `cancelada`) | `estado` | columna **de texto libre, sin `CHECK`** (default `esperando`); `cancelada` es un **supuesto del frontend** |
+| `ListaEspera` | `cliente.nombre`, `cliente.telefono` (JOIN) | `clienteNombre`, `clienteTelefono` | `cliente_nombre`, `cliente_telefono` | **calculados** (JOIN) |
+| `GrupoAsignacion`, `NuevaReservacion`, `NuevaEspera`, `NuevoCliente`, `CambioReservacion`, `CambioEspera` | — | — | cuerpos de petición con nombres de columna | solo frontend (ver el contrato de la hostess) |
+
+## Módulo del gerente
 
 | Concepto del frontend | Tabla.columna | Nombre en TypeScript | Nombre en JSON | Naturaleza |
 |---|---|---|---|---|
@@ -139,11 +163,13 @@ Un único archivo, `frontend/src/types/estados.ts`, define los códigos. Normali
 
 | Dominio | Valor en la BD | Código en el frontend | Naturaleza |
 |---|---|---|---|
-| Mesa | `libre` | `disponible` (antes `libre`; la interfaz dice «Disponible» y la URL `?estado=libre` sigue aceptándose) | columna `mesa.estado` (`CHECK`: `libre`, `ocupada`, `reservada`) |
+| Mesa | `libre` | `libre` (la interfaz dice «Libre»; la URL `?estado=disponible` del nombre anterior sigue aceptándose) | columna `mesa.estado` (`CHECK`: `libre`, `ocupada`, `reservada`) |
 | Mesa | `ocupada` | `ocupada` | columna `mesa.estado` |
 | Mesa | `reservada` | `reservada` | columna `mesa.estado` |
 | Cuenta | `abierta` | `abierta` | columna `cuenta.estado` (`CHECK`; default) |
 | Cuenta | `por_pagar`, `cerrada` | `por_pagar`, `cerrada` | columna `cuenta.estado` (`CHECK`) |
+| Reservación | `pendiente` (default), `confirmada`, `llego`, `cancelada` | igual | columna `reservacion.estado`, **texto libre sin `CHECK`**; salvo el default, **sin confirmar** |
+| Lista de espera | `esperando` (default), `asignada`, `cancelada` | igual | columna `lista_espera.estado`, **texto libre sin `CHECK`**; `cancelada` es un supuesto del frontend |
 | Pedido | `Registrado` | `registrado` | `estado_pedido.nombre` (pedido capturado, todavía editable) |
 | Pedido | `Pendiente` | `pendiente` | `estado_pedido.nombre`; **se usa como «enviado a cocina»** y se trata igual que `enviado` |
 | Pedido | `En preparacion` | `en_preparacion` | `estado_pedido.nombre` |

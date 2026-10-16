@@ -1,7 +1,7 @@
 // "Base de datos" en memoria para el mock. Se reinicia al recargar la página.
 // PROVISIONAL: datos de ejemplo del restaurante "La Madalena", con la misma forma y los mismos nombres que
 // el esquema de la BD (ids numéricos, `fechaHora`, `indicaciones`…). Ver docs/equivalencias-bd.md.
-import type { CategoriaMenu, Cuenta, Mesa, MotivoCancelacion, Pedido, Rol, Usuario } from '../../types'
+import type { CategoriaMenu, Cliente, Cuenta, ListaEspera, Mesa, MotivoCancelacion, Pedido, Reservacion, Rol, Usuario } from '../../types'
 
 /** Usuario de demostración: además del perfil guarda el acceso (`credenciales.nombre_usuario` y su contraseña). */
 export interface UsuarioMock extends Omit<Usuario, 'rol' | 'activo'> {
@@ -19,6 +19,12 @@ export type CuentaGuardada = Omit<Cuenta, 'pedidos' | 'total'>
 /** Mesa tal como se guarda: el resumen de cuenta y pedidos se calcula al consultarla. */
 export type MesaGuardada = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estado'>
 
+/** Reservación tal como se guarda: nombre y teléfono del cliente y número de mesa se calculan al consultarla. */
+export type ReservacionGuardada = Omit<Reservacion, 'clienteNombre' | 'clienteTelefono' | 'mesaNumero'>
+
+/** Lista de espera tal como se guarda: nombre y teléfono del cliente se calculan al consultarla. */
+export type EsperaGuardada = Omit<ListaEspera, 'clienteNombre' | 'clienteTelefono'>
+
 export interface BaseDatosMock {
   usuarios: UsuarioMock[]
   mesas: MesaGuardada[]
@@ -27,6 +33,10 @@ export interface BaseDatosMock {
   pedidos: Pedido[]
   /** Tabla `motivo_cancelacion`: cada cancelación crea una fila. */
   motivos: MotivoCancelacion[]
+  /** Rol hostess: tablas `cliente`, `reservacion` y `lista_espera`. Las mesas se comparten con el mesero. */
+  clientes: Cliente[]
+  reservaciones: ReservacionGuardada[]
+  listaEspera: EsperaGuardada[]
   siguienteIdPedido: number
   siguienteIdCuenta: number
   siguienteIdMotivo: number
@@ -35,6 +45,17 @@ export interface BaseDatosMock {
 const ahora = Date.now()
 /** Fecha de hace `minutos` minutos. */
 const hace = (minutos: number): Date => new Date(ahora - minutos * 60_000)
+
+/**
+ * Fecha de hoy a `minutos` de distancia de ahora (negativos = antes), sin salirse del día en curso: así el mock
+ * del Salón (que muestra «las reservaciones del día») no pierde reservaciones cerca de la medianoche.
+ */
+const hoyEn = (minutos: number): Date => {
+  const inicio = new Date(ahora)
+  inicio.setHours(0, 0, 0, 0)
+  const fin = inicio.getTime() + 24 * 60 * 60_000 - 60_000
+  return new Date(Math.min(Math.max(ahora + minutos * 60_000, inicio.getTime()), fin))
+}
 
 function crearCategorias(): CategoriaMenu[] {
   return [
@@ -83,9 +104,9 @@ function crearCategorias(): CategoriaMenu[] {
 
 function crearMesas(): MesaGuardada[] {
   const datos: Array<[Mesa['estado'], number]> = [
-    ['disponible', 2], ['disponible', 4], ['ocupada', 4], ['disponible', 4],
-    ['ocupada', 6], ['disponible', 2], ['reservada', 4], ['ocupada', 8],
-    ['disponible', 4], ['reservada', 6], ['ocupada', 4], ['ocupada', 2],
+    ['libre', 2], ['libre', 4], ['ocupada', 4], ['libre', 4],
+    ['ocupada', 6], ['libre', 2], ['reservada', 4], ['ocupada', 8],
+    ['libre', 4], ['reservada', 6], ['ocupada', 4], ['ocupada', 2],
   ]
   return datos.map(([estado, capacidad], i) => ({ idMesa: i + 1, numero: i + 1, capacidad, estado }))
 }
@@ -181,6 +202,43 @@ function crearCuentas(): CuentaGuardada[] {
   ]
 }
 
+function crearClientes(): Cliente[] {
+  const datos: Array<[string, string | null, string | null]> = [
+    ['Carlos Medina', '3115550201', 'carlos.medina@correo.test'],
+    ['Patricia Ruiz', '3115550202', null],
+    ['Familia González', '3115550203', null],
+    ['Daniel Ortega', '3115550204', 'daniel.ortega@correo.test'],
+    ['Elena Castillo', '3115550205', null],
+    ['Héctor Salas', '3115550206', null],
+    ['Valeria Núñez', '3115550207', null],
+    ['Cliente Prueba', null, null],
+  ]
+  return datos.map(([nombre, telefono, correo], i) => ({ idCliente: i + 1, nombre, telefono, correo }))
+}
+
+/**
+ * Reservaciones de ejemplo. Misma gente que database/seed_demo.sql, pero las mesas siguen el estado de las mesas del
+ * mock (reservadas: 7 y 10; ocupada con reservación que llegó: 8) y «Familia González» es de HOY (en la BD es de
+ * mañana) para poder probar sentar una reservación que aún no tiene mesa.
+ */
+function crearReservaciones(): ReservacionGuardada[] {
+  return [
+    { idReservacion: 1, idCliente: 1, idMesa: 7, fechaHora: hoyEn(90), personas: 4, estado: 'confirmada', llegadaEn: null },
+    { idReservacion: 2, idCliente: 2, idMesa: 10, fechaHora: hoyEn(120), personas: 2, estado: 'confirmada', llegadaEn: null },
+    { idReservacion: 3, idCliente: 3, idMesa: null, fechaHora: hoyEn(150), personas: 6, estado: 'pendiente', llegadaEn: null },
+    { idReservacion: 4, idCliente: 4, idMesa: 8, fechaHora: hoyEn(-100), personas: 5, estado: 'llego', llegadaEn: hoyEn(-95) },
+    { idReservacion: 5, idCliente: 5, idMesa: null, fechaHora: hace(24 * 60), personas: 3, estado: 'cancelada', llegadaEn: null },
+  ]
+}
+
+function crearListaEspera(): EsperaGuardada[] {
+  return [
+    { idEspera: 1, idCliente: 6, personas: 3, registradoEn: hace(25), estado: 'esperando' },
+    { idEspera: 2, idCliente: 7, personas: 2, registradoEn: hace(10), estado: 'esperando' },
+    { idEspera: 3, idCliente: 5, personas: 4, registradoEn: hace(120), estado: 'asignada' },
+  ]
+}
+
 export const baseDatos: BaseDatosMock = {
   // Usuarios de demostración (solo para el mock; nunca credenciales reales)
   // `idRol` sigue el orden del catálogo `rol` (Gerente, Mesero, Cocinero, Cajero, Hostess): SUPOSICIÓN, no confirmada.
@@ -188,12 +246,16 @@ export const baseDatos: BaseDatosMock = {
     { idUsuario: 1, idRol: 2, nombre: 'Ana Torres', correo: 'ana.torres@lamadalena.example', activo: true, rol: 'mesero', nombreUsuario: 'mesero', contrasena: '1234' },
     { idUsuario: 2, idRol: 1, nombre: 'Luis Ramírez', correo: 'luis.ramirez@lamadalena.example', activo: true, rol: 'gerente', nombreUsuario: 'gerente', contrasena: '1234' },
     { idUsuario: 3, idRol: 4, nombre: 'Marta Solís', correo: 'marta.solis@lamadalena.example', activo: true, rol: 'cajero', nombreUsuario: 'cajero', contrasena: '1234' },
+    { idUsuario: 4, idRol: 5, nombre: 'Sofía Mendoza', correo: 'sofia.mendoza@lamadalena.example', activo: true, rol: 'hostess', nombreUsuario: 'hostess', contrasena: '1234' },
   ],
   mesas: crearMesas(),
   categorias: crearCategorias(),
   cuentas: crearCuentas(),
   pedidos: crearPedidos(),
   motivos: [{ idMotivo: 1, descripcion: 'El cliente cambió de opinión' }],
+  clientes: crearClientes(),
+  reservaciones: crearReservaciones(),
+  listaEspera: crearListaEspera(),
   siguienteIdPedido: 11,
   siguienteIdCuenta: 7,
   siguienteIdMotivo: 2,

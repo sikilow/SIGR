@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Tarjeta de mesa del Panel de mesas. TODA la tarjeta es un botón (≥ 48 px).
-// Ocupada: muestra pedidos, total y avisos. Disponible/reservada: solo el estado, atenuada
+// Ocupada: muestra pedidos, total y avisos. Libre/reservada: solo el estado, atenuada
 // con fondo y color de número más suaves (sin bajar el contraste del texto por debajo de AA).
 import { computed } from 'vue'
 import { ETIQUETA_ESTADO_MESA, ETIQUETA_TIPO_PAGO, type Mesa } from '../types'
@@ -87,8 +87,8 @@ const textoCuenta = computed(() =>
   box-shadow: none;
 }
 
-.mesa--disponible {
-  --estado: var(--color-disponible);
+.mesa--libre {
+  --estado: var(--color-libre);
 }
 
 .mesa--ocupada {
@@ -99,14 +99,14 @@ const textoCuenta = computed(() =>
   --estado: var(--color-reservada);
 }
 
-/* Disponible y reservada: atenuadas (fondo de la página, sin sombra) pero con texto legible */
-.mesa--disponible,
+/* Libre y reservada: atenuadas (fondo de la página, sin sombra) pero con texto legible */
+.mesa--libre,
 .mesa--reservada {
   background: var(--color-bg);
   box-shadow: none;
 }
 
-.mesa--disponible .mesa__numero,
+.mesa--libre .mesa__numero,
 .mesa--reservada .mesa__numero {
   color: var(--color-muted);
 }

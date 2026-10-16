@@ -77,7 +77,7 @@ describe('motivoPedidoBloqueado / puedeRegistrarPedido (mesa y cuenta)', () => {
     expect(puedeRegistrarPedido(mesa({ estadoCuenta: null }))).toBe(true)
   })
 
-  it.each(['disponible', 'reservada', 'desconocido'] as const)('mesa %s: no se puede', (estado) => {
+  it.each(['libre', 'reservada', 'desconocido'] as const)('mesa %s: no se puede', (estado) => {
     expect(motivoPedidoBloqueado(mesa({ estado, estadoCuenta: null }))).toBe('La mesa 7 no está ocupada.')
     expect(puedeRegistrarPedido(mesa({ estado, estadoCuenta: null }))).toBe(false)
   })

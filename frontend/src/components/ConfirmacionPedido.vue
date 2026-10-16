@@ -90,7 +90,7 @@ onMounted(async () => {
 }
 
 .confirmacion__icono {
-  color: var(--color-disponible);
+  color: var(--color-libre);
 }
 
 .confirmacion h2:focus {

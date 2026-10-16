@@ -148,7 +148,7 @@ async function entrar() {
 
         <!-- Solo con el mock: usuarios de prueba -->
         <p v-if="usandoMock" class="login__demo">
-          Usuarios demo: <strong>mesero</strong>, <strong>cajero</strong>, <strong>gerente</strong> · contraseña
+          Usuarios demo: <strong>mesero</strong>, <strong>hostess</strong>, <strong>cajero</strong>, <strong>gerente</strong> · contraseña
           <strong class="numero">1234</strong>
         </p>
       </form>

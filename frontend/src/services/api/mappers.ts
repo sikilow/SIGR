@@ -62,7 +62,7 @@ export interface MesaDto {
   id_mesa: Numerico
   numero: Numerico
   capacidad: Numerico
-  /** mesa.estado (texto libre), p. ej. "disponible". */
+  /** mesa.estado (CHECK: libre, ocupada o reservada), p. ej. "libre". */
   estado: string
   // --- CALCULADOS por la API (no son columnas de `mesa`) ---
   estado_cuenta: string | null

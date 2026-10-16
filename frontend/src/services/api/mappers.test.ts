@@ -70,12 +70,12 @@ describe('aMesa', () => {
     })
   })
 
-  it('una mesa disponible sin cuenta conserva null y los contadores en 0 (también si PDO manda NULL)', () => {
+  it('una mesa libre sin cuenta conserva null y los contadores en 0 (también si PDO manda NULL)', () => {
     const base: MesaDto = {
-      id_mesa: 1, numero: 1, capacidad: 2, estado: 'disponible',
+      id_mesa: 1, numero: 1, capacidad: 2, estado: 'libre',
       estado_cuenta: null, pedidos_activos: 0, total_cuenta: 0, pedidos_listos: 0,
     }
-    expect(aMesa(base)).toMatchObject({ estado: 'disponible', estadoCuenta: null, pedidosActivos: 0, totalCuenta: 0, pedidosListos: 0 })
+    expect(aMesa(base)).toMatchObject({ estado: 'libre', estadoCuenta: null, pedidosActivos: 0, totalCuenta: 0, pedidosListos: 0 })
     expect(aMesa({ ...base, pedidos_activos: null, total_cuenta: null, pedidos_listos: null })).toMatchObject({
       pedidosActivos: 0, totalCuenta: 0, pedidosListos: 0,
     })
@@ -104,12 +104,12 @@ describe('aMesa', () => {
   })
 
   it('la cuenta "activa" nunca es cerrada: se muestra como sin cuenta', () => {
-    const mesa = aMesa({ id_mesa: 2, numero: 2, capacidad: 2, estado: 'disponible', estado_cuenta: 'cerrada', pedidos_activos: 0, total_cuenta: 0, pedidos_listos: 0 })
+    const mesa = aMesa({ id_mesa: 2, numero: 2, capacidad: 2, estado: 'libre', estado_cuenta: 'cerrada', pedidos_activos: 0, total_cuenta: 0, pedidos_listos: 0 })
     expect(mesa.estadoCuenta).toBeNull()
   })
 
   it('un id inválido es un error claro, no un NaN silencioso', () => {
-    expect(() => aMesa({ id_mesa: 'abc', numero: 1, capacidad: 2, estado: 'disponible', estado_cuenta: null, pedidos_activos: 0, total_cuenta: 0, pedidos_listos: 0 })).toThrow(/id_mesa/)
+    expect(() => aMesa({ id_mesa: 'abc', numero: 1, capacidad: 2, estado: 'libre', estado_cuenta: null, pedidos_activos: 0, total_cuenta: 0, pedidos_listos: 0 })).toThrow(/id_mesa/)
   })
 })
 

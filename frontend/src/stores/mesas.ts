@@ -5,10 +5,10 @@ import type { EstadoMesa, Mesa } from '../types'
 
 export type FiltroMesas = 'todas' | Exclude<EstadoMesa, 'desconocido'> | 'listo'
 
-export const FILTROS_MESAS: readonly FiltroMesas[] = ['todas', 'disponible', 'ocupada', 'reservada', 'listo']
+export const FILTROS_MESAS: readonly FiltroMesas[] = ['todas', 'libre', 'ocupada', 'reservada', 'listo']
 
-/** Alias de URL: `?estado=libre` (nombre anterior de «disponible») se sigue aceptando. */
-const ALIAS_FILTRO_URL: Record<string, FiltroMesas> = { libre: 'disponible' }
+/** Alias de URL: `?estado=disponible` (nombre anterior de «libre») se sigue aceptando. */
+const ALIAS_FILTRO_URL: Record<string, FiltroMesas> = { disponible: 'libre' }
 
 /** Convierte un valor de la URL (?estado=) en un filtro válido; si no lo es, `todas`. */
 export function filtroDesdeConsulta(valor: unknown): FiltroMesas {
@@ -37,7 +37,7 @@ export const useMesasStore = defineStore('mesas', () => {
 
   const contadores = computed(() => ({
     todas: mesas.value.length,
-    disponible: mesas.value.filter((m) => m.estado === 'disponible').length,
+    libre: mesas.value.filter((m) => m.estado === 'libre').length,
     ocupada: mesas.value.filter((m) => m.estado === 'ocupada').length,
     reservada: mesas.value.filter((m) => m.estado === 'reservada').length,
     listo: mesas.value.filter((m) => m.pedidosListos > 0).length,

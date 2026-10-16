@@ -8,7 +8,7 @@ se relaciona con el caso de uso (CU) del sistema que cubre. Las capturas están 
 |---|---|---|---|---|
 | 1 | Inicio de sesión | `/login` | **CU1** Iniciar sesión | [01-login-1024x768](capturas/01-login-1024x768.png) |
 | 2 | Panel de mesas | `/mesero/mesas` | **CU6** Consultar cuentas de mesa (estado, pedidos activos y total de la cuenta de cada mesa); avisa de pedidos listos | [02-panel-mesas-1024x768](capturas/02-panel-mesas-1024x768.png) · [02b (768×1024)](capturas/02b-panel-mesas-768x1024.png) |
-| 3 | Panel de mesas con filtro | `/mesero/mesas?estado=ocupada` | **CU6** (filtros Todas, Disponibles, Ocupadas, Reservadas y Pedido listo) | [03-panel-mesas-filtro-ocupadas-1024x768](capturas/03-panel-mesas-filtro-ocupadas-1024x768.png) |
+| 3 | Panel de mesas con filtro | `/mesero/mesas?estado=ocupada` | **CU6** (filtros Todas, Libres, Ocupadas, Reservadas y Pedido listo) | [03-panel-mesas-filtro-ocupadas-1024x768](capturas/03-panel-mesas-filtro-ocupadas-1024x768.png) |
 | 4 | Hoja de acciones de una mesa | _(diálogo del panel)_ | **CU6** (Ver cuenta) y acceso a **CU7** (Nuevo pedido) y **CU15** (Pedidos de la mesa) | [04-hoja-acciones-mesa-1024x768](capturas/04-hoja-acciones-mesa-1024x768.png) |
 | 5 | Pedido de mesa (1024×768) | `/mesero/mesas/:idMesa/pedido` | **CU9** Consultar menú · **CU7** Registrar pedidos (también edita un pedido registrado: `?editar=:idPedido`) | [05-pedido-mesa-1024x768](capturas/05-pedido-mesa-1024x768.png) |
 | 6 | Pedido de mesa (768×1024) | `/mesero/mesas/:idMesa/pedido` | **CU9** · **CU7** (el pedido pasa a una barra inferior con "Ver pedido") | [06-pedido-mesa-768x1024](capturas/06-pedido-mesa-768x1024.png) |

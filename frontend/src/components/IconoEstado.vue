@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // Ícono de estado (decorativo: siempre va junto a un texto visible, por eso se oculta a lectores).
 export type TonoEstado =
-  | 'disponible'
+  | 'libre'
+  // Usuario o producto activo (mismo ícono de «palomita» que una mesa libre)
+  | 'activo'
   | 'ocupada'
   | 'reservada'
   | 'listo'
@@ -36,8 +38,8 @@ withDefaults(defineProps<{ tono: TonoEstado; tamano?: number }>(), { tamano: 20 
     stroke-linecap="round"
     stroke-linejoin="round"
   >
-    <!-- disponible: check -->
-    <template v-if="tono === 'disponible'">
+    <!-- libre / activo: check -->
+    <template v-if="tono === 'libre' || tono === 'activo'">
       <circle cx="12" cy="12" r="9" />
       <path d="m8 12 3 3 5-6" />
     </template>

@@ -3,8 +3,9 @@
 Interfaz del Sistema Integral de Gestión de Restaurante (restaurante "La Madalena"), TecNM Tepic.
 Vue 3 + TypeScript + Vite, con Vue Router y Pinia. CSS propio, sin librerías de UI.
 
-Por ahora solo existe el rol **mesero** (Panel de mesas, Pedido de mesa, Cuenta de mesa y Mis
-pedidos), sobre una capa de servicios con mock intercambiable por la API real. Los tipos y el contrato de la
+Existen el rol **mesero** (Panel de mesas, Pedido de mesa, Cuenta de mesa y Mis pedidos) y el rol
+**hostess** (Salón, Reservaciones y Lista de espera; sus rutas de API están solo propuestas, así que hoy
+funciona en modo mock), el módulo del **gerente** (Usuarios y Productos), sobre una capa de servicios con mock intercambiable por la API real. Los tipos y el contrato de la
 API son **PROVISIONALES** hasta validarlos con el equipo de API.
 
 ## Comandos
@@ -17,6 +18,7 @@ npm run build      # tipos (vue-tsc) + build; usa el mock salvo que VITE_USE_MOC
 npm run build:api  # igual, pero con la API real (VITE_USE_MOCK=false, ver .env.api): sin mock ni franja demo
 npm test           # pruebas automáticas (Vitest)
 npm run check      # tipos + pruebas + build: debe pasar antes de entregar cambios
+npm run contraste  # informe de contraste WCAG de los pares de color de la hostess (sale con error si alguno no llega)
 npm run preview    # servir el build
 ```
 
@@ -35,7 +37,7 @@ ajusta `API_PROXY_TARGET` en `.env.api.local`.
 Con `VITE_USE_MOCK=true` (el valor por defecto) la aplicación usa datos simulados en memoria. Para que no
 se confunda con datos reales, todas las pantallas (login incluido) muestran la franja
 **"Modo demo · datos simulados"** (ícono + texto) y el login lista los usuarios de prueba
-(`mesero`, `cajero`, `gerente`; contraseña `1234`). Con `VITE_USE_MOCK=false` ninguna de las dos cosas
+(`mesero`, `hostess`, `cajero`, `gerente`; contraseña `1234`). Con `VITE_USE_MOCK=false` ninguna de las dos cosas
 aparece.
 
 ## Pruebas
@@ -90,13 +92,13 @@ Pantalla de inicio del mesero y punto de partida hacia Pedido de mesa, Cuenta de
 
 - **Tarjetas de mesa** (`MesaCard`): número, capacidad y estado con ícono + texto. Las ocupadas
   muestran pedidos activos, total acumulado y los avisos "Pedido listo" y "Cuenta solicitada".
-  Disponibles y reservadas se ven atenuadas. Toda la tarjeta es un botón.
-- **Resumen y filtros:** contadores por estado y chips Todas / Disponibles / Ocupadas / Reservadas /
-  Pedido listo (`aria-pressed`). El filtro vive en la URL: `?estado=disponible|ocupada|reservada|listo`
-  (`?estado=libre`, el valor que guarda la BD, se sigue aceptando como alias de `disponible`).
+  Libres y reservadas se ven atenuadas. Toda la tarjeta es un botón.
+- **Resumen y filtros:** contadores por estado y chips Todas / Libres / Ocupadas / Reservadas /
+  Pedido listo (`aria-pressed`). El filtro vive en la URL: `?estado=libre|ocupada|reservada|listo`
+  (`?estado=disponible`, el nombre anterior, se sigue aceptando como alias de `libre`).
 - **Hoja de acciones** (`HojaAccionesMesa`, `<dialog>` modal): una mesa **ocupada** ofrece Nuevo
   pedido, Ver cuenta y Pedidos de la mesa (Nuevo pedido se bloquea si la cuenta está `por_pagar`).
-  Una mesa disponible o reservada solo se puede cerrar: la hostess la asigna. Foco atrapado, Escape
+  Una mesa libre o reservada solo se puede cerrar: la hostess la asigna. Foco atrapado, Escape
   cierra y el foco regresa a la tarjeta.
 - **Actualización automática** (`usePolling`, store `stores/mesas.ts`): cada `VITE_POLL_MS` ms, en
   pausa con la pestaña oculta, sin peticiones encimadas y con botón de actualizar manual. Si falla

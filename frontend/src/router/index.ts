@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import GerenteLayout from '../layouts/GerenteLayout.vue'
+import HostessLayout from '../layouts/HostessLayout.vue'
 import MeseroLayout from '../layouts/MeseroLayout.vue'
 import { useSesionStore } from '../stores/sesion'
 import type { Rol } from '../types'
@@ -13,7 +14,9 @@ declare module 'vue-router' {
 
 /** Pantalla de inicio de cada rol. Los roles que aún no tienen interfaz caen en el aviso "tu rol no tiene acceso". */
 export function rutaInicial(rol: Rol | null): string {
-  return rol === 'gerente' ? '/gerente/usuarios' : '/mesero/mesas'
+  if (rol === 'gerente') return '/gerente/usuarios'
+  if (rol === 'hostess') return '/hostess/salon'
+  return '/mesero/mesas'
 }
 
 export const router = createRouter({
@@ -70,6 +73,29 @@ export const router = createRouter({
           path: 'productos',
           name: 'gerente-productos',
           component: () => import('../views/gerente/ProductosView.vue'),
+        },
+      ],
+    },
+    {
+      path: '/hostess',
+      component: HostessLayout,
+      meta: { roles: ['hostess'] },
+      redirect: '/hostess/salon',
+      children: [
+        {
+          path: 'salon',
+          name: 'hostess-salon',
+          component: () => import('../views/hostess/SalonView.vue'),
+        },
+        {
+          path: 'reservaciones',
+          name: 'hostess-reservaciones',
+          component: () => import('../views/hostess/ReservacionesView.vue'),
+        },
+        {
+          path: 'espera',
+          name: 'hostess-espera',
+          component: () => import('../views/hostess/EsperaView.vue'),
         },
       ],
     },

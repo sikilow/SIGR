@@ -4,13 +4,17 @@
 import {
   ESTADO_DESCONOCIDO,
   ESTADOS_CUENTA,
+  ESTADOS_ESPERA,
   ESTADOS_MESA,
   ESTADOS_PEDIDO_BD,
+  ESTADOS_RESERVACION,
   ESTADOS_SIN_EQUIVALENTE_EN_BD,
   ROLES,
   type EstadoCuenta,
+  type EstadoEspera,
   type EstadoMesa,
   type EstadoPedido,
+  type EstadoReservacion,
   type Rol,
 } from '../../types'
 import { ErrorServicio } from '../errores'
@@ -83,6 +87,15 @@ export function parseFechaMySQL(texto: unknown, campo = 'fecha'): Date {
   throw respuestaInvalida(campo, texto)
 }
 
+/** Date → DATETIME de MySQL en HORA LOCAL ("2026-10-16 20:30:00"): lo contrario de `parseFechaMySQL`. */
+export function aFechaMySQL(fecha: Date): string {
+  const dos = (n: number) => String(n).padStart(2, '0')
+  return (
+    `${fecha.getFullYear()}-${dos(fecha.getMonth() + 1)}-${dos(fecha.getDate())} ` +
+    `${dos(fecha.getHours())}:${dos(fecha.getMinutes())}:${dos(fecha.getSeconds())}`
+  )
+}
+
 /** Como `parseFechaMySQL`, pero `null`/`undefined` (columna NULL) → `null`. */
 export function parseFechaMySQLONula(texto: unknown, campo = 'fecha'): Date | null {
   return texto === null || texto === undefined ? null : parseFechaMySQL(texto, campo)
@@ -110,11 +123,12 @@ function buscarCodigo<T extends string>(validos: readonly T[], original: unknown
 }
 
 /**
- * `mesa.estado` → código. El CHECK de database/schema.sql admite `libre`, `ocupada` y `reservada`: `libre` es el
- * mismo estado que la interfaz llama `disponible`. Un valor fuera de esas listas da `desconocido` (y una advertencia).
+ * `mesa.estado` → código. El CHECK de database/schema.sql admite `libre`, `ocupada` y `reservada`. Por tolerancia
+ * (datos o versiones anteriores) `disponible` / `Disponible` también se entienden como `libre`. Un valor fuera de esas
+ * listas da `desconocido` (y una advertencia).
  */
 export function aEstadoMesa(original: unknown): EstadoMesa {
-  if (normalizarCodigo(original) === 'libre') return 'disponible'
+  if (normalizarCodigo(original) === 'disponible') return 'libre'
   const estado = buscarCodigo(ESTADOS_MESA, original)
   if (estado) return estado
   advertirDesconocido('Estado de mesa', original)
@@ -145,4 +159,23 @@ export function aRol(original: unknown): Rol | null {
   if (rol) return rol
   advertirDesconocido('Rol', original)
   return null
+}
+
+/**
+ * `reservacion.estado` (texto libre, valores SIN CONFIRMAR) → código. Tolera mayúsculas, acentos y espacios
+ * ('Llegó' → 'llego'). Un valor fuera de la lista da `desconocido` (y UNA advertencia en consola).
+ */
+export function aEstadoReservacion(original: unknown): EstadoReservacion {
+  const estado = buscarCodigo(ESTADOS_RESERVACION, original)
+  if (estado) return estado
+  advertirDesconocido('Estado de reservación', original)
+  return ESTADO_DESCONOCIDO
+}
+
+/** `lista_espera.estado` (texto libre, valores SIN CONFIRMAR) → código. Igual de tolerante que `aEstadoReservacion`. */
+export function aEstadoEspera(original: unknown): EstadoEspera {
+  const estado = buscarCodigo(ESTADOS_ESPERA, original)
+  if (estado) return estado
+  advertirDesconocido('Estado de lista de espera', original)
+  return ESTADO_DESCONOCIDO
 }

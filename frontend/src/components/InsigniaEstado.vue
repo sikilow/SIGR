@@ -49,9 +49,10 @@ defineProps<{
   color: var(--tono);
 }
 
-.insignia--disponible {
-  --tono: var(--color-disponible);
-  --tono-texto: var(--color-disponible-texto);
+.insignia--libre,
+.insignia--activo {
+  --tono: var(--color-libre);
+  --tono-texto: var(--color-libre-texto);
 }
 
 .insignia--ocupada {

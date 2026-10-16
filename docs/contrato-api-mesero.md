@@ -34,8 +34,10 @@ del catálogo (`"En preparacion"`) o ya el código (`"en_preparacion"`).
 
 | Dominio | Valores | Notas |
 |---|---|---|
-| `mesa.estado` | `libre`, `ocupada`, `reservada` | `CHECK` en la BD; `libre` es el valor por defecto. **La interfaz llama «Disponible» a `libre`** (el mapper lo convierte). |
+| `mesa.estado` | `libre`, `ocupada`, `reservada` | `CHECK` en la BD; `libre` es el valor por defecto. **La interfaz usa el mismo código y muestra «Libre»** (mesero y hostess). El normalizador sigue entendiendo `disponible` como `libre` por tolerancia. |
 | `cuenta.estado` | `abierta`, `por_pagar`, `cerrada` | `CHECK` en la BD; `abierta` es el valor por defecto. |
+| `reservacion.estado` | `pendiente`, `confirmada`, `llego`, `cancelada` | **Texto libre**, sin `CHECK` (`VARCHAR(25)`, default `pendiente`). Solo lo usa la hostess; los valores son **suposiciones sin confirmar** salvo el default (ver [`contrato-api-hostess.md`](contrato-api-hostess.md)). |
+| `lista_espera.estado` | `esperando`, `asignada`, `cancelada` | **Texto libre**, sin `CHECK` (`VARCHAR(25)`, default `esperando`). Solo lo usa la hostess; `cancelada` es un **supuesto del frontend**. |
 | `estado_pedido.nombre` | `Registrado`, `Pendiente`, `En preparacion`, `Listo`, `Entregado`, `Cancelado`, `Pagado` | Catálogo de la BD (`Registrado` y `Pagado` vienen en `schema.sql`). |
 | `rol.nombre` | `Gerente`, `Mesero`, `Cocinero`, `Cajero`, `Hostess` | Catálogo de la BD. |
 
@@ -403,9 +405,9 @@ catálogo (y que `Pendiente` deje de usarse), o renombrar `Pendiente` a `Enviado
 
 **b) ✔ Resuelto: `cuenta.tipo_pago_solicitado`** existe (`fisico` o `digital`, `CHECK`).
 
-**c) ✔ Resuelto: `mesa.estado` y `cuenta.estado` tienen `CHECK`.** Un detalle: la BD llama **`libre`** a lo que la interfaz muestra como
-«Disponible». El frontend lo convierte al leer; la API entrega y recibe `libre` (`PATCH /mesas/{id}/estado`). Si prefieren `disponible` en la BD,
-cambia el `CHECK`, el `DEFAULT` y el `enum` de `backend/src/routes/mesas.ts`.
+**c) ✔ Resuelto: `mesa.estado` y `cuenta.estado` tienen `CHECK`.** La BD guarda **`libre`** y la interfaz usa ahora el mismo código y el mismo
+texto («Libre») en mesero y hostess; ya no hay conversión. Por tolerancia, el normalizador (`aEstadoMesa`) sigue entendiendo `disponible` como `libre`.
+`reservacion.estado` y `lista_espera.estado`, en cambio, son **texto libre sin `CHECK`** (ver el punto j).
 
 **d) No hay restricción de una sola cuenta activa por mesa.** Nada impide dos cuentas abiertas para la misma mesa. Hoy la API lo evita al crear
 pedidos (bloquea la fila de la mesa con `FOR UPDATE`), pero la BD no lo garantiza. **Propuesta:** un `UNIQUE` sobre una columna generada
@@ -428,3 +430,14 @@ la cuenta (y en `total_cuenta` de `GET /mesas`). El cliente nunca envía precios
 
 **i) `pedido.observaciones` no se usa.** El frontend guarda las observaciones por producto (`detalle_pedido.indicaciones`). Si el pedido necesita una
 nota general, habría que agregarla al contrato.
+
+**j) `reservacion.estado` y `lista_espera.estado` son texto libre.** No tienen `CHECK` (a diferencia de `mesa` y `cuenta`). El frontend de la hostess asume
+`pendiente`/`confirmada`/`llego`/`cancelada` y `esperando`/`asignada`/`cancelada`; solo `pendiente` y `esperando` son los `DEFAULT` y `cancelada` de la
+lista de espera es un supuesto. Un valor desconocido se muestra como «Estado desconocido». **Propuesta:** agregar el `CHECK` con esos valores.
+
+**k) `producto.controla_existencia`.** Existe en `schema.sql` (`FALSE` = se prepara al momento, sin existencia que contar). Para el mesero, `disponible` se
+calcula como `producto.disponible AND (controla_existencia = 0 OR existencia > 0)` (ver `backend/src/dominio.ts`); el mesero no ve cantidades.
+
+**l) Faltan las rutas de la hostess.** El backend solo tiene `GET /mesas` y `PATCH /mesas/{id}/estado` para este rol; reservaciones, lista de espera, clientes y
+«asignar mesa» están **propuestos** en [`contrato-api-hostess.md`](contrato-api-hostess.md) y no implementados. Columnas relevantes: `cliente.telefono` y
+`cliente.correo` admiten `NULL`; `reservacion.id_mesa` y `reservacion.llegada_en` admiten `NULL`; `reservacion` **no tiene folio**.

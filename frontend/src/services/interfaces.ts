@@ -21,6 +21,7 @@ import type {
   Usuario,
   UsuarioAdmin,
 } from '../types'
+import type { HostessService } from './hostess/interfaces'
 
 export interface AuthService {
   /** POST /auth/login */
@@ -120,4 +121,5 @@ export interface Servicios {
   cuentas: CuentasService
   usuarios: UsuariosService
   catalogo: CatalogoService
+  hostess: HostessService
 }

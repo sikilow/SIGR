@@ -219,7 +219,7 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
 
         <div class="fila__lado">
           <div class="fila__insignias">
-            <InsigniaEstado :tono="p.activo ? 'disponible' : 'cancelado'" :texto="p.activo ? 'Activo' : 'Inactivo'" />
+            <InsigniaEstado :tono="p.activo ? 'activo' : 'cancelado'" :texto="p.activo ? 'Activo' : 'Inactivo'" />
             <InsigniaEstado v-if="agotadoPorExistencia(p)" tono="agotado" texto="Agotado" />
             <InsigniaEstado v-else-if="pocoStock(p)" tono="listo" texto="Poco stock" />
           </div>

@@ -1,3 +1,4 @@
+import { crearHostessMock } from '../hostess/mock'
 import type { Servicios } from '../interfaces'
 import { crearCatalogoMock, crearUsuariosMock } from './adminMock'
 import { crearAuthMock } from './authMock'
@@ -18,5 +19,6 @@ export function crearServiciosMock(): Servicios {
     cuentas: crearCuentasMock(),
     usuarios: crearUsuariosMock(),
     catalogo: crearCatalogoMock(),
+    hostess: crearHostessMock(),
   }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Hoja de acciones (bottom sheet) de una mesa, sobre DialogoModal (foco atrapado, Escape,
-// foco de regreso a la tarjeta). Solo una mesa OCUPADA ofrece acciones de pedido; disponible o
+// foco de regreso a la tarjeta). Solo una mesa OCUPADA ofrece acciones de pedido; libre o
 // reservada solo se puede cerrar (la hostess asigna la mesa).
 import { computed, ref } from 'vue'
 import { ETIQUETA_ESTADO_MESA, type Mesa } from '../types'
@@ -77,7 +77,7 @@ function bloquear(evento: Event) {
         </div>
       </template>
 
-      <!-- Mesa disponible o reservada: sin acciones de pedido (la hostess asigna la mesa) -->
+      <!-- Mesa libre o reservada: sin acciones de pedido (la hostess asigna la mesa) -->
       <p v-else class="hoja__resumen">Esta mesa no tiene clientes sentados; la hostess la asigna.</p>
 
       <button

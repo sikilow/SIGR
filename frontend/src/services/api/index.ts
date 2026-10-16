@@ -1,6 +1,7 @@
 // Implementación de los servicios contra la API real (backend/ de este repo, rutas /api/...).
 // Solo se usa con VITE_USE_MOCK=false.
 import { ErrorServicio } from '../errores'
+import { crearHostessApi } from '../hostess/api'
 import type { Servicios } from '../interfaces'
 import { solicitar } from './cliente'
 import { guardarToken, leerToken, limpiarToken } from './token'
@@ -127,7 +128,7 @@ export function crearServiciosApi(): Servicios {
         try {
           return aCuenta(await solicitar<CuentaDto>('GET', `/mesas/${idMesa}/cuenta`))
         } catch (error) {
-          // Una mesa sin cuenta activa (p. ej. disponible): la API responde 404 con `no_encontrado`.
+          // Una mesa sin cuenta activa (p. ej. libre): la API responde 404 con `no_encontrado`.
           if (error instanceof ErrorServicio && error.codigo === 'no_encontrado') return null
           throw error
         }
@@ -196,5 +197,7 @@ export function crearServiciosApi(): Servicios {
         return aProductoAdmin(await solicitar<ProductoAdminDto>('PATCH', `/catalogo/productos/${id}`, { cuerpo }))
       },
     },
+
+    hostess: crearHostessApi(),
   }
 }

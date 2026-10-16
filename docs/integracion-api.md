@@ -116,7 +116,7 @@ Usuario de prueba: un mesero real de la base de datos. Antes de cada prueba, rec
 - [ ] El JSON trae las columnas de `mesa` (`id_mesa`, `numero`, `capacidad`, `estado`) y los 4 campos calculados
       por la API (`estado_cuenta`, `pedidos_activos`, `total_cuenta`, `pedidos_listos`); una mesa sin cuenta trae
       `null` y ceros. Opcional: `tipo_pago_solicitado` (columna de `cuenta`) para mostrar "Cuenta solicitada · Pago digital".
-- [ ] Un `estado` de mesa fuera de `disponible`/`ocupada`/`reservada` se ve como «Estado desconocido» (y avisa en consola).
+- [ ] Un `estado` de mesa fuera de `libre`/`ocupada`/`reservada` se ve como «Estado desconocido» (y avisa en consola).
 - [ ] Se repite la petición cada 10 s (`VITE_POLL_MS`) y se detiene con la pestaña oculta.
 - [ ] Con la API apagada aparece "No se pudo actualizar…" con **Reintentar** y se conservan las mesas.
 
