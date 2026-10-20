@@ -1,0 +1,50 @@
+[
+  {
+    "idCliente": 1,
+    "nombre": "Carlos Medina",
+    "telefono": "3115550201",
+    "correo": "carlos.medina@correo.test"
+  },
+  {
+    "idCliente": 2,
+    "nombre": "Patricia Ruiz",
+    "telefono": "3115550202",
+    "correo": null
+  },
+  {
+    "idCliente": 3,
+    "nombre": "Familia González",
+    "telefono": "3115550203",
+    "correo": null
+  },
+  {
+    "idCliente": 4,
+    "nombre": "Daniel Ortega",
+    "telefono": "3115550204",
+    "correo": "daniel.ortega@correo.test"
+  },
+  {
+    "idCliente": 5,
+    "nombre": "Elena Castillo",
+    "telefono": "3115550205",
+    "correo": null
+  },
+  {
+    "idCliente": 6,
+    "nombre": "Héctor Salas",
+    "telefono": "3115550206",
+    "correo": null
+  },
+  {
+    "idCliente": 7,
+    "nombre": "Valeria Núñez",
+    "telefono": "3115550207",
+    "correo": null
+  },
+  {
+    "idCliente": 8,
+    "nombre": "Cliente Prueba",
+    "telefono": null,
+    "correo": null
+  }
+]

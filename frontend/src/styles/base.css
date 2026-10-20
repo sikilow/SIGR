@@ -1,0 +1,355 @@
+/* Reinicio mínimo y componentes base reutilizables. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+/* Con poca altura (zoom alto o móvil horizontal) las barras fijas ocupan menos para dejar espacio al contenido */
+@media (max-height: 37.5em) {
+  :root {
+    --altura-barra-superior: 48px;
+    --altura-nav-inferior: 56px;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: var(--fuente);
+  font-size: var(--texto-base);
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.25;
+}
+
+/* Jerarquía única: título de pantalla o de diálogo (h2) y de bloque o tarjeta (h3) */
+h2 {
+  font-size: var(--texto-xl);
+}
+
+h3 {
+  font-size: var(--texto-lg);
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+/* Foco visible para uso con teclado y lectores de pantalla */
+:focus-visible {
+  outline: 3px solid var(--color-primary-dark);
+  outline-offset: 2px;
+}
+
+/* Botones: siempre ≥ 48px de alto */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2);
+  min-height: var(--tactil-min);
+  min-width: var(--tactil-min);
+  padding: 0 var(--espacio-5);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radio);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color 150ms ease-out,
+    transform 100ms ease-out;
+}
+
+/* Feedback inmediato al presionar (sin cambiar el espacio que ocupa el botón) */
+.btn:active:not(:disabled):not([aria-disabled='true']) {
+  transform: scale(0.97);
+}
+
+.btn:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+}
+
+/* Acción destructiva (p. ej. cancelar): relleno de peligro con texto blanco (AA); siempre con texto + ícono */
+.btn--peligro {
+  border-color: var(--color-peligro);
+  background: var(--color-peligro);
+}
+
+.btn--peligro:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: var(--color-peligro-texto);
+  background: var(--color-peligro-texto);
+}
+
+/* Destructiva de menor peso (acción disponible en una pantalla, pero no la principal) */
+.btn--peligro-suave {
+  background: var(--color-surface);
+  color: var(--color-peligro-texto);
+  border-color: var(--color-peligro);
+}
+
+.btn--peligro-suave:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: var(--color-peligro-texto);
+  background: var(--color-peligro-fondo);
+  color: var(--color-peligro-texto);
+}
+
+/* Deshabilitado: relleno neutro y texto oscuro (legible), sin depender solo de la opacidad */
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  border-color: var(--color-deshabilitado-borde);
+  background: var(--color-deshabilitado-fondo);
+  color: var(--color-deshabilitado-texto);
+  cursor: not-allowed;
+}
+
+/* Botón de acción principal de una pantalla o de un diálogo: 56 px y texto grande */
+.btn--grande {
+  min-height: 56px;
+  font-size: var(--texto-lg);
+}
+
+/* Fila de botones al pie de un diálogo o de una confirmación: mismos tamaños y separación en todos */
+.fila-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-3);
+}
+
+.fila-botones > .btn {
+  flex: 1 1 180px;
+  min-height: 56px;
+  font-size: var(--texto-lg);
+}
+
+/* Enlace "‹ Volver" al inicio de una pantalla */
+.enlace-volver {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--espacio-1);
+  min-height: var(--tactil-min);
+  padding-right: var(--espacio-3);
+  color: var(--color-primary-dark);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.btn--secundario {
+  background: var(--color-surface);
+  color: var(--color-primary-dark);
+}
+
+.btn--secundario:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-bg);
+  color: var(--color-primary-dark);
+}
+
+/* Chips de filtro/categoría (≥ 48 px). Activo: relleno + check + aria-pressed, no solo color */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  min-height: var(--tactil-min);
+  padding: 0 var(--espacio-5);
+  border: 2px solid var(--color-muted);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 150ms ease-out;
+}
+
+.chip:active {
+  background: var(--color-border);
+}
+
+.chip--activo,
+.chip--activo:active {
+  border-color: var(--color-primary-dark);
+  background: var(--color-primary-dark);
+  color: var(--color-on-primary);
+}
+
+.tarjeta {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  padding: var(--espacio-6);
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+  font-weight: 600;
+}
+
+.campo input {
+  min-height: var(--tactil-min);
+  padding: 0 var(--espacio-4);
+  border: 2px solid var(--color-muted);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface);
+  font-weight: 400;
+}
+
+.texto-error {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Enlace para saltar la navegación (teclado y lectores de pantalla) */
+.saltar-contenido {
+  position: absolute;
+  top: var(--espacio-2);
+  left: var(--espacio-2);
+  z-index: 100;
+  padding: var(--espacio-3) var(--espacio-4);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface);
+  color: var(--color-primary-dark);
+  font-weight: 700;
+  transform: translateY(-200%);
+}
+
+.saltar-contenido:focus {
+  transform: none;
+}
+
+/* Cifras de ancho fijo para precios y totales */
+.numero {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Avisos en línea (error con "Reintentar", información). Siempre llevan ícono + texto. */
+.aviso {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-4);
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 2px solid var(--color-error);
+  border-radius: var(--radio);
+  background: var(--color-surface);
+}
+
+.aviso svg {
+  flex: none;
+}
+
+.aviso p {
+  flex: 1;
+  margin: 0;
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.aviso--info {
+  border-color: var(--color-primary);
+  color: var(--color-primary-dark);
+}
+
+.aviso--info p {
+  color: var(--color-text);
+}
+
+/* Pantalla vacía o con error sin datos */
+.vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-3);
+  padding: var(--espacio-10) var(--espacio-4);
+  border: 2px dashed var(--color-muted);
+  border-radius: var(--radio);
+  text-align: center;
+}
+
+.vacio p {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+/* Esqueleto de carga */
+.esqueleto {
+  min-height: 96px;
+  border-radius: var(--radio);
+  background: linear-gradient(90deg, var(--color-border) 25%, var(--color-surface) 50%, var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation: brillo-esqueleto 1.4s ease-in-out infinite;
+}
+
+@keyframes brillo-esqueleto {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Enlaces con aspecto de botón: sin subrayado */
+a.btn {
+  text-decoration: none;
+}
+
+/* Campo de texto de varias líneas (motivos, notas) */
+.campo textarea {
+  min-height: 112px;
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 2px solid var(--color-muted);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface);
+  font: inherit;
+  font-weight: 400;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+/* Movimiento reducido: ninguna animación ni transición se ejecuta (se anulan, no solo se acortan) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+}

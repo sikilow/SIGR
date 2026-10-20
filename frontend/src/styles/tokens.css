@@ -1,0 +1,80 @@
+/*
+  Tokens de diseño de SIGR.
+  PROVISIONAL: la paleta está pendiente de confirmación por el usuario.
+*/
+:root {
+  /* Paleta base */
+  --color-primary: #c2410c;
+  --color-primary-dark: #9a3412;
+  --color-bg: #fff8f1;
+  --color-surface: #ffffff;
+  --color-text: #1f2937;
+  --color-muted: #6b7280;
+  --color-border: #e7d9cc;
+  --color-on-primary: #ffffff;
+  --color-error: #b91c1c;
+
+  /* Estados de mesa y de pedido (para íconos y bordes; contraste ≥ 3:1 sobre blanco) */
+  --color-libre: #16a34a;
+  --color-ocupada: #dc2626;
+  --color-reservada: #2563eb;
+  --color-listo: #d97706;
+
+  /* Variantes oscuras para TEXTO de estado (contraste AA ≥ 4.5:1 sobre blanco) */
+  --color-libre-texto: #166534;
+  --color-ocupada-texto: #991b1b;
+  --color-reservada-texto: #1e40af;
+  --color-listo-texto: #92400e;
+
+  /* Controles deshabilitados (relleno neutro y texto oscuro legible) */
+  --color-deshabilitado-borde: #c9bbaa;
+  --color-deshabilitado-fondo: #ece3d9;
+  --color-deshabilitado-texto: #4b5563;
+  --color-listo-fondo: #fffbeb;
+
+  /* Acción destructiva (cancelar): relleno, variante oscura para texto/hover (AA sobre blanco) */
+  --color-peligro: #b91c1c;
+  --color-peligro-texto: #7f1d1d;
+  --color-peligro-fondo: #fef2f2;
+
+  /* Estados del pedido: color para ícono/borde y variante oscura para texto (AA sobre blanco) */
+  --color-registrado: #6b7280;
+  --color-registrado-texto: #374151;
+  --color-enviado: #2563eb;
+  --color-enviado-texto: #1e40af;
+  --color-preparacion: #7c3aed;
+  --color-preparacion-texto: #5b21b6;
+  --color-entregado: #16a34a;
+  --color-entregado-texto: #166534;
+  --color-pagado: #0f766e;
+  --color-pagado-texto: #115e59;
+
+  /* Forma */
+  --radio: 16px;
+  --radio-sm: 8px;
+  --sombra: 0 1px 3px rgb(31 41 55 / 12%), 0 1px 2px rgb(31 41 55 / 8%);
+
+  /* Escala de espaciado (base de 4px) */
+  --espacio-1: 4px;
+  --espacio-2: 8px;
+  --espacio-3: 12px;
+  --espacio-4: 16px;
+  --espacio-5: 20px;
+  --espacio-6: 24px;
+  --espacio-8: 32px;
+  --espacio-10: 40px;
+  --espacio-12: 48px;
+
+  /* Táctil: objetivo mínimo de 48px */
+  --tactil-min: 48px;
+  --altura-barra-superior: 64px;
+  --altura-nav-inferior: 72px;
+
+  /* Tipografía del sistema */
+  --fuente: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --texto-sm: 0.875rem;
+  --texto-base: 1rem;
+  --texto-lg: 1.25rem;
+  --texto-xl: 1.5rem;
+  --texto-2xl: 2rem;
+}

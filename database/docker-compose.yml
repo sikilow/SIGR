@@ -1,0 +1,28 @@
+# MySQL 8 para desarrollo de SIGR.
+#   Levantar:  docker compose -f database/docker-compose.yml up -d
+#   Apagar:    docker compose -f database/docker-compose.yml down        (los datos se conservan)
+#   Reiniciar de cero (borra los datos y vuelve a correr init.sql):
+#              docker compose -f database/docker-compose.yml down -v
+# init.sql solo se ejecuta la primera vez, cuando el volumen está vacío.
+services:
+  db:
+    image: mysql:8.0
+    container_name: sigr-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-sigr1234}
+      TZ: America/Mexico_City
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-time-zone=-06:00
+    ports:
+      - "3306:3306"
+    volumes:
+      - sigr-datos:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-sigr1234}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  sigr-datos:

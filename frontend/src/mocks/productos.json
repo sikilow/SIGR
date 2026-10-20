@@ -1,0 +1,158 @@
+[
+  {
+    "idCategoria": 1,
+    "nombre": "Entradas",
+    "productos": [
+      {
+        "idProducto": 1,
+        "idCategoria": 1,
+        "nombre": "Guacamole con totopos",
+        "descripcion": "Aguacate fresco, cebolla y cilantro",
+        "precio": 95,
+        "disponible": true
+      },
+      {
+        "idProducto": 2,
+        "idCategoria": 1,
+        "nombre": "Sopa de tortilla",
+        "descripcion": "Caldo de jitomate con aguacate y queso",
+        "precio": 85,
+        "disponible": true
+      },
+      {
+        "idProducto": 3,
+        "idCategoria": 1,
+        "nombre": "Queso fundido",
+        "descripcion": "Con chorizo y tortillas de harina",
+        "precio": 120,
+        "disponible": true
+      },
+      {
+        "idProducto": 4,
+        "idCategoria": 1,
+        "nombre": "Ceviche de pescado",
+        "descripcion": "Limón, chile serrano y pepino",
+        "precio": 140,
+        "disponible": false
+      }
+    ]
+  },
+  {
+    "idCategoria": 2,
+    "nombre": "Platos fuertes",
+    "productos": [
+      {
+        "idProducto": 5,
+        "idCategoria": 2,
+        "nombre": "Enchiladas verdes",
+        "descripcion": "Pollo deshebrado con crema y queso",
+        "precio": 165,
+        "disponible": true
+      },
+      {
+        "idProducto": 6,
+        "idCategoria": 2,
+        "nombre": "Arrachera con guarnición",
+        "descripcion": "300 g con frijoles y nopales",
+        "precio": 285,
+        "disponible": true
+      },
+      {
+        "idProducto": 7,
+        "idCategoria": 2,
+        "nombre": "Filete de pescado",
+        "descripcion": "A la veracruzana con arroz",
+        "precio": 230,
+        "disponible": true
+      },
+      {
+        "idProducto": 8,
+        "idCategoria": 2,
+        "nombre": "Mole poblano",
+        "descripcion": "Pierna de pollo con arroz rojo",
+        "precio": 190,
+        "disponible": true
+      },
+      {
+        "idProducto": 16,
+        "idCategoria": 2,
+        "nombre": "Tacos al pastor",
+        "descripcion": "Orden de cinco con piña y cilantro",
+        "precio": 120,
+        "disponible": true
+      }
+    ]
+  },
+  {
+    "idCategoria": 3,
+    "nombre": "Postres",
+    "productos": [
+      {
+        "idProducto": 9,
+        "idCategoria": 3,
+        "nombre": "Flan napolitano",
+        "descripcion": "Con caramelo casero",
+        "precio": 70,
+        "disponible": true,
+        "existencia": 8
+      },
+      {
+        "idProducto": 10,
+        "idCategoria": 3,
+        "nombre": "Churros con chocolate",
+        "descripcion": "Seis piezas con salsa de chocolate",
+        "precio": 85,
+        "disponible": true
+      },
+      {
+        "idProducto": 11,
+        "idCategoria": 3,
+        "nombre": "Pastel de tres leches",
+        "descripcion": "Rebanada individual",
+        "precio": 80,
+        "disponible": true,
+        "existencia": 5
+      }
+    ]
+  },
+  {
+    "idCategoria": 4,
+    "nombre": "Bebidas",
+    "productos": [
+      {
+        "idProducto": 12,
+        "idCategoria": 4,
+        "nombre": "Agua de horchata",
+        "descripcion": "Jarra de 1 litro",
+        "precio": 55,
+        "disponible": true
+      },
+      {
+        "idProducto": 13,
+        "idCategoria": 4,
+        "nombre": "Limonada mineral",
+        "descripcion": "Vaso grande",
+        "precio": 45,
+        "disponible": true,
+        "existencia": 12
+      },
+      {
+        "idProducto": 14,
+        "idCategoria": 4,
+        "nombre": "Café de olla",
+        "descripcion": "Con canela y piloncillo",
+        "precio": 40,
+        "disponible": true
+      },
+      {
+        "idProducto": 15,
+        "idCategoria": 4,
+        "nombre": "Cerveza artesanal",
+        "descripcion": "Botella de 355 ml",
+        "precio": 75,
+        "disponible": true,
+        "existencia": 24
+      }
+    ]
+  }
+]
