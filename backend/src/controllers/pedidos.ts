@@ -56,7 +56,7 @@ async function bloquearPedido(cx: PoolConnection, id: number) {
 
 function exigirPedidoPropio(req: Request, idMesero: number): void {
   if (req.usuario!.rol === "mesero" && req.usuario!.id !== idMesero) {
-    throw new ErrorApi(403, "sin_permiso", "No tienes permiso para consultar o modificar un pedido de otro mesero.");
+    throw new ErrorApi(403, "sin_permiso", "No tienes permiso para modificar un pedido de otro mesero.");
   }
 }
 
@@ -103,7 +103,7 @@ export const crearPedido = async (req: Request, res: Response) => {
 
 /**
  * GET /api/pedidos?id_mesa=&estado=
- * Un mesero solo ve SUS pedidos; el resto de los roles ve todos.
+ * Todos los roles autorizados pueden consultar todos los pedidos.
  */
 export const listarPedidos = async (req: Request, res: Response) => {
   const { id_mesa, estado } = validar(Filtros, req.query);
@@ -120,11 +120,6 @@ export const listarPedidos = async (req: Request, res: Response) => {
     condiciones.push("ep.nombre = ?");
     params.push(nombre);
   }
-  if (req.usuario!.rol === "mesero") {
-    condiciones.push("p.id_mesero = ?");
-    params.push(req.usuario!.id);
-  }
-
   res.json(await cargarPedidos(pool, condiciones.length ? `WHERE ${condiciones.join(" AND ")}` : "", params));
 };
 
@@ -132,7 +127,6 @@ export const listarPedidos = async (req: Request, res: Response) => {
 export const obtenerPedido = async (req: Request, res: Response) => {
   const pedido = await cargarPedido(pool, idDeRuta(req.params.id));
   if (!pedido) throw new ErrorApi(404, "no_encontrado", "El pedido no existe.");
-  exigirPedidoPropio(req, pedido.id_mesero);
   res.json(pedido);
 };
 

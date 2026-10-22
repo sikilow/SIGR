@@ -33,6 +33,7 @@ const pedidoDto: PedidoDto = {
   id_pedido: 6,
   id_cuenta: 4,
   id_mesero: 1,
+  nombre_mesero: 'Ana Torres',
   estado: 'Pendiente',
   fecha_hora: '2026-10-14 18:30:00',
   id_motivo: null,
@@ -48,6 +49,7 @@ const pedidoPdo = {
   id_pedido: '6',
   id_cuenta: '4',
   id_mesero: '1',
+  nombre_mesero: 'Ana Torres',
   estado: 'En preparacion',
   fecha_hora: '2026-10-14 18:30:00',
   id_motivo: null,
@@ -119,6 +121,7 @@ describe('aPedido', () => {
       idPedido: 6,
       idCuenta: 4,
       idMesero: 1,
+      nombreMesero: 'Ana Torres',
       estado: 'pendiente',
       fechaHora: new Date(2026, 9, 14, 18, 30, 0),
       idMotivo: null,
@@ -132,7 +135,7 @@ describe('aPedido', () => {
 
   it('convierte texto de PDO: ids, DECIMAL, NULL de indicaciones y estado con nombre del catálogo', () => {
     const pedido = aPedido(pedidoPdo)
-    expect(pedido).toMatchObject({ idPedido: 6, idCuenta: 4, idMesero: 1, idMesa: 11, mesaNumero: 11, estado: 'en_preparacion', total: 80 })
+    expect(pedido).toMatchObject({ idPedido: 6, idCuenta: 4, idMesero: 1, nombreMesero: 'Ana Torres', idMesa: 11, mesaNumero: 11, estado: 'en_preparacion', total: 80 })
     expect(pedido.detalle).toEqual([{ idProducto: 14, nombreProducto: 'Café de olla', cantidad: 2, indicaciones: '', precioUnitario: 40 }])
   })
 

@@ -80,7 +80,7 @@ function crearMesas(): MesaGuardada[] {
 }
 
 function crearPedidos(): Pedido[] {
-  const base = { idMesero: 1, idMotivo: null, motivoDescripcion: null }
+  const base = { idMesero: 1, nombreMesero: 'Ana Torres', idMotivo: null, motivoDescripcion: null }
   // En el mock el número visible de la mesa coincide con su id (`pedido` no tiene `id_mesa`: sale de la cuenta).
   const pedidos: Array<Omit<Pedido, 'mesaNumero'>> = [
     // Mesa 3 (cuenta 1): un pedido ya entregado y otro listo para entregar

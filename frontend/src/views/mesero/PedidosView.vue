@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Mis pedidos (/mesero/pedidos y /mesero/pedidos/:idPedido). Con 1024 px o más, lista a la izquierda y
+// Pedidos del salón (/mesero/pedidos y /mesero/pedidos/:idPedido). Con 1024 px o más, lista a la izquierda y
 // detalle a la derecha; con menos, el detalle es una pantalla aparte ("Volver a pedidos").
 // Los filtros viven en la URL: ?estado=registrado|enviado|en_preparacion|listo|entregado|cancelado
 // (sin valor = "Activos") y ?mesa=:idMesa.
@@ -179,7 +179,7 @@ onMounted(() => {
     <!-- Encabezado y filtros: se ocultan en la pantalla de detalle de las tablets verticales -->
     <template v-if="mostrarLista">
       <header class="pedidos__encabezado">
-        <h2 ref="tituloLista" tabindex="-1">Mis pedidos</h2>
+        <h2 ref="tituloLista" tabindex="-1">Pedidos del salón</h2>
         <IndicadorActualizacion :ultima="store.ultimaActualizacion" :actualizando="store.actualizando" @actualizar="polling.ejecutarAhora()" />
       </header>
 
@@ -270,6 +270,7 @@ onMounted(() => {
                 <span>Mesa {{ p.mesaNumero }}</span>
                 <span class="fila__hora numero">{{ formatearHora(p.fechaHora) }}</span>
               </span>
+              <span class="fila__mesero">Mesero: {{ p.nombreMesero }}</span>
               <InsigniaEstado :tono="p.estado" :texto="ETIQUETA_ESTADO_PEDIDO[p.estado]" />
               <span class="fila__datos">
                 {{ formatearProductos(p.detalle.reduce((suma, d) => suma + d.cantidad, 0)) }} ·
@@ -461,6 +462,11 @@ onMounted(() => {
 
 .fila__hora {
   margin-left: auto;
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+}
+
+.fila__mesero {
   color: var(--color-muted);
   font-size: var(--texto-sm);
 }

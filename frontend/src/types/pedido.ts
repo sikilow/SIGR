@@ -21,6 +21,8 @@ export interface Pedido {
   idCuenta: number
   /** pedido.id_mesero */
   idMesero: number
+  /** usuario.nombre del mesero que creó el pedido. */
+  nombreMesero: string
   /** pedido.id_estado, ya traducido a código con el nombre de estado_pedido (JOIN). */
   estado: EstadoPedido
   /** pedido.fecha_hora (DATETIME sin zona horaria, interpretada como hora local). */

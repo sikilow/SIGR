@@ -95,14 +95,12 @@ Cambia el estado de una mesa (sentar, liberar, reservar). Solo `hostess` y `gere
 
 | Líneas | Qué hace | Por qué |
 | --- | --- | --- |
-| 109 | Valida los filtros de `req.query`. | |
-| 110–122 | Arma el `WHERE` poco a poco con `condiciones` y `params`: `id_mesa` y/o `estado` (traducido con `nombreEstadoDeFiltro`; si no existe, 422). | Solo se agregan los filtros que llegaron. |
-| 123–126 | **Un mesero solo ve sus propios pedidos** (`p.id_mesero = ?`); los demás roles ven todos. | La regla está en el servidor. |
+| 109–127 | Valida y aplica los filtros opcionales `id_mesa` y `estado`; no restringe la lista por mesero. | Todos los meseros consultan pedidos de todo el salón. |
 
 ### `GET /api/pedidos/:id`
 
-Un pedido por id; 404 si no existe. Un mesero recibe 403 `sin_permiso` al consultar un pedido de otro mesero. Editar, enviar, cancelar
-y entregar también comprueban la propiedad antes de modificarlo; gerente conserva el acceso administrativo.
+Un pedido por id; cualquier mesero puede consultarlo. Editar, enviar, cancelar y entregar comprueban la propiedad antes de modificarlo;
+gerente conserva el acceso administrativo.
 
 ### `PATCH /api/pedidos/:id`: editar el detalle
 

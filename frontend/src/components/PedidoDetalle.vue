@@ -174,7 +174,7 @@ const cancelando = ref(false)
     <header class="detalle__cabecera">
       <div>
         <h2 id="detalle-titulo" ref="titulo" tabindex="-1">Pedido #{{ pedido.idPedido }}</h2>
-        <p class="detalle__meta">Mesa {{ pedido.mesaNumero }} · {{ formatearHora(pedido.fechaHora) }}</p>
+        <p class="detalle__meta">Mesa {{ pedido.mesaNumero }} · {{ formatearHora(pedido.fechaHora) }} · Mesero: {{ pedido.nombreMesero }}</p>
       </div>
       <InsigniaEstado :tono="pedido.estado" :texto="ETIQUETA_ESTADO_PEDIDO[pedido.estado]" />
     </header>

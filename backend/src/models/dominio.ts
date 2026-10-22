@@ -251,6 +251,8 @@ export interface PedidoDto {
   id_pedido: number;
   id_cuenta: number;
   id_mesero: number;
+  /** Calculado: usuario.nombre del mesero que creó el pedido. */
+  nombre_mesero: string;
   id_estado: number;
   /** Calculado: estado_pedido.nombre (JOIN por pedido.id_estado), p. ej. "En preparacion". */
   estado: string;
@@ -269,11 +271,13 @@ export interface PedidoDto {
 }
 
 const SELECT_PEDIDO = `
-  SELECT p.id_pedido, p.id_cuenta, p.id_mesero, p.id_estado, ep.nombre AS estado, p.fecha_hora, p.id_motivo,
+  SELECT p.id_pedido, p.id_cuenta, p.id_mesero, u.nombre AS nombre_mesero, p.id_estado,
+         ep.nombre AS estado, p.fecha_hora, p.id_motivo,
          c.id_mesa, m.numero AS mesa_numero, mc.descripcion AS motivo_descripcion
     FROM pedido p
     JOIN cuenta c ON c.id_cuenta = p.id_cuenta
     JOIN mesa m ON m.id_mesa = c.id_mesa
+    JOIN usuario u ON u.id_usuario = p.id_mesero
     JOIN estado_pedido ep ON ep.id_estado = p.id_estado
     LEFT JOIN motivo_cancelacion mc ON mc.id_motivo = p.id_motivo`;
 
@@ -313,6 +317,7 @@ export async function cargarPedidos(ex: Ejecutor, condicion = "", params: unknow
       id_pedido: p.id_pedido as number,
       id_cuenta: p.id_cuenta as number,
       id_mesero: p.id_mesero as number,
+      nombre_mesero: p.nombre_mesero as string,
       id_estado: p.id_estado as number,
       estado: p.estado as string,
       fecha_hora: p.fecha_hora as string,

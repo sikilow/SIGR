@@ -57,6 +57,7 @@
 | `Pedido.id` / `pedidoId` | `pedido.id_pedido` | `idPedido` | `id_pedido` | columna |
 | `Pedido.cuentaId` / `cuentaId` | `pedido.id_cuenta` | `idCuenta` | `id_cuenta` | columna |
 | `Pedido.meseroId` / `meseroId` | `pedido.id_mesero` | `idMesero` | `id_mesero` | columna (FK a `usuario.id_usuario`) |
+| Mesero que creó el pedido | `usuario.nombre` (JOIN por `pedido.id_mesero`) | `nombreMesero` | `nombre_mesero` | calculado por la API |
 | `Pedido.mesaId` | — (`pedido` **no tiene** `id_mesa`; sale de `cuenta.id_mesa`) | `idMesa` | `id_mesa` | calculado (JOIN con `cuenta`) |
 | `Pedido.mesaNumero` | `mesa.numero` (JOIN) | `mesaNumero` | `mesa_numero` | calculado (JOIN) |
 | `Pedido.estado` | `estado_pedido.nombre` vía `pedido.id_estado` | `estado` (código normalizado) | `estado` (nombre del catálogo, p. ej. `"En preparacion"`) | calculado (JOIN); la columna es `id_estado` |

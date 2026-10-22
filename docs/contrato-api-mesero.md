@@ -55,6 +55,7 @@ del catálogo (`"En preparacion"`) o ya el código (`"en_preparacion"`).
   "id_pedido": 6,
   "id_cuenta": 4,
   "id_mesero": 1,
+  "nombre_mesero": "Ana Torres",
   "id_estado": 1,
   "estado": "Pendiente",
   "fecha_hora": "2026-10-15 16:34:00",
@@ -73,6 +74,7 @@ del catálogo (`"En preparacion"`) o ya el código (`"en_preparacion"`).
 | Campo | Origen | Naturaleza |
 |---|---|---|
 | `id_pedido`, `id_cuenta`, `id_mesero`, `fecha_hora`, `id_motivo` | `pedido.*` | columna |
+| `nombre_mesero` | `usuario.nombre` (JOIN por `pedido.id_mesero`) | **calculado por la API, no es columna de `pedido`** |
 | `estado` | `estado_pedido.nombre` (JOIN por `pedido.id_estado`) | **calculado por la API, no es columna** (la columna es `id_estado`) |
 | `id_mesa` | `cuenta.id_mesa` (JOIN por `pedido.id_cuenta`) | **calculado por la API, no es columna** (`pedido` no tiene `id_mesa`) |
 | `mesa_numero` | `mesa.numero` (JOIN) | **calculado por la API, no es columna** |
@@ -241,17 +243,19 @@ Filtros opcionales por query string: `id_mesa`, `estado`. Ejemplo: `/pedidos?id_
 [ { "id_pedido": 5, "id_mesa": 11, "mesa_numero": 11, "estado": "Pendiente", "...": "..." } ]
 ```
 
-"Mis pedidos" pide `GET /pedidos` (con `id_mesa` cuando la URL trae `?mesa=`) y **filtra por estado en el cliente** ("Activos" =
-todo menos `Cancelado`). La API limita a cada mesero a sus propios pedidos; gerente y cocina pueden consultar todos. La cola de cocina
-pide `estado=Pendiente` y `estado=En preparacion` por separado; el endpoint admite un filtro de estado por petición. Cada pedido debe
-traer su `detalle` completo: el detalle se pinta con esos datos sin otra petición (si el pedido abierto no está en la lista, se pide
-con `GET /pedidos/{id}`).
+"Pedidos del salón" muestra el nombre del mesero creador en la lista y el detalle. Lo obtiene como `nombre_mesero` junto con cada pedido.
+La pantalla pide `GET /pedidos` (con `id_mesa` cuando la URL trae `?mesa=`) y **filtra por estado en el cliente** ("Activos" =
+todo menos `Cancelado`). Todos los meseros pueden consultar todos los pedidos, pero solo pueden modificar, enviar, cancelar o entregar
+los pedidos que crearon. Gerente y cocina pueden consultar todos; sus acciones tienen los permisos definidos por sus endpoints. La cola
+de cocina pide `estado=Pendiente` y `estado=En preparacion` por separado; el endpoint admite un filtro de estado por petición. Cada
+pedido debe traer su `detalle` completo: el detalle se pinta con esos datos sin otra petición (si el pedido abierto no está en la lista,
+se pide con `GET /pedidos/{id}`).
 
 ### GET /pedidos/{id}
 
-200: objeto Pedido (con `detalle` completo, incluidas las `indicaciones`). 404 `no_encontrado` si no existe; un mesero recibe 403
-`sin_permiso` si el pedido pertenece a otro mesero. La pantalla "Pedido de mesa" lo usa para precargar un pedido `registrado` que se va
-a editar, y valida en el cliente que pertenezca a la mesa y siga editable.
+200: objeto Pedido (con `detalle` completo, incluidas las `indicaciones`). 404 `no_encontrado` si no existe. Cualquier mesero puede
+consultarlo, aunque lo haya creado otro mesero. La pantalla "Pedido de mesa" lo usa para precargar un pedido `registrado` que se va a
+editar, y valida en el cliente que pertenezca a la mesa y siga editable.
 
 ### PATCH /pedidos/{id}
 
@@ -280,7 +284,7 @@ Se vuelve a verificar que alcance la existencia de cada producto y se **descuent
 `producto_agotado` (con la lista `productos`). Con `Idempotency-Key`.
 
 La interfaz hace "Enviar a cocina" en dos llamadas (`POST /pedidos` y luego esta). Si esta falla, el pedido ya quedó registrado y la
-interfaz ofrece **solo** reintentar el envío (no vuelve a crear el pedido), con la misma `Idempotency-Key`. "Mis pedidos" también lo
+interfaz ofrece **solo** reintentar el envío (no vuelve a crear el pedido), con la misma `Idempotency-Key`. "Pedidos del salón" también lo
 usa para el botón "Enviar a cocina" de un pedido sin enviar.
 
 ### PATCH /pedidos/{id}/estado
@@ -385,7 +389,8 @@ El mock lo respeta: con la misma clave devuelve el resultado anterior sin repeti
    segundos es razonable), SSE/WebSocket u otro mecanismo? Esto afecta el aviso de "pedido listo" al mesero.
 5. **CORS.** ¿Frontend y API estarán en el mismo origen o no? Si no, ¿qué orígenes y cabeceras se permiten (incluido
    `Access-Control-Allow-Credentials` si se usa cookie)?
-6. **Resuelto:** `GET /pedidos` devuelve solo los pedidos del mesero en sesión; cocina, gerente y otros roles autorizados ven todos.
+6. **Resuelto:** `GET /pedidos` devuelve todos los pedidos a los meseros, que solo pueden cambiar los pedidos propios; cocina, gerente y
+otros roles autorizados también pueden consultarlos.
 7. **Estados y reglas.** ¿Coinciden los estados y las transiciones de este documento con el modelo real? ¿Una mesa reservada puede recibir
    pedidos? ¿Se permiten pedidos nuevos cuando la cuenta está `por_pagar`? (El mock rechaza ambos casos.)
 8. **Resumen en `GET /mesas`.** ¿Pueden entregar `estado_cuenta`, `pedidos_activos`, `total_cuenta` y `pedidos_listos` en esa misma respuesta?
@@ -410,7 +415,7 @@ El mock lo respeta: con la misma clave devuelve el resultado anterior sin repeti
 17. **Autorización del gerente.** ¿Cómo se entera el mesero de que el gerente autorizó la cancelación de un pedido `En preparacion`? El
     frontend no consulta nada especial: lo vería como `Cancelado` en el siguiente polling de `GET /pedidos`. Esta aplicación tampoco ofrece al
     mesero pedir esa autorización.
-18. **Resuelto parcialmente:** el mesero consulta únicamente sus pedidos; puede usar los filtros por estado para ver los históricos
+18. **Resuelto parcialmente:** cada mesero consulta todos los pedidos; puede usar los filtros por estado para ver los históricos
 disponibles. La API no pagina ni limita por turno; revisar paginación si el volumen de pedidos lo requiere.
 
 ## Diferencias con la base de datos (para el equipo de BD y API)

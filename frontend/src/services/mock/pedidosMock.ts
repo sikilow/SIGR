@@ -16,7 +16,7 @@ function buscarPedido(id: number): Pedido {
 function exigirPedidoPropio(pedido: Pedido): void {
   const usuario = usuarioActual()
   if (usuario?.rol === 'mesero' && pedido.idMesero !== usuario.idUsuario) {
-    throw new ErrorServicio('sin_permiso', 'No tienes permiso para consultar o modificar un pedido de otro mesero.', 403)
+    throw new ErrorServicio('sin_permiso', 'No tienes permiso para modificar un pedido de otro mesero.', 403)
   }
 }
 
@@ -91,12 +91,17 @@ export function crearPedidosMock(): PedidosService {
           baseDatos.cuentas.push(cuenta)
         }
 
+        const idMesero = usuarioActual()?.idUsuario ?? 1
+        const mesero = baseDatos.usuarios.find((usuario) => usuario.idUsuario === idMesero)
+        if (!mesero) throw new ErrorServicio('no_encontrado', `No existe el usuario ${idMesero}.`, 404)
+
         const pedido: Pedido = {
           idPedido: baseDatos.siguienteIdPedido++,
           idMesa: mesa.idMesa,
           mesaNumero: mesa.numero,
           idCuenta: cuenta.idCuenta,
-          idMesero: usuarioActual()?.idUsuario ?? 1,
+          idMesero: mesero.idUsuario,
+          nombreMesero: mesero.nombre,
           estado: 'registrado',
           detalle,
           total: totalDe(detalle),
@@ -111,22 +116,15 @@ export function crearPedidosMock(): PedidosService {
 
     listar(filtro = {}) {
       return conRetraso(() => {
-        const usuario = usuarioActual()
         return baseDatos.pedidos
           .filter((p) => filtro.idMesa === undefined || p.idMesa === filtro.idMesa)
           .filter((p) => filtro.estado === undefined || p.estado === filtro.estado)
-          // Un mesero solo ve sus propios pedidos
-          .filter((p) => usuario?.rol !== 'mesero' || p.idMesero === usuario.idUsuario)
           .sort((a, b) => b.fechaHora.getTime() - a.fechaHora.getTime())
       })
     },
 
     obtener(id) {
-      return conRetraso(() => {
-        const pedido = buscarPedido(id)
-        exigirPedidoPropio(pedido)
-        return pedido
-      })
+      return conRetraso(() => buscarPedido(id))
     },
 
     actualizar(id, lineas) {

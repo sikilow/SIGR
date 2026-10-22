@@ -114,6 +114,7 @@ export interface PedidoDto {
   id_pedido: Numerico
   id_cuenta: Numerico
   id_mesero: Numerico
+  nombre_mesero: string
   /** CALCULADO por la API (JOIN con estado_pedido.nombre), p. ej. "En preparacion". La columna es `id_estado`. */
   estado: string
   /** DATETIME de MySQL sin zona horaria, p. ej. "2026-10-15 16:34:00". */
@@ -211,6 +212,7 @@ export function aPedido(dto: PedidoDto): Pedido {
     idPedido: aNumero(dto.id_pedido, 'id_pedido'),
     idCuenta: aNumero(dto.id_cuenta, 'id_cuenta'),
     idMesero: aNumero(dto.id_mesero, 'id_mesero'),
+    nombreMesero: dto.nombre_mesero,
     estado: aEstadoPedido(dto.estado),
     fechaHora: parseFechaMySQL(dto.fecha_hora, 'fecha_hora'),
     idMotivo: aNumeroONulo(dto.id_motivo, 'id_motivo'),

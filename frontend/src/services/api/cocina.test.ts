@@ -13,6 +13,7 @@ describe('servicio de cocina', () => {
           id_pedido: 7,
           id_cuenta: 3,
           id_mesero: 2,
+          nombre_mesero: 'Ana Torres',
           estado: 'En preparacion',
           fecha_hora: '2026-10-21 19:00:00',
           id_motivo: null,

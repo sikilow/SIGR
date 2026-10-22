@@ -168,7 +168,7 @@ Avance de los 22 requisitos funcionales del ERS: 13 implementados, 2 parciales, 
 | --- | --- | --- | --- | --- |
 | RF-PED-001 | Registrar pedido | Mesero | IMPLEMENTADO | `POST /api/pedidos` · Pedido de mesa |
 | RF-PED-002 | Cancelar pedido | Mesero, Gerente | IMPLEMENTADO | `POST /api/pedidos/:id/cancelar` (con motivo) · Mis pedidos |
-| RF-PED-003 | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | PARCIAL | Mesero: Mis pedidos; cocinero: cola operativa (enviados y en preparación). Historial para cajero y gerente pendiente |
+| RF-PED-003 | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | PARCIAL | Mesero: pedidos de todo el salón; cocinero: cola operativa (enviados y en preparación). Historial para cajero y gerente pendiente |
 | RF-PED-004 | Cambiar estado del pedido | Cocinero, Mesero | IMPLEMENTADO | Mesero envía y entrega; cocina avanza `Pendiente` → `En preparacion` → `Listo` en `/cocinero/cocina` |
 | RF-PED-005 | Consultar historial de pedidos | Gerente, Cajero | PENDIENTE | Sin pantalla ni endpoint propio |
 
@@ -395,7 +395,7 @@ Formato de error: `{ "codigo", "mensaje" }`. Códigos: `no_autenticado`, `creden
 | `GET /menu` | cualquiera con sesión | Menú para el mesero |
 | `POST /productos/disponibilidad` | cualquiera con sesión | Verifica existencia de productos |
 | `POST /pedidos` | mesero, gerente | Crea un pedido |
-| `GET /pedidos`, `GET /pedidos/:id` | cualquiera con sesión | Lista con filtro `?estado=`; el mesero solo ve y consulta los pedidos que creó |
+| `GET /pedidos`, `GET /pedidos/:id` | cualquiera con sesión | Lista con filtro `?estado=`; todos los meseros consultan todo el salón, pero solo modifican sus pedidos |
 | `PATCH /pedidos/:id` | mesero, gerente | Edita un pedido registrado |
 | `POST /pedidos/:id/enviar` | mesero, gerente | Envía a cocina; descuenta existencia y bloquea si no alcanza |
 | `POST /pedidos/:id/cancelar` | mesero, gerente | Cancela con motivo |
@@ -1195,12 +1195,14 @@ Al terminar, dame el BLOQUE DE ACTUALIZACIÓN de la sección 15.
 
 Más reciente primero. Cada IA agrega aquí su bloque de actualización.
 
-### 2026-10-21 · Pantalla de cocina
+### 2026-10-21 · Cocina y visibilidad de pedidos para meseros
 - Qué se hizo: se agregó la pantalla `/cocinero/cocina` con cola de pedidos enviados y en preparación, ordenada por antigüedad; el cocinero puede iniciar la preparación y marcar como listos. La cola se actualiza periódicamente y usa la transición ya protegida por rol y transacción en la API.
 - Archivos nuevos o cambiados: `frontend/src/layouts/CocinaLayout.vue`, `frontend/src/views/cocinero/CocinaView.vue`, `frontend/src/stores/cocina.ts`, `frontend/src/router/index.ts`, `frontend/src/services/interfaces.ts`, `frontend/src/services/api/index.ts`, `frontend/src/services/mock/pedidosMock.ts`, `frontend/src/types/usuario.ts`, pruebas de cocina; comentario obsoleto actualizado en `backend/src/controllers/pedidos.ts`; `README.md`, `docs/contrato-api-mesero.md`, `docs/PENDIENTES_Y_FALTANTES.md` y este contexto.
 - Decisiones tomadas: la cola incluye solo pedidos enviados (`Pendiente`) y en preparación; el orden es del más antiguo al más reciente; `Listo` sale de la cola para que el mesero lo entregue. No se cambió el contrato backend ni el esquema de la BD.
 - Requerimientos nuevos o cambiados: RF-PED-004 pasa a IMPLEMENTADO; RF-PED-003 sigue PARCIAL porque falta el historial para cajero y gerente. No se agregaron requisitos nuevos.
 - Pendiente o por verificar: probar el flujo visual de extremo a extremo con sesiones separadas de mesero y cocinero conectadas a MySQL.
+- Acceso del mesero a pedidos: todos pueden consultar la lista y el detalle del salón; editar, enviar, cancelar y entregar se limita a pedidos creados por su propio usuario. El gerente conserva acceso administrativo.
+- Vista del salón: cada pedido incluye `nombre_mesero`, calculado desde `usuario.nombre`, y lo muestra en la fila y el detalle.
 - Secciones de este archivo actualizadas: 3, 4, 5, 7, 8, 11 y 16.
 
 ### 2026-10 · Administración de mesas por el gerente

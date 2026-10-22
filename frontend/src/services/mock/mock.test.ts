@@ -57,27 +57,40 @@ afterEach(() => {
 
 // Datos sembrados: #3 en_preparacion, #2 listo, #5 pendiente (enviado a cocina), #6 registrado, #4 entregado, #8 cancelado, #10 pagado.
 describe('mock: propiedad de pedidos del mesero', () => {
-  it('lista únicamente los pedidos creados por el mesero en sesión', async () => {
+  it('lista y permite consultar pedidos creados por otros meseros', async () => {
     const { pedidos, baseDatos } = await nuevoMock()
     iniciarSesionMesero()
-    const ajeno = baseDatos.pedidos.find((pedido) => pedido.idPedido === 5)
-    if (ajeno) ajeno.idMesero = 2
+    baseDatos.usuarios.push({
+      idUsuario: 5, idRol: 2, nombre: 'Rosa Mesera', correo: '', activo: true,
+      rol: 'mesero', nombreUsuario: 'mesero2', contrasena: '1234',
+    })
+    const ajeno = baseDatos.pedidos.find((pedido) => pedido.idPedido === 6)
+    if (ajeno) {
+      ajeno.idMesero = 5
+      ajeno.nombreMesero = 'Rosa Mesera'
+    }
 
     const lista = await resolver(pedidos.listar())
 
-    expect(lista.some((pedido) => pedido.idPedido === 5)).toBe(false)
-    expect(lista.every((pedido) => pedido.idMesero === 1)).toBe(true)
+    expect(lista.some((pedido) => pedido.idPedido === 6 && pedido.nombreMesero === 'Rosa Mesera')).toBe(true)
+    expect((await resolver(pedidos.obtener(6))).nombreMesero).toBe('Rosa Mesera')
   })
 
-  it('deniega consultar y cambiar pedidos de otro mesero', async () => {
+  it('deniega cambiar pedidos de otro mesero', async () => {
     const { pedidos, baseDatos } = await nuevoMock()
     iniciarSesionMesero()
+    baseDatos.usuarios.push({
+      idUsuario: 5, idRol: 2, nombre: 'Rosa Mesera', correo: '', activo: true,
+      rol: 'mesero', nombreUsuario: 'mesero2', contrasena: '1234',
+    })
     for (const idPedido of [2, 6]) {
       const pedido = baseDatos.pedidos.find((p) => p.idPedido === idPedido)
-      if (pedido) pedido.idMesero = 2
+      if (pedido) {
+        pedido.idMesero = 5
+        pedido.nombreMesero = 'Rosa Mesera'
+      }
     }
 
-    expect(await codigoDeError(pedidos.obtener(6))).toBe('sin_permiso')
     expect(await codigoDeError(pedidos.actualizar(6, [{ idProducto: 1, cantidad: 1, indicaciones: '' }]))).toBe('sin_permiso')
     expect(await codigoDeError(pedidos.enviar(6))).toBe('sin_permiso')
     expect(await codigoDeError(pedidos.cancelar(6, 'Error al tomar el pedido'))).toBe('sin_permiso')
