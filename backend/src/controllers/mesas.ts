@@ -6,15 +6,16 @@ import { ErrorApi } from "../utils/errores";
 import { conIdempotencia } from "../services/idempotencia";
 
 /**
- * GET /api/mesas  →  [{ id_mesa, numero, capacidad, estado, ... }]
- * Las primeras cuatro son columnas de `mesa`. El resto es el resumen CALCULADO de su cuenta activa (la que no
+ * GET /api/mesas  →  [{ id_mesa, numero, capacidad, zona, estado, ... }]
+ * Solo trae las mesas DISPONIBLES (`activa = TRUE`): las que el gerente marcó como no disponibles no
+ * aparecen para el mesero ni para la hostess. Las primeras cinco son columnas de `mesa`. El resto es el resumen CALCULADO de su cuenta activa (la que no
  * está cerrada), que el Panel de mesas necesita: estado_cuenta, pedidos_activos (no cancelados ni pagados),
  * total_cuenta (sin cancelados) y pedidos_listos. tipo_pago_solicitado es la columna de `cuenta`.
  */
 export const listarMesas = async (_req: Request, res: Response) => {
   const rows = await filas(
     pool,
-    `SELECT m.id_mesa, m.numero, m.capacidad, m.estado,
+    `SELECT m.id_mesa, m.numero, m.capacidad, m.zona, m.estado,
             c.estado AS estado_cuenta, c.tipo_pago_solicitado,
             COALESCE(pa.pedidos_activos, 0) AS pedidos_activos,
             COALESCE(pa.pedidos_listos, 0)  AS pedidos_listos,
@@ -36,6 +37,7 @@ export const listarMesas = async (_req: Request, res: Response) => {
                WHERE ep.nombre <> 'Cancelado'
                GROUP BY p.id_cuenta
             ) t ON t.id_cuenta = c.id_cuenta
+      WHERE m.activa = TRUE
       ORDER BY m.numero`,
   );
 
@@ -44,6 +46,7 @@ export const listarMesas = async (_req: Request, res: Response) => {
       id_mesa: r.id_mesa as number,
       numero: r.numero as number,
       capacidad: r.capacidad as number,
+      zona: (r.zona as string | null) ?? null,
       estado: r.estado as string,
       estado_cuenta: (r.estado_cuenta as string | null) ?? null,
       tipo_pago_solicitado: (r.tipo_pago_solicitado as string | null) ?? null,
@@ -107,12 +110,13 @@ export const asignarMesa = async (req: Request, res: Response) => {
 
       const cambioMesa = await ejecutar(
         cx,
-        "UPDATE mesa SET estado = 'ocupada' WHERE id_mesa = ? AND estado IN ('libre', 'reservada')",
+        "UPDATE mesa SET estado = 'ocupada' WHERE id_mesa = ? AND activa = TRUE AND estado IN ('libre', 'reservada')",
         [mesaId],
       );
       if (cambioMesa.affectedRows === 0) {
-        const [mesaExistente] = await filas(cx, "SELECT numero FROM mesa WHERE id_mesa = ?", [mesaId]);
+        const [mesaExistente] = await filas(cx, "SELECT numero, activa FROM mesa WHERE id_mesa = ?", [mesaId]);
         if (!mesaExistente) throw new ErrorApi(404, "no_encontrado", `La mesa ${mesaId} no existe.`);
+        if (!mesaExistente.activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesaExistente.numero} no está disponible.`);
         throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesaExistente.numero} ya está ocupada.`);
       }
 
@@ -174,14 +178,17 @@ export const cambiarEstadoMesa = async (req: Request, res: Response) => {
   const mesaId = idDeRuta(req.params.id);
   const { estado } = validar(CambioEstado, req.body);
 
-  const [mesa] = await filas(pool, "SELECT id_mesa FROM mesa WHERE id_mesa = ?", [mesaId]);
-  if (!mesa) throw new ErrorApi(404, "no_encontrado", `La mesa ${mesaId} no existe.`);
+  await transaccion(async (cx) => {
+    const [mesa] = await filas(cx, "SELECT id_mesa, numero, activa FROM mesa WHERE id_mesa = ? FOR UPDATE", [mesaId]);
+    if (!mesa) throw new ErrorApi(404, "no_encontrado", `La mesa ${mesaId} no existe.`);
+    if (!mesa.activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está disponible.`);
 
-  if (estado !== "ocupada") {
-    const [activa] = await filas(pool, "SELECT 1 AS x FROM cuenta WHERE id_mesa = ? AND estado <> 'cerrada' LIMIT 1", [mesaId]);
-    if (activa) throw new ErrorApi(409, "estado_invalido", "La mesa tiene una cuenta activa: primero hay que cerrarla.");
-  }
+    if (estado !== "ocupada") {
+      const [activa] = await filas(cx, "SELECT 1 AS x FROM cuenta WHERE id_mesa = ? AND estado <> 'cerrada' LIMIT 1", [mesaId]);
+      if (activa) throw new ErrorApi(409, "estado_invalido", "La mesa tiene una cuenta activa: primero hay que cerrarla.");
+    }
 
-  await ejecutar(pool, "UPDATE mesa SET estado = ? WHERE id_mesa = ?", [estado, mesaId]);
+    await ejecutar(cx, "UPDATE mesa SET estado = ? WHERE id_mesa = ?", [estado, mesaId]);
+  });
   res.json({ id_mesa: mesaId, estado });
 };

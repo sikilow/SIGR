@@ -6,6 +6,7 @@
 //  - Estados y roles llegan con el nombre del catálogo ('En preparacion', 'Mesero') y se normalizan a código.
 // Ver docs/equivalencias-bd.md y docs/contrato-api-mesero.md.
 import type {
+  CambioMesa,
   CambioProducto,
   CambioUsuario,
   CategoriaAdmin,
@@ -16,6 +17,8 @@ import type {
   ItemDisponibilidad,
   LineaNuevoPedido,
   Mesa,
+  MesaAdmin,
+  NuevaMesa,
   NuevoPedido,
   NuevoProducto,
   NuevoUsuario,
@@ -303,6 +306,17 @@ export interface CategoriaAdminDto {
   total_productos: Numerico
 }
 
+export interface MesaAdminDto {
+  id_mesa: Numerico
+  numero: Numerico
+  capacidad: Numerico
+  /** mesa.zona: «sección» del salón; `null` si no tiene. */
+  zona: string | null
+  /** mesa.activa (BOOLEAN; puede llegar como 0/1). */
+  activa: unknown
+  estado: string
+}
+
 export interface ProductoAdminDto {
   id_producto: Numerico
   id_categoria: Numerico
@@ -346,6 +360,17 @@ export function aCategoriaAdmin(dto: CategoriaAdminDto): CategoriaAdmin {
   }
 }
 
+export function aMesaAdmin(dto: MesaAdminDto): MesaAdmin {
+  return {
+    idMesa: aNumero(dto.id_mesa, 'id_mesa'),
+    numero: aNumero(dto.numero, 'numero'),
+    capacidad: aNumero(dto.capacidad, 'capacidad'),
+    zona: dto.zona == null || dto.zona.trim() === '' ? null : dto.zona.trim(),
+    activa: aBooleano(dto.activa, 'activa'),
+    estado: aEstadoMesa(dto.estado),
+  }
+}
+
 export function aProductoAdmin(dto: ProductoAdminDto): ProductoAdmin {
   return {
     idProducto: aNumero(dto.id_producto, 'id_producto'),
@@ -359,6 +384,25 @@ export function aProductoAdmin(dto: ProductoAdminDto): ProductoAdmin {
     stockMinimo: aNumero(dto.stock_minimo, 'stock_minimo'),
     controlaExistencia: dto.controla_existencia == null ? true : aBooleano(dto.controla_existencia, 'controla_existencia'),
     disponible: aBooleano(dto.disponible, 'disponible'),
+  }
+}
+
+export function deNuevaMesa(m: NuevaMesa) {
+  return {
+    numero: m.numero,
+    capacidad: m.capacidad,
+    ...(m.zona.trim() ? { zona: m.zona.trim() } : {}),
+    activa: m.activa,
+  }
+}
+
+/** Solo viajan los campos que cambiaron (PATCH parcial). Una sección vacía viaja como `''` y el backend la guarda como `NULL`. */
+export function deCambioMesa(c: CambioMesa) {
+  return {
+    ...(c.numero !== undefined ? { numero: c.numero } : {}),
+    ...(c.capacidad !== undefined ? { capacidad: c.capacidad } : {}),
+    ...(c.zona !== undefined ? { zona: c.zona.trim() } : {}),
+    ...(c.activa !== undefined ? { activa: c.activa } : {}),
   }
 }
 

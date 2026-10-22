@@ -19,7 +19,12 @@ export interface UsuarioMock extends Omit<Usuario, 'rol' | 'activo'> {
 export type CuentaGuardada = Omit<Cuenta, 'pedidos' | 'total'>
 
 /** Mesa tal como se guarda: el resumen de cuenta y pedidos se calcula al consultarla. */
-export type MesaGuardada = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estado'>
+export type MesaGuardada = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estado'> & {
+  /** mesa.zona: «sección» del salón (texto libre). */
+  zona: string | null
+  /** mesa.activa: `false` = no disponible (no aparece en el panel del mesero ni en el salón de la hostess). */
+  activa: boolean
+}
 
 /** Reservación tal como se guarda: nombre y teléfono del cliente y número de mesa se calculan al consultarla. */
 export type ReservacionGuardada = Omit<Reservacion, 'clienteNombre' | 'clienteTelefono' | 'mesaNumero'>
@@ -71,7 +76,7 @@ function crearMesas(): MesaGuardada[] {
     ['libre', 4], ['reservada', 6], ['ocupada', 4], ['ocupada', 2],
     ['libre', 2], ['libre', 2], ['libre', 4], ['libre', 4], ['libre', 6], ['libre', 8],
   ]
-  return datos.map(([estado, capacidad], i) => ({ idMesa: i + 1, numero: i + 1, capacidad, estado }))
+  return datos.map(([estado, capacidad], i) => ({ idMesa: i + 1, numero: i + 1, capacidad, estado, zona: null, activa: true }))
 }
 
 function crearPedidos(): Pedido[] {

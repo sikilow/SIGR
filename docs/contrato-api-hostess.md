@@ -42,6 +42,8 @@ a este rol, puede hacerlo sin avisar al frontend.
 
 ## 1. `GET /api/mesas` — ya existe
 
+> **Cambio:** solo devuelve las mesas **disponibles** (`mesa.activa = TRUE`) y agrega `zona` (la «sección», puede ser `null`). Una mesa no disponible tampoco se puede sentar, reservar ni cambiar de estado: la API responde `409 mesa_no_disponible`.
+
 Sin cambios. Campos usados: `id_mesa`, `numero`, `capacidad`, `estado` (`libre` | `ocupada` | `reservada`).
 La interfaz del salón llama **«Libre»** al estado `libre` (el frontend usa el mismo código `libre`; `aEstadoMesa`
 entiende también `disponible` por tolerancia).

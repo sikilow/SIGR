@@ -5,7 +5,9 @@ import { baseDatos, type MesaGuardada } from './baseDatos'
 import { conRetraso } from './utiles'
 
 /** Agrega a la mesa el resumen de su cuenta activa y de sus pedidos. */
-function conResumen(mesa: MesaGuardada): Mesa {
+function conResumen(mesaGuardada: MesaGuardada): Mesa {
+  // La sección y la disponibilidad no viajan en el panel: solo se muestran las mesas disponibles.
+  const { zona: _zona, activa: _activa, ...mesa } = mesaGuardada
   const cuenta = baseDatos.cuentas.find((c) => c.idMesa === mesa.idMesa && c.estado !== 'cerrada')
   const pedidos = cuenta ? baseDatos.pedidos.filter((p) => p.idCuenta === cuenta.idCuenta) : []
 
@@ -22,7 +24,7 @@ function conResumen(mesa: MesaGuardada): Mesa {
 export function crearMesasMock(): MesasService {
   return {
     listar() {
-      return conRetraso(() => baseDatos.mesas.map(conResumen))
+      return conRetraso(() => baseDatos.mesas.filter((m) => m.activa).map(conResumen))
     },
   }
 }

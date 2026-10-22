@@ -142,11 +142,11 @@ Sin cuerpo. Responde 204.
 ```json
 [
   {
-    "id_mesa": 1, "numero": 1, "capacidad": 2, "estado": "libre",
+    "id_mesa": 1, "numero": 1, "capacidad": 2, "zona": null, "estado": "libre",
     "estado_cuenta": null, "pedidos_activos": 0, "total_cuenta": 0, "pedidos_listos": 0
   },
   {
-    "id_mesa": 3, "numero": 3, "capacidad": 4, "estado": "ocupada",
+    "id_mesa": 3, "numero": 3, "capacidad": 4, "zona": "Terraza", "estado": "ocupada",
     "estado_cuenta": "abierta", "pedidos_activos": 2, "total_cuenta": 470, "pedidos_listos": 1,
     "tipo_pago_solicitado": null
   }
@@ -155,12 +155,14 @@ Sin cuerpo. Responde 204.
 
 | Campo | Naturaleza |
 |---|---|
-| `id_mesa`, `numero`, `capacidad`, `estado` | columna de `mesa` |
+| `id_mesa`, `numero`, `capacidad`, `zona`, `estado` | columna de `mesa` (`zona` es la «sección»; puede ser `null`) |
 | `estado_cuenta` | **calculado por la API, no es columna**: `cuenta.estado` de la cuenta activa (`"abierta"` \| `"por_pagar"`); `null` si la mesa no tiene cuenta activa |
 | `pedidos_activos` | **calculado por la API, no es columna**: pedidos de la cuenta activa que no están `Cancelado` (ni `pagado`, si existiera) |
 | `total_cuenta` | **calculado por la API, no es columna**: total de la cuenta activa, sin pedidos cancelados |
 | `pedidos_listos` | **calculado por la API, no es columna**: pedidos de la cuenta activa en estado `Listo` (cocina terminó; falta servirlos) |
 | `tipo_pago_solicitado` | columna de `cuenta` (de la cuenta activa); opcional: si la API no lo envía, el panel muestra solo "Cuenta solicitada" |
+
+> **Solo se devuelven las mesas disponibles** (`mesa.activa = TRUE`). Las que el gerente marcó como no disponibles no aparecen en esta lista ni en el Salón de la hostess.
 
 El Panel de mesas necesita este resumen **por cada mesa y en una sola petición** (evita pedir la cuenta y los pedidos mesa por
 mesa cada pocos segundos). Para una mesa sin cuenta activa: `estado_cuenta: null` y los tres contadores en `0`. El panel consulta

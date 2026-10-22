@@ -250,3 +250,130 @@ export const editarProducto = async (req: Request, res: Response) => {
 
   res.json(await cargarProducto(pool, id));
 };
+
+// ───────────────────────────── Mesas (solo gerente) ─────────────────────────────
+// `activa = false` significa «mesa no disponible»: desaparece del Panel de mesas y del Salón
+// (GET /api/mesas solo trae las activas) y no se puede sentar, reservar ni cambiar de estado.
+// Las mesas no se borran (tienen cuentas y reservaciones ligadas): se marcan como no disponibles.
+
+interface MesaAdminDto {
+  id_mesa: number;
+  numero: number;
+  capacidad: number;
+  zona: string | null; // «sección» del salón; texto libre
+  activa: boolean;
+  estado: string; // libre | ocupada | reservada (ocupación actual)
+}
+
+const SELECT_MESA_ADMIN = "SELECT id_mesa, numero, capacidad, zona, activa, estado FROM mesa";
+
+function aMesaAdminDto(r: Record<string, unknown>): MesaAdminDto {
+  return {
+    id_mesa: r.id_mesa as number,
+    numero: r.numero as number,
+    capacidad: r.capacidad as number,
+    zona: (r.zona as string | null) ?? null,
+    activa: Boolean(r.activa),
+    estado: r.estado as string,
+  };
+}
+
+async function cargarMesaAdmin(ex: Ejecutor, id: number): Promise<MesaAdminDto> {
+  const [fila] = await filas(ex, `${SELECT_MESA_ADMIN} WHERE id_mesa = ?`, [id]);
+  if (!fila) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
+  return aMesaAdminDto(fila);
+}
+
+/** GET /api/catalogo/mesas: todas las mesas, también las no disponibles. */
+export const listarMesasAdmin = async (_req: Request, res: Response) => {
+  const rows = await filas(pool, `${SELECT_MESA_ADMIN} ORDER BY numero`);
+  res.json(rows.map(aMesaAdminDto));
+};
+
+const NumeroMesa = z.number().int().min(1, "debe ser mayor a 0").max(999, "máximo 999");
+const CapacidadMesa = z.number().int().min(1, "debe ser mayor a 0").max(50, "máximo 50 personas");
+const ZonaMesa = z.string().trim().max(40, "máximo 40 caracteres");
+
+const CrearMesa = z.object({
+  numero: NumeroMesa,
+  capacidad: CapacidadMesa,
+  zona: ZonaMesa.optional(),
+  activa: z.boolean().optional(),
+});
+
+/** POST /api/catalogo/mesas  { numero, capacidad, zona?, activa? } → 201. La mesa nace `libre`. */
+export const crearMesaAdmin = async (req: Request, res: Response) => {
+  const d = validar(CrearMesa, req.body);
+  let id: number;
+  try {
+    const r = await ejecutar(pool, "INSERT INTO mesa (numero, capacidad, zona, activa) VALUES (?, ?, ?, ?)", [
+      d.numero,
+      d.capacidad,
+      d.zona || null,
+      d.activa ?? true,
+    ]);
+    id = r.insertId;
+  } catch (e) {
+    if (esDuplicado(e)) throw new ErrorApi(409, "estado_invalido", `Ya existe la mesa ${d.numero}.`);
+    throw e;
+  }
+  res.status(201).json(await cargarMesaAdmin(pool, id));
+};
+
+const EditarMesa = z
+  .object({
+    numero: NumeroMesa,
+    capacidad: CapacidadMesa,
+    zona: ZonaMesa,
+    activa: z.boolean(),
+  })
+  .partial();
+
+/**
+ * PATCH /api/catalogo/mesas/:id  (cualquier subconjunto de campos)
+ * No se puede marcar como no disponible una mesa ocupada o reservada, con una cuenta abierta o con
+ * reservaciones vigentes: primero hay que liberarla o cancelar esas reservaciones.
+ */
+export const editarMesaAdmin = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const d = validar(EditarMesa, req.body);
+  if (Object.keys(d).length === 0) throw new ErrorApi(422, "estado_invalido", "No hay nada que cambiar.");
+
+  try {
+    await transaccion(async (cx) => {
+      const [mesa] = await filas(cx, "SELECT numero, estado, activa FROM mesa WHERE id_mesa = ? FOR UPDATE", [id]);
+      if (!mesa) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
+
+      if (d.activa === false && Boolean(mesa.activa)) {
+        if (mesa.estado !== "libre") {
+          throw new ErrorApi(409, "estado_invalido", `La mesa ${mesa.numero} está ${mesa.estado}: libérala antes de marcarla como no disponible.`);
+        }
+        const [cuenta] = await filas(cx, "SELECT 1 AS x FROM cuenta WHERE id_mesa = ? AND estado <> 'cerrada' LIMIT 1", [id]);
+        if (cuenta) {
+          throw new ErrorApi(409, "estado_invalido", `La mesa ${mesa.numero} tiene una cuenta abierta: hay que cerrarla antes.`);
+        }
+        const [reserva] = await filas(
+          cx,
+          "SELECT 1 AS x FROM reservacion WHERE id_mesa = ? AND estado IN ('pendiente', 'confirmada') LIMIT 1",
+          [id],
+        );
+        if (reserva) {
+          throw new ErrorApi(409, "estado_invalido", `La mesa ${mesa.numero} tiene reservaciones vigentes: cancélalas o cámbialas de mesa antes.`);
+        }
+      }
+
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      if (d.numero !== undefined) (sets.push("numero = ?"), params.push(d.numero));
+      if (d.capacidad !== undefined) (sets.push("capacidad = ?"), params.push(d.capacidad));
+      if (d.zona !== undefined) (sets.push("zona = ?"), params.push(d.zona || null));
+      if (d.activa !== undefined) (sets.push("activa = ?"), params.push(d.activa));
+      await ejecutar(cx, `UPDATE mesa SET ${sets.join(", ")} WHERE id_mesa = ?`, [...params, id]);
+    });
+  } catch (e) {
+    if (esDuplicado(e)) throw new ErrorApi(409, "estado_invalido", `Ya existe la mesa ${d.numero}.`);
+    throw e;
+  }
+
+  res.json(await cargarMesaAdmin(pool, id));
+};

@@ -12,15 +12,18 @@ import {
   aDisponibilidad,
   aMesa,
   aPedido,
+  aMesaAdmin,
   aProductoAdmin,
   aUsuario,
   aUsuarioAdmin,
+  deCambioMesa,
   deCambioProducto,
   deCambioUsuario,
   deActualizacionPedido,
   deCancelacion,
   deCredenciales,
   deItemsDisponibilidad,
+  deNuevaMesa,
   deNuevoPedido,
   deNuevoProducto,
   deNuevoUsuario,
@@ -29,6 +32,7 @@ import {
   type CategoriaMenuDto,
   type CuentaDto,
   type DisponibilidadDto,
+  type MesaAdminDto,
   type MesaDto,
   type PedidoDto,
   type ProductoAdminDto,
@@ -195,6 +199,21 @@ export function crearServiciosApi(): Servicios {
       async actualizarProducto(id, cambio) {
         const cuerpo = deCambioProducto(cambio)
         return aProductoAdmin(await solicitar<ProductoAdminDto>('PATCH', `/catalogo/productos/${id}`, { cuerpo }))
+      },
+
+      async listarMesas() {
+        const r = await solicitar<MesaAdminDto[]>('GET', '/catalogo/mesas')
+        return r.map(aMesaAdmin)
+      },
+
+      async crearMesa(mesa) {
+        const cuerpo = deNuevaMesa(mesa)
+        return aMesaAdmin(await solicitar<MesaAdminDto>('POST', '/catalogo/mesas', { cuerpo }))
+      },
+
+      async actualizarMesa(id, cambio) {
+        const cuerpo = deCambioMesa(cambio)
+        return aMesaAdmin(await solicitar<MesaAdminDto>('PATCH', `/catalogo/mesas/${id}`, { cuerpo }))
       },
     },
 

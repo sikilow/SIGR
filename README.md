@@ -48,7 +48,7 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 
 | Actor | Qué necesita del sistema | Pantallas hoy |
 | --- | --- | --- |
-| 🧑‍💼 **Gerente** | Supervisar la operación: usuarios, menú e inventario, reportes y cancelaciones excepcionales | Usuarios, Productos e inventario |
+| 🧑‍💼 **Gerente** | Supervisar la operación: usuarios, menú e inventario, mesas, reportes y cancelaciones excepcionales | Usuarios, Productos e inventario, Mesas |
 | 🍽️ **Mesero** | Capturar pedidos rápido y sin errores, ver su estado, enviarlos a cocina y pedir la cuenta | Mesas, Pedido de mesa, Cuenta, Mis pedidos |
 | 👨‍🍳 **Cocinero** | Recibir los pedidos claros y en orden, y marcarlos en preparación o listos | *(pendiente)* |
 | 💵 **Cajero** | Consultar cuentas, cobrar, generar tickets y facturas, y hacer el corte de caja | *(pendiente)* |
@@ -127,6 +127,11 @@ Aparecieron durante el desarrollo. Los códigos son **propuestos**: falta aproba
 | `RF-PRO-004` | Consultar productos e inventario con filtros por estado, categoría, poco stock y búsqueda | Gerente | `GET /api/catalogo/productos` |
 | `RF-PRO-005` | Gestionar categorías del menú (crear, renombrar, borrar) | Gerente | `/api/catalogo/categorias` |
 | `RF-PRO-006` | Existencia opcional por producto: se descuenta al enviar el pedido a cocina y se bloquea el envío si no alcanza | Sistema | `POST /api/pedidos/:id/enviar`, `POST /api/productos/disponibilidad` |
+| `RF-MES-002` | Registrar mesa: número, cantidad de personas, sección (opcional) y disponibilidad | Gerente | `POST /api/catalogo/mesas` · Mesas → Nueva mesa |
+| `RF-MES-003` | Actualizar mesa (número, cantidad de personas, sección) | Gerente | `PATCH /api/catalogo/mesas/:id` · Mesas → Editar |
+| `RF-MES-004` | Marcar una mesa como disponible o no disponible (no se borra). Una mesa no disponible no aparece para la hostess ni para el mesero y no se puede sentar, reservar ni cambiar de estado. No se puede desactivar si está ocupada, reservada, con cuenta abierta o con reservaciones vigentes | Gerente | `PATCH /api/catalogo/mesas/:id` · Mesas → No disponible / Disponible |
+| `RF-MES-005` | Consultar las mesas como gerente, incluidas las no disponibles, con filtros por disponibilidad, sección y búsqueda | Gerente | `GET /api/catalogo/mesas` · Mesas |
+| `RF-MES-006` | Sección de la mesa (`mesa.zona`, texto libre): se guarda, se edita y se filtra en la pantalla del gerente. El Salón y el Panel aún no la muestran (ver RF-MES-007) | Gerente | `mesa.zona` |
 | `RF-USR-006` | Cambiar la contraseña de un usuario | Gerente | `POST /api/usuarios/:id/contrasena` |
 | `RF-USR-007` | Desactivar y reactivar usuarios (sustituye al borrado de RF-USR-003) | Gerente | `PATCH /api/usuarios/:id` |
 | `RF-CUE-001` | Solicitar la cuenta de una mesa y elegir pago en caja o digital (la cuenta pasa a `por_pagar`) | Mesero, Gerente | `POST /api/cuentas/:id/solicitar-pago` |
@@ -141,12 +146,7 @@ Salen de lo que pidió el equipo y de la revisión del proyecto. El detalle, las
 
 | Código | Requisito | Actor | Origen |
 | --- | --- | --- | --- |
-| `RF-MES-002` | Registrar mesa (número, capacidad y zona) | Gerente | Pedido del equipo |
-| `RF-MES-003` | Actualizar mesa (número, capacidad, zona) | Gerente | Pedido del equipo |
-| `RF-MES-004` | Activar o desactivar mesa (no se borra) | Gerente | Pedido del equipo |
-| `RF-MES-005` | Consultar mesas como gerente, incluidas las inactivas, con filtros por zona y estado | Gerente | Pedido del equipo |
-| `RF-MES-006` | Zona de mesa: asignarla y filtrar o agrupar por zona (por ejemplo en el Salón) | Gerente, Hostess | Pedido del equipo |
-| `RF-ZON-001` | Gestionar zonas (solo si se decide que sean un catálogo) | Gerente | Por decidir (D-1) |
+| `RF-MES-007` | Mostrar o agrupar por sección en el Salón de la hostess y en el Panel de mesas (el backend ya envía `zona`) | Hostess, Mesero | Detalle pendiente de RF-MES-006 |
 | `RF-AUD-001` | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo |
 | `RF-AUD-002` | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión |
 | `RF-USR-008` | Que cada usuario cambie su propia contraseña | Todos los roles | Hallazgo de la revisión |
@@ -426,7 +426,7 @@ El árbol de arriba es el modelo; las carpetas ya existen y contienen lo siguien
 | `backend/src/mocks/` | `clientes.mock.ts` y `productos.mock.ts`: datos falsos tipados para probar la API. |
 | `backend/src/utils/` | `config.ts`, `errores.ts`, `auth.ts` (JWT y permisos por rol) y `seed.ts` (usuarios de prueba). |
 | `backend/tests/` | Pruebas unitarias con Vitest: `dominio.test.ts` y `mocks.test.ts` (26 pruebas). |
-| `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `004`). |
+| `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `005`). |
 | `docs/` | `arquitectura.md` y el resto de la documentación (contratos de API, equivalencias, pendientes, guía de código). |
 
 ### Archivos y carpetas adicionales
@@ -483,6 +483,7 @@ npm run dev                 # http://localhost:5173
 
 > **Base de datos ya existente:** no la recrees. Ejecuta, en orden, las `database/migrations/00N_*.sql` que todavía no hayas corrido.
 > Para agregar las mesas 13-18 a una base existente, ejecuta `mysql -u root -p -e "source database/migrations/004_mesas_13_a_18.sql"` desde la raíz del proyecto. Después de insertarlas, el panel de mesas y el Salón las cargan automáticamente desde la API.
+> Si la base se creó antes de la administración de mesas del gerente, ejecuta una sola vez `mysql -u root -p -e "source database/migrations/005_mesas_zona_activa.sql"` desde la raíz. Esta migración agrega `mesa.zona` y `mesa.activa`; `database/init.sql` ya las incluye para bases nuevas.
 
 ### Variables de entorno
 
@@ -529,7 +530,7 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 
 | Rol | Usuario | Contraseña | Acceso |
 | --- | --- | --- | --- |
-| Gerente | `gerente` | `1234` | Usuarios, productos e inventario |
+| Gerente | `gerente` | `1234` | Usuarios, productos e inventario y mesas |
 | Mesero | `mesero` | `1234` | Mesas, pedidos y cuentas |
 | Mesero 2 | `mesero2` | `1234` | Igual que el mesero (solo con `seed_demo.sql`) |
 | Cocinero | `cocinero` | `1234` | *(pantalla pendiente)* |

@@ -1,6 +1,7 @@
 // Contratos de la capa de servicios. Las vistas y stores dependen SOLO de estas
 // interfaces; `services/index.ts` decide si se usa el mock o la API real.
 import type {
+  CambioMesa,
   CambioProducto,
   CambioUsuario,
   CategoriaAdmin,
@@ -12,6 +13,8 @@ import type {
   ItemDisponibilidad,
   LineaNuevoPedido,
   Mesa,
+  MesaAdmin,
+  NuevaMesa,
   NuevoPedido,
   NuevoProducto,
   NuevoUsuario,
@@ -111,6 +114,12 @@ export interface CatalogoService {
   crearProducto(producto: NuevoProducto): Promise<ProductoAdmin>
   /** PATCH /catalogo/productos/{id}. Desactivar = `{ activo: false }` (los productos no se borran). */
   actualizarProducto(id: number, cambio: CambioProducto): Promise<ProductoAdmin>
+  /** GET /catalogo/mesas (también las no disponibles) */
+  listarMesas(): Promise<MesaAdmin[]>
+  /** POST /catalogo/mesas */
+  crearMesa(mesa: NuevaMesa): Promise<MesaAdmin>
+  /** PATCH /catalogo/mesas/{id}. No disponible = `{ activa: false }` (las mesas no se borran). Una mesa ocupada, con cuenta o con reservaciones vigentes no se puede desactivar. */
+  actualizarMesa(id: number, cambio: CambioMesa): Promise<MesaAdmin>
 }
 
 export interface Servicios {

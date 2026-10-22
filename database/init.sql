@@ -50,8 +50,12 @@ CREATE TABLE mesa (
   id_mesa INT AUTO_INCREMENT PRIMARY KEY,
   numero INT NOT NULL UNIQUE,
   capacidad INT NOT NULL CHECK (capacidad > 0),
+  zona VARCHAR(40) NULL,
+  activa BOOLEAN NOT NULL DEFAULT TRUE,
   estado VARCHAR(20) NOT NULL DEFAULT 'libre' CHECK (estado IN ('libre', 'ocupada', 'reservada'))
 ) ENGINE=InnoDB;
+-- zona: sección del salón (texto libre; la hostess y el mesero no la necesitan para operar).
+-- activa: FALSE = mesa no disponible; no aparece en el Salón ni en el Panel de mesas. No se borran (tienen cuentas ligadas).
 
 CREATE TABLE categoria_menu (
   id_categoria INT AUTO_INCREMENT PRIMARY KEY,

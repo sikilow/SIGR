@@ -1,4 +1,5 @@
-// Tipos del módulo del gerente: administración de usuarios, categorías, productos e inventario.
+// Tipos del módulo del gerente: administración de usuarios, categorías, productos, inventario y mesas.
+import type { EstadoMesa } from './estados'
 import type { Rol } from './usuario'
 
 export interface UsuarioAdmin {
@@ -70,6 +71,38 @@ export interface NuevoProducto {
 }
 
 export type CambioProducto = Partial<NuevoProducto>
+
+/** Mesa vista por el gerente: también las no disponibles (el panel del mesero y de la hostess solo muestra las disponibles). */
+export interface MesaAdmin {
+  /** mesa.id_mesa */
+  idMesa: number
+  /** mesa.numero: único; es el que se ve en el salón. */
+  numero: number
+  /** mesa.capacidad: cantidad de personas (mayor que 0). */
+  capacidad: number
+  /** mesa.zona: «sección» del salón (texto libre). `null` si no tiene. */
+  zona: string | null
+  /** mesa.activa: `false` = no disponible; desaparece del Salón y del Panel de mesas y no se puede sentar ni reservar. */
+  activa: boolean
+  /** mesa.estado: ocupación actual (libre, ocupada o reservada). */
+  estado: EstadoMesa
+}
+
+export interface NuevaMesa {
+  numero: number
+  capacidad: number
+  /** Sección del salón; vacía = sin sección. */
+  zona: string
+  activa: boolean
+}
+
+/** Cualquier subconjunto de campos editables. Marcar como no disponible = `{ activa: false }` (las mesas no se borran). */
+export type CambioMesa = Partial<NuevaMesa>
+
+/** Límites que valida también el backend. */
+export const MESA_NUMERO_MAX = 999
+export const MESA_CAPACIDAD_MAX = 50
+export const MESA_ZONA_MAX = 40
 
 /** Roles que el gerente puede asignar. */
 export const ROLES_ASIGNABLES: readonly Rol[] = ['gerente', 'mesero', 'cocinero', 'cajero', 'hostess']

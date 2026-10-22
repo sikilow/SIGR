@@ -91,6 +91,13 @@ async function salir() {
         </svg>
         <span>Productos</span>
       </RouterLink>
+      <RouterLink class="nav__enlace" :to="{ name: 'gerente-mesas' }">
+        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="6" width="18" height="4" rx="1.5" />
+          <path d="M6 10v9M18 10v9M3 19h3M18 19h3" />
+        </svg>
+        <span>Mesas</span>
+      </RouterLink>
     </nav>
   </div>
 </template>
@@ -217,7 +224,7 @@ async function salir() {
 
 .nav {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }

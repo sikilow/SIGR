@@ -232,8 +232,9 @@ export const crearReservacion = async (req: Request, res: Response) => {
       if (!cliente) throw new ErrorApi(404, "no_encontrado", "El cliente no existe.");
 
       if (datos.id_mesa !== undefined && datos.id_mesa !== null) {
-        const [mesa] = await filas(cx, "SELECT numero, estado FROM mesa WHERE id_mesa = ? FOR UPDATE", [datos.id_mesa]);
+        const [mesa] = await filas(cx, "SELECT numero, estado, activa FROM mesa WHERE id_mesa = ? FOR UPDATE", [datos.id_mesa]);
         if (!mesa) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
+        if (!mesa.activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está disponible.`);
         if (mesa.estado !== "libre") {
           throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} ya no está libre.`);
         }
@@ -315,8 +316,9 @@ export const editarReservacion = async (req: Request, res: Response) => {
         }
 
         if (mesaFinal !== null && mesaFinal !== mesaAnterior) {
-          const [mesa] = await filas(cx, "SELECT numero, estado FROM mesa WHERE id_mesa = ? FOR UPDATE", [mesaFinal]);
+          const [mesa] = await filas(cx, "SELECT numero, estado, activa FROM mesa WHERE id_mesa = ? FOR UPDATE", [mesaFinal]);
           if (!mesa) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
+          if (!mesa.activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está disponible.`);
           if (mesa.estado !== "libre") {
             throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} ya no está libre.`);
           }
@@ -370,10 +372,11 @@ export const registrarLlegada = async (req: Request, res: Response) => {
       }
       const [mesa] = await filas(
         cx,
-        "SELECT id_mesa, numero, capacidad, estado FROM mesa WHERE id_mesa = ? FOR UPDATE",
+        "SELECT id_mesa, numero, capacidad, estado, activa FROM mesa WHERE id_mesa = ? FOR UPDATE",
         [mesaId],
       );
       if (!mesa) throw new ErrorApi(404, "no_encontrado", `La mesa ${mesaId} no existe.`);
+      if (!mesa.activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está disponible.`);
       if (!["libre", "reservada"].includes(mesa.estado)) {
         throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} ya está ocupada.`);
       }

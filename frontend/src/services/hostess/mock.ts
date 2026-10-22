@@ -74,6 +74,7 @@ function liberarMesaSiCorresponde(idMesa: number | null, exceptoId: number): voi
 function mesaLibreParaReservar(idMesa: number): void {
   const mesa = baseDatos.mesas.find((m) => m.idMesa === idMesa)
   if (!mesa) throw new ErrorServicio('no_encontrado', `La mesa ${idMesa} no existe.`, 404)
+  if (!mesa.activa) throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesa.numero} no está disponible.`, 409)
   if (mesa.estado !== 'libre') {
     throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesa.numero} ya no está libre.`, 409)
   }
@@ -93,6 +94,7 @@ function validarPersonasNuevas(personas: number): void {
 function asignar(idMesa: number, grupo: GrupoAsignacion): ResultadoAsignacion {
   const mesaGuardada = baseDatos.mesas.find((m) => m.idMesa === idMesa)
   if (!mesaGuardada) throw new ErrorServicio('no_encontrado', `La mesa ${idMesa} no existe.`, 404)
+  if (!mesaGuardada.activa) throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesaGuardada.numero} no está disponible.`, 409)
   if (!mesaAsignable(aMesaSalon(idMesa))) {
     throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesaGuardada.numero} ya está ocupada.`, 409)
   }
@@ -175,7 +177,7 @@ function editar(r: ReservacionGuardada, cambio: CambioReservacion): void {
 export function crearHostessMock(): HostessService {
   return {
     listarMesas() {
-      return conRetraso(() => baseDatos.mesas.map((m) => aMesaSalon(m.idMesa)))
+      return conRetraso(() => baseDatos.mesas.filter((m) => m.activa).map((m) => aMesaSalon(m.idMesa)))
     },
 
     listarReservaciones(dia) {

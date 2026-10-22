@@ -50,7 +50,7 @@ flowchart LR
 | --- | --- |
 | `docker-compose.yml` | Levanta MySQL 8 en un contenedor. |
 | `init.sql` | Script inicial: crea la base `SIGR` con sus 23 tablas, los catálogos y los datos base. |
-| `migrations/` | Cambios incrementales (`001` a `004`) para bases que ya existían. |
+| `migrations/` | Cambios incrementales (`001` a `005`) para bases que ya existían. |
 | `seed_demo.sql` | Datos de demostración opcionales (mesas 7 a 18, cuentas, clientes, reservaciones, lista de espera). |
 
 ## 3. Cómo viaja una petición

@@ -1,10 +1,10 @@
 // Administración simulada (usuarios, categorías, productos, inventario) para VITE_USE_MOCK=true.
 // Los cambios se hacen sobre la misma "base de datos" en memoria que usa el mesero, así que un
 // producto nuevo o un precio editado se ven en el menú del mesero. Se reinicia al recargar la página.
-import type { CategoriaAdmin, ProductoAdmin, UsuarioAdmin } from '../../types'
+import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CategoriaAdmin, type MesaAdmin, type ProductoAdmin, type UsuarioAdmin } from '../../types'
 import { ErrorServicio } from '../errores'
 import type { CatalogoService, UsuariosService } from '../interfaces'
-import { baseDatos } from './baseDatos'
+import { baseDatos, type MesaGuardada } from './baseDatos'
 import { conRetraso } from './utiles'
 
 const duplicado = (campo: string) => new ErrorServicio('estado_invalido', `Ya existe otro usuario con ese ${campo}.`, 409)
@@ -187,11 +187,89 @@ function validarNombreCategoria(nombre: string, id?: number): void {
   }
 }
 
+// ---------- Mesas ----------
+const aMesaAdmin = (m: MesaGuardada): MesaAdmin => ({
+  idMesa: m.idMesa,
+  numero: m.numero,
+  capacidad: m.capacidad,
+  zona: m.zona,
+  activa: m.activa,
+  estado: m.estado,
+})
+
+/** Mismas reglas que valida el backend (`controllers/catalogo.ts`). */
+function validarDatosMesa(c: { numero?: number; capacidad?: number; zona?: string }): void {
+  if (c.numero !== undefined && (!Number.isInteger(c.numero) || c.numero < 1 || c.numero > MESA_NUMERO_MAX)) {
+    throw new ErrorServicio('estado_invalido', `El número de mesa debe ser un entero de 1 a ${MESA_NUMERO_MAX}.`, 422)
+  }
+  if (c.capacidad !== undefined && (!Number.isInteger(c.capacidad) || c.capacidad < 1 || c.capacidad > MESA_CAPACIDAD_MAX)) {
+    throw new ErrorServicio('estado_invalido', `La capacidad debe ser un entero de 1 a ${MESA_CAPACIDAD_MAX} personas.`, 422)
+  }
+  if (c.zona !== undefined && c.zona.trim().length > MESA_ZONA_MAX) {
+    throw new ErrorServicio('estado_invalido', `La sección admite máximo ${MESA_ZONA_MAX} caracteres.`, 422)
+  }
+}
+
+function exigirNumeroLibre(numero: number, exceptoId?: number): void {
+  if (baseDatos.mesas.some((m) => m.numero === numero && m.idMesa !== exceptoId)) {
+    throw new ErrorServicio('estado_invalido', `Ya existe la mesa ${numero}.`, 409)
+  }
+}
+
 export function crearCatalogoMock(): CatalogoService {
   // Los productos agotados de la demo cuentan como "activos sin existencia" salvo que se indique otra cosa.
   return {
     listarCategorias() {
       return conRetraso(() => baseDatos.categorias.map((c) => aCategoria(c.idCategoria)))
+    },
+
+    listarMesas() {
+      return conRetraso(() => [...baseDatos.mesas].sort((a, b) => a.numero - b.numero).map(aMesaAdmin))
+    },
+
+    crearMesa(mesa) {
+      return conRetraso(() => {
+        validarDatosMesa(mesa)
+        exigirNumeroLibre(mesa.numero)
+        const nueva: MesaGuardada = {
+          idMesa: Math.max(0, ...baseDatos.mesas.map((m) => m.idMesa)) + 1,
+          numero: mesa.numero,
+          capacidad: mesa.capacidad,
+          zona: mesa.zona.trim() || null,
+          activa: mesa.activa,
+          estado: 'libre',
+        }
+        baseDatos.mesas.push(nueva)
+        return aMesaAdmin(nueva)
+      })
+    },
+
+    actualizarMesa(id, cambio) {
+      return conRetraso(() => {
+        const mesa = baseDatos.mesas.find((m) => m.idMesa === id)
+        if (!mesa) throw noExiste('La mesa')
+        if (Object.keys(cambio).length === 0) throw new ErrorServicio('estado_invalido', 'No hay nada que cambiar.', 422)
+        validarDatosMesa(cambio)
+
+        if (cambio.activa === false && mesa.activa) {
+          if (mesa.estado !== 'libre') {
+            throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} está ${mesa.estado}: libérala antes de marcarla como no disponible.`, 409)
+          }
+          if (baseDatos.cuentas.some((c) => c.idMesa === id && c.estado !== 'cerrada')) {
+            throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} tiene una cuenta abierta: hay que cerrarla antes.`, 409)
+          }
+          if (baseDatos.reservaciones.some((r) => r.idMesa === id && (r.estado === 'pendiente' || r.estado === 'confirmada'))) {
+            throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} tiene reservaciones vigentes: cancélalas o cámbialas de mesa antes.`, 409)
+          }
+        }
+        if (cambio.numero !== undefined) exigirNumeroLibre(cambio.numero, id)
+
+        if (cambio.numero !== undefined) mesa.numero = cambio.numero
+        if (cambio.capacidad !== undefined) mesa.capacidad = cambio.capacidad
+        if (cambio.zona !== undefined) mesa.zona = cambio.zona.trim() || null
+        if (cambio.activa !== undefined) mesa.activa = cambio.activa
+        return aMesaAdmin(mesa)
+      })
     },
 
     crearCategoria(nombre) {

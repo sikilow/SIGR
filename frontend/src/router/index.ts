@@ -74,6 +74,11 @@ export const router = createRouter({
           name: 'gerente-productos',
           component: () => import('../views/gerente/ProductosView.vue'),
         },
+        {
+          path: 'mesas',
+          name: 'gerente-mesas',
+          component: () => import('../views/gerente/MesasView.vue'),
+        },
       ],
     },
     {

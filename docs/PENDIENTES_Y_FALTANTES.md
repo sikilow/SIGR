@@ -10,41 +10,37 @@ Documento para que el equipo **verifique y decida**. **No contiene código ni ca
 
 ## 1. Lo que pidió el equipo
 
-### 1.1 Mesas: administración por el gerente
+### 1.1 Mesas: administración por el gerente (HECHO, con un detalle pendiente)
 
-Hoy el gerente **no puede administrar las mesas**. Las mesas solo se crean con scripts SQL (`init.sql`, `seed_demo.sql`, `migrations/004_mesas_13_a_18.sql`). La API solo permite listarlas, sentar un grupo y cambiar su estado (`libre`, `ocupada`, `reservada`).
+Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la pantalla **Mesas** (`/gerente/mesas`) y la API `/api/catalogo/mesas`.
 
-| Código propuesto | Requerimiento | Verificación |
+| Código | Requerimiento | Estado |
 | --- | --- | --- |
-| RF-MES-002 | **Registrar mesa** (número, capacidad y zona) | Verificado: no existe ruta ni pantalla para crearla |
-| RF-MES-003 | **Actualizar mesa** (número, capacidad, zona) | Verificado: no existe |
-| RF-MES-004 | **Activar o desactivar mesa** (no se borra: tiene cuentas y reservaciones ligadas) | Verificado: la tabla `mesa` **no tiene** columna de activo; `usuario` y `producto` sí la tienen |
-| RF-MES-005 | **Consultar mesas** como gerente (incluye las inactivas), con filtros por zona y estado | Verificado: `GET /api/mesas` solo sirve el panel del mesero y la hostess |
-| RF-MES-006 | **Zona de mesa**: asignar una zona a cada mesa y poder filtrar o agrupar por zona (por ejemplo en el Salón de la hostess) | Verificado: no existe el concepto de zona en la base ni en la API |
-| RF-ZON-001 | **Gestionar zonas** (crear, renombrar, desactivar), solo si se decide que sean un catálogo | Por validar (ver decisión D-1) |
+| RF-MES-002 | **Registrar mesa**: número, cantidad de personas, sección (opcional) y disponibilidad | Hecho: `POST /api/catalogo/mesas`; botón «Nueva mesa» |
+| RF-MES-003 | **Actualizar mesa** (número, cantidad de personas, sección) | Hecho: `PATCH /api/catalogo/mesas/:id`; botón «Editar» |
+| RF-MES-004 | **Marcar como disponible o no disponible** (no se borra) | Hecho: una mesa no disponible no aparece para la hostess ni para el mesero y no se puede sentar, reservar ni cambiar de estado (`409 mesa_no_disponible`) |
+| RF-MES-005 | **Consultar mesas** como gerente, incluidas las no disponibles | Hecho: `GET /api/catalogo/mesas`, con filtros por disponibilidad, sección y búsqueda |
+| RF-MES-006 | **Sección de la mesa** | **Parcial**: se guarda (`mesa.zona`), se edita y se filtra en la pantalla del gerente; el Salón y el Panel de mesas todavía no la muestran |
+| RF-MES-007 *(propuesto)* | Mostrar o agrupar por sección en el Salón de la hostess y en el Panel del mesero | Pendiente: el backend ya envía `zona` en `GET /api/mesas`; falta la pantalla |
 
-**Qué se afectaría (para dimensionar el trabajo, sin tocar nada todavía):**
+**Decisiones que se tomaron** (cámbienlas si no les parecen):
 
-| Capa | Qué habría que revisar |
+| Id | Decisión |
 | --- | --- |
-| Base de datos | Un lugar para guardar la zona y un indicador de activa en `mesa`; una migración `005_*.sql`; actualizar `init.sql` y los datos de prueba. |
-| API (solo gerente) | Rutas de alta, edición, activar/desactivar y consulta de mesas (y de zonas, si hay catálogo). |
-| Reglas | Una mesa inactiva no aparece en el Salón, no se puede sentar a nadie, no se puede reservar y no se cuenta para el panel del mesero. No se puede desactivar una mesa ocupada, con cuenta abierta o con reservaciones vigentes. |
-| Frontend gerente | Una pantalla nueva «Mesas» y su entrada en el menú del gerente. |
-| Frontend hostess y mesero | Filtro o agrupación por zona; ocultar mesas inactivas. |
-| Modo demo (mock) | El mock debe tener las mismas operaciones que la API. |
-| Documentación | `README.md`, `CONTEXTO_IA.md`, `docs/equivalencias-bd.md`, un contrato de API del gerente y el ERS. |
-| Pruebas | Pruebas de las reglas anteriores. |
+| D-1 | La sección es **texto libre con sugerencias** de las ya existentes (columna `mesa.zona`, hasta 40 caracteres). No hay catálogo de secciones; si se quiere uno, se migra después. |
+| D-2 | Las secciones las define el gerente al escribirlas; no hay una lista fija. |
+| D-3 | **No se puede marcar como no disponible** una mesa ocupada, reservada, con cuenta abierta o con reservaciones vigentes: primero hay que liberarla o cancelar esas reservaciones. |
+| D-4 | El número de mesa sigue siendo **único** y no se reutiliza, aunque la mesa esté no disponible. |
+| D-5 | Cambiar la capacidad **no revisa** las reservaciones ya hechas. |
 
-**Decisiones que el equipo debe tomar**
+**Qué se verificó:** 54 pruebas de la API contra MySQL 8 real (incluyen las mesas), la migración `005` sobre una base con el esquema anterior, y 26 pruebas nuevas del frontend (453 en total). Se comprobó en la interfaz que la mesa 1, marcada como no disponible, desapareció del Salón de la hostess.
 
-| Id | Pregunta | Opciones |
-| --- | --- | --- |
-| D-1 | ¿La zona es un texto libre o un catálogo? | **Texto libre**: más rápido, pero permite «Terraza», «terraza» y «Terasa». **Catálogo** (tabla de zonas): más trabajo, pero consistente y se puede administrar. |
-| D-2 | ¿Qué zonas existen? | Por ejemplo salón principal, terraza, barra. Hay que definirlas con el restaurante. |
-| D-3 | ¿Qué pasa con las reservaciones que ya tienen una mesa que se desactiva? | Bloquear la desactivación, o liberarlas y avisar a la hostess. |
-| D-4 | ¿Se puede reutilizar el número de una mesa desactivada? | Hoy el número es único. |
-| D-5 | ¿Cambiar la capacidad de una mesa afecta reservaciones ya hechas? | Advertir, bloquear o ignorar. |
+**Lo que aún falta alrededor de esto:**
+
+- Mostrar o agrupar por sección en el Salón y el Panel (RF-MES-007).
+- Una mesa **con cuenta abierta** no se puede desactivar hasta que exista cómo cerrar cuentas (ver P-01).
+- No se registra quién creó, editó o desactivó una mesa (ver la bitácora, RF-AUD-002).
+- Las bases de datos que ya existían necesitan correr `database/migrations/005_mesas_zona_activa.sql`.
 
 ### 1.2 Auditoría: quién cambia una contraseña
 
@@ -152,9 +148,9 @@ Son sugerencias mías, **no requisitos**. Solo valen si el restaurante las neces
 
 ## 4. Orden sugerido de trabajo (para discutir)
 
-1. Decidir D-1 a D-5 y la opción de auditoría (A, B o C).
+1. Confirmar las decisiones D-1 a D-5 de las mesas y elegir la opción de auditoría (A, B o C).
 2. Cerrar P-01 (cerrar cuentas), porque sin eso el ciclo de una mesa queda incompleto.
-3. Mesas del gerente (RF-MES-002 a 006) y bitácora (RF-AUD-001 y 002), que comparten la misma migración de base de datos.
+3. Bitácora (RF-AUD-001 y 002) y mostrar la sección de la mesa en el Salón y el Panel (RF-MES-007). Las mesas del gerente ya están hechas.
 4. Cambio de contraseña propio (RF-USR-008) y seguridad del ERS (P-03 y P-04).
 5. Pantalla de cocina, luego caja y facturación.
 6. Pruebas del backend (P-05) conforme se construyan las reglas anteriores.

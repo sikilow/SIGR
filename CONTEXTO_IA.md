@@ -123,7 +123,7 @@ SIGR/
 │       ├── utils/              carrito, reglas de negocio, formato, contraste
 │       ├── assets/             vacía por ahora (.gitkeep)
 │       └── types/, layouts/, composables/, styles/   (adicionales: el código depende de ellas)
-├── database/                   init.sql, docker-compose.yml, seed_demo.sql (opcional) y migrations/001 a 004
+├── database/                   init.sql, docker-compose.yml, seed_demo.sql (opcional) y migrations/001 a 005
 ├── docs/                       arquitectura.md, contratos de API, equivalencias-bd.md, PENDIENTES_Y_FALTANTES.md,
 │                               guia-codigo/ y capturas/
 ├── CONTEXTO_IA.md              este archivo
@@ -136,7 +136,7 @@ Diferencias menores respecto al modelo: `frontend/` tiene las carpetas adicional
 
 | Rol (`rol.nombre`) | Qué hace | Pantallas (ruta) | Usuario de prueba |
 | --- | --- | --- | --- |
-| gerente | Administra usuarios, menú e inventario; supervisa; cancela excepciones | `/gerente/usuarios`, `/gerente/productos` | `gerente` |
+| gerente | Administra usuarios, menú e inventario y mesas; supervisa; cancela excepciones | `/gerente/usuarios`, `/gerente/productos`, `/gerente/mesas` | `gerente` |
 | mesero | Pedidos, cuentas de mesa, enviar a cocina, entregar | `/mesero/mesas`, `/mesero/mesas/:id/pedido`, `/mesero/mesas/:id/cuenta`, `/mesero/pedidos/:id?` | `mesero`, `mesero2` |
 | cocinero | Ver pedidos y cambiar su estado | pendiente | `cocinero` |
 | cajero | Cobrar, tickets, facturas, corte de caja | pendiente | `cajero` |
@@ -211,6 +211,11 @@ Falta aprobarlos con el equipo y agregarlos al ERS.
 | RF-PRO-004 | Consultar productos e inventario con filtros por estado, categoría, poco stock y búsqueda | Gerente | `GET /api/catalogo/productos` |
 | RF-PRO-005 | Gestionar categorías del menú (crear, renombrar, borrar) | Gerente | `/api/catalogo/categorias` |
 | RF-PRO-006 | Existencia opcional por producto: se descuenta al enviar el pedido a cocina y se bloquea el envío si no alcanza | Sistema | `POST /api/pedidos/:id/enviar`, `POST /api/productos/disponibilidad` |
+| RF-MES-002 | Registrar mesa: número, cantidad de personas, sección (opcional) y disponibilidad | Gerente | `POST /api/catalogo/mesas` · Mesas → Nueva mesa |
+| RF-MES-003 | Actualizar mesa (número, cantidad de personas, sección) | Gerente | `PATCH /api/catalogo/mesas/:id` · Mesas → Editar |
+| RF-MES-004 | Marcar una mesa como disponible o no disponible (no se borra). Una mesa no disponible no aparece para la hostess ni para el mesero y no se puede sentar, reservar ni cambiar de estado. No se puede desactivar si está ocupada, reservada, con cuenta abierta o con reservaciones vigentes | Gerente | `PATCH /api/catalogo/mesas/:id` · Mesas → No disponible / Disponible |
+| RF-MES-005 | Consultar las mesas como gerente, incluidas las no disponibles, con filtros por disponibilidad, sección y búsqueda | Gerente | `GET /api/catalogo/mesas` · Mesas |
+| RF-MES-006 | Sección de la mesa (`mesa.zona`, texto libre): se guarda, se edita y se filtra en la pantalla del gerente. El Salón y el Panel aún no la muestran (ver RF-MES-007) | Gerente | `mesa.zona` |
 | RF-USR-006 | Cambiar la contraseña de un usuario | Gerente | `POST /api/usuarios/:id/contrasena` |
 | RF-USR-007 | Desactivar y reactivar usuarios (sustituye al borrado de RF-USR-003) | Gerente | `PATCH /api/usuarios/:id` |
 | RF-CUE-001 | Solicitar la cuenta de una mesa y elegir pago en caja o digital (la cuenta pasa a `por_pagar`) | Mesero, Gerente | `POST /api/cuentas/:id/solicitar-pago` |
@@ -320,12 +325,7 @@ Cuando aparezca algo que no está arriba, agrégalo aquí y también en la tabla
 | Código propuesto | Requerimiento | Actor | Origen (quién lo pidió o dónde apareció) | Estado | Fecha |
 | --- | --- | --- | --- | --- | --- |
 
-| RF-MES-002 | Registrar mesa (número, capacidad y zona) | Gerente | Pedido del equipo | PROPUESTO (sin construir) | oct. 2026 |
-| RF-MES-003 | Actualizar mesa (número, capacidad, zona) | Gerente | Pedido del equipo | PROPUESTO (sin construir) | oct. 2026 |
-| RF-MES-004 | Activar o desactivar mesa (no se borra) | Gerente | Pedido del equipo | PROPUESTO (sin construir) | oct. 2026 |
-| RF-MES-005 | Consultar mesas como gerente, incluidas las inactivas, con filtros por zona y estado | Gerente | Pedido del equipo | PROPUESTO (sin construir) | oct. 2026 |
-| RF-MES-006 | Zona de mesa: asignarla y filtrar o agrupar por zona (por ejemplo en el Salón) | Gerente, Hostess | Pedido del equipo | PROPUESTO (sin construir) | oct. 2026 |
-| RF-ZON-001 | Gestionar zonas (solo si se decide que sean un catálogo) | Gerente | Por decidir (D-1) | PROPUESTO (sin construir) | oct. 2026 |
+| RF-MES-007 | Mostrar o agrupar por sección en el Salón de la hostess y en el Panel de mesas (el backend ya envía `zona`) | Hostess, Mesero | Detalle pendiente de RF-MES-006 | PROPUESTO (sin construir) | oct. 2026 |
 | RF-AUD-001 | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo | PROPUESTO (sin construir) | oct. 2026 |
 | RF-AUD-002 | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
 | RF-USR-008 | Que cada usuario cambie su propia contraseña | Todos los roles | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
@@ -336,7 +336,7 @@ Detalle, decisiones pendientes (D-1 a D-5) y hallazgos P-01 a P-16: `docs/PENDIE
 
 ## 6. Modelo de datos (MySQL, base `SIGR`)
 
-Notación: `*` clave primaria, `→tabla` clave foránea. El esquema completo está en `database/init.sql` (23 tablas, más catálogos y datos base). Las migraciones (`database/migrations/`): `001_ajustes_front` (ajustes para conectar el frontend del mesero), `002_api_idempotencia` (motivo libre de cancelación e idempotencia), `003_existencia_producto` (existencia opcional por producto, `producto.controla_existencia`) y `004_mesas_13_a_18`. Si la base ya existe, no la recrees: corre en orden las migraciones que falten.
+Notación: `*` clave primaria, `→tabla` clave foránea. El esquema completo está en `database/init.sql` (23 tablas, más catálogos y datos base). Las migraciones (`database/migrations/`): `001_ajustes_front` (ajustes para conectar el frontend del mesero), `002_api_idempotencia` (motivo libre de cancelación e idempotencia), `003_existencia_producto` (existencia opcional por producto, `producto.controla_existencia`) `004_mesas_13_a_18` y `005_mesas_zona_activa` (sección y disponibilidad de las mesas). Si la base ya existe, no la recrees: corre en orden las migraciones que falten.
 
 ```
 
@@ -345,7 +345,7 @@ usuario: id_usuario*, id_rol→rol, nombre, correo, activo, creado_en
 credenciales: id_usuario*→usuario, nombre_usuario, password_hash, ultimo_acceso
 perfil_usuario: id_usuario*→usuario, telefono, direccion
 cliente: id_cliente*, nombre, telefono, correo
-mesa: id_mesa*, numero, capacidad, estado
+mesa: id_mesa*, numero, capacidad, zona, activa, estado
 categoria_menu: id_categoria*, nombre
 producto: id_producto*, id_categoria→categoria_menu, nombre, descripcion, precio, disponible, controla_existencia
 disponibilidadProducto: id_inventario*, id_producto→producto, existencia, stock_minimo
@@ -375,19 +375,20 @@ idempotencia: clave, id_usuario, ruta, estado_http, respuesta, creado_en
 | `estado_pedido.nombre` | `Registrado`, `Pendiente` (usado como «enviado a cocina»), `En preparacion`, `Listo`, `Entregado`, `Cancelado`, `Pagado` |
 | `reservacion.estado` | `pendiente` (por defecto), `confirmada`, `cancelada`, `llego` (al registrar la llegada). Es `VARCHAR` sin `CHECK` |
 | `lista_espera.estado` | `esperando` (por defecto), `asignada`, `cancelada`. Es `VARCHAR` sin `CHECK` |
+| `mesa.activa` | `TRUE` (disponible) o `FALSE` (no disponible: no aparece para la hostess ni para el mesero; no se borra) |
 | `rol.nombre` | `gerente`, `mesero`, `cocinero`, `cajero`, `hostess` |
 
 Reglas en la BD: `capacidad > 0`, `precio >= 0`, `existencia >= 0`, `stock_minimo >= 0`, `personas > 0`, `cantidad > 0`. Las contraseñas se guardan con `bcryptjs` en `credenciales.password_hash`. Los productos y usuarios **no se borran** (tienen pedidos y ventas ligados): se desactivan.
 
 ## 7. API REST (`/api`, JSON, JWT en `Authorization: Bearer <token>`)
 
-Formato de error: `{ "codigo", "mensaje" }`. Códigos: `no_autenticado`, `credenciales_invalidas`, `sin_permiso`, `requiere_gerente`, `no_encontrado`, `estado_invalido` (también para validación zod, HTTP 422), `producto_agotado`, `mesa_no_disponible`, `desconocido`.
+Formato de error: `{ "codigo", "mensaje" }`. Códigos: `no_autenticado`, `credenciales_invalidas`, `sin_permiso`, `requiere_gerente`, `no_encontrado`, `estado_invalido` (también para validación zod, HTTP 422), `producto_agotado`, `mesa_no_disponible` (mesa ocupada o no disponible), `desconocido`.
 
 | Método y ruta | Roles | Para qué |
 | --- | --- | --- |
 | `POST /auth/login` | público | Inicia sesión; devuelve JWT (dura 8 h) |
 | `GET /auth/me` | cualquiera con sesión | Usuario de la sesión |
-| `GET /mesas` | cualquiera con sesión | Mesas con estado y cuenta |
+| `GET /mesas` | cualquiera con sesión | Mesas **disponibles** con estado, sección y cuenta (las no disponibles no aparecen) |
 | `GET /mesas/:id/cuenta` | cualquiera con sesión | Cuenta activa con sus pedidos |
 | `POST /mesas/:id/asignar` | hostess, gerente | Ocupa la mesa para una reservación, un grupo en espera o un número de personas |
 | `PATCH /mesas/:id/estado` | hostess, gerente | Cambia el estado de la mesa |
@@ -411,6 +412,7 @@ Formato de error: `{ "codigo", "mensaje" }`. Códigos: `no_autenticado`, `creden
 | `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/:id`, `POST /usuarios/:id/contrasena` | gerente | Administración de usuarios |
 | `GET/POST /catalogo/categorias`, `PATCH/DELETE /catalogo/categorias/:id` | gerente | Categorías del menú |
 | `GET/POST /catalogo/productos`, `PATCH /catalogo/productos/:id` | gerente | Productos e inventario |
+| `GET/POST /catalogo/mesas`, `PATCH /catalogo/mesas/:id` | gerente | Administración de mesas: registrar, editar y marcar como disponible o no disponible (no se borran) |
 
 Las rutas de crear, enviar, cancelar, entregar, solicitar pago, asignar mesa y reservaciones aceptan la cabecera `Idempotency-Key`: una clave es una intención del usuario; si se reintenta con la misma clave, el servidor devuelve la respuesta guardada sin repetir la acción (usa un candado `GET_LOCK` de MySQL).
 
@@ -464,7 +466,7 @@ Antes de entregar: `npm run build` y `npm test` en `backend/`, y `npm run check`
 6. **Seguridad del ERS sin cubrir:** bloqueo tras 5 intentos (RNF-009), expiración por inactividad (RNF-011), invalidar la sesión al salir (RNF-012), registro de accesos no autorizados (RNF-017) y bitácora de eventos (RNF-026).
 7. Medir los tiempos de respuesta (RNF-001) y decidir si hace falta tiempo real (RNF-025).
 8. Decidir qué pasa con el borrado de clientes y actualizar el ERS con los requisitos de la sección 5.2.
-9. **Mesas del gerente** (RF-MES-002 a 006): registrar, editar, activar o desactivar y zona de mesa. Hoy las mesas solo se crean con SQL. Falta decidir si la zona es texto libre o catálogo.
+9. **Sección de la mesa en el Salón y el Panel** (RF-MES-007): hoy la sección solo se ve y se filtra en la pantalla del gerente; falta mostrarla o agrupar por sección para la hostess y el mesero (el backend ya envía `zona` en `GET /api/mesas`).
 10. **Auditoría** (RF-AUD-001 y 002): quién cambia una contraseña, a quién y cuándo. Un trigger de MySQL no conoce al usuario del sistema; la API tendría que pasarle su id. Opciones y recomendación en `docs/PENDIENTES_Y_FALTANTES.md`.
 11. **Cerrar cuentas** (RF-CUE-002): hoy nada cierra una cuenta, así que una mesa con pedidos no se puede liberar desde el sistema.
 12. Cambio de contraseña propio (RF-USR-008), quién canceló un pedido (RF-PED-006) y las reglas del dominio sin aplicar (tolerancia de reservas, capacidad, regla 11).
@@ -1081,6 +1083,7 @@ async function alGuardar(u: UsuarioAdmin, creado: boolean) {
 Cada grupo de rutas declara qué roles entran y una guarda global lo hace cumplir (`frontend/src/router/index.ts`):
 
 ```ts
+    {
       path: '/gerente',
       component: GerenteLayout,
       meta: { roles: ['gerente'] },
@@ -1096,10 +1099,13 @@ Cada grupo de rutas declara qué roles entran y una guarda global lo hace cumpli
           name: 'gerente-productos',
           component: () => import('../views/gerente/ProductosView.vue'),
         },
+        {
+          path: 'mesas',
+          name: 'gerente-mesas',
+          component: () => import('../views/gerente/MesasView.vue'),
+        },
       ],
     },
-    {
-      path: '/hostess',
 ...
 router.beforeEach(async (to) => {
   if (to.name === 'inicio') {
@@ -1129,7 +1135,7 @@ router.beforeEach(async (to) => {
 
 ### 14.13 Receta completa: agregar un recurso nuevo de punta a punta
 
-Ejemplo: «administrar mesas» (pendiente RF-MES-002 a 006). El orden que se sigue siempre:
+Ejemplo real: la administración de mesas del gerente (RF-MES-002 a 006; ver la sección 16, «Administración de mesas»). El orden que se sigue siempre:
 
 1. **Requisito:** escribirlo en `README.md` y en la sección 5.7 de este archivo con su código `RF-…`.
 2. **Base de datos:** `database/migrations/00N_*.sql` y el mismo cambio en `database/init.sql`.
@@ -1188,6 +1194,15 @@ Al terminar, dame el BLOQUE DE ACTUALIZACIÓN de la sección 15.
 ## 16. Registro de cambios y decisiones
 
 Más reciente primero. Cada IA agrega aquí su bloque de actualización.
+
+### 2026-10 · Administración de mesas por el gerente
+- Qué se hizo: el gerente puede registrar mesas (número, cantidad de personas, sección y disponibilidad), editarlas y marcarlas como disponibles o no disponibles desde la pantalla **Mesas** (`/gerente/mesas`, tercera pestaña). Una mesa no disponible **no aparece** para la hostess ni para el mesero (`GET /api/mesas` solo trae las activas) y no se puede sentar, reservar ni cambiar de estado (`409 mesa_no_disponible`).
+- Archivos nuevos o cambiados: `database/migrations/005_mesas_zona_activa.sql` e `init.sql` (columnas `mesa.zona` y `mesa.activa`); `backend/src/controllers/catalogo.ts` y `routes/catalogo.ts` (`/api/catalogo/mesas`); `controllers/mesas.ts` y `controllers/hostess.ts` (ocultar y rechazar mesas no disponibles); frontend: `views/gerente/MesasView.vue`, `components/FormularioMesaDialog.vue`, `layouts/GerenteLayout.vue`, `router/index.ts`, `types/gerente.ts`, `services/interfaces.ts`, `services/api/` y `services/mock/` más `services/hostess/mock.ts`.
+- Decisiones tomadas: la sección es texto libre con sugerencias de las ya existentes (sin catálogo); las mesas no se borran; no se puede desactivar una mesa ocupada, reservada, con cuenta abierta o con reservaciones vigentes; el número de mesa sigue siendo único; cambiar la capacidad no revisa reservaciones ya hechas.
+- Requerimientos nuevos o cambiados: RF-MES-002 a 006 construidos; RF-MES-007 propuesto (mostrar o agrupar por sección en el Salón y el Panel).
+- Verificación: 54 pruebas de la API contra MySQL 8 real (mesas, pedidos, usuarios, catálogo, idempotencia) y la migración 005 sobre una base con el esquema anterior; frontend 453 pruebas y build.
+- Pendiente o por verificar: mostrar la sección en el Salón y el Panel; bitácora de quién crea o desactiva una mesa; las mesas con cuenta abierta no se pueden desactivar hasta que exista cerrar cuenta.
+- Secciones de este archivo actualizadas: 4, 5, 6, 7, 11 y 16.
 
 ### 2026-10 · Reorganización a la estructura acordada
 - Qué se hizo: el proyecto se reorganizó a la estructura de la sección 3. El backend separa rutas, controladores, modelos y servicios; se agregaron mocks y pruebas del backend; la base de datos pasó a `init.sql` y `migrations/`; se agregó `docker-compose.yml`; los mocks del frontend pasaron a JSON y `main.ts` quedó en la raíz del frontend.

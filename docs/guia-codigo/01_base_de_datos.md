@@ -52,7 +52,7 @@ Archivos: `schema.sql` (227 líneas, crea todo), `seed.sql` (25), `seed_demo.sql
 | Líneas | Tabla | Qué guarda | Detalles |
 | --- | --- | --- | --- |
 | 36–41 | `cliente` | Clientes (para reservas y lista de espera). | `telefono` y `correo` pueden ser `NULL`. **No hay `UNIQUE` en el teléfono**: la unicidad la valida el backend con una consulta (`routes/hostess.ts`). |
-| 43–48 | `mesa` | Mesas del salón. | `numero` único; `capacidad > 0`; `estado` solo puede ser `libre`, `ocupada` o `reservada` (`CHECK`). |
+| 43–48 | `mesa` | Mesas del salón. | `numero` único; `capacidad > 0`; `estado` solo puede ser `libre`, `ocupada` o `reservada` (`CHECK`). *Después se agregaron `zona` (sección) y `activa` (disponible): migración 005.* |
 | 50–53 | `categoria_menu` | Entradas, Platos fuertes, Postres, Bebidas. | `nombre` único. |
 | 55–65 | `producto` | Platillos y bebidas. | `precio DECIMAL(10,2)` (hasta 99 999 999.99) con `CHECK >= 0`; `disponible` = **activo en el menú**; `controla_existencia`: verdadero = se cuenta inventario; falso = se prepara al momento (comentario de la línea 62). |
 | 67–73 | `disponibilidadProducto` | El inventario. | `id_producto` **único**: una fila de inventario por producto. `existencia` y `stock_minimo` no pueden ser negativos. |
