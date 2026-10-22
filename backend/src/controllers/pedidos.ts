@@ -38,11 +38,11 @@ async function guardarDetalle(cx: PoolConnection, pedidoId: number, lineas: Line
   await cx.query("INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad, precio_unitario, indicaciones) VALUES ?", [valores]);
 }
 
-/** Bloquea la fila del pedido durante la transacción y devuelve su estado (código del front). */
+/** Bloquea la fila del pedido durante la transacción y devuelve su estado y propietario. */
 async function bloquearPedido(cx: PoolConnection, id: number) {
   const [fila] = await filas(
     cx,
-    `SELECT p.id_pedido, ep.nombre AS estado, c.estado AS estado_cuenta
+    `SELECT p.id_pedido, p.id_mesero, ep.nombre AS estado, c.estado AS estado_cuenta
        FROM pedido p
        JOIN estado_pedido ep ON ep.id_estado = p.id_estado
        JOIN cuenta c ON c.id_cuenta = p.id_cuenta
@@ -51,7 +51,13 @@ async function bloquearPedido(cx: PoolConnection, id: number) {
   );
   if (!fila) throw new ErrorApi(404, "no_encontrado", `El pedido ${id} no existe.`);
   const estado = ESTADOS_PEDIDO.find((e) => ESTADO_PEDIDO_DB[e] === fila.estado) ?? "registrado";
-  return { estado, cuentaPorPagar: fila.estado_cuenta === "por_pagar" };
+  return { estado, idMesero: Number(fila.id_mesero), cuentaPorPagar: fila.estado_cuenta === "por_pagar" };
+}
+
+function exigirPedidoPropio(req: Request, idMesero: number): void {
+  if (req.usuario!.rol === "mesero" && req.usuario!.id !== idMesero) {
+    throw new ErrorApi(403, "sin_permiso", "No tienes permiso para consultar o modificar un pedido de otro mesero.");
+  }
 }
 
 async function pedidoOError(cx: PoolConnection, id: number): Promise<PedidoDto> {
@@ -126,6 +132,7 @@ export const listarPedidos = async (req: Request, res: Response) => {
 export const obtenerPedido = async (req: Request, res: Response) => {
   const pedido = await cargarPedido(pool, idDeRuta(req.params.id));
   if (!pedido) throw new ErrorApi(404, "no_encontrado", "El pedido no existe.");
+  exigirPedidoPropio(req, pedido.id_mesero);
   res.json(pedido);
 };
 
@@ -138,7 +145,8 @@ export const editarPedido = async (req: Request, res: Response) => {
   const { detalle } = validar(Actualizacion, req.body);
 
   const pedido = await transaccion(async (cx) => {
-    const { estado, cuentaPorPagar } = await bloquearPedido(cx, id);
+    const { estado, idMesero, cuentaPorPagar } = await bloquearPedido(cx, id);
+    exigirPedidoPropio(req, idMesero);
     if (estado !== "registrado") {
       throw new ErrorApi(409, "estado_invalido", "El pedido ya no está en estado registrado.");
     }
@@ -161,7 +169,8 @@ export const enviarPedido = async (req: Request, res: Response) => {
 
   await conIdempotencia(req, res, 200, () =>
     transaccion(async (cx) => {
-      const { estado } = await bloquearPedido(cx, id);
+      const { estado, idMesero } = await bloquearPedido(cx, id);
+      exigirPedidoPropio(req, idMesero);
       if (estado !== "registrado") {
         throw new ErrorApi(409, "estado_invalido", "Solo se puede enviar un pedido registrado.");
       }
@@ -194,7 +203,8 @@ export const cancelarPedido = async (req: Request, res: Response) => {
 
   await conIdempotencia(req, res, 200, () =>
     transaccion(async (cx) => {
-      const { estado, cuentaPorPagar } = await bloquearPedido(cx, id);
+      const { estado, idMesero, cuentaPorPagar } = await bloquearPedido(cx, id);
+      exigirPedidoPropio(req, idMesero);
       if (estado === "en_preparacion" && rol !== "gerente") {
         throw new ErrorApi(403, "requiere_gerente", "El pedido está en preparación: solo el gerente puede cancelarlo.");
       }
@@ -222,7 +232,8 @@ export const entregarPedido = async (req: Request, res: Response) => {
 
   await conIdempotencia(req, res, 200, () =>
     transaccion(async (cx) => {
-      const { estado } = await bloquearPedido(cx, id);
+      const { estado, idMesero } = await bloquearPedido(cx, id);
+      exigirPedidoPropio(req, idMesero);
       if (estado !== "listo") {
         throw new ErrorApi(409, "estado_invalido", "Solo se puede entregar un pedido que está listo.");
       }
@@ -234,8 +245,7 @@ export const entregarPedido = async (req: Request, res: Response) => {
 
 /**
  * PATCH /api/pedidos/:id/estado  { estado: "en_preparacion" | "listo" }
- * Acción de la cocina (aún no hay pantalla para el cocinero; sirve para probar el flujo del mesero).
- * Solo avanza: enviado → en_preparacion → listo.
+ * Acción de cocina. Solo avanza: enviado → en_preparacion → listo.
  */
 export const cambiarEstadoPedido = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);

@@ -125,6 +125,10 @@ export function crearServiciosApi(): Servicios {
       async entregar(id, claveIdempotencia) {
         return aPedido(await solicitar<PedidoDto>('POST', `/pedidos/${id}/entregar`, { claveIdempotencia }))
       },
+
+      async cambiarEstadoCocina(id, estado) {
+        return aPedido(await solicitar<PedidoDto>('PATCH', `/pedidos/${id}/estado`, { cuerpo: { estado } }))
+      },
     },
 
     cuentas: {

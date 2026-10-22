@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import CocinaLayout from '../layouts/CocinaLayout.vue'
 import GerenteLayout from '../layouts/GerenteLayout.vue'
 import HostessLayout from '../layouts/HostessLayout.vue'
 import MeseroLayout from '../layouts/MeseroLayout.vue'
@@ -16,6 +17,7 @@ declare module 'vue-router' {
 export function rutaInicial(rol: Rol | null): string {
   if (rol === 'gerente') return '/gerente/usuarios'
   if (rol === 'hostess') return '/hostess/salon'
+  if (rol === 'cocinero') return '/cocinero/cocina'
   return '/mesero/mesas'
 }
 
@@ -101,6 +103,19 @@ export const router = createRouter({
           path: 'espera',
           name: 'hostess-espera',
           component: () => import('../views/hostess/EsperaView.vue'),
+        },
+      ],
+    },
+    {
+      path: '/cocinero',
+      component: CocinaLayout,
+      meta: { roles: ['cocinero'] },
+      redirect: '/cocinero/cocina',
+      children: [
+        {
+          path: 'cocina',
+          name: 'cocinero-cocina',
+          component: () => import('../views/cocinero/CocinaView.vue'),
         },
       ],
     },

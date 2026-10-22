@@ -77,6 +77,11 @@ export interface PedidosService {
    * Marca como `entregado` un pedido `listo`; desde otro estado falla con `estado_invalido`.
    */
   entregar(id: number, claveIdempotencia?: string): Promise<Pedido>
+  /**
+   * PATCH /pedidos/{id}/estado. Cocina: `pendiente`/enviado → `en_preparacion` → `listo`.
+   * La API valida que el pedido esté en el estado anterior correcto.
+   */
+  cambiarEstadoCocina(id: number, estado: 'en_preparacion' | 'listo'): Promise<Pedido>
 }
 
 export interface CuentasService {

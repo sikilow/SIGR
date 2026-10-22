@@ -13,6 +13,13 @@ function buscarPedido(id: number): Pedido {
   return pedido
 }
 
+function exigirPedidoPropio(pedido: Pedido): void {
+  const usuario = usuarioActual()
+  if (usuario?.rol === 'mesero' && pedido.idMesero !== usuario.idUsuario) {
+    throw new ErrorServicio('sin_permiso', 'No tienes permiso para consultar o modificar un pedido de otro mesero.', 403)
+  }
+}
+
 const totalDe = (detalle: DetallePedido[]): number =>
   detalle.reduce((suma, d) => suma + d.cantidad * d.precioUnitario, 0)
 
@@ -115,12 +122,17 @@ export function crearPedidosMock(): PedidosService {
     },
 
     obtener(id) {
-      return conRetraso(() => buscarPedido(id))
+      return conRetraso(() => {
+        const pedido = buscarPedido(id)
+        exigirPedidoPropio(pedido)
+        return pedido
+      })
     },
 
     actualizar(id, lineas) {
       return conRetraso(() => {
         const pedido = buscarPedido(id)
+        exigirPedidoPropio(pedido)
         // Solo se modifica mientras no se haya enviado a cocina.
         if (!puedeEditarOEnviar(pedido.estado)) {
           throw new ErrorServicio('estado_invalido', 'El pedido ya no está en estado registrado.', 409)
@@ -134,6 +146,7 @@ export function crearPedidosMock(): PedidosService {
     enviar(id, claveIdempotencia) {
       return conRetrasoIdempotente(claveIdempotencia, () => {
         const pedido = buscarPedido(id)
+        exigirPedidoPropio(pedido)
         // Fallo simulado (ver utiles.ts) para probar "Reintentar envío": falla ANTES de aplicar la acción.
         if (puedeEditarOEnviar(pedido.estado) && consumirFalloSimulado('sigr.mock.fallarEnvio')) {
           throw new ErrorServicio('desconocido', 'Fallo simulado al enviar a cocina.', 500)
@@ -154,6 +167,7 @@ export function crearPedidosMock(): PedidosService {
     cancelar(id, descripcion, claveIdempotencia) {
       return conRetrasoIdempotente(claveIdempotencia, () => {
         const pedido = buscarPedido(id)
+        exigirPedidoPropio(pedido)
         const texto = descripcion.trim()
         if (texto.length < DESCRIPCION_MOTIVO_MIN || texto.length > DESCRIPCION_MOTIVO_MAX) {
           throw new ErrorServicio(
@@ -186,10 +200,23 @@ export function crearPedidosMock(): PedidosService {
     entregar(id, claveIdempotencia) {
       return conRetrasoIdempotente(claveIdempotencia, () => {
         const pedido = buscarPedido(id)
+        exigirPedidoPropio(pedido)
         if (pedido.estado !== 'listo') {
           throw new ErrorServicio('estado_invalido', 'Solo se puede entregar un pedido que está listo.', 409)
         }
         pedido.estado = 'entregado'
+        return pedido
+      })
+    },
+
+    cambiarEstadoCocina(id, estado) {
+      return conRetraso(() => {
+        const pedido = buscarPedido(id)
+        const requerido = estado === 'en_preparacion' ? 'pendiente' : 'en_preparacion'
+        if (pedido.estado !== requerido) {
+          throw new ErrorServicio('estado_invalido', `Para pasar a ${estado} el pedido debe estar en ${requerido}.`, 409)
+        }
+        pedido.estado = estado
         return pedido
       })
     },

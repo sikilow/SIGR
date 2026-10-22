@@ -82,7 +82,7 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 | P-03 | **Seguridad del ERS sin cubrir** | RNF-009 (bloqueo tras 5 intentos), RNF-011 (expiración por inactividad: hoy el token dura 8 horas fijas), RNF-012 (invalidar la sesión al salir), RNF-017 (registro de accesos no autorizados). | Verificado |
 | P-04 | **Sin protecciones básicas de la API** | El backend no usa límite de peticiones (contra fuerza bruta) ni cabeceras de seguridad. No hay HTTPS configurado en el proyecto. | Verificado en `package.json`; el HTTPS es por validar |
 | P-05 | **Las pruebas del backend son mínimas** | `backend/tests/` solo cubre funciones puras del dominio y los mocks (26 pruebas). No hay pruebas de las rutas ni de las reglas más delicadas (existencia, cancelaciones, bloqueos), que necesitan una base de datos. El frontend tiene 18 archivos de pruebas. | Verificado |
-| P-06 | **Pantallas pendientes** | Cocina (la API ya existe), caja y facturación. Los roles `cocinero` y `cajero` hoy ven «tu rol no tiene acceso». | Verificado |
+| P-06 | **Pantallas pendientes** | Caja y facturación. El rol `cocinero` ya tiene cola en `/cocinero/cocina`; el rol `cajero` sigue sin pantalla. | Verificado |
 | P-07 | **Falta `PATCH /api/lista-espera/:id`** | Quitar o editar un grupo de la lista de espera. | Verificado |
 
 ### 2.2 Reglas del dominio que el servidor no aplica o que chocan con el diseño
@@ -152,7 +152,7 @@ Son sugerencias mías, **no requisitos**. Solo valen si el restaurante las neces
 2. Cerrar P-01 (cerrar cuentas), porque sin eso el ciclo de una mesa queda incompleto.
 3. Bitácora (RF-AUD-001 y 002) y mostrar la sección de la mesa en el Salón y el Panel (RF-MES-007). Las mesas del gerente ya están hechas.
 4. Cambio de contraseña propio (RF-USR-008) y seguridad del ERS (P-03 y P-04).
-5. Pantalla de cocina, luego caja y facturación.
+5. Caja y facturación; la pantalla de cocina ya está implementada.
 6. Pruebas del backend (P-05) conforme se construyan las reglas anteriores.
 7. Actualizar el ERS, el README, `CONTEXTO_IA.md` y la documentación del gerente.
 

@@ -36,15 +36,57 @@ async function codigoDeError(promesa: Promise<unknown>): Promise<string> {
   return 'sin error'
 }
 
+function iniciarSesionMesero(idUsuario = 1): void {
+  vi.stubGlobal('sessionStorage', {
+    getItem: vi.fn((clave: string) =>
+      clave === 'sigr.mock.sesion'
+        ? JSON.stringify({ idUsuario, idRol: 2, nombre: 'Mesero', correo: '', activo: true, rol: 'mesero' })
+        : null,
+    ),
+  })
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
 })
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
 // Datos sembrados: #3 en_preparacion, #2 listo, #5 pendiente (enviado a cocina), #6 registrado, #4 entregado, #8 cancelado, #10 pagado.
+describe('mock: propiedad de pedidos del mesero', () => {
+  it('lista únicamente los pedidos creados por el mesero en sesión', async () => {
+    const { pedidos, baseDatos } = await nuevoMock()
+    iniciarSesionMesero()
+    const ajeno = baseDatos.pedidos.find((pedido) => pedido.idPedido === 5)
+    if (ajeno) ajeno.idMesero = 2
+
+    const lista = await resolver(pedidos.listar())
+
+    expect(lista.some((pedido) => pedido.idPedido === 5)).toBe(false)
+    expect(lista.every((pedido) => pedido.idMesero === 1)).toBe(true)
+  })
+
+  it('deniega consultar y cambiar pedidos de otro mesero', async () => {
+    const { pedidos, baseDatos } = await nuevoMock()
+    iniciarSesionMesero()
+    for (const idPedido of [2, 6]) {
+      const pedido = baseDatos.pedidos.find((p) => p.idPedido === idPedido)
+      if (pedido) pedido.idMesero = 2
+    }
+
+    expect(await codigoDeError(pedidos.obtener(6))).toBe('sin_permiso')
+    expect(await codigoDeError(pedidos.actualizar(6, [{ idProducto: 1, cantidad: 1, indicaciones: '' }]))).toBe('sin_permiso')
+    expect(await codigoDeError(pedidos.enviar(6))).toBe('sin_permiso')
+    expect(await codigoDeError(pedidos.cancelar(6, 'Error al tomar el pedido'))).toBe('sin_permiso')
+    expect(await codigoDeError(pedidos.entregar(2))).toBe('sin_permiso')
+    expect(baseDatos.pedidos.find((p) => p.idPedido === 2)?.estado).toBe('listo')
+    expect(baseDatos.pedidos.find((p) => p.idPedido === 6)?.estado).toBe('registrado')
+  })
+})
+
 describe('mock: cancelar pedido', () => {
   it('en_preparacion devuelve requiere_gerente y no cambia el pedido', async () => {
     const { pedidos, baseDatos } = await nuevoMock()
@@ -119,6 +161,21 @@ describe('mock: enviar pedido', () => {
   it('un pedido que ya no está registrado devuelve estado_invalido', async () => {
     const { pedidos } = await nuevoMock()
     expect(await codigoDeError(pedidos.enviar(5))).toBe('estado_invalido') // #5 ya está pendiente
+  })
+})
+
+describe('mock: cambiar estado desde cocina', () => {
+  it('pasa de enviado a preparación y de preparación a listo', async () => {
+    const { pedidos } = await nuevoMock()
+    expect((await resolver(pedidos.cambiarEstadoCocina(5, 'en_preparacion'))).estado).toBe('en_preparacion')
+    expect((await resolver(pedidos.cambiarEstadoCocina(5, 'listo'))).estado).toBe('listo')
+  })
+
+  it('no permite saltarse estados ni cambiar un pedido que ya no está en cola', async () => {
+    const { pedidos, baseDatos } = await nuevoMock()
+    expect(await codigoDeError(pedidos.cambiarEstadoCocina(5, 'listo'))).toBe('estado_invalido')
+    expect(baseDatos.pedidos.find((p) => p.idPedido === 5)?.estado).toBe('pendiente')
+    expect(await codigoDeError(pedidos.cambiarEstadoCocina(2, 'listo'))).toBe('estado_invalido')
   })
 })
 

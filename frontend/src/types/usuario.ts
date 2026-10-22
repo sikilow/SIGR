@@ -1,6 +1,6 @@
 // Tipos `Usuario` y `Rol` (tablas `usuario`, `rol` y `credenciales`). Ver docs/equivalencias-bd.md.
 
-/** Roles del sistema: `rol.nombre` normalizado (minúsculas, sin acentos). Por ahora solo se construye la interfaz de `mesero`. */
+/** Roles del sistema: `rol.nombre` normalizado (minúsculas, sin acentos). */
 export const ROLES = ['gerente', 'mesero', 'cocinero', 'cajero', 'hostess'] as const
 export type Rol = (typeof ROLES)[number]
 

@@ -15,7 +15,7 @@
 
 </div>
 
-> 🚧 **Estado del repositorio:** el rol **hostess** (Salón, Reservaciones y Lista de espera) ya tiene sus rutas en `backend/` (clientes, reservaciones, lista de espera y asignar mesa). Solo falta `PATCH /api/lista-espera/:id` para editar la lista de espera (ver [`docs/contrato-api-hostess.md`](docs/contrato-api-hostess.md)). Con `VITE_USE_MOCK=true` todo corre sin backend.
+> 🚧 **Estado del repositorio:** cocina ya tiene pantalla para recibir pedidos y avanzar su preparación. En la API de hostess solo falta `PATCH /api/lista-espera/:id` para editar la lista de espera (ver [`docs/contrato-api-hostess.md`](docs/contrato-api-hostess.md)). Con `VITE_USE_MOCK=true` todo corre sin backend.
 
 ---
 
@@ -35,7 +35,7 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 | 💳 **Cuenta de mesa** | Consulta de pedidos y total; solicitud de pago en caja o digital | ✅ |
 | 👥 **Usuarios** *(gerente)* | Alta, edición, activación y cambio de contraseña | ✅ |
 | 📦 **Productos e inventario** *(gerente)* | Categorías, precios, stock mínimo y existencia opcional por producto | ✅ |
-| 👨‍🍳 **Cocina** | Cola de pedidos en preparación y marcado como listos | 🚧 |
+| 👨‍🍳 **Cocina** | Cola de pedidos enviados y en preparación; iniciar preparación y marcarlos listos. Actualización automática | ✅ |
 | 💵 **Caja** | Cobro, pagos divididos y corte de caja (el esquema ya existe) | 🚧 |
 | 🪑 **Hostess: Salón** | Estado de las mesas (libres, ocupadas, reservadas), próximas reservaciones y lista de espera; asignar mesa a un grupo. No ve pedidos ni cuentas | ✅ |
 | 📅 **Hostess: Reservaciones** | Lista por día, alta y edición con búsqueda de clientes, confirmar, cancelar y registrar la llegada | ✅ |
@@ -50,7 +50,7 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 | --- | --- | --- |
 | 🧑‍💼 **Gerente** | Supervisar la operación: usuarios, menú e inventario, mesas, reportes y cancelaciones excepcionales | Usuarios, Productos e inventario, Mesas |
 | 🍽️ **Mesero** | Capturar pedidos rápido y sin errores, ver su estado, enviarlos a cocina y pedir la cuenta | Mesas, Pedido de mesa, Cuenta, Mis pedidos |
-| 👨‍🍳 **Cocinero** | Recibir los pedidos claros y en orden, y marcarlos en preparación o listos | *(pendiente)* |
+| 👨‍🍳 **Cocinero** | Recibir pedidos claros y en orden, iniciar preparación y marcarlos listos | Cocina |
 | 💵 **Cajero** | Consultar cuentas, cobrar, generar tickets y facturas, y hacer el corte de caja | *(pendiente)* |
 | 🪑 **Hostess** | Asignar mesas, controlar reservaciones y la lista de espera, registrar clientes | Salón, Reservaciones, Lista de espera |
 
@@ -64,7 +64,7 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 
 > **Leyenda:** ✅ implementado · 🟡 parcial o distinto a lo que pide el ERS · 🚧 pendiente · 🔎 aún sin medir o revisar
 
-**Avance de requisitos funcionales del ERS:** 12 ✅ · 3 🟡 · 7 🚧 de 22.
+**Avance de requisitos funcionales del ERS:** 13 ✅ · 2 🟡 · 7 🚧 de 22.
 
 ### Requisitos funcionales
 
@@ -84,8 +84,8 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 | --- | --- | --- | --- | --- |
 | `RF-PED-001` | Registrar pedido | Mesero | ✅ | `POST /api/pedidos` · Pedido de mesa |
 | `RF-PED-002` | Cancelar pedido | Mesero, Gerente | ✅ | `POST /api/pedidos/:id/cancelar` (con motivo) · Mis pedidos |
-| `RF-PED-003` | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | 🟡 | `GET /api/pedidos` y `/:id` aceptan cualquier rol; solo el mesero tiene pantalla (Mis pedidos) |
-| `RF-PED-004` | Cambiar estado del pedido | Cocinero, Mesero | 🟡 | API lista (`/enviar`, `/entregar`, `PATCH /:id/estado` para cocinero y gerente); falta la pantalla de cocina |
+| `RF-PED-003` | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | 🟡 | Mesero: Mis pedidos; cocinero: cola operativa de pedidos enviados y en preparación. Historial para cajero y gerente pendiente |
+| `RF-PED-004` | Cambiar estado del pedido | Cocinero, Mesero | ✅ | Mesero envía y entrega; cocina avanza `Pendiente` → `En preparacion` → `Listo` en `/cocinero/cocina` |
 | `RF-PED-005` | Consultar historial de pedidos | Gerente, Cajero | 🚧 | Sin pantalla ni endpoint propio |
 
 #### Gestión de ventas
@@ -506,7 +506,7 @@ VITE_USE_MOCK=false
 VITE_API_URL=http://localhost:3000/api
 ```
 
-Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, ideal para trabajar solo en las pantallas. En ese modo el login lista los usuarios demo: `mesero`, `hostess`, `cajero` y `gerente` (contraseña `1234`).
+Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, ideal para trabajar solo en las pantallas. En ese modo el login lista los usuarios demo: `mesero`, `cocinero`, `hostess`, `cajero` y `gerente` (contraseña `1234`).
 
 ### Comandos útiles
 
@@ -533,7 +533,7 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 | Gerente | `gerente` | `1234` | Usuarios, productos e inventario y mesas |
 | Mesero | `mesero` | `1234` | Mesas, pedidos y cuentas |
 | Mesero 2 | `mesero2` | `1234` | Igual que el mesero (solo con `seed_demo.sql`) |
-| Cocinero | `cocinero` | `1234` | *(pantalla pendiente)* |
+| Cocinero | `cocinero` | `1234` | Cola de cocina: pedidos enviados y en preparación |
 | Cajero | `cajero` | `1234` | *(pantalla pendiente)* |
 | Hostess | `hostess` | `1234` | Salón, Reservaciones y Lista de espera |
 

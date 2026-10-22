@@ -91,24 +91,26 @@ Cambia el estado de una mesa (sentar, liberar, reservar). Solo `hostess` y `gere
 | 107–109 | Busca el id del estado `registrado`, inserta el pedido y guarda su detalle. | |
 | 110 | Devuelve el pedido completo. | |
 
-### `GET /api/pedidos` (líneas 115–140): listar
+### `GET /api/pedidos`: listar
 
 | Líneas | Qué hace | Por qué |
 | --- | --- | --- |
-| 120 | Valida los filtros de `req.query`. | |
-| 121–133 | Arma el `WHERE` poco a poco con `condiciones` y `params`: `id_mesa` y/o `estado` (traducido con `nombreEstadoDeFiltro`; si no existe, 422). | Solo se agregan los filtros que llegaron. |
-| 134–137 | **Un mesero solo ve sus propios pedidos** (`p.id_mesero = ?`); los demás roles ven todos. | La regla está en el servidor. |
-| 139 | `condiciones.join(" AND ")` une las condiciones. | |
+| 109 | Valida los filtros de `req.query`. | |
+| 110–122 | Arma el `WHERE` poco a poco con `condiciones` y `params`: `id_mesa` y/o `estado` (traducido con `nombreEstadoDeFiltro`; si no existe, 422). | Solo se agregan los filtros que llegaron. |
+| 123–126 | **Un mesero solo ve sus propios pedidos** (`p.id_mesero = ?`); los demás roles ven todos. | La regla está en el servidor. |
 
-### `GET /api/pedidos/:id` (líneas 142–147)
+### `GET /api/pedidos/:id`
 
-Un pedido por id; 404 si no existe. Cualquier usuario con sesión puede consultarlo.
+Un pedido por id; 404 si no existe. Un mesero recibe 403 `sin_permiso` al consultar un pedido de otro mesero. Editar, enviar, cancelar
+y entregar también comprueban la propiedad antes de modificarlo; gerente conserva el acceso administrativo.
 
-### `PATCH /api/pedidos/:id` (líneas 149–173): editar el detalle
+### `PATCH /api/pedidos/:id`: editar el detalle
 
-Solo si el pedido sigue `registrado` y la cuenta no pidió el pago. **Reemplaza todo el detalle**: borra las líneas (`DELETE FROM detalle_pedido`), valida disponibilidad y existencia, y vuelve a insertarlas. Todo en una transacción.
+Solo el mesero propietario o el gerente; el pedido debe seguir `registrado` y la cuenta no debe haber pedido el pago.
+**Reemplaza todo el detalle**: borra las líneas (`DELETE FROM detalle_pedido`), valida disponibilidad y existencia, y vuelve a insertarlas.
+Todo en una transacción.
 
-### `POST /api/pedidos/:id/enviar` (líneas 175–198): mandar a cocina
+### `POST /api/pedidos/:id/enviar`: mandar a cocina
 
 | Líneas | Qué hace | Por qué |
 | --- | --- | --- |
@@ -116,7 +118,7 @@ Solo si el pedido sigue `registrado` y la cuenta no pidió el pago. **Reemplaza 
 | 185–192 | Lee las líneas y llama a `verificarExistencia(..., true)`: **bloquea el inventario, verifica y descuenta**. | Un producto pudo agotarse entre el registro y el envío. |
 | 194 | Cambia el estado a `enviado` (en la BD, `Pendiente`). | Si algo falló antes, la transacción se deshace y **no se descuenta nada**. |
 
-### `POST /api/pedidos/:id/cancelar` (líneas 200–234)
+### `POST /api/pedidos/:id/cancelar`
 
 | Líneas | Qué hace | Por qué |
 | --- | --- | --- |
@@ -127,13 +129,13 @@ Solo si el pedido sigue `registrado` y la cuenta no pidió el pago. **Reemplaza 
 | 225 | Si ya se había enviado, `devolverExistencia` regresa lo descontado al inventario. | |
 | 226–230 | Pone estado `cancelado` y guarda el motivo (`idMotivoTexto`). | El pedido **no se borra**: queda en el historial. |
 
-### `POST /api/pedidos/:id/entregar` (líneas 236–250)
+### `POST /api/pedidos/:id/entregar`
 
 Solo si el pedido está `listo` pasa a `entregado` (el mesero ya lo sirvió).
 
-### `PATCH /api/pedidos/:id/estado` (líneas 252–272): acciones de la cocina
+### `PATCH /api/pedidos/:id/estado`: acciones de la cocina
 
-Solo `cocinero` y `gerente`. El estado nuevo solo puede **avanzar un paso**: `enviado → en_preparacion` y `en_preparacion → listo` (línea 260 calcula el estado requerido). Si no está en el estado previo, 409. **Aún no existe pantalla de cocina**, pero la API ya está lista.
+Solo `cocinero` y `gerente`. El estado nuevo solo puede **avanzar un paso**: `enviado → en_preparacion` y `en_preparacion → listo`. Si no está en el estado previo, 409.
 
 ---
 

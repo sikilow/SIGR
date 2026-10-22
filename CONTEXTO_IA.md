@@ -114,11 +114,11 @@ SIGR/
 │   ├── index.html, main.ts, vite.config.ts
 │   ├── public/
 │   └── src/
-│       ├── views/              mesero/, hostess/, gerente/ y LoginView
+│       ├── views/              mesero/, hostess/, gerente/, cocinero/ y LoginView
 │       ├── components/         diálogos, formularios, insignias; hostess/ aparte
 │       ├── router/             rutas y guardas por rol
 │       ├── services/           api/ (backend real), mock/ (datos simulados), hostess/, interfaces.ts
-│       ├── stores/             Pinia: sesion, mesas, pedidos, cuenta, reservaciones, espera, salon, anuncios
+│       ├── stores/             Pinia: sesion, mesas, pedidos, cocina, cuenta, reservaciones, espera, salon, anuncios
 │       ├── mocks/              clientes.json y productos.json (los lee services/mock/baseDatos.ts)
 │       ├── utils/              carrito, reglas de negocio, formato, contraste
 │       ├── assets/             vacía por ahora (.gitkeep)
@@ -138,7 +138,7 @@ Diferencias menores respecto al modelo: `frontend/` tiene las carpetas adicional
 | --- | --- | --- | --- |
 | gerente | Administra usuarios, menú e inventario y mesas; supervisa; cancela excepciones | `/gerente/usuarios`, `/gerente/productos`, `/gerente/mesas` | `gerente` |
 | mesero | Pedidos, cuentas de mesa, enviar a cocina, entregar | `/mesero/mesas`, `/mesero/mesas/:id/pedido`, `/mesero/mesas/:id/cuenta`, `/mesero/pedidos/:id?` | `mesero`, `mesero2` |
-| cocinero | Ver pedidos y cambiar su estado | pendiente | `cocinero` |
+| cocinero | Ver la cola de pedidos y cambiar su estado | `/cocinero/cocina` | `cocinero` |
 | cajero | Cobrar, tickets, facturas, corte de caja | pendiente | `cajero` |
 | hostess | Salón, reservaciones, lista de espera, clientes | `/hostess/salon`, `/hostess/reservaciones`, `/hostess/espera` | `hostess` |
 
@@ -148,7 +148,7 @@ Contraseña de todos los usuarios de prueba: `1234` (solo desarrollo). El gerent
 
 Fuente: documento ERS (RP33) y modelo de requisitos (RP41). Estado según lectura del código: IMPLEMENTADO, PARCIAL (incompleto o distinto al ERS) o PENDIENTE.
 
-Avance de los 22 requisitos funcionales del ERS: 12 implementados, 3 parciales, 7 pendientes.
+Avance de los 22 requisitos funcionales del ERS: 13 implementados, 2 parciales, 7 pendientes.
 
 ### 5.1 Requisitos funcionales del ERS
 
@@ -168,8 +168,8 @@ Avance de los 22 requisitos funcionales del ERS: 12 implementados, 3 parciales, 
 | --- | --- | --- | --- | --- |
 | RF-PED-001 | Registrar pedido | Mesero | IMPLEMENTADO | `POST /api/pedidos` · Pedido de mesa |
 | RF-PED-002 | Cancelar pedido | Mesero, Gerente | IMPLEMENTADO | `POST /api/pedidos/:id/cancelar` (con motivo) · Mis pedidos |
-| RF-PED-003 | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | PARCIAL | `GET /api/pedidos` y `/:id` aceptan cualquier rol; solo el mesero tiene pantalla (Mis pedidos) |
-| RF-PED-004 | Cambiar estado del pedido | Cocinero, Mesero | PARCIAL | API lista (`/enviar`, `/entregar`, `PATCH /:id/estado` para cocinero y gerente); falta la pantalla de cocina |
+| RF-PED-003 | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | PARCIAL | Mesero: Mis pedidos; cocinero: cola operativa (enviados y en preparación). Historial para cajero y gerente pendiente |
+| RF-PED-004 | Cambiar estado del pedido | Cocinero, Mesero | IMPLEMENTADO | Mesero envía y entrega; cocina avanza `Pendiente` → `En preparacion` → `Listo` en `/cocinero/cocina` |
 | RF-PED-005 | Consultar historial de pedidos | Gerente, Cajero | PENDIENTE | Sin pantalla ni endpoint propio |
 
 **Gestión de ventas**
@@ -395,12 +395,12 @@ Formato de error: `{ "codigo", "mensaje" }`. Códigos: `no_autenticado`, `creden
 | `GET /menu` | cualquiera con sesión | Menú para el mesero |
 | `POST /productos/disponibilidad` | cualquiera con sesión | Verifica existencia de productos |
 | `POST /pedidos` | mesero, gerente | Crea un pedido |
-| `GET /pedidos`, `GET /pedidos/:id` | cualquiera con sesión | Lista y detalle (filtro `?estado=`) |
+| `GET /pedidos`, `GET /pedidos/:id` | cualquiera con sesión | Lista con filtro `?estado=`; el mesero solo ve y consulta los pedidos que creó |
 | `PATCH /pedidos/:id` | mesero, gerente | Edita un pedido registrado |
 | `POST /pedidos/:id/enviar` | mesero, gerente | Envía a cocina; descuenta existencia y bloquea si no alcanza |
 | `POST /pedidos/:id/cancelar` | mesero, gerente | Cancela con motivo |
 | `POST /pedidos/:id/entregar` | mesero, gerente | Marca como entregado |
-| `PATCH /pedidos/:id/estado` | cocinero, gerente | Cambia el estado de preparación |
+| `PATCH /pedidos/:id/estado` | cocinero, gerente | Cocina avanza `Pendiente` → `En preparacion` → `Listo` |
 | `POST /cuentas/:id/solicitar-pago` | mesero, gerente | Pasa la cuenta a `por_pagar` (pago físico o digital) |
 | `GET /clientes`, `POST /clientes` | hostess, gerente | Buscar y registrar clientes (teléfono único) |
 | `GET /reservaciones?fecha=` | hostess, gerente | Reservaciones del día |
@@ -424,6 +424,7 @@ Las rutas de crear, enviar, cancelar, entregar, solicitar pago, asignar mesa y r
 - **Fechas:** `DATETIME` sin zona horaria, texto `AAAA-MM-DD HH:MM:SS`, hora local. **Dinero:** `DECIMAL`, llega como número (`decimalNumbers: true`).
 - **Dos modos del frontend:** `VITE_USE_MOCK=true` (sin backend, con franja «Modo demo») y `false` (API real). `services/mock/` y `services/api/` implementan las mismas interfaces. `npm run dev` usa la API y `npm run dev:demo` usa el mock.
 - **Actualización automática** por consulta periódica (`VITE_POLL_MS`, 10 s por defecto, mínimo 1 s).
+- **Cocina:** la cola consulta por separado pedidos `Pendiente` y `En preparacion`, los ordena del más antiguo al más reciente y permite avanzar cada pedido al siguiente estado.
 - **Accesibilidad:** foco al cambiar de pantalla, enlace «Saltar al contenido», contraste revisado con `npm run contraste`.
 - **Validación:** todas las peticiones con zod en el backend; un `ErrorApi` lanzado en una ruta llega al manejador global.
 
@@ -458,19 +459,18 @@ Antes de entregar: `npm run build` y `npm test` en `backend/`, y `npm run check`
 
 ## 11. Pendientes (en el orden más útil)
 
-1. **Pantalla de cocina** (RF-PED-003, RF-PED-004): la API ya existe.
-2. **Caja** (RF-VEN-001 a 004): cobro, pagos divididos, corte, historial y reporte de ventas. El esquema ya existe; faltan API y pantalla.
-3. **Facturación** (RF-VEN-002): el esquema ya existe.
-4. **Historial de pedidos** (RF-PED-005) y **actualizar o eliminar clientes** (RF-CLI-002 y 003).
-5. **`PATCH /api/lista-espera/:id`** para quitar o editar grupos en espera.
-6. **Seguridad del ERS sin cubrir:** bloqueo tras 5 intentos (RNF-009), expiración por inactividad (RNF-011), invalidar la sesión al salir (RNF-012), registro de accesos no autorizados (RNF-017) y bitácora de eventos (RNF-026).
-7. Medir los tiempos de respuesta (RNF-001) y decidir si hace falta tiempo real (RNF-025).
-8. Decidir qué pasa con el borrado de clientes y actualizar el ERS con los requisitos de la sección 5.2.
-9. **Sección de la mesa en el Salón y el Panel** (RF-MES-007): hoy la sección solo se ve y se filtra en la pantalla del gerente; falta mostrarla o agrupar por sección para la hostess y el mesero (el backend ya envía `zona` en `GET /api/mesas`).
-10. **Auditoría** (RF-AUD-001 y 002): quién cambia una contraseña, a quién y cuándo. Un trigger de MySQL no conoce al usuario del sistema; la API tendría que pasarle su id. Opciones y recomendación en `docs/PENDIENTES_Y_FALTANTES.md`.
-11. **Cerrar cuentas** (RF-CUE-002): hoy nada cierra una cuenta, así que una mesa con pedidos no se puede liberar desde el sistema.
-12. Cambio de contraseña propio (RF-USR-008), quién canceló un pedido (RF-PED-006) y las reglas del dominio sin aplicar (tolerancia de reservas, capacidad, regla 11).
-13. Pruebas de las rutas del backend contra una base de datos (hoy solo hay 26 pruebas de funciones puras y mocks) y protecciones básicas de la API (límite de intentos, cabeceras de seguridad).
+1. **Caja** (RF-VEN-001 a 004): cobro, pagos divididos, corte, historial y reporte de ventas. El esquema ya existe; faltan API y pantalla.
+2. **Facturación** (RF-VEN-002): el esquema ya existe.
+3. **Historial de pedidos** (RF-PED-005) y **actualizar o eliminar clientes** (RF-CLI-002 y 003).
+4. **`PATCH /api/lista-espera/:id`** para quitar o editar grupos en espera.
+5. **Seguridad del ERS sin cubrir:** bloqueo tras 5 intentos (RNF-009), expiración por inactividad (RNF-011), invalidar la sesión al salir (RNF-012), registro de accesos no autorizados (RNF-017) y bitácora de eventos (RNF-026).
+6. Medir los tiempos de respuesta (RNF-001) y decidir si hace falta tiempo real (RNF-025).
+7. Decidir qué pasa con el borrado de clientes y actualizar el ERS con los requisitos de la sección 5.2.
+8. **Sección de la mesa en el Salón y el Panel** (RF-MES-007): hoy la sección solo se ve y se filtra en la pantalla del gerente; falta mostrarla o agrupar por sección para la hostess y el mesero (el backend ya envía `zona` en `GET /api/mesas`).
+9. **Auditoría** (RF-AUD-001 y 002): quién cambia una contraseña, a quién y cuándo. Un trigger de MySQL no conoce al usuario del sistema; la API tendría que pasarle su id. Opciones y recomendación en `docs/PENDIENTES_Y_FALTANTES.md`.
+10. **Cerrar cuentas** (RF-CUE-002): hoy nada cierra una cuenta, así que una mesa con pedidos no se puede liberar desde el sistema.
+11. Cambio de contraseña propio (RF-USR-008), quién canceló un pedido (RF-PED-006) y las reglas del dominio sin aplicar (tolerancia de reservas, capacidad, regla 11).
+12. Pruebas de las rutas del backend contra una base de datos (hoy solo hay 26 pruebas de funciones puras y mocks) y protecciones básicas de la API (límite de intentos, cabeceras de seguridad).
 
 ## 12. Glosario
 
@@ -1195,6 +1195,14 @@ Al terminar, dame el BLOQUE DE ACTUALIZACIÓN de la sección 15.
 
 Más reciente primero. Cada IA agrega aquí su bloque de actualización.
 
+### 2026-10-21 · Pantalla de cocina
+- Qué se hizo: se agregó la pantalla `/cocinero/cocina` con cola de pedidos enviados y en preparación, ordenada por antigüedad; el cocinero puede iniciar la preparación y marcar como listos. La cola se actualiza periódicamente y usa la transición ya protegida por rol y transacción en la API.
+- Archivos nuevos o cambiados: `frontend/src/layouts/CocinaLayout.vue`, `frontend/src/views/cocinero/CocinaView.vue`, `frontend/src/stores/cocina.ts`, `frontend/src/router/index.ts`, `frontend/src/services/interfaces.ts`, `frontend/src/services/api/index.ts`, `frontend/src/services/mock/pedidosMock.ts`, `frontend/src/types/usuario.ts`, pruebas de cocina; comentario obsoleto actualizado en `backend/src/controllers/pedidos.ts`; `README.md`, `docs/contrato-api-mesero.md`, `docs/PENDIENTES_Y_FALTANTES.md` y este contexto.
+- Decisiones tomadas: la cola incluye solo pedidos enviados (`Pendiente`) y en preparación; el orden es del más antiguo al más reciente; `Listo` sale de la cola para que el mesero lo entregue. No se cambió el contrato backend ni el esquema de la BD.
+- Requerimientos nuevos o cambiados: RF-PED-004 pasa a IMPLEMENTADO; RF-PED-003 sigue PARCIAL porque falta el historial para cajero y gerente. No se agregaron requisitos nuevos.
+- Pendiente o por verificar: probar el flujo visual de extremo a extremo con sesiones separadas de mesero y cocinero conectadas a MySQL.
+- Secciones de este archivo actualizadas: 3, 4, 5, 7, 8, 11 y 16.
+
 ### 2026-10 · Administración de mesas por el gerente
 - Qué se hizo: el gerente puede registrar mesas (número, cantidad de personas, sección y disponibilidad), editarlas y marcarlas como disponibles o no disponibles desde la pantalla **Mesas** (`/gerente/mesas`, tercera pestaña). Una mesa no disponible **no aparece** para la hostess ni para el mesero (`GET /api/mesas` solo trae las activas) y no se puede sentar, reservar ni cambiar de estado (`409 mesa_no_disponible`).
 - Archivos nuevos o cambiados: `database/migrations/005_mesas_zona_activa.sql` e `init.sql` (columnas `mesa.zona` y `mesa.activa`); `backend/src/controllers/catalogo.ts` y `routes/catalogo.ts` (`/api/catalogo/mesas`); `controllers/mesas.ts` y `controllers/hostess.ts` (ocultar y rechazar mesas no disponibles); frontend: `views/gerente/MesasView.vue`, `components/FormularioMesaDialog.vue`, `layouts/GerenteLayout.vue`, `router/index.ts`, `types/gerente.ts`, `services/interfaces.ts`, `services/api/` y `services/mock/` más `services/hostess/mock.ts`.
@@ -1214,4 +1222,3 @@ Más reciente primero. Cada IA agrega aquí su bloque de actualización.
 ### 2026-10 · Requerimientos propuestos y hallazgos
 - Qué se hizo: se documentaron los faltantes en `docs/PENDIENTES_Y_FALTANTES.md` (mesas del gerente, zona de mesa, auditoría de contraseñas, cerrar cuentas, seguridad del ERS).
 - Decisiones pendientes: D-1 a D-5 de ese documento y la opción de auditoría (A, B o C).
-
