@@ -131,7 +131,8 @@ Aparecieron durante el desarrollo. Los códigos son **propuestos**: falta aproba
 | `RF-MES-003` | Actualizar mesa (número, cantidad de personas, sección) | Gerente | `PATCH /api/catalogo/mesas/:id` · Mesas → Editar |
 | `RF-MES-004` | Marcar una mesa como disponible o no disponible (no se borra). Una mesa no disponible no aparece para la hostess ni para el mesero y no se puede sentar, reservar ni cambiar de estado. No se puede desactivar si está ocupada, reservada, con cuenta abierta o con reservaciones vigentes | Gerente | `PATCH /api/catalogo/mesas/:id` · Mesas → No disponible / Disponible |
 | `RF-MES-005` | Consultar las mesas como gerente, incluidas las no disponibles, con filtros por disponibilidad, sección y búsqueda | Gerente | `GET /api/catalogo/mesas` · Mesas |
-| `RF-MES-006` | Sección de la mesa (`mesa.zona`, texto libre): se guarda, se edita y se filtra en la pantalla del gerente. El Salón y el Panel aún no la muestran (ver RF-MES-007) | Gerente | `mesa.zona` |
+| `RF-MES-006` | Sección de la mesa (`mesa.zona`, texto libre): se guarda, se edita y se filtra en la pantalla del gerente; el Salón y el Panel la muestran y agrupan (RF-MES-007) | Gerente | `mesa.zona` |
+| `RF-MES-007` | Mostrar y agrupar las mesas por sección en el Panel del mesero y el Salón de la hostess, con filtro «Sección» (`?seccion=`) combinable con el de estado | Mesero, Hostess | `/mesero/mesas`, `/hostess/salon` |
 | `RF-USR-006` | Cambiar la contraseña de un usuario | Gerente | `POST /api/usuarios/:id/contrasena` |
 | `RF-USR-007` | Desactivar y reactivar usuarios (sustituye al borrado de RF-USR-003) | Gerente | `PATCH /api/usuarios/:id` |
 | `RF-CUE-001` | Solicitar la cuenta de una mesa y elegir pago en caja o digital (la cuenta pasa a `por_pagar`) | Mesero, Gerente | `POST /api/cuentas/:id/solicitar-pago` |
@@ -147,7 +148,6 @@ Salen de lo que pidió el equipo y de la revisión del proyecto. El detalle, las
 
 | Código | Requisito | Actor | Origen |
 | --- | --- | --- | --- |
-| `RF-MES-007` | Mostrar o agrupar por sección en el Salón de la hostess y en el Panel de mesas (el backend ya envía `zona`) | Hostess, Mesero | Detalle pendiente de RF-MES-006 |
 | `RF-AUD-001` | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo |
 | `RF-AUD-002` | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión |
 | `RF-USR-008` | Que cada usuario cambie su propia contraseña | Todos los roles | Hallazgo de la revisión |

@@ -33,7 +33,7 @@ const siguienteId = (ids: number[]): number => Math.max(0, ...ids) + 1
 function aMesaSalon(idMesa: number): MesaSalon {
   const mesa = baseDatos.mesas.find((m) => m.idMesa === idMesa)
   if (!mesa) throw new ErrorServicio('no_encontrado', `La mesa ${idMesa} no existe.`, 404)
-  return { idMesa: mesa.idMesa, numero: mesa.numero, capacidad: mesa.capacidad, estado: mesa.estado }
+  return { idMesa: mesa.idMesa, numero: mesa.numero, capacidad: mesa.capacidad, estado: mesa.estado, zona: mesa.zona }
 }
 
 /** Agrega a la reservación los datos calculados (JOIN con cliente y mesa). */

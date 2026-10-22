@@ -6,8 +6,8 @@ import { conRetraso } from './utiles'
 
 /** Agrega a la mesa el resumen de su cuenta activa y de sus pedidos. */
 function conResumen(mesaGuardada: MesaGuardada): Mesa {
-  // La sección y la disponibilidad no viajan en el panel: solo se muestran las mesas disponibles.
-  const { zona: _zona, activa: _activa, ...mesa } = mesaGuardada
+  // La disponibilidad no viaja en el panel (solo se listan las mesas disponibles); la sección sí, como en GET /mesas.
+  const { activa: _activa, ...mesa } = mesaGuardada
   const cuenta = baseDatos.cuentas.find((c) => c.idMesa === mesa.idMesa && c.estado !== 'cerrada')
   const pedidos = cuenta ? baseDatos.pedidos.filter((p) => p.idCuenta === cuenta.idCuenta) : []
 

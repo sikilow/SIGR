@@ -2,6 +2,14 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { servicios } from '../services'
 import type { EstadoMesa, Mesa } from '../types'
+import {
+  TODAS_LAS_SECCIONES,
+  agruparPorSeccion,
+  filtrarPorSeccion,
+  hayVariasSecciones,
+  seccionEfectiva,
+  seccionesDe,
+} from '../utils/secciones'
 
 export type FiltroMesas = 'todas' | Exclude<EstadoMesa, 'desconocido'> | 'listo'
 
@@ -45,7 +53,15 @@ export const useMesasStore = defineStore('mesas', () => {
     pedidosListos: mesas.value.reduce((suma, m) => suma + m.pedidosListos, 0),
   }))
 
-  const mesasFiltradas = computed(() => {
+  // ---------- Secciones (RF-MES-007) ----------
+  /** Filtro de sección pedido (?seccion=); `seccionActiva` es el que de verdad se aplica. */
+  const seccion = ref<string>(TODAS_LAS_SECCIONES)
+  const secciones = computed(() => seccionesDe(mesas.value))
+  /** Con una sola sección (o ninguna) no hay encabezados ni select: la pantalla queda como antes. */
+  const variasSecciones = computed(() => hayVariasSecciones(mesas.value))
+  const seccionActiva = computed(() => seccionEfectiva(seccion.value, mesas.value))
+
+  const mesasPorEstado = computed(() => {
     switch (filtro.value) {
       case 'todas':
         return mesas.value
@@ -55,6 +71,12 @@ export const useMesasStore = defineStore('mesas', () => {
         return mesas.value.filter((m) => m.estado === filtro.value)
     }
   })
+
+  /** Filtro de estado y de sección combinados. Los contadores del resumen siguen siendo del total. */
+  const mesasFiltradas = computed(() => filtrarPorSeccion(mesasPorEstado.value, seccionActiva.value))
+
+  /** Mesas visibles agrupadas por sección (alfabético, «Sin sección» al final; por número dentro de cada grupo). */
+  const grupos = computed(() => agruparPorSeccion(mesasFiltradas.value, mesas.value))
 
   /** Detecta mesas cuyo número de pedidos listos aumentó respecto a la carga anterior. */
   function detectarNuevasListas(anteriores: Mesa[], actuales: Mesa[]): Mesa[] {
@@ -122,7 +144,12 @@ export const useMesasStore = defineStore('mesas', () => {
     mostrarAviso,
     descartarAviso,
     contadores,
+    seccion,
+    secciones,
+    variasSecciones,
+    seccionActiva,
     mesasFiltradas,
+    grupos,
     cargar,
     invalidar,
   }

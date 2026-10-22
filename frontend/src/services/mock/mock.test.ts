@@ -229,6 +229,18 @@ describe('mock: entregar pedido', () => {
   })
 })
 
+describe('mock: sección de las mesas del panel (RF-MES-007)', () => {
+  it('el panel recibe la sección (o null) y no la disponibilidad, como GET /mesas', async () => {
+    const { mesas } = await nuevoMock()
+    const lista = await resolver(mesas.listar())
+    expect(lista.find((m) => m.numero === 1)?.zona).toBe('Salón')
+    expect(lista.find((m) => m.numero === 9)?.zona).toBe('Terraza')
+    expect(lista.find((m) => m.numero === 15)?.zona).toBe('Barra')
+    expect(lista.find((m) => m.numero === 18)?.zona).toBeNull()
+    expect(lista.every((m) => !('activa' in m))).toBe(true)
+  })
+})
+
 describe('mock: solicitar cuenta', () => {
   it('pasa la cuenta de abierta a por_pagar y guarda el tipo de pago', async () => {
     const { cuentas, mesas } = await nuevoMock()

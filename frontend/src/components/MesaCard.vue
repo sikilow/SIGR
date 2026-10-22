@@ -5,12 +5,15 @@
 import { computed } from 'vue'
 import { ETIQUETA_ESTADO_MESA, ETIQUETA_TIPO_PAGO, type Mesa } from '../types'
 import { formatearCapacidad, formatearMoneda, formatearPedidosActivos } from '../utils/formato'
+import { ETIQUETA_SIN_SECCION } from '../utils/secciones'
 import InsigniaEstado from './InsigniaEstado.vue'
 
 const props = defineProps<{
   mesa: Mesa
   /** Resalta la tarjeta (mesa que acaba de pasar a "pedido listo"). */
   resaltada?: boolean
+  /** Muestra la sección (solo cuando el salón tiene varias; con una sola, la tarjeta queda como antes). */
+  mostrarSeccion?: boolean
 }>()
 
 defineEmits<{ seleccionar: [mesa: Mesa] }>()
@@ -40,6 +43,11 @@ const textoCuenta = computed(() =>
         <span class="mesa__numero">{{ mesa.numero }}</span>
       </span>
       <span class="mesa__capacidad">{{ formatearCapacidad(mesa.capacidad) }}</span>
+    </span>
+
+    <span v-if="mostrarSeccion" class="mesa__seccion">
+      <span v-if="mesa.zona" class="solo-lectores">Sección:</span>
+      {{ mesa.zona ?? ETIQUETA_SIN_SECCION }}
     </span>
 
     <InsigniaEstado :tono="mesa.estado" :texto="ETIQUETA_ESTADO_MESA[mesa.estado]" />
@@ -140,6 +148,16 @@ const textoCuenta = computed(() =>
 .mesa__capacidad {
   color: var(--color-muted);
   font-size: var(--texto-sm);
+}
+
+/* Sección: texto pequeño bajo el número; un nombre largo (hasta 40 caracteres) se parte sin ensanchar la tarjeta */
+.mesa__seccion {
+  max-width: 100%;
+  margin-top: calc(var(--espacio-2) * -1);
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .mesa__datos {

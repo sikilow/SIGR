@@ -23,6 +23,7 @@ import {
   aNumero,
   aNumeroONulo,
   aTexto,
+  aZona,
   parseFechaMySQL,
   parseFechaMySQLONula,
 } from '../api/conversion'
@@ -39,6 +40,8 @@ export interface MesaSalonDto {
   capacidad: Numerico
   /** mesa.estado (texto libre), p. ej. "libre". */
   estado: string
+  /** mesa.zona («sección»). GET /mesas la envía; la respuesta de asignar mesa no: ausente = sin sección. */
+  zona?: string | null
 }
 
 export interface ReservacionDto {
@@ -100,6 +103,7 @@ export function aMesaSalon(dto: MesaSalonDto): MesaSalon {
     numero: aNumero(dto.numero, 'numero'),
     capacidad: aNumero(dto.capacidad, 'capacidad'),
     estado: aEstadoMesa(dto.estado),
+    zona: aZona(dto.zona),
   }
 }
 

@@ -20,8 +20,8 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 | RF-MES-003 | **Actualizar mesa** (número, cantidad de personas, sección) | Hecho: `PATCH /api/catalogo/mesas/:id`; botón «Editar» |
 | RF-MES-004 | **Marcar como disponible o no disponible** (no se borra) | Hecho: una mesa no disponible no aparece para la hostess ni para el mesero y no se puede sentar, reservar ni cambiar de estado (`409 mesa_no_disponible`) |
 | RF-MES-005 | **Consultar mesas** como gerente, incluidas las no disponibles | Hecho: `GET /api/catalogo/mesas`, con filtros por disponibilidad, sección y búsqueda |
-| RF-MES-006 | **Sección de la mesa** | **Parcial**: se guarda (`mesa.zona`), se edita y se filtra en la pantalla del gerente; el Salón y el Panel de mesas todavía no la muestran |
-| RF-MES-007 *(propuesto)* | Mostrar o agrupar por sección en el Salón de la hostess y en el Panel del mesero | Pendiente: el backend ya envía `zona` en `GET /api/mesas`; falta la pantalla |
+| RF-MES-006 | **Sección de la mesa** | Hecho: se guarda (`mesa.zona`), se edita y se filtra en la pantalla del gerente, y se muestra en el Salón y el Panel (RF-MES-007) |
+| RF-MES-007 *(propuesto)* | Mostrar o agrupar por sección en el Salón de la hostess y en el Panel del mesero | Hecho (2026-10-21): grupos por sección, filtro «Sección» en la URL (`?seccion=`) y la sección en la tarjeta y la hoja de acciones. Ver `docs/pantallas-mesero.md` |
 
 **Decisiones que se tomaron** (cámbienlas si no les parecen):
 
@@ -37,7 +37,7 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 
 **Lo que aún falta alrededor de esto:**
 
-- Mostrar o agrupar por sección en el Salón y el Panel (RF-MES-007).
+- ~~Mostrar o agrupar por sección en el Salón y el Panel (RF-MES-007).~~ Hecho; falta probarlo contra MySQL con secciones reales.
 - Una mesa con cuenta activa sigue sin poder desactivarse; tras el cobro se cierra la cuenta y se libera la mesa (ver D-3 y P-01).
 - No se registra quién creó, editó o desactivó una mesa (ver la bitácora, RF-AUD-002).
 - Las bases de datos que ya existían necesitan correr `database/migrations/005_mesas_zona_activa.sql`.

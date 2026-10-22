@@ -17,7 +17,7 @@ export interface Cliente {
  * Mesa tal como la ve la hostess: solo lo que es de `mesa`. NO incluye pedidos, cuentas ni totales
  * (esos son del mesero y del cajero).
  */
-export type MesaSalon = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estado'>
+export type MesaSalon = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estado' | 'zona'>
 
 /** reservacion. La tabla NO tiene folio. */
 export interface Reservacion {

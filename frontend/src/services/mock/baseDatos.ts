@@ -70,13 +70,16 @@ function crearCategorias(): CategoriaMenu[] {
 }
 
 function crearMesas(): MesaGuardada[] {
-  const datos: Array<[Mesa['estado'], number]> = [
-    ['libre', 2], ['libre', 4], ['ocupada', 4], ['libre', 4],
-    ['ocupada', 6], ['libre', 2], ['reservada', 4], ['ocupada', 8],
-    ['libre', 4], ['reservada', 6], ['ocupada', 4], ['ocupada', 2],
-    ['libre', 2], ['libre', 2], ['libre', 4], ['libre', 4], ['libre', 6], ['libre', 8],
+  // Secciones de ejemplo (RF-MES-007): Salón 1–8, Terraza 9–14, Barra 15–17 y la 18 sin sección, para ver los grupos
+  // del Panel y del Salón, incluido «Sin sección».
+  const datos: Array<[Mesa['estado'], number, string | null]> = [
+    ['libre', 2, 'Salón'], ['libre', 4, 'Salón'], ['ocupada', 4, 'Salón'], ['libre', 4, 'Salón'],
+    ['ocupada', 6, 'Salón'], ['libre', 2, 'Salón'], ['reservada', 4, 'Salón'], ['ocupada', 8, 'Salón'],
+    ['libre', 4, 'Terraza'], ['reservada', 6, 'Terraza'], ['ocupada', 4, 'Terraza'], ['ocupada', 2, 'Terraza'],
+    ['libre', 2, 'Terraza'], ['libre', 2, 'Terraza'], ['libre', 4, 'Barra'], ['libre', 4, 'Barra'], ['libre', 6, 'Barra'],
+    ['libre', 8, null],
   ]
-  return datos.map(([estado, capacidad], i) => ({ idMesa: i + 1, numero: i + 1, capacidad, estado, zona: null, activa: true }))
+  return datos.map(([estado, capacidad, zona], i) => ({ idMesa: i + 1, numero: i + 1, capacidad, estado, zona, activa: true }))
 }
 
 function crearPedidos(): Pedido[] {

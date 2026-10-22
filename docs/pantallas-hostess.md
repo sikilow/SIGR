@@ -15,6 +15,9 @@ Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×
 | 3 | Asignar mesa | _(segundo paso del mismo diálogo)_ | Elegir el grupo (reservación, lista de espera o grupo sin registro), aviso de capacidad que no bloquea y confirmar | [h1-03-asignar-mesa-1024x768](capturas/h1-03-asignar-mesa-1024x768.png) |
 | 4 | Mesa asignada | `/hostess/salon` | Resultado: la mesa pasa a Ocupada, el grupo sale de las listas y se anuncia «Mesa 4 asignada a Familia González» | [h1-04-mesa-asignada-1024x768](capturas/h1-04-mesa-asignada-1024x768.png) |
 | 5 | Salón (768×1024) | `/hostess/salon` | Igual que la 1, con las reservaciones y la espera **debajo** de las mesas | [h1-05-salon-768x1024](capturas/h1-05-salon-768x1024.png) · [panel inferior](capturas/h1-06-panel-inferior-768x1024.png) |
+| 5a | Salón agrupado por sección | `/hostess/salon` | **RF-MES-007**: un grupo por sección con encabezado «Barra · 3 libres de 3 mesas» y la sección en cada tarjeta | [h1-07-salon-secciones-1024x768](capturas/h1-07-salon-secciones-1024x768.png) · [768×1024](capturas/h1-10-salon-secciones-768x1024.png) · [zoom 200 %](capturas/h1-11-salon-zoom-200.png) |
+| 5b | Salón filtrado por sección | `/hostess/salon?seccion=Barra` | Select «Sección» combinable con los chips de estado; el resumen sigue contando todas las mesas | [h1-08-salon-filtro-barra-1024x768](capturas/h1-08-salon-filtro-barra-1024x768.png) |
+| 5c | Hoja de acciones con sección | _(diálogo del Salón)_ | «Sección: Terraza» bajo el título de la mesa | [h1-09-hoja-acciones-seccion-1024x768](capturas/h1-09-hoja-acciones-seccion-1024x768.png) |
 
 ### Reservaciones (H2)
 
@@ -57,6 +60,23 @@ Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×
 | Espera | Asignar mesa a un grupo |
 |---|---|
 | ![Espera](capturas/h3-01-espera-1024x768.png) | ![Asignar mesa](capturas/h3-03-asignar-mesa-1024x768.png) |
+
+| Salón por sección | Filtro por sección |
+|---|---|
+| ![Salón por sección](capturas/h1-07-salon-secciones-1024x768.png) | ![Filtro Barra](capturas/h1-08-salon-filtro-barra-1024x768.png) |
+
+## Secciones del salón (RF-MES-007)
+
+Mismo comportamiento que el Panel del mesero (ver [`pantallas-mesero.md`](pantallas-mesero.md)):
+
+1. Se agrupa solo si hay **más de una sección** (contando «Sin sección»); con una sola o ninguna, el Salón se ve como antes.
+2. Secciones en orden alfabético, «Sin sección» al final y mesas por número. Encabezado `h3` por grupo con
+   «N libres de M mesas» (de toda la sección, aunque haya filtro de estado); cada grupo es una región con `aria-labelledby`.
+3. Select «Sección» junto a los chips (con 1024×768 baja a su propia línea porque el panel lateral ocupa espacio), en la
+   URL como `?seccion=Barra` o `?seccion=sin-seccion`. Al cambiar un filtro se anuncia el resultado (`aria-live`).
+4. La tarjeta muestra la sección en texto pequeño; la hoja de acciones, «Sección: …».
+5. La sección sale de `GET /api/mesas` (`zona`). La respuesta de «Asignar mesa» no la trae, pero el Salón recarga todas
+   las mesas después de asignar, así que no se pierde.
 
 ## Cómo funciona la lista de espera
 
@@ -110,4 +130,6 @@ Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×
 - **Teclado completo**: los grupos son un grupo de radios nativo (flechas), «Volver» y «Asignar mesa» son botones.
 - `prefers-reduced-motion`: sin animaciones ni transiciones (reglas globales de `base.css` y locales).
 - Sin scroll horizontal en 1024×768 ni en 768×1024; los botones de la hoja quedan fijos al pie para que «Asignar mesa»
-  siempre esté a la vista.
+  siempre esté a la vista. Con secciones también se revisó con zoom de 200 % (sin scroll horizontal).
+- **Campos de fecha:** el ícono del calendario nativo (Chrome y Edge) lleva el mismo anillo de foco que el resto de la app
+  (`::-webkit-calendar-picker-indicator:focus-visible` en `base.css`).

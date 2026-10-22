@@ -30,6 +30,8 @@ function bloquear(evento: Event) {
         <InsigniaEstado :tono="mesa.estado" :texto="ETIQUETA_ESTADO_MESA[mesa.estado]" />
       </header>
 
+      <p v-if="mesa.zona" class="hoja__seccion">Sección: <strong>{{ mesa.zona }}</strong></p>
+
       <!-- Mesa ocupada: acciones de pedido -->
       <template v-if="ocupada">
         <p class="hoja__resumen">
@@ -109,6 +111,12 @@ function bloquear(evento: Event) {
 .hoja__resumen {
   margin: 0;
   color: var(--color-text);
+}
+
+/* Sección de la mesa (RF-MES-007): pegada al encabezado, antes del resumen */
+.hoja__seccion {
+  margin: calc(var(--espacio-2) * -1) 0 0;
+  overflow-wrap: anywhere;
 }
 
 .hoja__acciones {

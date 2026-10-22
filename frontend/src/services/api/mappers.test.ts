@@ -67,9 +67,22 @@ describe('aMesa', () => {
       estado_cuenta: 'abierta', pedidos_activos: 2, total_cuenta: 470, pedidos_listos: 1,
     }
     expect(aMesa(dto)).toEqual({
-      idMesa: 3, numero: 3, capacidad: 4, estado: 'ocupada',
+      idMesa: 3, numero: 3, capacidad: 4, estado: 'ocupada', zona: null,
       estadoCuenta: 'abierta', pedidosActivos: 2, totalCuenta: 470, pedidosListos: 1, tipoPagoSolicitado: null,
     })
+  })
+
+  it('la sección (mesa.zona) llega recortada; vacía, solo espacios, null o ausente = sin sección (null)', () => {
+    const base: MesaDto = {
+      id_mesa: 1, numero: 1, capacidad: 2, estado: 'libre',
+      estado_cuenta: null, pedidos_activos: 0, total_cuenta: 0, pedidos_listos: 0,
+    }
+    expect(aMesa({ ...base, zona: 'Terraza' }).zona).toBe('Terraza')
+    expect(aMesa({ ...base, zona: '  Barra  ' }).zona).toBe('Barra')
+    expect(aMesa({ ...base, zona: '' }).zona).toBeNull()
+    expect(aMesa({ ...base, zona: '   ' }).zona).toBeNull()
+    expect(aMesa({ ...base, zona: null }).zona).toBeNull()
+    expect(aMesa(base).zona).toBeNull()
   })
 
   it('una mesa libre sin cuenta conserva null y los contadores en 0 (también si PDO manda NULL)', () => {

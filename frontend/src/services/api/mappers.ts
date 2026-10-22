@@ -39,6 +39,7 @@ import {
   aNumeroONulo,
   aRol,
   aTexto,
+  aZona,
   normalizarCodigo,
   parseFechaMySQL,
   parseFechaMySQLONula,
@@ -67,6 +68,8 @@ export interface MesaDto {
   capacidad: Numerico
   /** mesa.estado (CHECK: libre, ocupada o reservada), p. ej. "libre". */
   estado: string
+  /** mesa.zona: «sección» del salón (hasta 40 caracteres); `null` si no tiene. Opcional por tolerancia. */
+  zona?: string | null
   // --- CALCULADOS por la API (no son columnas de `mesa`) ---
   estado_cuenta: string | null
   pedidos_activos: Numerico | null
@@ -171,6 +174,7 @@ export function aMesa(dto: MesaDto): Mesa {
     numero: aNumero(dto.numero, 'numero'),
     capacidad: aNumero(dto.capacidad, 'capacidad'),
     estado: aEstadoMesa(dto.estado),
+    zona: aZona(dto.zona),
     estadoCuenta: estadoCuenta === 'cerrada' ? null : estadoCuenta,
     pedidosActivos: aNumeroONulo(dto.pedidos_activos, 'pedidos_activos') ?? 0,
     totalCuenta: aNumeroONulo(dto.total_cuenta, 'total_cuenta') ?? 0,
@@ -367,7 +371,7 @@ export function aMesaAdmin(dto: MesaAdminDto): MesaAdmin {
     idMesa: aNumero(dto.id_mesa, 'id_mesa'),
     numero: aNumero(dto.numero, 'numero'),
     capacidad: aNumero(dto.capacidad, 'capacidad'),
-    zona: dto.zona == null || dto.zona.trim() === '' ? null : dto.zona.trim(),
+    zona: aZona(dto.zona),
     activa: aBooleano(dto.activa, 'activa'),
     estado: aEstadoMesa(dto.estado),
   }

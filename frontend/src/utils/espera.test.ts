@@ -33,6 +33,7 @@ const mesa = (idMesa: number, capacidad: number, estado: MesaSalon['estado'] = '
   numero: idMesa,
   capacidad,
   estado,
+  zona: null,
 })
 
 const ESTADOS: EstadoEspera[] = ['esperando', 'asignada', 'cancelada', 'desconocido']

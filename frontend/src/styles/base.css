@@ -57,6 +57,22 @@ input {
   outline-offset: 2px;
 }
 
+/*
+  Ícono de calendario de los campos de fecha nativos (Chrome y Edge): recibe el foco por separado y Chrome le pone
+  un recuadro fino propio. Se le da el mismo anillo que al resto de la app y un poco de área para tocarlo.
+  Reglas separadas: si un navegador no entiende el selector, solo ignora esa regla.
+*/
+input[type='date']::-webkit-calendar-picker-indicator {
+  padding: var(--espacio-1);
+  border-radius: var(--radio-sm);
+  cursor: pointer;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
+  outline: 3px solid var(--color-primary-dark);
+  outline-offset: 1px;
+}
+
 /* Botones: siempre ≥ 48px de alto */
 .btn {
   display: inline-flex;

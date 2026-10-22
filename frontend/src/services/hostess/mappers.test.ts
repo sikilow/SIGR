@@ -45,7 +45,17 @@ const esperaDto: ListaEsperaDto = {
 describe('aMesaSalon', () => {
   it('traduce las columnas de mesa; «libre» (BD) es el mismo código en el frontend', () => {
     const dto: MesaSalonDto = { id_mesa: 1, numero: 1, capacidad: 2, estado: 'libre' }
-    expect(aMesaSalon(dto)).toEqual({ idMesa: 1, numero: 1, capacidad: 2, estado: 'libre' })
+    expect(aMesaSalon(dto)).toEqual({ idMesa: 1, numero: 1, capacidad: 2, estado: 'libre', zona: null })
+  })
+
+  it('la sección (mesa.zona) llega recortada; vacía, solo espacios, null o ausente (respuesta de asignar) = null', () => {
+    const base: MesaSalonDto = { id_mesa: 1, numero: 1, capacidad: 2, estado: 'libre' }
+    expect(aMesaSalon({ ...base, zona: 'Terraza' }).zona).toBe('Terraza')
+    expect(aMesaSalon({ ...base, zona: ' Salón principal ' }).zona).toBe('Salón principal')
+    expect(aMesaSalon({ ...base, zona: '' }).zona).toBeNull()
+    expect(aMesaSalon({ ...base, zona: '   ' }).zona).toBeNull()
+    expect(aMesaSalon({ ...base, zona: null }).zona).toBeNull()
+    expect(aMesaSalon(base).zona).toBeNull()
   })
 
   it('tolera «disponible» (nombre anterior) como libre, sin advertir', () => {
@@ -64,8 +74,8 @@ describe('aMesaSalon', () => {
       pedidos_activos: '2',
     } as MesaSalonDto
     const mesa = aMesaSalon(dto)
-    expect(mesa).toEqual({ idMesa: 3, numero: 3, capacidad: 4, estado: 'ocupada' })
-    expect(Object.keys(mesa)).toEqual(['idMesa', 'numero', 'capacidad', 'estado'])
+    expect(mesa).toEqual({ idMesa: 3, numero: 3, capacidad: 4, estado: 'ocupada', zona: null })
+    expect(Object.keys(mesa)).toEqual(['idMesa', 'numero', 'capacidad', 'estado', 'zona'])
   })
 
   it('un estado desconocido da «desconocido» con una sola advertencia', () => {

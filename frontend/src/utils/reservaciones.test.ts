@@ -31,6 +31,7 @@ const mesa = (idMesa: number, capacidad: number, estado: MesaSalon['estado'] = '
   numero: idMesa,
   capacidad,
   estado,
+  zona: null,
 })
 
 const reservacion = (sobrescribir: Partial<Reservacion> = {}): Reservacion => ({
