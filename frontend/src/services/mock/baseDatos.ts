@@ -81,6 +81,9 @@ function crearMesas(): MesaGuardada[] {
 
 function crearPedidos(): Pedido[] {
   const base = { idMesero: 1, nombreMesero: 'Ana Torres', idMotivo: null, motivoDescripcion: null }
+  // Segunda mesera (como `mesero2` de database/seed_demo.sql): atiende la mesa 12 y parte del historial, para que la
+  // pantalla Pedidos del gerente tenga pedidos de dos meseros. Ana (`mesero`) no puede modificar los de Rosa.
+  const rosa = { ...base, idMesero: 5, nombreMesero: 'Rosa Mesera' }
   // En el mock el número visible de la mesa coincide con su id (`pedido` no tiene `id_mesa`: sale de la cuenta).
   const pedidos: Array<Omit<Pedido, 'mesaNumero'>> = [
     // Mesa 3 (cuenta 1): un pedido ya entregado y otro listo para entregar
@@ -127,22 +130,22 @@ function crearPedidos(): Pedido[] {
         { idProducto: 14, nombreProducto: 'Café de olla', cantidad: 2, indicaciones: '', precioUnitario: 40 },
       ],
     },
-    // Mesa 12 (cuenta 5): entregado + en preparación (estable varios minutos) + uno CANCELADO con motivo
+    // Mesa 12 (cuenta 5, de Rosa): entregado + en preparación (estable varios minutos) + uno CANCELADO con motivo
     {
-      ...base, idPedido: 7, idMesa: 12, idCuenta: 5, estado: 'entregado', fechaHora: hace(40), total: 240,
+      ...rosa, idPedido: 7, idMesa: 12, idCuenta: 5, estado: 'entregado', fechaHora: hace(40), total: 240,
       detalle: [
         { idProducto: 16, nombreProducto: 'Tacos al pastor', cantidad: 2, indicaciones: 'Con poca piña', precioUnitario: 120 },
       ],
     },
     {
-      ...base, idPedido: 8, idMesa: 12, idCuenta: 5, estado: 'cancelado', fechaHora: hace(25), total: 140,
+      ...rosa, idPedido: 8, idMesa: 12, idCuenta: 5, estado: 'cancelado', fechaHora: hace(25), total: 140,
       idMotivo: 1, motivoDescripcion: 'El cliente cambió de opinión',
       detalle: [
         { idProducto: 9, nombreProducto: 'Flan napolitano', cantidad: 2, indicaciones: '', precioUnitario: 70 },
       ],
     },
     {
-      ...base, idPedido: 9, idMesa: 12, idCuenta: 5, estado: 'en_preparacion', fechaHora: hace(6), total: 315,
+      ...rosa, idPedido: 9, idMesa: 12, idCuenta: 5, estado: 'en_preparacion', fechaHora: hace(6), total: 315,
       detalle: [
         { idProducto: 2, nombreProducto: 'Sopa de tortilla', cantidad: 1, indicaciones: '', precioUnitario: 85 },
         { idProducto: 7, nombreProducto: 'Filete de pescado', cantidad: 1, indicaciones: '', precioUnitario: 230 },
@@ -153,6 +156,36 @@ function crearPedidos(): Pedido[] {
       ...base, idPedido: 10, idMesa: 2, idCuenta: 6, estado: 'pagado', fechaHora: hace(300), total: 190,
       detalle: [
         { idProducto: 8, nombreProducto: 'Mole poblano', cantidad: 1, indicaciones: '', precioUnitario: 190 },
+      ],
+    },
+    // Historial (cuentas 7 y 8, ya cerradas): pedidos de días anteriores para el filtro por día del gerente.
+    {
+      ...base, idPedido: 11, idMesa: 4, idCuenta: 7, estado: 'pagado', fechaHora: hace(24 * 60 + 90), total: 380,
+      detalle: [
+        { idProducto: 16, nombreProducto: 'Tacos al pastor', cantidad: 2, indicaciones: '', precioUnitario: 120 },
+        { idProducto: 9, nombreProducto: 'Flan napolitano', cantidad: 2, indicaciones: '', precioUnitario: 70 },
+      ],
+    },
+    {
+      ...rosa, idPedido: 12, idMesa: 4, idCuenta: 7, estado: 'cancelado', fechaHora: hace(24 * 60 + 70), total: 85,
+      idMotivo: 2, motivoDescripcion: 'Demora excesiva en cocina',
+      detalle: [
+        { idProducto: 2, nombreProducto: 'Sopa de tortilla', cantidad: 1, indicaciones: 'Sin crema', precioUnitario: 85 },
+      ],
+    },
+    {
+      ...rosa, idPedido: 13, idMesa: 6, idCuenta: 8, estado: 'pagado', fechaHora: hace(2 * 24 * 60 + 120), total: 805,
+      detalle: [
+        { idProducto: 6, nombreProducto: 'Arrachera con guarnición', cantidad: 2, indicaciones: 'Una bien cocida', precioUnitario: 285 },
+        { idProducto: 15, nombreProducto: 'Cerveza artesanal', cantidad: 2, indicaciones: '', precioUnitario: 75 },
+        { idProducto: 1, nombreProducto: 'Guacamole con totopos', cantidad: 1, indicaciones: '', precioUnitario: 95 },
+      ],
+    },
+    {
+      ...base, idPedido: 14, idMesa: 6, idCuenta: 8, estado: 'pagado', fechaHora: hace(2 * 24 * 60 + 60), total: 125,
+      detalle: [
+        { idProducto: 10, nombreProducto: 'Churros con chocolate', cantidad: 1, indicaciones: '', precioUnitario: 85 },
+        { idProducto: 14, nombreProducto: 'Café de olla', cantidad: 1, indicaciones: '', precioUnitario: 40 },
       ],
     },
   ]
@@ -167,6 +200,9 @@ function crearCuentas(): CuentaGuardada[] {
     { idCuenta: 4, idMesa: 11, estado: 'abierta', abiertaEn: hace(6), cerradaEn: null, tipoPagoSolicitado: null },
     { idCuenta: 5, idMesa: 12, estado: 'abierta', abiertaEn: hace(45), cerradaEn: null, tipoPagoSolicitado: null },
     { idCuenta: 6, idMesa: 2, estado: 'cerrada', abiertaEn: hace(320), cerradaEn: hace(280), tipoPagoSolicitado: 'digital' },
+    // Historial: cuentas de días anteriores, ya cobradas (no afectan el estado actual de las mesas).
+    { idCuenta: 7, idMesa: 4, estado: 'cerrada', abiertaEn: hace(24 * 60 + 100), cerradaEn: hace(24 * 60 + 20), tipoPagoSolicitado: 'fisico' },
+    { idCuenta: 8, idMesa: 6, estado: 'cerrada', abiertaEn: hace(2 * 24 * 60 + 130), cerradaEn: hace(2 * 24 * 60), tipoPagoSolicitado: 'digital' },
   ]
 }
 
@@ -206,16 +242,20 @@ export const baseDatos: BaseDatosMock = {
     { idUsuario: 2, idRol: 1, nombre: 'Luis Ramírez', correo: 'luis.ramirez@lamadalena.example', activo: true, rol: 'gerente', nombreUsuario: 'gerente', contrasena: '1234' },
     { idUsuario: 3, idRol: 4, nombre: 'Marta Solís', correo: 'marta.solis@lamadalena.example', activo: true, rol: 'cajero', nombreUsuario: 'cajero', contrasena: '1234' },
     { idUsuario: 4, idRol: 5, nombre: 'Sofía Mendoza', correo: 'sofia.mendoza@lamadalena.example', activo: true, rol: 'hostess', nombreUsuario: 'hostess', contrasena: '1234' },
+    { idUsuario: 5, idRol: 2, nombre: 'Rosa Mesera', correo: 'rosa.mesera@lamadalena.example', activo: true, rol: 'mesero', nombreUsuario: 'mesero2', contrasena: '1234' },
   ],
   mesas: crearMesas(),
   categorias: crearCategorias(),
   cuentas: crearCuentas(),
   pedidos: crearPedidos(),
-  motivos: [{ idMotivo: 1, descripcion: 'El cliente cambió de opinión' }],
+  motivos: [
+    { idMotivo: 1, descripcion: 'El cliente cambió de opinión' },
+    { idMotivo: 2, descripcion: 'Demora excesiva en cocina' },
+  ],
   clientes: crearClientes(),
   reservaciones: crearReservaciones(),
   listaEspera: crearListaEspera(),
-  siguienteIdPedido: 11,
-  siguienteIdCuenta: 7,
-  siguienteIdMotivo: 2,
+  siguienteIdPedido: 15,
+  siguienteIdCuenta: 9,
+  siguienteIdMotivo: 3,
 }

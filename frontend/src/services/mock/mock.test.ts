@@ -46,6 +46,16 @@ function iniciarSesionMesero(idUsuario = 1): void {
   })
 }
 
+function iniciarSesionGerente(): void {
+  vi.stubGlobal('sessionStorage', {
+    getItem: vi.fn((clave: string) =>
+      clave === 'sigr.mock.sesion'
+        ? JSON.stringify({ idUsuario: 2, idRol: 1, nombre: 'Luis Ramírez', correo: '', activo: true, rol: 'gerente' })
+        : null,
+    ),
+  })
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
 })
@@ -274,5 +284,58 @@ describe('mock: Idempotency-Key', () => {
     const { pedidos } = await nuevoMock()
     expect(await codigoDeError(pedidos.cancelar(3, 'Demora excesiva', 'k-error'))).toBe('requiere_gerente')
     expect(await codigoDeError(pedidos.cancelar(3, 'Demora excesiva', 'k-error'))).toBe('requiere_gerente')
+  })
+})
+
+// Pantalla Pedidos del gerente (/gerente/pedidos): RF-PED-002 (gerente), RF-PED-003 y RF-PED-005.
+describe('mock: datos para la pantalla Pedidos del gerente', () => {
+  it('trae pedidos de dos meseros, de varios estados y de días anteriores', async () => {
+    const { pedidos } = await nuevoMock()
+    const lista = await resolver(pedidos.listar())
+    expect(new Set(lista.map((p) => p.nombreMesero))).toEqual(new Set(['Ana Torres', 'Rosa Mesera']))
+    const estados = new Set(lista.map((p) => p.estado))
+    for (const estado of ['registrado', 'pendiente', 'en_preparacion', 'listo', 'entregado', 'cancelado', 'pagado'] as const) {
+      expect(estados.has(estado)).toBe(true)
+    }
+    const inicioDeHoy = new Date()
+    inicioDeHoy.setHours(0, 0, 0, 0)
+    expect(lista.some((p) => p.fechaHora < inicioDeHoy)).toBe(true)
+  })
+})
+
+describe('mock: el gerente cancela como excepción', () => {
+  it('cancela un pedido en preparación de otro mesero, con su motivo', async () => {
+    const { pedidos } = await nuevoMock()
+    iniciarSesionGerente()
+    const pedido = await resolver(pedidos.cancelar(9, 'Demora excesiva', 'k-gerente'))
+    expect(pedido.estado).toBe('cancelado')
+    expect(pedido.motivoDescripcion).toBe('Demora excesiva')
+    expect(pedido.nombreMesero).toBe('Rosa Mesera')
+  })
+
+  it.each([
+    [2, 'listo'],
+    [4, 'entregado'],
+    [8, 'cancelado'],
+    [10, 'pagado'],
+  ])('tampoco el gerente cancela el pedido #%i (%s)', async (id) => {
+    const { pedidos } = await nuevoMock()
+    iniciarSesionGerente()
+    expect(await codigoDeError(pedidos.cancelar(id, 'Error al tomar el pedido'))).toBe('estado_invalido')
+  })
+
+  it('con la cuenta por pagar el gerente recibe estado_invalido', async () => {
+    const { pedidos, baseDatos } = await nuevoMock()
+    iniciarSesionGerente()
+    const cuenta = baseDatos.cuentas.find((c) => c.idCuenta === 5) // mesa 12: #9 en preparación
+    if (cuenta) cuenta.estado = 'por_pagar'
+    expect(await codigoDeError(pedidos.cancelar(9, 'Demora excesiva'))).toBe('estado_invalido')
+  })
+
+  it('el mesero sigue sin poder cancelar su pedido en preparación', async () => {
+    const { pedidos, baseDatos } = await nuevoMock()
+    iniciarSesionMesero(1)
+    expect(await codigoDeError(pedidos.cancelar(3, 'Demora excesiva'))).toBe('requiere_gerente')
+    expect(baseDatos.pedidos.find((p) => p.idPedido === 3)?.estado).toBe('en_preparacion')
   })
 })
