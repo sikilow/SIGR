@@ -56,7 +56,6 @@ async function salir() {
     </main>
     <nav class="nav" aria-label="Navegación principal">
       <RouterLink class="nav__enlace" :to="{ name: 'cajero-caja' }">
-        <span aria-hidden="true">💵</span>
         <span>Caja</span>
       </RouterLink>
     </nav>
