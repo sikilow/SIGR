@@ -2,6 +2,8 @@
 // interfaces; `services/index.ts` decide si se usa el mock o la API real.
 import type {
   CambioMesa,
+  CorteCaja,
+  EstadoCaja,
   CambioProducto,
   CambioUsuario,
   CategoriaAdmin,
@@ -18,11 +20,13 @@ import type {
   NuevoPedido,
   NuevoProducto,
   NuevoUsuario,
+  PagoCajaEntrada,
   Pedido,
   ProductoAdmin,
   TipoPago,
   Usuario,
   UsuarioAdmin,
+  VentaCaja,
 } from '../types'
 import type { HostessService } from './hostess/interfaces'
 
@@ -91,6 +95,17 @@ export interface CuentasService {
   solicitarPago(idCuenta: number, tipo: TipoPago, claveIdempotencia?: string): Promise<Cuenta>
 }
 
+export interface CajaService {
+  /** GET /caja/estado */
+  obtenerEstado(): Promise<EstadoCaja>
+  /** POST /caja/cortes */
+  abrirCorte(): Promise<CorteCaja>
+  /** POST /caja/cortes/cerrar */
+  cerrarCorte(totalReportado: number): Promise<CorteCaja>
+  /** POST /caja/cuentas/{id}/cobrar */
+  cobrar(idCuenta: number, pagos: PagoCajaEntrada[], claveIdempotencia?: string): Promise<VentaCaja>
+}
+
 /** Administración de usuarios. Solo el gerente (la API lo valida con 403 `sin_permiso`). */
 export interface UsuariosService {
   /** GET /usuarios (activos e inactivos) */
@@ -133,6 +148,7 @@ export interface Servicios {
   menu: MenuService
   pedidos: PedidosService
   cuentas: CuentasService
+  caja: CajaService
   usuarios: UsuariosService
   catalogo: CatalogoService
   hostess: HostessService

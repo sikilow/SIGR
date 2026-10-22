@@ -108,7 +108,7 @@ SIGR/
 │   │   ├── mocks/              clientes.mock.ts y productos.mock.ts
 │   │   └── utils/              config.ts (JWT_SECRET, PUERTO, CORS), errores.ts (ErrorApi),
 │   │                           auth.ts (requiereAuth(...roles)) y seed.ts (usuarios de prueba)
-│   ├── tests/                  dominio.test.ts y mocks.test.ts (26 pruebas, Vitest)
+│   ├── tests/                  dominio.test.ts, mocks.test.ts y caja.test.ts (31 pruebas, Vitest)
 │   ├── .env.example, package.json, tsconfig.json
 ├── frontend/
 │   ├── index.html, main.ts, vite.config.ts
@@ -139,16 +139,16 @@ Diferencias menores respecto al modelo: `frontend/` tiene las carpetas adicional
 | gerente | Administra usuarios, menú e inventario y mesas; supervisa; cancela excepciones | `/gerente/usuarios`, `/gerente/productos`, `/gerente/mesas` | `gerente` |
 | mesero | Pedidos, cuentas de mesa, enviar a cocina, entregar | `/mesero/mesas`, `/mesero/mesas/:id/pedido`, `/mesero/mesas/:id/cuenta`, `/mesero/pedidos/:id?` | `mesero`, `mesero2` |
 | cocinero | Ver la cola de pedidos y cambiar su estado | `/cocinero/cocina` | `cocinero` |
-| cajero | Cobrar, tickets, facturas, corte de caja | pendiente | `cajero` |
+| cajero | Cobrar cuentas solicitadas, imprimir ticket y hacer corte de caja | `/cajero/caja` | `cajero` |
 | hostess | Salón, reservaciones, lista de espera, clientes | `/hostess/salon`, `/hostess/reservaciones`, `/hostess/espera` | `hostess` |
 
-Contraseña de todos los usuarios de prueba: `1234` (solo desarrollo). El gerente también puede usar los endpoints de la hostess y del mesero (por eso aparece en varios `requiereAuth`). La guarda del router manda a cada rol a su pantalla inicial (`rutaInicial` en `router/index.ts`); un rol sin pantalla cae en el aviso «tu rol no tiene acceso».
+Contraseña de todos los usuarios de prueba: `1234` (solo desarrollo). El gerente también puede usar los endpoints de la hostess y del mesero (por eso aparece en varios `requiereAuth`). La guarda del router manda a cada rol a su pantalla inicial (`rutaInicial` en `router/index.ts`); las pantallas principales de todos los roles reconocidos están implementadas.
 
 ## 5. Requerimientos
 
 Fuente: documento ERS (RP33) y modelo de requisitos (RP41). Estado según lectura del código: IMPLEMENTADO, PARCIAL (incompleto o distinto al ERS) o PENDIENTE.
 
-Avance de los 22 requisitos funcionales del ERS: 13 implementados, 2 parciales, 7 pendientes.
+Avance de los 22 requisitos funcionales del ERS: 14 implementados, 2 parciales, 6 pendientes.
 
 ### 5.1 Requisitos funcionales del ERS
 
@@ -176,7 +176,7 @@ Avance de los 22 requisitos funcionales del ERS: 13 implementados, 2 parciales, 
 
 | Código | Requisito | Actor(es) | Estado | Dónde está / nota |
 | --- | --- | --- | --- | --- |
-| RF-VEN-001 | Registrar venta | Cajero | PENDIENTE | El esquema ya existe (`venta`, `pago`, `metodo_pago`, `corte_caja`); falta API y pantalla de caja |
+| RF-VEN-001 | Registrar venta | Cajero | IMPLEMENTADO | `POST /api/caja/cuentas/:id/cobrar`; cierra la cuenta y la mesa en una transacción |
 | RF-VEN-002 | Generar factura | Cajero | PENDIENTE | El esquema ya existe (`factura`, `datos_fiscales`); falta API y pantalla |
 | RF-VEN-003 | Consultar historial de ventas | Cajero, Gerente | PENDIENTE | Pendiente |
 | RF-VEN-004 | Generar reporte de ventas | Gerente | PENDIENTE | Pendiente |
@@ -219,10 +219,11 @@ Falta aprobarlos con el equipo y agregarlos al ERS.
 | RF-USR-006 | Cambiar la contraseña de un usuario | Gerente | `POST /api/usuarios/:id/contrasena` |
 | RF-USR-007 | Desactivar y reactivar usuarios (sustituye al borrado de RF-USR-003) | Gerente | `PATCH /api/usuarios/:id` |
 | RF-CUE-001 | Solicitar la cuenta de una mesa y elegir pago en caja o digital (la cuenta pasa a `por_pagar`) | Mesero, Gerente | `POST /api/cuentas/:id/solicitar-pago` |
+| RF-CUE-002 | Cerrar cuenta únicamente al registrar su pago | Cajero | `POST /api/caja/cuentas/:id/cobrar` |
 | RF-MES-001 | Asignar mesa a un grupo y cambiar el estado de la mesa (`libre`, `ocupada`, `reservada`) | Hostess, Gerente | `POST /api/mesas/:id/asignar`, `PATCH /api/mesas/:id/estado` |
 | RF-RES-006 | Registrar la llegada de un cliente con reservación | Hostess | `POST /api/reservaciones/:id/llegada` |
 | RF-ESP-001 | Gestionar la lista de espera: agregar grupos, consultar por orden de llegada y sentarlos; la edición (`PATCH`) sigue pendiente | Hostess | `GET` y `POST /api/lista-espera` |
-| RNF-030 | Las acciones críticas (crear, enviar, cancelar, entregar pedidos, solicitar pago, asignar mesa) no deben duplicarse si el cliente reintenta (`Idempotency-Key`) | Sistema | `backend/src/services/idempotencia.ts`, tabla `idempotencia` |
+| RNF-030 | Las acciones críticas (crear, enviar, cancelar, entregar pedidos, solicitar pago, asignar mesa y cobrar) no deben duplicarse si el cliente reintenta (`Idempotency-Key`) | Sistema | `backend/src/services/idempotencia.ts`, tabla `idempotencia` |
 
 ### 5.3 Diferencias entre el ERS y el código
 
@@ -329,14 +330,13 @@ Cuando aparezca algo que no está arriba, agrégalo aquí y también en la tabla
 | RF-AUD-001 | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo | PROPUESTO (sin construir) | oct. 2026 |
 | RF-AUD-002 | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
 | RF-USR-008 | Que cada usuario cambie su propia contraseña | Todos los roles | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
-| RF-CUE-002 | Cerrar cuenta (hoy nada la cierra y la mesa no se puede liberar) | Cajero, Gerente | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
 | RF-PED-006 | Registrar quién canceló un pedido y cuándo | Sistema | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
 
 Detalle, decisiones pendientes (D-1 a D-5) y hallazgos P-01 a P-16: `docs/PENDIENTES_Y_FALTANTES.md`.
 
 ## 6. Modelo de datos (MySQL, base `SIGR`)
 
-Notación: `*` clave primaria, `→tabla` clave foránea. El esquema completo está en `database/init.sql` (23 tablas, más catálogos y datos base). Las migraciones (`database/migrations/`): `001_ajustes_front` (ajustes para conectar el frontend del mesero), `002_api_idempotencia` (motivo libre de cancelación e idempotencia), `003_existencia_producto` (existencia opcional por producto, `producto.controla_existencia`) `004_mesas_13_a_18` y `005_mesas_zona_activa` (sección y disponibilidad de las mesas). Si la base ya existe, no la recrees: corre en orden las migraciones que falten.
+Notación: `*` clave primaria, `→tabla` clave foránea. El esquema completo está en `database/init.sql` (23 tablas, más catálogos y datos base). Las migraciones (`database/migrations/`): `001_ajustes_front` (ajustes para conectar el frontend del mesero), `002_api_idempotencia` (motivo libre de cancelación e idempotencia), `003_existencia_producto` (existencia opcional por producto, `producto.controla_existencia`), `004_mesas_13_a_18`, `005_mesas_zona_activa` (sección y disponibilidad de mesas) y `006_caja` (efectivo recibido y cambio). Si la base ya existe, no la recrees: corre en orden las migraciones que falten.
 
 ```
 
@@ -359,7 +359,7 @@ detalle_pedido: id_detalle*, id_pedido→pedido, id_producto→producto, cantida
 corte_caja: id_corte*, id_cajero→usuario, inicio, fin, total_reportado
 venta: id_venta*, id_cuenta→cuenta, id_corte→corte_caja, id_cajero→usuario, fecha_hora, total
 metodo_pago: id_metodo*, nombre
-pago: id_pago*, id_venta→venta, id_metodo→metodo_pago, monto, pagado_en, referencia
+pago: id_pago*, id_venta→venta, id_metodo→metodo_pago, monto, monto_recibido, cambio, pagado_en, referencia
 datos_fiscales: id_datos_fiscales*, id_cliente→cliente, rfc, razon_social, regimen_fiscal, codigo_postal
 factura: id_factura*, id_venta→venta, id_datos_fiscales→datos_fiscales, folio, fecha_emision, estado
 idempotencia: clave, id_usuario, ruta, estado_http, respuesta, creado_en
@@ -402,6 +402,9 @@ Formato de error: `{ "codigo", "mensaje" }`. Códigos: `no_autenticado`, `creden
 | `POST /pedidos/:id/entregar` | mesero, gerente | Marca como entregado |
 | `PATCH /pedidos/:id/estado` | cocinero, gerente | Cocina avanza `Pendiente` → `En preparacion` → `Listo` |
 | `POST /cuentas/:id/solicitar-pago` | mesero, gerente | Pasa la cuenta a `por_pagar` (pago físico o digital) |
+| `GET /caja/estado` | cajero | Corte abierto, cuentas solicitadas y métodos de pago |
+| `POST /caja/cortes`, `POST /caja/cortes/cerrar` | cajero | Abre el corte y guarda el total de ventas reportado al cerrarlo |
+| `POST /caja/cuentas/:id/cobrar` | cajero | Registra pago exacto o dividido, genera el ticket y cierra cuenta/mesa |
 | `GET /clientes`, `POST /clientes` | hostess, gerente | Buscar y registrar clientes (teléfono único) |
 | `GET /reservaciones?fecha=` | hostess, gerente | Reservaciones del día |
 | `POST /reservaciones` | hostess, gerente | Crea una reservación |
@@ -459,18 +462,16 @@ Antes de entregar: `npm run build` y `npm test` en `backend/`, y `npm run check`
 
 ## 11. Pendientes (en el orden más útil)
 
-1. **Caja** (RF-VEN-001 a 004): cobro, pagos divididos, corte, historial y reporte de ventas. El esquema ya existe; faltan API y pantalla.
-2. **Facturación** (RF-VEN-002): el esquema ya existe.
-3. **Historial de pedidos** (RF-PED-005) y **actualizar o eliminar clientes** (RF-CLI-002 y 003).
-4. **`PATCH /api/lista-espera/:id`** para quitar o editar grupos en espera.
-5. **Seguridad del ERS sin cubrir:** bloqueo tras 5 intentos (RNF-009), expiración por inactividad (RNF-011), invalidar la sesión al salir (RNF-012), registro de accesos no autorizados (RNF-017) y bitácora de eventos (RNF-026).
-6. Medir los tiempos de respuesta (RNF-001) y decidir si hace falta tiempo real (RNF-025).
-7. Decidir qué pasa con el borrado de clientes y actualizar el ERS con los requisitos de la sección 5.2.
-8. **Sección de la mesa en el Salón y el Panel** (RF-MES-007): hoy la sección solo se ve y se filtra en la pantalla del gerente; falta mostrarla o agrupar por sección para la hostess y el mesero (el backend ya envía `zona` en `GET /api/mesas`).
-9. **Auditoría** (RF-AUD-001 y 002): quién cambia una contraseña, a quién y cuándo. Un trigger de MySQL no conoce al usuario del sistema; la API tendría que pasarle su id. Opciones y recomendación en `docs/PENDIENTES_Y_FALTANTES.md`.
-10. **Cerrar cuentas** (RF-CUE-002): hoy nada cierra una cuenta, así que una mesa con pedidos no se puede liberar desde el sistema.
-11. Cambio de contraseña propio (RF-USR-008), quién canceló un pedido (RF-PED-006) y las reglas del dominio sin aplicar (tolerancia de reservas, capacidad, regla 11).
-12. Pruebas de las rutas del backend contra una base de datos (hoy solo hay 26 pruebas de funciones puras y mocks) y protecciones básicas de la API (límite de intentos, cabeceras de seguridad).
+1. **Facturación** (RF-VEN-002): el esquema existe, pero falta definir integración fiscal, API y pantalla. Caja no integra proveedores ni timbrado.
+2. **Historial de ventas** (RF-VEN-003), **reportes** (RF-VEN-004) e historial de pedidos (RF-PED-005).
+3. **Actualizar o eliminar clientes** (RF-CLI-002 y 003) y `PATCH /api/lista-espera/:id` para quitar o editar grupos en espera.
+4. **Seguridad del ERS sin cubrir:** bloqueo tras 5 intentos (RNF-009), expiración por inactividad (RNF-011), invalidar la sesión al salir (RNF-012), registro de accesos no autorizados (RNF-017) y bitácora de eventos (RNF-026).
+5. Medir los tiempos de respuesta (RNF-001) y decidir si hace falta tiempo real (RNF-025).
+6. Decidir qué pasa con el borrado de clientes y actualizar el ERS con los requisitos de la sección 5.2.
+7. **Sección de la mesa en el Salón y el Panel** (RF-MES-007): hoy la sección solo se ve y se filtra en la pantalla del gerente; falta mostrarla o agrupar por sección para la hostess y el mesero (el backend ya envía `zona` en `GET /api/mesas`).
+8. **Auditoría** (RF-AUD-001 y 002): quién cambia una contraseña, a quién y cuándo. Un trigger de MySQL no conoce al usuario del sistema; la API tendría que pasarle su id. Opciones y recomendación en `docs/PENDIENTES_Y_FALTANTES.md`.
+9. Cambio de contraseña propio (RF-USR-008), quién canceló un pedido (RF-PED-006) y las reglas del dominio sin aplicar (tolerancia de reservas, capacidad, regla 11).
+10. Pruebas de rutas del backend contra una base de datos (31 pruebas actuales: funciones del dominio, mocks y validación de importes; no cubren rutas con MySQL) y protecciones básicas de la API (límite de intentos, cabeceras de seguridad).
 
 ## 12. Glosario
 
@@ -1204,6 +1205,15 @@ Más reciente primero. Cada IA agrega aquí su bloque de actualización.
 - Acceso del mesero a pedidos: todos pueden consultar la lista y el detalle del salón; editar, enviar, cancelar y entregar se limita a pedidos creados por su propio usuario. El gerente conserva acceso administrativo.
 - Vista del salón: cada pedido incluye `nombre_mesero`, calculado desde `usuario.nombre`, y lo muestra en la fila y el detalle.
 - Secciones de este archivo actualizadas: 3, 4, 5, 7, 8, 11 y 16.
+
+### 2026-10 · Interfaz de cajero y cierre de cuentas
+- Qué se hizo: pantalla protegida `/cajero/caja` con apertura/cierre de corte, cuentas solicitadas, detalle, pagos divididos, cambio efectivo y ticket imprimible; API transaccional para cobrar y cerrar cuenta/mesa.
+- Archivos nuevos o cambiados: `backend/src/controllers/caja.ts`, `models/caja.ts`, `routes/caja.ts`, `backend/tests/caja.test.ts`, `database/migrations/006_caja.sql`, `database/init.sql`; `frontend/src/layouts/CajaLayout.vue`, `views/cajero/CajaView.vue`, tipos y servicios API/mock con prueba; README, contrato de API y guías de caja/BD.
+- Decisiones tomadas: se cobra solo `por_pagar`; no se cobra hasta entregar todos los pedidos activos; pagos divididos hasta tres métodos distintos deben sumar exactamente el total; solo efectivo admite registrar efectivo recibido/cambio; se requiere corte abierto propio. Facturación fiscal queda fuera.
+- Requerimientos nuevos o cambiados: RF-VEN-001 y RF-CUE-002 implementados; P-01 resuelto. RF-VEN-002/003/004 (factura, historial y reportes) continúan pendientes.
+- Verificación: backend build; 31 pruebas backend y 459 frontend pasan; frontend build. No se ejecutaron rutas contra una base de datos en esta sesión.
+- Pendiente o por verificar: aplicar `database/migrations/006_caja.sql` a bases existentes y hacer prueba de extremo a extremo conectada a MySQL; definir integración fiscal e historial de ventas.
+- Secciones de este archivo actualizadas: 3, 4, 5, 6, 7, 11 y 16.
 
 ### 2026-10 · Administración de mesas por el gerente
 - Qué se hizo: el gerente puede registrar mesas (número, cantidad de personas, sección y disponibilidad), editarlas y marcarlas como disponibles o no disponibles desde la pantalla **Mesas** (`/gerente/mesas`, tercera pestaña). Una mesa no disponible **no aparece** para la hostess ni para el mesero (`GET /api/mesas` solo trae las activas) y no se puede sentar, reservar ni cambiar de estado (`409 mesa_no_disponible`).

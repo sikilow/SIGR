@@ -18,7 +18,7 @@ Después de escribir los documentos 01 a 05 el proyecto pasó a la estructura ac
 | `backend/src/routes/<área>.ts` (ruta y lógica juntas) | `routes/<área>.ts` (solo la ruta y el permiso) y `controllers/<área>.ts` (la lógica: los bloques `async (req, res) => {...}` pasaron a funciones con nombre) |
 | `backend/src/routes/hostess.ts` | `routes/clientes.ts`, `routes/reservaciones.ts`, `routes/listaEspera.ts` y la lógica en `controllers/hostess.ts` |
 | `database/schema.sql` y `database/seed.sql` | `database/init.sql` (un solo archivo: esquema, catálogos y datos base) |
-| `database/migracion_01_front.sql` a `migracion_04_mesas.sql` | `database/migrations/001_ajustes_front.sql` a `004_mesas_13_a_18.sql` |
+| `database/migracion_01_front.sql` a `migracion_06_caja.sql` | `database/migrations/001_ajustes_front.sql` a `006_caja.sql` |
 | *(no existía)* | `backend/src/mocks/`, `backend/tests/`, `database/docker-compose.yml`, `frontend/src/mocks/*.json` |
 | `frontend/src/main.ts` | `frontend/main.ts` |
 
@@ -37,6 +37,7 @@ El proyecto tiene unas **25 000 líneas** (backend 2 294, base de datos ~500, fr
 | 03 | `03_backend_dominio_y_rutas_basicas.md` | `dominio.ts` y las rutas `auth`, `productos`, `menu`, `cuentas` y `usuarios` | ~800 | Hecho |
 | 04 | `04_backend_mesas_y_pedidos.md` | `routes/mesas.ts` y `routes/pedidos.ts` | 462 | Hecho |
 | 05 | `05_backend_catalogo_y_hostess.md` | `routes/catalogo.ts` y `routes/hostess.ts` | 718 | Hecho |
+| Caja | `caja_frontend_backend.md` | Operación de caja en backend y frontend | — | Hecho |
 | 06 | Frontend: base | `main.ts`, `App.vue`, `router`, `styles/base.css`, `types/`, `utils/` (sin pruebas) | ~2 100 | Pendiente |
 | 07 | Frontend: servicios | `services/api` (933), `services/mock` (1 004), `services/hostess` (724), `interfaces.ts` | ~2 900 | Pendiente |
 | 08 | Frontend: stores y composables | `stores/` (968) y `composables/` (94) | ~1 060 | Pendiente |

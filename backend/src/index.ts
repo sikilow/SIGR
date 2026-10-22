@@ -6,6 +6,7 @@ import { authRouter } from "./routes/auth";
 import { catalogoRouter } from "./routes/catalogo";
 import { clientesRouter } from "./routes/clientes";
 import { cuentasRouter } from "./routes/cuentas";
+import { cajaRouter } from "./routes/caja";
 import { listaEsperaRouter } from "./routes/listaEspera";
 import { menuRouter } from "./routes/menu";
 import { mesasRouter } from "./routes/mesas";
@@ -31,6 +32,7 @@ app.use("/api/menu", menuRouter);
 app.use("/api/productos", productosRouter);
 app.use("/api/pedidos", pedidosRouter);
 app.use("/api/cuentas", cuentasRouter);
+app.use("/api/caja", cajaRouter);
 app.use("/api/usuarios", usuariosRouter); // solo gerente
 app.use("/api/catalogo", catalogoRouter); // solo gerente
 

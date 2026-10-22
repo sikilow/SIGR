@@ -1,6 +1,7 @@
 // Implementación de los servicios contra la API real (backend/ de este repo, rutas /api/...).
 // Solo se usa con VITE_USE_MOCK=false.
 import { ErrorServicio } from '../errores'
+import { crearCajaApi } from './caja'
 import { crearHostessApi } from '../hostess/api'
 import type { Servicios } from '../interfaces'
 import { solicitar } from './cliente'
@@ -222,5 +223,6 @@ export function crearServiciosApi(): Servicios {
     },
 
     hostess: crearHostessApi(),
+    caja: crearCajaApi(),
   }
 }

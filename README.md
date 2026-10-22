@@ -36,7 +36,7 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 | 👥 **Usuarios** *(gerente)* | Alta, edición, activación y cambio de contraseña | ✅ |
 | 📦 **Productos e inventario** *(gerente)* | Categorías, precios, stock mínimo y existencia opcional por producto | ✅ |
 | 👨‍🍳 **Cocina** | Cola de pedidos enviados y en preparación; iniciar preparación y marcarlos listos. Actualización automática | ✅ |
-| 💵 **Caja** | Cobro, pagos divididos y corte de caja (el esquema ya existe) | 🚧 |
+| 💵 **Caja** | Apertura/cierre de corte, cobro de cuentas solicitadas, pagos divididos, cambio y ticket imprimible | ✅ |
 | 🪑 **Hostess: Salón** | Estado de las mesas (libres, ocupadas, reservadas), próximas reservaciones y lista de espera; asignar mesa a un grupo. No ve pedidos ni cuentas | ✅ |
 | 📅 **Hostess: Reservaciones** | Lista por día, alta y edición con búsqueda de clientes, confirmar, cancelar y registrar la llegada | ✅ |
 | ⏳ **Hostess: Lista de espera** | Grupos por orden de llegada, tiempo de espera con marca de espera larga, agregar y sentar. Quitar de la lista: pendiente en la API (`PATCH`) | 🟡 |
@@ -51,7 +51,7 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 | 🧑‍💼 **Gerente** | Supervisar la operación: usuarios, menú e inventario, mesas, reportes y cancelaciones excepcionales | Usuarios, Productos e inventario, Mesas |
 | 🍽️ **Mesero** | Capturar pedidos rápido y sin errores, ver su estado, enviarlos a cocina y pedir la cuenta | Mesas, Pedido de mesa, Cuenta, Mis pedidos |
 | 👨‍🍳 **Cocinero** | Recibir pedidos claros y en orden, iniciar preparación y marcarlos listos | Cocina |
-| 💵 **Cajero** | Consultar cuentas, cobrar, generar tickets y facturas, y hacer el corte de caja | *(pendiente)* |
+| 💵 **Cajero** | Consultar cuentas solicitadas, cobrar, imprimir ticket y hacer el corte de caja | Caja |
 | 🪑 **Hostess** | Asignar mesas, controlar reservaciones y la lista de espera, registrar clientes | Salón, Reservaciones, Lista de espera |
 
 ---
@@ -64,7 +64,7 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 
 > **Leyenda:** ✅ implementado · 🟡 parcial o distinto a lo que pide el ERS · 🚧 pendiente · 🔎 aún sin medir o revisar
 
-**Avance de requisitos funcionales del ERS:** 13 ✅ · 2 🟡 · 7 🚧 de 22.
+**Avance de requisitos funcionales del ERS:** 14 ✅ · 2 🟡 · 6 🚧 de 22.
 
 ### Requisitos funcionales
 
@@ -92,7 +92,7 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 
 | Código | Requisito | Actor(es) | Estado | Dónde está / nota |
 | --- | --- | --- | --- | --- |
-| `RF-VEN-001` | Registrar venta | Cajero | 🚧 | El esquema ya existe (`venta`, `pago`, `metodo_pago`, `corte_caja`); falta API y pantalla de caja |
+| `RF-VEN-001` | Registrar venta | Cajero | ✅ | `POST /api/caja/cuentas/:id/cobrar`; pago exacto o dividido, cambio en efectivo y cierre de cuenta |
 | `RF-VEN-002` | Generar factura | Cajero | 🚧 | El esquema ya existe (`factura`, `datos_fiscales`); falta API y pantalla |
 | `RF-VEN-003` | Consultar historial de ventas | Cajero, Gerente | 🚧 | Pendiente |
 | `RF-VEN-004` | Generar reporte de ventas | Gerente | 🚧 | Pendiente |
@@ -101,7 +101,7 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 
 | Código | Requisito | Actor(es) | Estado | Dónde está / nota |
 | --- | --- | --- | --- | --- |
-| `RF-CLI-001` | Registrar cliente | Hostess, Cajero | ✅ | `POST /api/clientes` · selector de cliente en Reservaciones y Espera (el cajero aún no tiene pantalla) |
+| `RF-CLI-001` | Registrar cliente | Hostess, Cajero | ✅ | `POST /api/clientes` · selector de cliente en Reservaciones y Espera |
 | `RF-CLI-002` | Actualizar cliente | Hostess, Cajero | 🚧 | Sin endpoint |
 | `RF-CLI-003` | Eliminar cliente | Gerente, Cajero | 🚧 | Sin endpoint |
 
@@ -135,10 +135,11 @@ Aparecieron durante el desarrollo. Los códigos son **propuestos**: falta aproba
 | `RF-USR-006` | Cambiar la contraseña de un usuario | Gerente | `POST /api/usuarios/:id/contrasena` |
 | `RF-USR-007` | Desactivar y reactivar usuarios (sustituye al borrado de RF-USR-003) | Gerente | `PATCH /api/usuarios/:id` |
 | `RF-CUE-001` | Solicitar la cuenta de una mesa y elegir pago en caja o digital (la cuenta pasa a `por_pagar`) | Mesero, Gerente | `POST /api/cuentas/:id/solicitar-pago` |
+| `RF-CUE-002` | Cerrar cuenta únicamente al registrar su pago | Cajero | `POST /api/caja/cuentas/:id/cobrar` |
 | `RF-MES-001` | Asignar mesa a un grupo y cambiar el estado de la mesa (`libre`, `ocupada`, `reservada`) | Hostess, Gerente | `POST /api/mesas/:id/asignar`, `PATCH /api/mesas/:id/estado` |
 | `RF-RES-006` | Registrar la llegada de un cliente con reservación | Hostess | `POST /api/reservaciones/:id/llegada` |
 | `RF-ESP-001` | Gestionar la lista de espera: agregar grupos, consultar por orden de llegada y sentarlos; la edición (`PATCH`) sigue pendiente | Hostess | `GET` y `POST /api/lista-espera` |
-| `RNF-030` | Las acciones críticas (crear, enviar, cancelar, entregar pedidos, solicitar pago, asignar mesa) no deben duplicarse si el cliente reintenta (`Idempotency-Key`) | Sistema | `backend/src/services/idempotencia.ts`, tabla `idempotencia` |
+| `RNF-030` | Las acciones críticas (crear, enviar, cancelar, entregar pedidos, solicitar pago, asignar mesa y cobrar) no deben duplicarse si el cliente reintenta (`Idempotency-Key`) | Sistema | `backend/src/services/idempotencia.ts`, tabla `idempotencia` |
 
 ### Requerimientos propuestos que aún no se construyen
 
@@ -150,7 +151,6 @@ Salen de lo que pidió el equipo y de la revisión del proyecto. El detalle, las
 | `RF-AUD-001` | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo |
 | `RF-AUD-002` | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión |
 | `RF-USR-008` | Que cada usuario cambie su propia contraseña | Todos los roles | Hallazgo de la revisión |
-| `RF-CUE-002` | Cerrar cuenta (hoy nada la cierra y la mesa no se puede liberar) | Cajero, Gerente | Hallazgo de la revisión |
 | `RF-PED-006` | Registrar quién canceló un pedido y cuándo | Sistema | Hallazgo de la revisión |
 
 ### Diferencias entre el ERS y lo implementado
@@ -425,7 +425,7 @@ El árbol de arriba es el modelo; las carpetas ya existen y contienen lo siguien
 | `backend/src/services/` | `db.ts` (pool de MySQL y transacciones) e `idempotencia.ts`. |
 | `backend/src/mocks/` | `clientes.mock.ts` y `productos.mock.ts`: datos falsos tipados para probar la API. |
 | `backend/src/utils/` | `config.ts`, `errores.ts`, `auth.ts` (JWT y permisos por rol) y `seed.ts` (usuarios de prueba). |
-| `backend/tests/` | Pruebas unitarias con Vitest: `dominio.test.ts` y `mocks.test.ts` (26 pruebas). |
+| `backend/tests/` | Pruebas unitarias con Vitest: dominio, mocks y reglas de importes de caja. |
 | `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `005`). |
 | `docs/` | `arquitectura.md` y el resto de la documentación (contratos de API, equivalencias, pendientes, guía de código). |
 
@@ -484,6 +484,7 @@ npm run dev                 # http://localhost:5173
 > **Base de datos ya existente:** no la recrees. Ejecuta, en orden, las `database/migrations/00N_*.sql` que todavía no hayas corrido.
 > Para agregar las mesas 13-18 a una base existente, ejecuta `mysql -u root -p -e "source database/migrations/004_mesas_13_a_18.sql"` desde la raíz del proyecto. Después de insertarlas, el panel de mesas y el Salón las cargan automáticamente desde la API.
 > Si la base se creó antes de la administración de mesas del gerente, ejecuta una sola vez `mysql -u root -p -e "source database/migrations/005_mesas_zona_activa.sql"` desde la raíz. Esta migración agrega `mesa.zona` y `mesa.activa`; `database/init.sql` ya las incluye para bases nuevas.
+> Para habilitar la caja en una base existente, ejecuta una sola vez `mysql -u root -p -e "source database/migrations/006_caja.sql"` desde la raíz. Agrega a `pago` las columnas para registrar el efectivo recibido y el cambio. Las bases nuevas ya las incluyen en `database/init.sql`.
 
 ### Variables de entorno
 
@@ -514,7 +515,7 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 | --- | --- | --- |
 | `backend/` | `npm run dev` | API con recarga automática |
 | `backend/` | `npm run build` | Revisa tipos y compila a `dist/` |
-| `backend/` | `npm test` | Pruebas unitarias del backend (26) |
+| `backend/` | `npm test` | Pruebas unitarias del backend |
 | raíz | `docker compose -f database/docker-compose.yml up -d` | Levanta MySQL 8 con `init.sql` |
 | `frontend/` | `npm run dev` | Servidor de desarrollo |
 | `frontend/` | `npm run build` | Revisa tipos y genera el build |
@@ -534,7 +535,7 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 | Mesero | `mesero` | `1234` | Mesas, pedidos y cuentas |
 | Mesero 2 | `mesero2` | `1234` | Igual que el mesero (solo con `seed_demo.sql`) |
 | Cocinero | `cocinero` | `1234` | Cola de cocina: pedidos enviados y en preparación |
-| Cajero | `cajero` | `1234` | *(pantalla pendiente)* |
+| Cajero | `cajero` | `1234` | Caja |
 | Hostess | `hostess` | `1234` | Salón, Reservaciones y Lista de espera |
 
 ---

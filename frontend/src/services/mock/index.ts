@@ -3,6 +3,7 @@ import type { Servicios } from '../interfaces'
 import { crearCatalogoMock, crearUsuariosMock } from './adminMock'
 import { crearAuthMock } from './authMock'
 import { crearCuentasMock } from './cuentasMock'
+import { crearCajaMock } from './cajaMock'
 import { crearMenuMock } from './menuMock'
 import { crearMesasMock } from './mesasMock'
 import { crearPedidosMock } from './pedidosMock'
@@ -17,6 +18,7 @@ export function crearServiciosMock(): Servicios {
     menu: crearMenuMock(),
     pedidos: crearPedidosMock(),
     cuentas: crearCuentasMock(),
+    caja: crearCajaMock(),
     usuarios: crearUsuariosMock(),
     catalogo: crearCatalogoMock(),
     hostess: crearHostessMock(),

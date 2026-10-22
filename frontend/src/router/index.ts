@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import CocinaLayout from '../layouts/CocinaLayout.vue'
+import CajaLayout from '../layouts/CajaLayout.vue'
 import GerenteLayout from '../layouts/GerenteLayout.vue'
 import HostessLayout from '../layouts/HostessLayout.vue'
 import MeseroLayout from '../layouts/MeseroLayout.vue'
@@ -18,6 +19,7 @@ export function rutaInicial(rol: Rol | null): string {
   if (rol === 'gerente') return '/gerente/usuarios'
   if (rol === 'hostess') return '/hostess/salon'
   if (rol === 'cocinero') return '/cocinero/cocina'
+  if (rol === 'cajero') return '/cajero/caja'
   return '/mesero/mesas'
 }
 
@@ -116,6 +118,19 @@ export const router = createRouter({
           path: 'cocina',
           name: 'cocinero-cocina',
           component: () => import('../views/cocinero/CocinaView.vue'),
+        },
+      ],
+    },
+    {
+      path: '/cajero',
+      component: CajaLayout,
+      meta: { roles: ['cajero'] },
+      redirect: '/cajero/caja',
+      children: [
+        {
+          path: 'caja',
+          name: 'cajero-caja',
+          component: () => import('../views/cajero/CajaView.vue'),
         },
       ],
     },

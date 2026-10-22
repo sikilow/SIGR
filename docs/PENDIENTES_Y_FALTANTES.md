@@ -38,7 +38,7 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 **Lo que aún falta alrededor de esto:**
 
 - Mostrar o agrupar por sección en el Salón y el Panel (RF-MES-007).
-- Una mesa **con cuenta abierta** no se puede desactivar hasta que exista cómo cerrar cuentas (ver P-01).
+- Una mesa con cuenta activa sigue sin poder desactivarse; tras el cobro se cierra la cuenta y se libera la mesa (ver D-3 y P-01).
 - No se registra quién creó, editó o desactivó una mesa (ver la bitácora, RF-AUD-002).
 - Las bases de datos que ya existían necesitan correr `database/migrations/005_mesas_zona_activa.sql`.
 
@@ -77,12 +77,12 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 
 | Id | Hallazgo | Detalle | Verificación |
 | --- | --- | --- | --- |
-| P-01 | **No existe forma de cerrar una cuenta** | Nada pone `cuenta.estado = 'cerrada'` ni llena `cerrada_en`. Como `PATCH /api/mesas/:id/estado` **rechaza liberar una mesa con cuenta activa**, una mesa que ya tuvo pedidos **no se puede liberar desde el sistema** (solo con SQL a mano). Se resuelve con la caja (RF-VEN-001) o con una acción provisional del gerente. También incumple la regla 18 del dominio (no cerrar una cuenta sin pago). Código propuesto: RF-CUE-002 «Cerrar cuenta». | Verificado |
+| P-01 | **Resuelto: cierre de cuenta al cobrar** | `POST /api/caja/cuentas/:id/cobrar` registra la venta y los pagos y, en la misma transacción, marca pedidos pagados, llena `cerrada_en`, cierra la cuenta y libera la mesa. No permite cobrar cuentas no solicitadas ni pedidos sin entregar. | Resuelto |
 | P-02 | **No se guarda quién canceló un pedido** | Solo se guarda el motivo (`id_motivo`), no el usuario ni la fecha de cancelación. Código propuesto: RF-PED-006. Relacionado con RNF-026 y RNF-027. | Verificado |
 | P-03 | **Seguridad del ERS sin cubrir** | RNF-009 (bloqueo tras 5 intentos), RNF-011 (expiración por inactividad: hoy el token dura 8 horas fijas), RNF-012 (invalidar la sesión al salir), RNF-017 (registro de accesos no autorizados). | Verificado |
 | P-04 | **Sin protecciones básicas de la API** | El backend no usa límite de peticiones (contra fuerza bruta) ni cabeceras de seguridad. No hay HTTPS configurado en el proyecto. | Verificado en `package.json`; el HTTPS es por validar |
-| P-05 | **Las pruebas del backend son mínimas** | `backend/tests/` solo cubre funciones puras del dominio y los mocks (26 pruebas). No hay pruebas de las rutas ni de las reglas más delicadas (existencia, cancelaciones, bloqueos), que necesitan una base de datos. El frontend tiene 18 archivos de pruebas. | Verificado |
-| P-06 | **Pantallas pendientes** | Caja y facturación. El rol `cocinero` ya tiene cola en `/cocinero/cocina`; el rol `cajero` sigue sin pantalla. | Verificado |
+| P-05 | **Las pruebas del backend son mínimas** | `backend/tests/` cubre funciones puras, mocks y validación de importes (31 pruebas), pero no las rutas ni las reglas que requieren base de datos. El frontend tiene 22 archivos de pruebas. | Verificado |
+| P-06 | **Pantallas pendientes** | Caja ya está disponible en `/cajero/caja`; facturación fiscal aún no tiene proveedor, API ni pantalla. | Parcial |
 | P-07 | **Falta `PATCH /api/lista-espera/:id`** | Quitar o editar un grupo de la lista de espera. | Verificado |
 
 ### 2.2 Reglas del dominio que el servidor no aplica o que chocan con el diseño
@@ -117,7 +117,7 @@ Por validar: cuánto tiempo se conserva la bitácora y quién puede consultarla 
 | --- | --- | --- |
 | P-08 | `reservacion.estado` y `lista_espera.estado` son texto libre, **sin `CHECK` ni catálogo** (ya hay una nota `[PENDIENTE-BD]` en `seed_demo.sql`). | Verificado |
 | P-09 | El estado de pedido `Pagado` existe pero **nada lo usa**. | Verificado |
-| P-10 | Las tablas de caja y facturación (`venta`, `pago`, `corte_caja`, `datos_fiscales`, `factura`) existen pero **ninguna ruta las usa**. | Verificado |
+| P-10 | Las tablas fiscales (`datos_fiscales`, `factura`) existen pero **ninguna ruta las usa**. Las tablas de venta, pago y corte ya están conectadas a la API de caja. | Parcial |
 | P-11 | `GET /api/pedidos` devuelve **todos** los pedidos visibles sin paginación; con el tiempo el historial crecerá. | Verificado |
 | P-12 | Las fechas dependen de la zona horaria de MySQL (`NOW()`); si el servidor y la base difieren, las reservaciones pueden correrse. Ya hay una advertencia en `seed_demo.sql`. | Verificado |
 
@@ -149,17 +149,15 @@ Son sugerencias mías, **no requisitos**. Solo valen si el restaurante las neces
 ## 4. Orden sugerido de trabajo (para discutir)
 
 1. Confirmar las decisiones D-1 a D-5 de las mesas y elegir la opción de auditoría (A, B o C).
-2. Cerrar P-01 (cerrar cuentas), porque sin eso el ciclo de una mesa queda incompleto.
-3. Bitácora (RF-AUD-001 y 002) y mostrar la sección de la mesa en el Salón y el Panel (RF-MES-007). Las mesas del gerente ya están hechas.
-4. Cambio de contraseña propio (RF-USR-008) y seguridad del ERS (P-03 y P-04).
-5. Caja y facturación; la pantalla de cocina ya está implementada.
-6. Pruebas del backend (P-05) conforme se construyan las reglas anteriores.
-7. Actualizar el ERS, el README, `CONTEXTO_IA.md` y la documentación del gerente.
+2. Bitácora (RF-AUD-001 y 002) y mostrar la sección de la mesa en el Salón y el Panel (RF-MES-007).
+3. Cambio de contraseña propio (RF-USR-008) y seguridad del ERS (P-03 y P-04).
+4. Facturación fiscal (RF-VEN-002), historial de ventas (RF-VEN-003) e informes (RF-VEN-004).
+5. Pruebas de rutas del backend contra una base de datos (P-05).
+6. Actualizar el ERS y documentación cuando se validen las reglas pendientes.
 
 ---
 
 ## 5. Lo que necesito que el equipo verifique
 
-- Confirmar que **P-01** es cierto en su versión más reciente (puede que alguien ya haya agregado cómo cerrar cuentas en una rama que yo no vi).
 - Confirmar las reglas 5, 8, 9 y 11 de la sección 2.2: ¿son comportamientos intencionales o errores?
 - Decidir si las ideas de la sección 3 interesan.

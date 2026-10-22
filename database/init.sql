@@ -179,6 +179,8 @@ CREATE TABLE pago (
   id_venta INT NOT NULL,
   id_metodo INT NOT NULL,
   monto DECIMAL(12,2) NOT NULL CHECK (monto > 0),
+  monto_recibido DECIMAL(12,2) NOT NULL CHECK (monto_recibido >= monto),
+  cambio DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (cambio >= 0),
   pagado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   referencia VARCHAR(100) NULL,
   CONSTRAINT fk_pago_id_venta FOREIGN KEY (id_venta) REFERENCES venta (id_venta) ON UPDATE CASCADE ON DELETE RESTRICT,

@@ -21,7 +21,7 @@
 
 **Mesero:** `rol`, `usuario`, `credenciales`, `mesa`, `categoria_menu`, `producto`, `cuenta`, `estado_pedido`, `motivo_cancelacion`, `pedido`, `detalle_pedido`.
 **Hostess:** `mesa`, `reservacion`, `lista_espera`, `cliente` (nunca pedidos ni cuentas). **Gerente:** `usuario`, `credenciales`, `perfil_usuario`, `categoria_menu`, `producto`, `disponibilidadProducto`.
-**Todavía sin interfaz (no se usan):** `venta`, `pago`, `metodo_pago`, `corte_caja`, `datos_fiscales`, `factura`. La tabla `idempotencia` es del backend.
+**Caja:** `venta`, `pago`, `metodo_pago` y `corte_caja` se usan en `/cajero/caja`; `pago.monto_recibido` y `pago.cambio` conservan el efectivo recibido y el cambio. **Facturación aún sin interfaz/API:** `datos_fiscales` y `factura`. La tabla `idempotencia` es del backend.
 
 ## Mesas — tipo `Mesa` (tabla `mesa`)
 
