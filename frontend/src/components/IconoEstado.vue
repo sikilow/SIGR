@@ -10,6 +10,7 @@ export type TonoEstado =
   | 'cuenta'
   | 'cuenta_abierta'
   | 'agotado'
+  | 'stock_bajo'
   | 'carrito'
   // Estados del pedido (`listo` se comparte con el aviso "Pedido listo" del panel)
   | 'registrado'
@@ -63,6 +64,10 @@ withDefaults(defineProps<{ tono: TonoEstado; tamano?: number }>(), { tamano: 20 
     <template v-else-if="tono === 'agotado'">
       <circle cx="12" cy="12" r="9" />
       <path d="m9 9 6 6M15 9l-6 6" />
+    </template>
+    <template v-else-if="tono === 'stock_bajo'">
+      <path d="M12 3 2.8 19h18.4L12 3Z" />
+      <path d="M12 9v4M12 16v.01" />
     </template>
     <!-- en el pedido: carrito -->
     <template v-else-if="tono === 'carrito'">

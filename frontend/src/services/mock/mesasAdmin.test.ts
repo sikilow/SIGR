@@ -55,15 +55,16 @@ describe('registrar mesas', () => {
     expect((await resolver(hostess.listarMesas())).map((m) => m.numero)).toContain(100)
   })
 
-  it('una sección vacía queda sin sección', async () => {
+  it('no permite crear una mesa sin sección', async () => {
     const { catalogo } = await nuevoMock()
-    const nueva = await resolver(catalogo.crearMesa({ numero: 20, capacidad: 2, zona: '   ', activa: true }))
-    expect(nueva.zona).toBeNull()
+    const e = await errorDe(catalogo.crearMesa({ numero: 20, capacidad: 2, zona: '   ', activa: true }))
+    expect(e.codigo).toBe('estado_invalido')
+    expect(e.mensaje).toContain('sección')
   })
 
   it('no permite repetir el número de una mesa', async () => {
     const { catalogo } = await nuevoMock()
-    const e = await errorDe(catalogo.crearMesa({ numero: 3, capacidad: 2, zona: '', activa: true }))
+    const e = await errorDe(catalogo.crearMesa({ numero: 3, capacidad: 2, zona: 'Salón', activa: true }))
     expect(e.codigo).toBe('estado_invalido')
     expect(e.mensaje).toContain('Ya existe la mesa 3')
   })
@@ -143,15 +144,15 @@ describe('editar mesas', () => {
   it('cambia capacidad, sección y número', async () => {
     const { catalogo } = await nuevoMock()
     const mesa4 = (await resolver(catalogo.listarMesas())).find((m) => m.numero === 4)!
+    await resolver(catalogo.crearSeccion('Salón principal'))
     const r = await resolver(catalogo.actualizarMesa(mesa4.idMesa, { capacidad: 8, zona: 'Salón principal', numero: 40 }))
     expect(r).toMatchObject({ numero: 40, capacidad: 8, zona: 'Salón principal' })
   })
 
-  it('quitar la sección (texto vacío) la deja sin sección', async () => {
+  it('no permite quitar la sección obligatoria', async () => {
     const { catalogo } = await nuevoMock()
     const mesa4 = (await resolver(catalogo.listarMesas())).find((m) => m.numero === 4)!
-    await resolver(catalogo.actualizarMesa(mesa4.idMesa, { zona: 'Terraza' }))
-    expect((await resolver(catalogo.actualizarMesa(mesa4.idMesa, { zona: '' }))).zona).toBeNull()
+    expect((await errorDe(catalogo.actualizarMesa(mesa4.idMesa, { zona: '' }))).codigo).toBe('estado_invalido')
   })
 
   it('no permite renumerar a un número que ya existe', async () => {
@@ -169,8 +170,48 @@ describe('editar mesas', () => {
 
   it('la lista del gerente viene ordenada por número', async () => {
     const { catalogo } = await nuevoMock()
-    await resolver(catalogo.crearMesa({ numero: 102, capacidad: 2, zona: '', activa: true }))
+    await resolver(catalogo.crearMesa({ numero: 102, capacidad: 2, zona: 'General', activa: true }))
     const numeros = (await resolver(catalogo.listarMesas())).map((m) => m.numero)
     expect(numeros).toEqual([...numeros].sort((a, b) => a - b))
+  })
+})
+
+describe('administración de secciones', () => {
+  it('crea y renombra una sección, actualizando también las mesas asignadas', async () => {
+    const { catalogo } = await nuevoMock()
+    const nueva = await resolver(catalogo.crearSeccion('Patio'))
+    expect(nueva).toMatchObject({ nombre: 'Patio', activa: true, totalMesas: 0 })
+    const mesa = await resolver(catalogo.crearMesa({ numero: 120, capacidad: 4, zona: 'Patio', activa: true }))
+
+    const renombrada = await resolver(catalogo.renombrarSeccion('Patio', 'Patio norte'))
+    expect(renombrada).toMatchObject({ nombre: 'Patio norte', totalMesas: 1 })
+    expect((await resolver(catalogo.listarMesas())).find((m) => m.idMesa === mesa.idMesa)?.zona).toBe('Patio norte')
+  })
+
+  it('inhabilita las mesas de una sección para mesero y hostess, y las restaura al habilitarla', async () => {
+    const { catalogo, mesas, hostess } = await nuevoMock()
+    await resolver(catalogo.actualizarSeccion('General', { activa: false }))
+    expect((await resolver(mesas.listar())).map((m) => m.numero)).not.toContain(18)
+    expect((await resolver(hostess.listarMesas())).map((m) => m.numero)).not.toContain(18)
+
+    await resolver(catalogo.actualizarSeccion('General', { activa: true }))
+    expect((await resolver(mesas.listar())).map((m) => m.numero)).toContain(18)
+    expect((await resolver(hostess.listarMesas())).map((m) => m.numero)).toContain(18)
+  })
+
+  it('no permite inhabilitar secciones con mesas en uso, borrar secciones asignadas ni asignar una inhabilitada', async () => {
+    const { catalogo, hostess } = await nuevoMock()
+    expect((await errorDe(catalogo.actualizarSeccion('Salón', { activa: false }))).codigo).toBe('estado_invalido')
+    expect((await errorDe(catalogo.eliminarSeccion('General'))).codigo).toBe('estado_invalido')
+    await resolver(catalogo.actualizarSeccion('General', { activa: false }))
+    expect((await errorDe(catalogo.crearMesa({ numero: 121, capacidad: 2, zona: 'General', activa: true }))).codigo).toBe('estado_invalido')
+    expect((await errorDe(hostess.asignarMesa(18, { tipo: 'sinRegistro', personas: 2 }))).codigo).toBe('mesa_no_disponible')
+  })
+
+  it('permite borrar solo una sección vacía', async () => {
+    const { catalogo } = await nuevoMock()
+    await resolver(catalogo.crearSeccion('Evento'))
+    await resolver(catalogo.eliminarSeccion('Evento'))
+    expect((await resolver(catalogo.listarSecciones())).some((s) => s.nombre === 'Evento')).toBe(false)
   })
 })

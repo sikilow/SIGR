@@ -19,15 +19,20 @@ export interface UsuarioMock extends Omit<Usuario, 'rol' | 'activo'> {
 export type CuentaGuardada = Omit<Cuenta, 'pedidos' | 'total'>
 
 /** Mesa tal como se guarda: el resumen de cuenta y pedidos se calcula al consultarla. */
-export type MesaGuardada = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estado'> & {
-  /** mesa.zona: «sección» del salón (texto libre). */
+export type MesaGuardada = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estado' | 'plantaBaja' | 'espacioCarriola' | 'sinEscaleras'> & {
+  /** mesa.zona: sección registrada del salón. */
   zona: string | null
   /** mesa.activa: `false` = no disponible (no aparece en el panel del mesero ni en el salón de la hostess). */
   activa: boolean
 }
 
+export interface SeccionGuardada {
+  nombre: string
+  activa: boolean
+}
+
 /** Reservación tal como se guarda: nombre y teléfono del cliente y número de mesa se calculan al consultarla. */
-export type ReservacionGuardada = Omit<Reservacion, 'clienteNombre' | 'clienteTelefono' | 'mesaNumero'>
+export type ReservacionGuardada = Omit<Reservacion, 'clienteNombre' | 'clienteTelefono' | 'clienteCorreo' | 'mesaNumero'>
 
 /** Lista de espera tal como se guarda: nombre y teléfono del cliente se calculan al consultarla. */
 export type EsperaGuardada = Omit<ListaEspera, 'clienteNombre' | 'clienteTelefono'>
@@ -35,6 +40,7 @@ export type EsperaGuardada = Omit<ListaEspera, 'clienteNombre' | 'clienteTelefon
 export interface BaseDatosMock {
   usuarios: UsuarioMock[]
   mesas: MesaGuardada[]
+  secciones: SeccionGuardada[]
   categorias: CategoriaMenu[]
   cuentas: CuentaGuardada[]
   pedidos: Pedido[]
@@ -44,6 +50,7 @@ export interface BaseDatosMock {
   clientes: Cliente[]
   reservaciones: ReservacionGuardada[]
   listaEspera: EsperaGuardada[]
+  configuracionReservacion: { toleranciaMinutos: number; recordatorioMinutos: number }
   siguienteIdPedido: number
   siguienteIdCuenta: number
   siguienteIdMotivo: number
@@ -79,7 +86,17 @@ function crearMesas(): MesaGuardada[] {
     ['libre', 2, 'Terraza'], ['libre', 2, 'Terraza'], ['libre', 4, 'Barra'], ['libre', 4, 'Barra'], ['libre', 6, 'Barra'],
     ['libre', 8, null],
   ]
-  return datos.map(([estado, capacidad, zona], i) => ({ idMesa: i + 1, numero: i + 1, capacidad, estado, zona, activa: true }))
+  return datos.map(([estado, capacidad, zona], i) => ({
+    idMesa: i + 1,
+    numero: i + 1,
+    capacidad,
+    estado,
+    zona: zona ?? 'General',
+    plantaBaja: true,
+    espacioCarriola: [1, 4, 9, 13].includes(i + 1),
+    sinEscaleras: [1, 2, 4, 6, 9, 13, 15].includes(i + 1),
+    activa: true,
+  }))
 }
 
 function crearPedidos(): Pedido[] {
@@ -248,6 +265,7 @@ export const baseDatos: BaseDatosMock = {
     { idUsuario: 5, idRol: 2, nombre: 'Rosa Mesera', correo: 'rosa.mesera@lamadalena.example', activo: true, rol: 'mesero', nombreUsuario: 'mesero2', contrasena: '1234' },
   ],
   mesas: crearMesas(),
+  secciones: ['General', 'Salón', 'Terraza', 'Barra'].map((nombre) => ({ nombre, activa: true })),
   categorias: crearCategorias(),
   cuentas: crearCuentas(),
   pedidos: crearPedidos(),
@@ -258,6 +276,7 @@ export const baseDatos: BaseDatosMock = {
   clientes: crearClientes(),
   reservaciones: crearReservaciones(),
   listaEspera: crearListaEspera(),
+  configuracionReservacion: { toleranciaMinutos: 15, recordatorioMinutos: 5 },
   siguienteIdPedido: 15,
   siguienteIdCuenta: 9,
   siguienteIdMotivo: 3,

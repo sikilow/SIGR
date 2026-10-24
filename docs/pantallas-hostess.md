@@ -23,14 +23,14 @@ Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×
 
 | # | Pantalla | Ruta | Qué cubre | Captura |
 |---|---|---|---|---|
-| 6 | Reservaciones (1024×768) | `/hostess/reservaciones` | Lista del día (hoy por defecto, con selector de día), filtros por estado con su cantidad y búsqueda por nombre o teléfono. Cada reservación: hora, cliente, teléfono, personas, mesa o «Sin mesa» y estado (ícono + texto) | [h2-01-reservaciones-1024x768](capturas/h2-01-reservaciones-1024x768.png) |
+| 6 | Reservaciones (1024×768) | `/hostess/reservaciones` | Lista del día (hoy por defecto, con selector de día), filtros por estado —incluida Vencida— con su cantidad y búsqueda por nombre o teléfono. Cada reservación: hora, cliente, teléfono, personas, mesa o «Sin mesa» y estado (ícono + texto) | [h2-01-reservaciones-1024x768](capturas/h2-01-reservaciones-1024x768.png) |
 | 7 | Hoja de una reservación | _(diálogo de Reservaciones)_ | Datos y acciones según el estado: Registrar llegada, Confirmar, Editar y Cancelar (los estados finales solo se pueden cerrar) | [h2-02-hoja-reservacion-1024x768](capturas/h2-02-hoja-reservacion-1024x768.png) |
 | 8 | Nueva reservación con errores | _(diálogo de Reservaciones)_ | Validación: resumen de errores enfocable con enlaces a cada campo y un error bajo cada campo | [h2-03-nueva-reservacion-errores-1024x768](capturas/h2-03-nueva-reservacion-errores-1024x768.png) |
 | 9 | Nueva reservación: cliente existente | _(mismo diálogo)_ | Búsqueda de cliente por nombre o teléfono y cliente ya elegido | [h2-04-nueva-reservacion-cliente-elegido-1024x768](capturas/h2-04-nueva-reservacion-cliente-elegido-1024x768.png) |
 | 10 | Registrar llegada | _(mismo diálogo)_ | Si la reservación no tiene mesa, se elige entre las libres (con aviso de capacidad que no bloquea) | [h2-05-registrar-llegada-1024x768](capturas/h2-05-registrar-llegada-1024x768.png) |
 | 11 | Cancelar reservación | _(mismo diálogo)_ | Confirmación de una acción destructiva; avisa que la mesa se libera | [h2-06-cancelar-reservacion-1024x768](capturas/h2-06-cancelar-reservacion-1024x768.png) |
 | 12 | Reservaciones (768×1024) | `/hostess/reservaciones` | Igual que la 6, con el estado debajo del nombre | [h2-07-reservaciones-768x1024](capturas/h2-07-reservaciones-768x1024.png) |
-| 13 | Cliente nuevo con errores (768×1024) | _(diálogo de Reservaciones)_ | Alta de cliente (nombre, teléfono, correo opcional) con varios errores a la vez | [h2-08-cliente-nuevo-errores-768x1024](capturas/h2-08-cliente-nuevo-errores-768x1024.png) |
+| 13 | Cliente nuevo con errores (768×1024) | _(diálogo de Reservaciones)_ | Alta de cliente (nombre, teléfono y correo obligatorio para reservar) con varios errores a la vez | [h2-08-cliente-nuevo-errores-768x1024](capturas/h2-08-cliente-nuevo-errores-768x1024.png) |
 
 ### Lista de espera (H3)
 
@@ -96,17 +96,26 @@ Mismo comportamiento que el Panel del mesero (ver [`pantallas-mesero.md`](pantal
 
 1. **Lista:** `/hostess/reservaciones` muestra hoy; las flechas, el campo de fecha y «Hoy» cambian de día. La lista se
    actualiza sola cada pocos segundos. El filtro (`?estado=`) y la búsqueda no cambian el día.
-2. **Nueva reservación:** cliente (buscar uno existente por nombre o teléfono, o crear uno con nombre y teléfono de
-   10 dígitos y correo opcional), fecha y hora (no pasadas), personas (1 a 20) y mesa opcional. La mesa solo se ofrece
-   para reservaciones **de hoy** y solo entre las **libres**; si las personas no caben se avisa, sin bloquear. Al guardar
-   la lista va al día de la reservación y la resalta.
+2. **Nueva reservación:** cliente (buscar uno existente por nombre o teléfono, o crear uno con nombre, teléfono de
+   10 dígitos y correo obligatorio), fecha y hora (no pasadas), personas (1 a 20), preferencias opcionales de sección y
+   accesibilidad, y mesa opcional. Si el cliente ya existe sin correo válido, se puede completar o corregir el correo
+   desde el selector. La mesa solo se ofrece para reservaciones **de hoy** y solo entre las **libres**; las sugerencias
+   priorizan sección, planta baja, espacio para carriola, acceso sin escaleras y capacidad. Si las personas no caben se
+   avisa, sin bloquear. Al guardar la lista va al día de la reservación y la resalta.
 3. **Editar:** solo `pendiente` o `confirmada`; el cliente no cambia. Se puede cambiar fecha, hora, personas y mesa.
 4. **Confirmar:** `pendiente → confirmada`.
 5. **Cancelar:** pide confirmación. La reservación pierde su mesa y, si nadie más la necesita, la mesa vuelve a **libre**.
+   Si la reservación permanece pendiente o confirmada más allá de la tolerancia configurada por Gerencia, pasa a
+   **Vencida**, la mesa se libera y se encola un aviso por correo.
 6. **Registrar llegada:** la reservación pasa a `llego` (con `llegada_en`) y la mesa queda **ocupada**. Si no tiene mesa
    (o la suya ya no está disponible) se elige una. Es el mismo efecto que «Asignar mesa» del Salón.
 7. El **Salón** refleja todo: mesas reservadas con hora y nombre, mesas liberadas o llenas y la lista de próximas
    reservaciones.
+
+La tolerancia de llegada y la anticipación de los recordatorios se configuran desde **Gerente → Reservas**. El backend
+envía las notificaciones con Resend; los fallos quedan registrados en la cola para reintento. La API requiere la
+migración `010_reservaciones_y_caracteristicas.sql` y `RESEND_API_KEY`/`RESEND_FROM` en el entorno del backend. Consulta
+[resend-reservaciones.md](resend-reservaciones.md).
 
 ## Cómo funciona «Asignar mesa»
 

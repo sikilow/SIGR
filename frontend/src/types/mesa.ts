@@ -11,8 +11,11 @@ export interface Mesa {
   capacidad: number
   /** mesa.estado (texto libre en la BD). */
   estado: EstadoMesa
-  /** mesa.zona: «sección» del salón (texto libre, recortado); `null` = sin sección. */
+  /** mesa.zona: sección del salón (recortada); null se tolera para respuestas antiguas. */
   zona: string | null
+  plantaBaja: boolean
+  espacioCarriola: boolean
+  sinEscaleras: boolean
 
   // --- Campos CALCULADOS por la API (no son columnas de `mesa`) ---
   /** Estado de la cuenta activa de la mesa; `null` si no hay cuenta activa. */

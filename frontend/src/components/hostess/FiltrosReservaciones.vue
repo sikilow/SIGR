@@ -16,6 +16,7 @@ const opciones = computed<Array<{ valor: FiltroReservaciones; etiqueta: string }
   { valor: 'confirmada', etiqueta: 'Confirmadas' },
   { valor: 'llego', etiqueta: 'Llegaron' },
   { valor: 'cancelada', etiqueta: 'Canceladas' },
+  { valor: 'vencida', etiqueta: 'Vencidas' },
 ])
 </script>
 

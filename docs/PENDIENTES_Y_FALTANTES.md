@@ -1,6 +1,6 @@
 # SIGR · Pendientes y faltantes por revisar
 
-Documento para que el equipo **verifique y decida**. **No contiene código ni cambios hechos**: solo lista lo que falta, qué se afectaría y qué hay que decidir.
+Documento de seguimiento para que el equipo **verifique y decida**. Registra tanto las funciones ya implementadas que surgieron de las revisiones como los asuntos que siguen pendientes; no sustituye el código ni el ERS.
 
 - **Última revisión:** octubre de 2026, sobre el código del repositorio y el ERS.
 - **Cómo leer la columna «Verificación»:** *Verificado* = lo comprobé leyendo el código o el esquema. *Por validar* = es una suposición o una idea que el equipo debe confirmar.
@@ -10,25 +10,25 @@ Documento para que el equipo **verifique y decida**. **No contiene código ni ca
 
 ## 1. Lo que pidió el equipo
 
-### 1.1 Mesas: administración por el gerente (HECHO, con un detalle pendiente)
+### 1.1 Mesas: administración por el gerente y catálogo de secciones (HECHO)
 
 Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la pantalla **Mesas** (`/gerente/mesas`) y la API `/api/catalogo/mesas`.
 
 | Código | Requerimiento | Estado |
 | --- | --- | --- |
-| RF-MES-002 | **Registrar mesa**: número, cantidad de personas, sección (opcional) y disponibilidad | Hecho: `POST /api/catalogo/mesas`; botón «Nueva mesa» |
+| RF-MES-002 | **Registrar mesa**: número, capacidad, sección obligatoria y disponibilidad | Hecho: `POST /api/catalogo/mesas`; botón «Nueva mesa» |
 | RF-MES-003 | **Actualizar mesa** (número, cantidad de personas, sección) | Hecho: `PATCH /api/catalogo/mesas/:id`; botón «Editar» |
 | RF-MES-004 | **Marcar como disponible o no disponible** (no se borra) | Hecho: una mesa no disponible no aparece para la hostess ni para el mesero y no se puede sentar, reservar ni cambiar de estado (`409 mesa_no_disponible`) |
 | RF-MES-005 | **Consultar mesas** como gerente, incluidas las no disponibles | Hecho: `GET /api/catalogo/mesas`, con filtros por disponibilidad, sección y búsqueda |
-| RF-MES-006 | **Sección de la mesa** | Hecho: se guarda (`mesa.zona`), se edita y se filtra en la pantalla del gerente, y se muestra en el Salón y el Panel (RF-MES-007) |
-| RF-MES-007 *(propuesto)* | Mostrar o agrupar por sección en el Salón de la hostess y en el Panel del mesero | Hecho (2026-10-21): grupos por sección, filtro «Sección» en la URL (`?seccion=`) y la sección en la tarjeta y la hoja de acciones. Ver `docs/pantallas-mesero.md` |
+| RF-MES-006 | **Administrar secciones** | Hecho: crear, renombrar, inhabilitar/habilitar y borrar desde Gerente → Mesas → Secciones; `mesa.zona` referencia una sección activa |
+| RF-MES-007 *(propuesto)* | Mostrar o agrupar por sección en el Salón de la hostess y en el Panel del mesero | Implementado (2026-10-21): grupos por sección, filtro «Sección» en la URL (`?seccion=`) y la sección en la tarjeta y la hoja de acciones. Ver `docs/pantallas-mesero.md` |
 
 **Decisiones que se tomaron** (cámbienlas si no les parecen):
 
 | Id | Decisión |
 | --- | --- |
-| D-1 | La sección es **texto libre con sugerencias** de las ya existentes (columna `mesa.zona`, hasta 40 caracteres). No hay catálogo de secciones; si se quiere uno, se migra después. |
-| D-2 | Las secciones las define el gerente al escribirlas; no hay una lista fija. |
+| D-1 | Las secciones tienen un catálogo administrable en la tabla `seccion`; `mesa.zona` debe corresponder a una sección activa. |
+| D-2 | Gerencia puede crear, renombrar, inhabilitar/habilitar y borrar secciones. Una sección solo se borra cuando no tiene mesas asociadas; renombrar actualiza las mesas. |
 | D-3 | **No se puede marcar como no disponible** una mesa ocupada, reservada, con cuenta abierta o con reservaciones vigentes: primero hay que liberarla o cancelar esas reservaciones. |
 | D-4 | El número de mesa sigue siendo **único** y no se reutiliza, aunque la mesa esté no disponible. |
 | D-5 | Cambiar la capacidad **no revisa** las reservaciones ya hechas. |
@@ -37,10 +37,10 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 
 **Lo que aún falta alrededor de esto:**
 
-- ~~Mostrar o agrupar por sección en el Salón y el Panel (RF-MES-007).~~ Hecho; falta probarlo contra MySQL con secciones reales.
+- ~~Mostrar o agrupar por sección en el Salón y el Panel (RF-MES-007).~~ Implementado; la validación automatizada y el build están cubiertos, falta la prueba operativa contra una base compartida del restaurante.
 - Una mesa con cuenta activa sigue sin poder desactivarse; tras el cobro se cierra la cuenta y se libera la mesa (ver D-3 y P-01).
 - No se registra quién creó, editó o desactivó una mesa (ver la bitácora, RF-AUD-002).
-- Las bases de datos que ya existían necesitan correr `database/migrations/005_mesas_zona_activa.sql`.
+- Las bases existentes deben aplicar, en orden, las migraciones que les falten; los cambios recientes de catálogo, secciones y reservaciones están en 007–010. Ver `docs/actualizar-base-datos.md`.
 
 ### 1.2 Auditoría: quién cambia una contraseña
 
@@ -81,7 +81,7 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 | P-02 | **No se guarda quién canceló un pedido** | Solo se guarda el motivo (`id_motivo`), no el usuario ni la fecha de cancelación. Código propuesto: RF-PED-006. Relacionado con RNF-026 y RNF-027. | Verificado |
 | P-03 | **Seguridad del ERS sin cubrir** | RNF-009 (bloqueo tras 5 intentos), RNF-011 (expiración por inactividad: hoy el token dura 8 horas fijas), RNF-012 (invalidar la sesión al salir), RNF-017 (registro de accesos no autorizados). | Verificado |
 | P-04 | **Sin protecciones básicas de la API** | El backend no usa límite de peticiones (contra fuerza bruta) ni cabeceras de seguridad. No hay HTTPS configurado en el proyecto. | Verificado en `package.json`; el HTTPS es por validar |
-| P-05 | **Las pruebas del backend son mínimas** | `backend/tests/` cubre funciones puras, mocks y validación de importes (31 pruebas), pero no las rutas ni las reglas que requieren base de datos. El frontend tiene 22 archivos de pruebas. | Verificado |
+| P-05 | **Las pruebas del backend son mínimas** | `backend/tests/` cubre dominio, mocks, importes y el cliente de correo (34 pruebas), pero no las rutas ni las reglas que requieren base de datos. El frontend sí tiene pruebas unitarias y de rutas, pero falta una prueba integral contra MySQL. | Verificado |
 | P-06 | **Pantallas pendientes** | Caja ya está disponible en `/cajero/caja`; facturación fiscal aún no tiene proveedor, API ni pantalla. | Parcial |
 | P-07 | **Falta `PATCH /api/lista-espera/:id`** | Quitar o editar un grupo de la lista de espera. | Verificado |
 
@@ -89,7 +89,7 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 
 | Regla del ERS | Qué pasa hoy | Verificación |
 | --- | --- | --- |
-| 1 y 2: tiempo de tolerancia para clientes con reserva; liberar o cancelar si no llegan | **No está implementada**. Ninguna parte del código maneja una tolerancia. | Verificado |
+| 1 y 2: tiempo de tolerancia para clientes con reserva; liberar o cancelar si no llegan | **Implementada**: Gerencia configura 5–180 minutos (15 por defecto); el backend marca `vencida`, libera la mesa y encola un aviso por correo. Requiere migración 010 y configuración de Resend para entregar el correo. | Implementado; la configuración y las pruebas del proveedor están documentadas |
 | 5: cada reserva se asocia a una mesa | La mesa es **opcional** (`id_mesa` puede ser nulo) y se asigna al sentar. Es una decisión de diseño por confirmar. | Verificado |
 | 6: no dos reservas en la misma mesa y horario | Se evita de forma **indirecta** (para reservar, la mesa debe estar libre) y **solo para reservaciones de hoy**. No hay validación por franja horaria. | Verificado |
 | 8 y 9: asignar mesas según el número de personas, con capacidad máxima | El frontend **solo avisa** («Puedes continuar si las acomodas») y el servidor acepta cualquier número de personas sin comparar con la capacidad. Puede ser intencional; hay que confirmarlo. | Verificado |
@@ -115,7 +115,7 @@ Por validar: cuánto tiempo se conserva la bitácora y quién puede consultarla 
 
 | Id | Hallazgo | Verificación |
 | --- | --- | --- |
-| P-08 | `reservacion.estado` y `lista_espera.estado` son texto libre, **sin `CHECK` ni catálogo** (ya hay una nota `[PENDIENTE-BD]` en `seed_demo.sql`). | Verificado |
+| P-08 | `reservacion.estado` y `lista_espera.estado` son texto libre, **sin `CHECK` ni catálogo**. Los valores usados por la aplicación ya están documentados; `vencida` se asigna por el proceso de reservaciones. | Verificado |
 | P-09 | El estado de pedido `Pagado` existe pero **nada lo usa**. | Verificado |
 | P-10 | Las tablas fiscales (`datos_fiscales`, `factura`) existen pero **ninguna ruta las usa**. Las tablas de venta, pago y corte ya están conectadas a la API de caja. | Parcial |
 | P-11 | `GET /api/pedidos` devuelve **todos** los pedidos visibles sin paginación; con el tiempo el historial crecerá. | Verificado |
@@ -148,8 +148,8 @@ Son sugerencias mías, **no requisitos**. Solo valen si el restaurante las neces
 
 ## 4. Orden sugerido de trabajo (para discutir)
 
-1. Confirmar las decisiones D-1 a D-5 de las mesas y elegir la opción de auditoría (A, B o C).
-2. Bitácora (RF-AUD-001 y 002) y mostrar la sección de la mesa en el Salón y el Panel (RF-MES-007).
+1. Confirmar las decisiones D-3 a D-5 de las mesas y elegir la opción de auditoría (A, B o C); D-1 y D-2 ya se resolvieron con el catálogo de secciones.
+2. Bitácora (RF-AUD-001 y 002) y prueba operativa de secciones/mesas en el entorno compartido (RF-MES-007).
 3. Cambio de contraseña propio (RF-USR-008) y seguridad del ERS (P-03 y P-04).
 4. Facturación fiscal (RF-VEN-002), historial de ventas (RF-VEN-003) e informes (RF-VEN-004).
 5. Pruebas de rutas del backend contra una base de datos (P-05).

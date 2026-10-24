@@ -39,6 +39,7 @@ function alTocar() {
     @click="alTocar"
   >
     <span class="producto__nombre">{{ producto.nombre }}</span>
+    <span v-if="producto.presentacion" class="producto__presentacion">{{ producto.presentacion }}</span>
     <span class="producto__precio numero">{{ formatearMoneda(producto.precio) }}</span>
 
     <span v-if="hayEtiquetas" class="producto__etiquetas">
@@ -94,6 +95,11 @@ function alTocar() {
 .producto__nombre {
   font-weight: 700;
   line-height: 1.25;
+}
+
+.producto__presentacion {
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
 }
 
 .producto__precio {

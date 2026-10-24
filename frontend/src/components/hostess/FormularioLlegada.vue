@@ -138,7 +138,7 @@ async function confirmar() {
         <span class="opcion__texto">
           <strong>Mesa {{ o.mesa.numero }} · para {{ o.mesa.capacidad }}</strong>
           <span class="opcion__detalle">
-            {{ o.mesa.estado === 'reservada' ? 'Reservada para esta reservación' : 'Libre' }}{{ o.alcanza ? '' : ' · no alcanza para el grupo' }}
+            {{ o.mesa.zona }} · {{ o.mesa.estado === 'reservada' ? 'Reservada para esta reservación' : 'Libre' }}{{ o.alcanza ? '' : ' · no alcanza para el grupo' }}{{ o.mesa.plantaBaja ? ' · planta baja' : '' }}{{ o.mesa.espacioCarriola ? ' · carriola' : '' }}{{ o.mesa.sinEscaleras ? ' · sin escaleras' : '' }}
           </span>
         </span>
       </label>

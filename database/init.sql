@@ -46,15 +46,25 @@ CREATE TABLE cliente (
   correo VARCHAR(120) NULL
 ) ENGINE=InnoDB;
 
+CREATE TABLE seccion (
+  nombre VARCHAR(40) PRIMARY KEY,
+  activa BOOLEAN NOT NULL DEFAULT TRUE
+) ENGINE=InnoDB;
+
+INSERT INTO seccion (nombre) VALUES ('General'), ('Salón'), ('Terraza'), ('Barra');
+
 CREATE TABLE mesa (
   id_mesa INT AUTO_INCREMENT PRIMARY KEY,
   numero INT NOT NULL UNIQUE,
   capacidad INT NOT NULL CHECK (capacidad > 0),
-  zona VARCHAR(40) NULL,
+  zona VARCHAR(40) NOT NULL DEFAULT 'General',
+  planta_baja BOOLEAN NOT NULL DEFAULT FALSE,
+  espacio_carriola BOOLEAN NOT NULL DEFAULT FALSE,
+  sin_escaleras BOOLEAN NOT NULL DEFAULT FALSE,
   activa BOOLEAN NOT NULL DEFAULT TRUE,
   estado VARCHAR(20) NOT NULL DEFAULT 'libre' CHECK (estado IN ('libre', 'ocupada', 'reservada'))
 ) ENGINE=InnoDB;
--- zona: sección del salón (texto libre; la hostess y el mesero no la necesitan para operar).
+-- zona: sección existente; una sección inhabilitada oculta sus mesas a hostess y mesero.
 -- activa: FALSE = mesa no disponible; no aparece en el Salón ni en el Panel de mesas. No se borran (tienen cuentas ligadas).
 
 CREATE TABLE categoria_menu (
@@ -66,11 +76,13 @@ CREATE TABLE producto (
   id_producto INT AUTO_INCREMENT PRIMARY KEY,
   id_categoria INT NOT NULL,
   nombre VARCHAR(100) NOT NULL,
-  descripcion VARCHAR(255) NULL,
+  presentacion VARCHAR(100) NOT NULL DEFAULT '',
+  descripcion VARCHAR(255) NOT NULL,
   precio DECIMAL(10,2) NOT NULL CHECK (precio >= 0),
   disponible BOOLEAN NOT NULL DEFAULT TRUE,
   -- FALSE = se prepara al momento: no tiene existencia que controlar (ni se limita ni se descuenta).
   controla_existencia BOOLEAN NOT NULL DEFAULT TRUE,
+  INDEX idx_producto_variante (id_categoria, nombre, presentacion),
   CONSTRAINT fk_producto_id_categoria FOREIGN KEY (id_categoria) REFERENCES categoria_menu (id_categoria) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -92,6 +104,30 @@ CREATE TABLE reservacion (
   llegada_en DATETIME NULL,
   CONSTRAINT fk_reservacion_id_cliente FOREIGN KEY (id_cliente) REFERENCES cliente (id_cliente) ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT fk_reservacion_id_mesa FOREIGN KEY (id_mesa) REFERENCES mesa (id_mesa) ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE configuracion_reservacion (
+  id INT PRIMARY KEY CHECK (id = 1),
+  tolerancia_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 15 CHECK (tolerancia_minutos BETWEEN 5 AND 180),
+  recordatorio_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 5 CHECK (recordatorio_minutos BETWEEN 1 AND 30),
+  actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+INSERT INTO configuracion_reservacion (id, tolerancia_minutos, recordatorio_minutos) VALUES (1, 15, 5);
+
+CREATE TABLE notificacion_reservacion (
+  id_notificacion INT AUTO_INCREMENT PRIMARY KEY,
+  id_reservacion INT NOT NULL,
+  tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('recordatorio', 'vencida')),
+  destinatario VARCHAR(120) NOT NULL,
+  estado VARCHAR(20) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'enviada')),
+  intentos SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  ultimo_error VARCHAR(500) NULL,
+  creada_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  enviada_en DATETIME NULL,
+  UNIQUE KEY uq_notificacion_reservacion_tipo (id_reservacion, tipo),
+  INDEX idx_notificacion_pendiente (estado, creada_en),
+  CONSTRAINT fk_notificacion_id_reservacion FOREIGN KEY (id_reservacion) REFERENCES reservacion (id_reservacion) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 CREATE TABLE lista_espera (
@@ -244,7 +280,8 @@ select * from metodo_pago;
 -- =====================================================================
 USE SIGR;
 
-INSERT INTO mesa (numero, capacidad) VALUES (1,2),(2,2),(3,4),(4,4),(5,6),(6,8);
+INSERT INTO mesa (numero, capacidad, zona) VALUES
+  (1,2,'Salón'),(2,2,'Salón'),(3,4,'Salón'),(4,4,'Salón'),(5,6,'Salón'),(6,8,'Salón');
 
 INSERT INTO categoria_menu (nombre) VALUES ('Entradas'),('Platos fuertes'),('Postres'),('Bebidas');
 
@@ -252,13 +289,13 @@ INSERT INTO categoria_menu (nombre) VALUES ('Entradas'),('Platos fuertes'),('Pos
 -- TRUE: viene ya hecho o embotellado (postre, refresco, cerveza) y su existencia sí se controla.
 INSERT INTO producto (id_categoria, nombre, descripcion, precio, controla_existencia) VALUES
 (1, 'Guacamole', 'Con totopos', 85.00, FALSE),
-(1, 'Sopa de tortilla', NULL, 70.00, FALSE),
+(1, 'Sopa de tortilla', 'Detalle pendiente de completar', 70.00, FALSE),
 (2, 'Tacos de arrachera', 'Orden de 4', 140.00, FALSE),
 (2, 'Enchiladas verdes', 'Con pollo', 120.00, FALSE),
-(3, 'Flan', NULL, 55.00, TRUE),
+(3, 'Flan', 'Detalle pendiente de completar', 55.00, TRUE),
 (4, 'Agua de horchata', '500 ml', 35.00, FALSE),
-(4, 'Refresco', NULL, 30.00, TRUE),
-(4, 'Cerveza', NULL, 50.00, TRUE);
+(4, 'Refresco', 'Detalle pendiente de completar', 30.00, TRUE),
+(4, 'Cerveza', 'Detalle pendiente de completar', 50.00, TRUE);
 
 INSERT INTO disponibilidadProducto (id_producto, existencia, stock_minimo)
 SELECT id_producto, 50, 5 FROM producto;

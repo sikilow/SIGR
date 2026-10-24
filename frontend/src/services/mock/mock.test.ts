@@ -236,7 +236,7 @@ describe('mock: sección de las mesas del panel (RF-MES-007)', () => {
     expect(lista.find((m) => m.numero === 1)?.zona).toBe('Salón')
     expect(lista.find((m) => m.numero === 9)?.zona).toBe('Terraza')
     expect(lista.find((m) => m.numero === 15)?.zona).toBe('Barra')
-    expect(lista.find((m) => m.numero === 18)?.zona).toBeNull()
+    expect(lista.find((m) => m.numero === 18)?.zona).toBe('General')
     expect(lista.every((m) => !('activa' in m))).toBe(true)
   })
 })

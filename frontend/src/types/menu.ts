@@ -8,6 +8,8 @@ export interface Producto {
   /** producto.id_categoria */
   idCategoria: number
   nombre: string
+  /** Presentación o variante comercial (p. ej. lata de 355 ml); vacía si no aplica. */
+  presentacion?: string
   descripcion: string
   /** producto.precio (DECIMAL(10,2), mayor o igual que 0), en pesos mexicanos (MXN). */
   precio: number

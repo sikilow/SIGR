@@ -8,6 +8,7 @@
 import type {
   CambioMesa,
   CambioProducto,
+  ConfiguracionReservacion,
   CambioUsuario,
   CategoriaAdmin,
   CategoriaMenu,
@@ -25,6 +26,7 @@ import type {
   Pedido,
   Producto,
   ProductoAdmin,
+  SeccionAdmin,
   TipoPago,
   Usuario,
   UsuarioAdmin,
@@ -70,6 +72,9 @@ export interface MesaDto {
   estado: string
   /** mesa.zona: «sección» del salón (hasta 40 caracteres); `null` si no tiene. Opcional por tolerancia. */
   zona?: string | null
+  planta_baja?: Booleano
+  espacio_carriola?: Booleano
+  sin_escaleras?: Booleano
   // --- CALCULADOS por la API (no son columnas de `mesa`) ---
   estado_cuenta: string | null
   pedidos_activos: Numerico | null
@@ -83,6 +88,7 @@ export interface ProductoDto {
   id_producto: Numerico
   id_categoria: Numerico
   nombre: string
+  presentacion?: string | null
   descripcion: string | null
   precio: Numerico
   disponible: Booleano
@@ -175,6 +181,9 @@ export function aMesa(dto: MesaDto): Mesa {
     capacidad: aNumero(dto.capacidad, 'capacidad'),
     estado: aEstadoMesa(dto.estado),
     zona: aZona(dto.zona),
+    plantaBaja: dto.planta_baja === undefined ? false : aBooleano(dto.planta_baja, 'planta_baja'),
+    espacioCarriola: dto.espacio_carriola === undefined ? false : aBooleano(dto.espacio_carriola, 'espacio_carriola'),
+    sinEscaleras: dto.sin_escaleras === undefined ? false : aBooleano(dto.sin_escaleras, 'sin_escaleras'),
     estadoCuenta: estadoCuenta === 'cerrada' ? null : estadoCuenta,
     pedidosActivos: aNumeroONulo(dto.pedidos_activos, 'pedidos_activos') ?? 0,
     totalCuenta: aNumeroONulo(dto.total_cuenta, 'total_cuenta') ?? 0,
@@ -188,6 +197,7 @@ export function aProducto(dto: ProductoDto): Producto {
     idProducto: aNumero(dto.id_producto, 'id_producto'),
     idCategoria: aNumero(dto.id_categoria, 'id_categoria'),
     nombre: dto.nombre,
+    ...(dto.presentacion ? { presentacion: dto.presentacion } : {}),
     descripcion: aTexto(dto.descripcion),
     precio: aNumero(dto.precio, 'precio'),
     disponible: aBooleano(dto.disponible, 'disponible'),
@@ -312,12 +322,33 @@ export interface CategoriaAdminDto {
   total_productos: Numerico
 }
 
+export interface SeccionAdminDto {
+  nombre: string
+  activa: Booleano
+  total_mesas: Numerico
+}
+
+export interface ConfiguracionReservacionDto {
+  tolerancia_minutos: Numerico
+  recordatorio_minutos: Numerico
+}
+
+export function aConfiguracionReservacion(dto: ConfiguracionReservacionDto): ConfiguracionReservacion {
+  return {
+    toleranciaMinutos: aNumero(dto.tolerancia_minutos, 'tolerancia_minutos'),
+    recordatorioMinutos: aNumero(dto.recordatorio_minutos, 'recordatorio_minutos'),
+  }
+}
+
 export interface MesaAdminDto {
   id_mesa: Numerico
   numero: Numerico
   capacidad: Numerico
-  /** mesa.zona: «sección» del salón; `null` si no tiene. */
+  /** mesa.zona: obligatoria después de 009_secciones_mesas.sql; se tolera null para detectar API desactualizada. */
   zona: string | null
+  planta_baja?: Booleano
+  espacio_carriola?: Booleano
+  sin_escaleras?: Booleano
   /** mesa.activa (BOOLEAN; puede llegar como 0/1). */
   activa: unknown
   estado: string
@@ -329,6 +360,7 @@ export interface ProductoAdminDto {
   /** CALCULADO por la API (JOIN con categoria_menu.nombre). */
   categoria: string
   nombre: string
+  presentacion?: string | null
   descripcion: string | null
   precio: Numerico
   /** producto.disponible: el gerente lo tiene activo en el menú. */
@@ -366,12 +398,25 @@ export function aCategoriaAdmin(dto: CategoriaAdminDto): CategoriaAdmin {
   }
 }
 
+export function aSeccionAdmin(dto: SeccionAdminDto): SeccionAdmin {
+  return {
+    nombre: dto.nombre,
+    activa: aBooleano(dto.activa, 'activa'),
+    totalMesas: aNumero(dto.total_mesas, 'total_mesas'),
+  }
+}
+
 export function aMesaAdmin(dto: MesaAdminDto): MesaAdmin {
+  const zona = aZona(dto.zona)
+  if (zona === null) throw new ErrorServicio('desconocido', 'La respuesta de la API contiene una mesa sin sección.')
   return {
     idMesa: aNumero(dto.id_mesa, 'id_mesa'),
     numero: aNumero(dto.numero, 'numero'),
     capacidad: aNumero(dto.capacidad, 'capacidad'),
-    zona: aZona(dto.zona),
+    zona,
+    plantaBaja: dto.planta_baja === undefined ? false : aBooleano(dto.planta_baja, 'planta_baja'),
+    espacioCarriola: dto.espacio_carriola === undefined ? false : aBooleano(dto.espacio_carriola, 'espacio_carriola'),
+    sinEscaleras: dto.sin_escaleras === undefined ? false : aBooleano(dto.sin_escaleras, 'sin_escaleras'),
     activa: aBooleano(dto.activa, 'activa'),
     estado: aEstadoMesa(dto.estado),
   }
@@ -383,6 +428,7 @@ export function aProductoAdmin(dto: ProductoAdminDto): ProductoAdmin {
     idCategoria: aNumero(dto.id_categoria, 'id_categoria'),
     categoria: dto.categoria,
     nombre: dto.nombre,
+    presentacion: dto.presentacion ?? '',
     descripcion: aTexto(dto.descripcion),
     precio: aNumero(dto.precio, 'precio'),
     activo: aBooleano(dto.activo, 'activo'),
@@ -397,17 +443,23 @@ export function deNuevaMesa(m: NuevaMesa) {
   return {
     numero: m.numero,
     capacidad: m.capacidad,
-    ...(m.zona.trim() ? { zona: m.zona.trim() } : {}),
+    zona: m.zona.trim(),
+    planta_baja: m.plantaBaja ?? false,
+    espacio_carriola: m.espacioCarriola ?? false,
+    sin_escaleras: m.sinEscaleras ?? false,
     activa: m.activa,
   }
 }
 
-/** Solo viajan los campos que cambiaron (PATCH parcial). Una sección vacía viaja como `''` y el backend la guarda como `NULL`. */
+/** Solo viajan los campos que cambiaron (PATCH parcial). */
 export function deCambioMesa(c: CambioMesa) {
   return {
     ...(c.numero !== undefined ? { numero: c.numero } : {}),
     ...(c.capacidad !== undefined ? { capacidad: c.capacidad } : {}),
     ...(c.zona !== undefined ? { zona: c.zona.trim() } : {}),
+    ...(c.plantaBaja !== undefined ? { planta_baja: c.plantaBaja } : {}),
+    ...(c.espacioCarriola !== undefined ? { espacio_carriola: c.espacioCarriola } : {}),
+    ...(c.sinEscaleras !== undefined ? { sin_escaleras: c.sinEscaleras } : {}),
     ...(c.activa !== undefined ? { activa: c.activa } : {}),
   }
 }
@@ -439,6 +491,7 @@ export function deNuevoProducto(p: NuevoProducto) {
   return {
     id_categoria: p.idCategoria,
     nombre: p.nombre.trim(),
+    presentacion: p.presentacion.trim(),
     descripcion: p.descripcion.trim(),
     precio: p.precio,
     activo: p.activo,
@@ -452,6 +505,7 @@ export function deCambioProducto(c: CambioProducto) {
   return {
     ...(c.idCategoria !== undefined ? { id_categoria: c.idCategoria } : {}),
     ...(c.nombre !== undefined ? { nombre: c.nombre.trim() } : {}),
+    ...(c.presentacion !== undefined ? { presentacion: c.presentacion.trim() } : {}),
     ...(c.descripcion !== undefined ? { descripcion: c.descripcion.trim() } : {}),
     ...(c.precio !== undefined ? { precio: c.precio } : {}),
     ...(c.activo !== undefined ? { activo: c.activo } : {}),

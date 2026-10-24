@@ -40,12 +40,24 @@ export interface CategoriaAdmin {
   totalProductos: number
 }
 
+export interface SeccionAdmin {
+  nombre: string
+  activa: boolean
+  totalMesas: number
+}
+
+export interface ConfiguracionReservacion {
+  toleranciaMinutos: number
+  recordatorioMinutos: number
+}
+
 export interface ProductoAdmin {
   /** producto.id_producto */
   idProducto: number
   idCategoria: number
   categoria: string
   nombre: string
+  presentacion: string
   descripcion: string
   /** Precio en pesos mexicanos (MXN). */
   precio: number
@@ -62,6 +74,7 @@ export interface ProductoAdmin {
 export interface NuevoProducto {
   idCategoria: number
   nombre: string
+  presentacion: string
   descripcion: string
   precio: number
   activo: boolean
@@ -80,8 +93,11 @@ export interface MesaAdmin {
   numero: number
   /** mesa.capacidad: cantidad de personas (mayor que 0). */
   capacidad: number
-  /** mesa.zona: «sección» del salón (texto libre). `null` si no tiene. */
-  zona: string | null
+  /** mesa.zona: nombre de una sección registrada; es obligatoria en la base de datos. */
+  zona: string
+  plantaBaja: boolean
+  espacioCarriola: boolean
+  sinEscaleras: boolean
   /** mesa.activa: `false` = no disponible; desaparece del Salón y del Panel de mesas y no se puede sentar ni reservar. */
   activa: boolean
   /** mesa.estado: ocupación actual (libre, ocupada o reservada). */
@@ -91,8 +107,11 @@ export interface MesaAdmin {
 export interface NuevaMesa {
   numero: number
   capacidad: number
-  /** Sección del salón; vacía = sin sección. */
+  /** Sección activa del salón. */
   zona: string
+  plantaBaja?: boolean
+  espacioCarriola?: boolean
+  sinEscaleras?: boolean
   activa: boolean
 }
 

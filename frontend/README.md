@@ -3,10 +3,11 @@
 Interfaz del Sistema Integral de Gestión de Restaurante (restaurante "La Madalena"), TecNM Tepic.
 Vue 3 + TypeScript + Vite, con Vue Router y Pinia. CSS propio, sin librerías de UI.
 
-Existen el rol **mesero** (Panel de mesas, Pedido de mesa, Cuenta de mesa y Mis pedidos) y el rol
-**hostess** (Salón, Reservaciones y Lista de espera; sus rutas de API están solo propuestas, así que hoy
-funciona en modo mock), el módulo del **gerente** (Usuarios y Productos), sobre una capa de servicios con mock intercambiable por la API real. Los tipos y el contrato de la
-API son **PROVISIONALES** hasta validarlos con el equipo de API.
+Existen los roles **mesero** (Panel de mesas, Pedido de mesa, Cuenta de mesa y Mis pedidos),
+**hostess** (Salón, Reservaciones y Lista de espera), **gerente** (Usuarios, Productos, Mesas, Reservas y Pedidos),
+**cocinero** (Cocina) y **cajero** (Caja). Las rutas de hostess y gerente están conectadas a la API real; para los
+detalles por endpoint consulta los contratos en `../docs/`. La aplicación mantiene una capa de servicios con mock
+intercambiable por la API real.
 
 ## Comandos
 
@@ -62,6 +63,9 @@ Copia `.env.example` a `.env.local`:
 
 Con `VITE_USE_MOCK=true`, usuarios de demo (contraseña `1234`): `mesero`, `gerente`, `cajero`.
 El gerente y el cajero sirven para probar que la guardia redirige a `/login` cuando el rol no coincide.
+
+La pantalla de configuración de Reservas para gerente es `/gerente/reservaciones`; la prueba
+`src/router/index.test.ts` verifica que pertenezca al rol correcto.
 
 ## Estructura
 

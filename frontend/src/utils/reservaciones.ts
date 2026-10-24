@@ -180,12 +180,28 @@ export interface OpcionMesa {
  * Mesas que se pueden ofrecer para una reservación: las LIBRES y la que la reservación ya tiene (aunque esté
  * `reservada`, es la suya). Primero las que alcanzan, de la más justa a la más grande; después las que no alcanzan.
  */
-export function mesasParaReservacion(mesas: MesaSalon[], personas: number, idMesaActual: number | null): OpcionMesa[] {
+export type PreferenciasMesa = Partial<Pick<MesaSalon, 'plantaBaja' | 'espacioCarriola' | 'sinEscaleras'>> & { zona?: string }
+
+export function mesasParaReservacion(
+  mesas: MesaSalon[],
+  personas: number,
+  idMesaActual: number | null,
+  preferencias: PreferenciasMesa = {},
+): OpcionMesa[] {
+  const caracteristicas = (['plantaBaja', 'espacioCarriola', 'sinEscaleras'] as const)
+    .filter((clave) => preferencias[clave])
   return mesas
     .filter((m) => m.estado === 'libre' || m.idMesa === idMesaActual)
     .map((mesa) => ({ mesa, alcanza: mesa.capacidad >= personas }))
     .sort((a, b) => {
       if (a.alcanza !== b.alcanza) return a.alcanza ? -1 : 1
+      const coincideZonaA = preferencias.zona && a.mesa.zona === preferencias.zona ? 1 : 0
+      const coincideZonaB = preferencias.zona && b.mesa.zona === preferencias.zona ? 1 : 0
+      if (coincideZonaA !== coincideZonaB) return coincideZonaB - coincideZonaA
+      const coincidencias = (opcion: OpcionMesa) =>
+        caracteristicas.reduce((total, clave) => total + Number(opcion.mesa[clave]), 0)
+      const diferenciaCaracteristicas = coincidencias(b) - coincidencias(a)
+      if (diferenciaCaracteristicas !== 0) return diferenciaCaracteristicas
       return a.mesa.capacidad - b.mesa.capacidad || a.mesa.numero - b.mesa.numero
     })
 }
@@ -252,9 +268,9 @@ export function validarCliente(datos: DatosCliente): ErroresCliente {
 
 // ---------- Búsqueda y filtros ----------
 
-export type FiltroReservaciones = 'todas' | 'pendiente' | 'confirmada' | 'llego' | 'cancelada'
+export type FiltroReservaciones = 'todas' | 'pendiente' | 'confirmada' | 'llego' | 'cancelada' | 'vencida'
 
-export const FILTROS_RESERVACIONES: readonly FiltroReservaciones[] = ['todas', 'pendiente', 'confirmada', 'llego', 'cancelada']
+export const FILTROS_RESERVACIONES: readonly FiltroReservaciones[] = ['todas', 'pendiente', 'confirmada', 'llego', 'cancelada', 'vencida']
 
 /** Minúsculas y sin acentos, para buscar «gonzalez» y encontrar «González». */
 export function normalizarBusqueda(texto: string): string {

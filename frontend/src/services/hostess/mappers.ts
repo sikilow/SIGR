@@ -42,6 +42,9 @@ export interface MesaSalonDto {
   estado: string
   /** mesa.zona («sección»). GET /mesas la envía; la respuesta de asignar mesa no: ausente = sin sección. */
   zona?: string | null
+  planta_baja?: boolean | number | string
+  espacio_carriola?: boolean | number | string
+  sin_escaleras?: boolean | number | string
 }
 
 export interface ReservacionDto {
@@ -58,6 +61,7 @@ export interface ReservacionDto {
   cliente_nombre: string
   /** cliente.telefono (JOIN). */
   cliente_telefono: string | null
+  cliente_correo?: string | null
   /** mesa.numero (JOIN); NULL si la reservación no tiene mesa. */
   mesa_numero: Numerico | null
 }
@@ -104,6 +108,9 @@ export function aMesaSalon(dto: MesaSalonDto): MesaSalon {
     capacidad: aNumero(dto.capacidad, 'capacidad'),
     estado: aEstadoMesa(dto.estado),
     zona: aZona(dto.zona),
+    plantaBaja: dto.planta_baja === true || dto.planta_baja === 1 || dto.planta_baja === '1',
+    espacioCarriola: dto.espacio_carriola === true || dto.espacio_carriola === 1 || dto.espacio_carriola === '1',
+    sinEscaleras: dto.sin_escaleras === true || dto.sin_escaleras === 1 || dto.sin_escaleras === '1',
   }
 }
 
@@ -118,6 +125,7 @@ export function aReservacion(dto: ReservacionDto): Reservacion {
     llegadaEn: parseFechaMySQLONula(dto.llegada_en, 'llegada_en'),
     clienteNombre: aTexto(dto.cliente_nombre),
     clienteTelefono: aTelefono(dto.cliente_telefono),
+    clienteCorreo: aTelefono(dto.cliente_correo),
     mesaNumero: aNumeroONulo(dto.mesa_numero, 'mesa_numero'),
   }
 }

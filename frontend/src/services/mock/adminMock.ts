@@ -1,13 +1,14 @@
 // Administración simulada (usuarios, categorías, productos, inventario) para VITE_USE_MOCK=true.
 // Los cambios se hacen sobre la misma "base de datos" en memoria que usa el mesero, así que un
 // producto nuevo o un precio editado se ven en el menú del mesero. Se reinicia al recargar la página.
-import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CategoriaAdmin, type MesaAdmin, type ProductoAdmin, type UsuarioAdmin } from '../../types'
+import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CategoriaAdmin, type MesaAdmin, type ProductoAdmin, type SeccionAdmin, type UsuarioAdmin } from '../../types'
 import { ErrorServicio } from '../errores'
 import type { CatalogoService, UsuariosService } from '../interfaces'
 import { baseDatos, type MesaGuardada } from './baseDatos'
 import { conRetraso } from './utiles'
 
 const duplicado = (campo: string) => new ErrorServicio('estado_invalido', `Ya existe otro usuario con ese ${campo}.`, 409)
+const claveProducto = (texto: string) => texto.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase()
 // Orden del catálogo `rol` (Gerente, Mesero, Cocinero, Cajero, Hostess): SUPOSICIÓN, no confirmada.
 const ROL_ID = { gerente: 1, mesero: 2, cocinero: 3, cajero: 4, hostess: 5 } as const
 const noExiste = (que: string) => new ErrorServicio('no_encontrado', `${que} no existe.`, 404)
@@ -147,6 +148,7 @@ function aProductoAdmin(id: number): ProductoAdmin {
         idCategoria: c.idCategoria,
         categoria: c.nombre,
         nombre: p.nombre,
+        presentacion: p.presentacion ?? '',
         descripcion: p.descripcion,
         precio: p.precio,
         activo,
@@ -188,25 +190,66 @@ function validarNombreCategoria(nombre: string, id?: number): void {
 }
 
 // ---------- Mesas ----------
-const aMesaAdmin = (m: MesaGuardada): MesaAdmin => ({
-  idMesa: m.idMesa,
-  numero: m.numero,
-  capacidad: m.capacidad,
-  zona: m.zona,
-  activa: m.activa,
-  estado: m.estado,
-})
+const aMesaAdmin = (m: MesaGuardada): MesaAdmin => {
+  const zona = m.zona?.trim()
+  if (!zona) throw new ErrorServicio('desconocido', `La mesa ${m.numero} no tiene una sección registrada.`)
+  return {
+    idMesa: m.idMesa,
+    numero: m.numero,
+    capacidad: m.capacidad,
+    zona,
+    plantaBaja: m.plantaBaja,
+    espacioCarriola: m.espacioCarriola,
+    sinEscaleras: m.sinEscaleras,
+    activa: m.activa,
+    estado: m.estado,
+  }
+}
+
+const claveSeccion = (nombre: string) => nombre.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase()
+
+function aSeccionAdmin(nombre: string): SeccionAdmin {
+  const seccion = baseDatos.secciones.find((s) => s.nombre === nombre)
+  if (!seccion) throw noExiste('La sección')
+  return {
+    nombre: seccion.nombre,
+    activa: seccion.activa,
+    totalMesas: baseDatos.mesas.filter((m) => m.zona === nombre).length,
+  }
+}
+
+function validarNombreSeccion(nombre: string, actual?: string): void {
+  const texto = nombre.trim()
+  if (!texto || texto.length > MESA_ZONA_MAX) {
+    throw new ErrorServicio('estado_invalido', `El nombre de la sección debe tener entre 1 y ${MESA_ZONA_MAX} caracteres.`, 422)
+  }
+  if (baseDatos.secciones.some((s) => s.nombre !== actual && claveSeccion(s.nombre) === claveSeccion(texto))) {
+    throw new ErrorServicio('estado_invalido', 'Ya existe una sección con ese nombre.', 409)
+  }
+}
+
+function exigirSeccionActiva(nombre: string): void {
+  const seccion = baseDatos.secciones.find((s) => s.nombre === nombre.trim())
+  if (!seccion || !seccion.activa) throw new ErrorServicio('estado_invalido', `La sección «${nombre}» no existe o está inhabilitada.`, 409)
+}
 
 /** Mismas reglas que valida el backend (`controllers/catalogo.ts`). */
-function validarDatosMesa(c: { numero?: number; capacidad?: number; zona?: string }): void {
+function validarDatosMesa(c: {
+  numero?: number
+  capacidad?: number
+  zona?: string
+  plantaBaja?: boolean
+  espacioCarriola?: boolean
+  sinEscaleras?: boolean
+}): void {
   if (c.numero !== undefined && (!Number.isInteger(c.numero) || c.numero < 1 || c.numero > MESA_NUMERO_MAX)) {
     throw new ErrorServicio('estado_invalido', `El número de mesa debe ser un entero de 1 a ${MESA_NUMERO_MAX}.`, 422)
   }
   if (c.capacidad !== undefined && (!Number.isInteger(c.capacidad) || c.capacidad < 1 || c.capacidad > MESA_CAPACIDAD_MAX)) {
     throw new ErrorServicio('estado_invalido', `La capacidad debe ser un entero de 1 a ${MESA_CAPACIDAD_MAX} personas.`, 422)
   }
-  if (c.zona !== undefined && c.zona.trim().length > MESA_ZONA_MAX) {
-    throw new ErrorServicio('estado_invalido', `La sección admite máximo ${MESA_ZONA_MAX} caracteres.`, 422)
+  if (c.zona !== undefined && (!c.zona.trim() || c.zona.trim().length > MESA_ZONA_MAX)) {
+    throw new ErrorServicio('estado_invalido', `La sección es obligatoria y admite máximo ${MESA_ZONA_MAX} caracteres.`, 422)
   }
 }
 
@@ -219,8 +262,86 @@ function exigirNumeroLibre(numero: number, exceptoId?: number): void {
 export function crearCatalogoMock(): CatalogoService {
   // Los productos agotados de la demo cuentan como "activos sin existencia" salvo que se indique otra cosa.
   return {
+    obtenerConfiguracionReservacion() {
+      return conRetraso(() => ({ ...baseDatos.configuracionReservacion }))
+    },
+
+    actualizarConfiguracionReservacion(cambio) {
+      return conRetraso(() => {
+        if (!Number.isInteger(cambio.toleranciaMinutos) || cambio.toleranciaMinutos < 5 || cambio.toleranciaMinutos > 180) {
+          throw new ErrorServicio('estado_invalido', 'La tolerancia debe estar entre 5 y 180 minutos.', 422)
+        }
+        if (!Number.isInteger(cambio.recordatorioMinutos) || cambio.recordatorioMinutos < 1 || cambio.recordatorioMinutos > 30) {
+          throw new ErrorServicio('estado_invalido', 'El recordatorio debe estar entre 1 y 30 minutos.', 422)
+        }
+        baseDatos.configuracionReservacion = { ...cambio }
+        return { ...baseDatos.configuracionReservacion }
+      })
+    },
+
     listarCategorias() {
       return conRetraso(() => baseDatos.categorias.map((c) => aCategoria(c.idCategoria)))
+    },
+
+    listarSecciones() {
+      return conRetraso(() => baseDatos.secciones
+        .map((s) => aSeccionAdmin(s.nombre))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')))
+    },
+
+    crearSeccion(nombre) {
+      return conRetraso(() => {
+        validarNombreSeccion(nombre)
+        const nueva = { nombre: nombre.trim(), activa: true }
+        baseDatos.secciones.push(nueva)
+        return aSeccionAdmin(nueva.nombre)
+      })
+    },
+
+    renombrarSeccion(nombre, nuevoNombre) {
+      return conRetraso(() => {
+        const seccion = baseDatos.secciones.find((s) => s.nombre === nombre)
+        if (!seccion) throw noExiste('La sección')
+        validarNombreSeccion(nuevoNombre, nombre)
+        const anterior = seccion.nombre
+        seccion.nombre = nuevoNombre.trim()
+        for (const mesa of baseDatos.mesas) {
+          if (mesa.zona === anterior) mesa.zona = seccion.nombre
+        }
+        return aSeccionAdmin(seccion.nombre)
+      })
+    },
+
+    actualizarSeccion(nombre, cambio) {
+      return conRetraso(() => {
+        const seccion = baseDatos.secciones.find((s) => s.nombre === nombre)
+        if (!seccion) throw noExiste('La sección')
+        if (!cambio.activa && seccion.activa) {
+          const ocupada = baseDatos.mesas.find((m) =>
+            m.zona === nombre &&
+            (m.estado !== 'libre' ||
+              baseDatos.cuentas.some((c) => c.idMesa === m.idMesa && c.estado !== 'cerrada') ||
+              baseDatos.reservaciones.some((r) => r.idMesa === m.idMesa && (r.estado === 'pendiente' || r.estado === 'confirmada'))),
+          )
+          if (ocupada) {
+            throw new ErrorServicio('estado_invalido', `No se puede inhabilitar «${nombre}» mientras la mesa ${ocupada.numero} esté ocupada, tenga una cuenta abierta o una reservación vigente.`, 409)
+          }
+        }
+        seccion.activa = cambio.activa
+        return aSeccionAdmin(nombre)
+      })
+    },
+
+    eliminarSeccion(nombre) {
+      return conRetraso(() => {
+        const seccion = baseDatos.secciones.find((s) => s.nombre === nombre)
+        if (!seccion) throw noExiste('La sección')
+        const totalMesas = baseDatos.mesas.filter((m) => m.zona === nombre).length
+        if (totalMesas > 0) {
+          throw new ErrorServicio('estado_invalido', `No se puede borrar «${nombre}» mientras tenga mesas asignadas.`, 409)
+        }
+        baseDatos.secciones.splice(baseDatos.secciones.indexOf(seccion), 1)
+      })
     },
 
     listarMesas() {
@@ -230,12 +351,16 @@ export function crearCatalogoMock(): CatalogoService {
     crearMesa(mesa) {
       return conRetraso(() => {
         validarDatosMesa(mesa)
+        exigirSeccionActiva(mesa.zona)
         exigirNumeroLibre(mesa.numero)
         const nueva: MesaGuardada = {
           idMesa: Math.max(0, ...baseDatos.mesas.map((m) => m.idMesa)) + 1,
           numero: mesa.numero,
           capacidad: mesa.capacidad,
-          zona: mesa.zona.trim() || null,
+          zona: mesa.zona.trim(),
+          plantaBaja: mesa.plantaBaja ?? false,
+          espacioCarriola: mesa.espacioCarriola ?? false,
+          sinEscaleras: mesa.sinEscaleras ?? false,
           activa: mesa.activa,
           estado: 'libre',
         }
@@ -250,6 +375,7 @@ export function crearCatalogoMock(): CatalogoService {
         if (!mesa) throw noExiste('La mesa')
         if (Object.keys(cambio).length === 0) throw new ErrorServicio('estado_invalido', 'No hay nada que cambiar.', 422)
         validarDatosMesa(cambio)
+        if (cambio.zona !== undefined) exigirSeccionActiva(cambio.zona)
 
         if (cambio.activa === false && mesa.activa) {
           if (mesa.estado !== 'libre') {
@@ -266,7 +392,10 @@ export function crearCatalogoMock(): CatalogoService {
 
         if (cambio.numero !== undefined) mesa.numero = cambio.numero
         if (cambio.capacidad !== undefined) mesa.capacidad = cambio.capacidad
-        if (cambio.zona !== undefined) mesa.zona = cambio.zona.trim() || null
+        if (cambio.zona !== undefined) mesa.zona = cambio.zona.trim()
+        if (cambio.plantaBaja !== undefined) mesa.plantaBaja = cambio.plantaBaja
+        if (cambio.espacioCarriola !== undefined) mesa.espacioCarriola = cambio.espacioCarriola
+        if (cambio.sinEscaleras !== undefined) mesa.sinEscaleras = cambio.sinEscaleras
         if (cambio.activa !== undefined) mesa.activa = cambio.activa
         return aMesaAdmin(mesa)
       })
@@ -310,8 +439,14 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const c = baseDatos.categorias.find((x) => x.idCategoria === n.idCategoria)
         if (!c) throw new ErrorServicio('estado_invalido', 'La categoría indicada no existe.', 422)
+        const nombre = claveProducto(n.nombre)
+        const presentacion = claveProducto(n.presentacion)
+        const existente = c.productos.find((p) => claveProducto(p.nombre) === nombre && claveProducto(p.presentacion ?? '') === presentacion)
+        if (existente) {
+          throw new ErrorServicio('estado_invalido', 'Ya existe un producto con esa categoría, nombre y presentación. Búscalo y edita sus datos o existencias.', 409)
+        }
         const id = Math.max(0, ...baseDatos.categorias.flatMap((k) => k.productos.map((p) => p.idProducto))) + 1
-        c.productos.push({ idProducto: id, idCategoria: c.idCategoria, nombre: n.nombre.trim(), descripcion: n.descripcion.trim(), precio: n.precio, disponible: n.activo && (!n.controlaExistencia || n.existencia > 0), ...(n.controlaExistencia ? { existencia: n.existencia } : {}) })
+        c.productos.push({ idProducto: id, idCategoria: c.idCategoria, nombre: n.nombre.trim(), presentacion: n.presentacion.trim(), descripcion: n.descripcion.trim(), precio: n.precio, disponible: n.activo && (!n.controlaExistencia || n.existencia > 0), ...(n.controlaExistencia ? { existencia: n.existencia } : {}) })
         activos.set(id, n.activo)
         inventario.set(id, { existencia: n.existencia, stockMinimo: n.stockMinimo, controla: n.controlaExistencia })
         return aProductoAdmin(id)
@@ -323,6 +458,15 @@ export function crearCatalogoMock(): CatalogoService {
         const actual = aProductoAdmin(id)
         const origen = baseDatos.categorias.find((k) => k.idCategoria === actual.idCategoria)!
         const p = origen.productos.find((x) => x.idProducto === id)!
+        const categoria = c.idCategoria ?? actual.idCategoria
+        const nombre = claveProducto(c.nombre ?? actual.nombre)
+        const presentacion = claveProducto(c.presentacion ?? actual.presentacion)
+        const existente = baseDatos.categorias
+          .find((k) => k.idCategoria === categoria)
+          ?.productos.find((otro) => otro.idProducto !== id && claveProducto(otro.nombre) === nombre && claveProducto(otro.presentacion ?? '') === presentacion)
+        if (existente) {
+          throw new ErrorServicio('estado_invalido', 'Ya existe otro producto con la misma categoría, nombre y presentación.', 409)
+        }
         if (c.idCategoria !== undefined && c.idCategoria !== actual.idCategoria) {
           const destino = baseDatos.categorias.find((k) => k.idCategoria === c.idCategoria)
           if (!destino) throw new ErrorServicio('estado_invalido', 'La categoría indicada no existe.', 422)
@@ -331,6 +475,7 @@ export function crearCatalogoMock(): CatalogoService {
           destino.productos.push(p)
         }
         if (c.nombre !== undefined) p.nombre = c.nombre.trim()
+        if (c.presentacion !== undefined) p.presentacion = c.presentacion.trim()
         if (c.descripcion !== undefined) p.descripcion = c.descripcion.trim()
         if (c.precio !== undefined) p.precio = c.precio
         const i = inv(id, actual.activo)

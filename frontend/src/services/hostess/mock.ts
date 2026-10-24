@@ -33,7 +33,16 @@ const siguienteId = (ids: number[]): number => Math.max(0, ...ids) + 1
 function aMesaSalon(idMesa: number): MesaSalon {
   const mesa = baseDatos.mesas.find((m) => m.idMesa === idMesa)
   if (!mesa) throw new ErrorServicio('no_encontrado', `La mesa ${idMesa} no existe.`, 404)
-  return { idMesa: mesa.idMesa, numero: mesa.numero, capacidad: mesa.capacidad, estado: mesa.estado, zona: mesa.zona }
+  return {
+    idMesa: mesa.idMesa,
+    numero: mesa.numero,
+    capacidad: mesa.capacidad,
+    estado: mesa.estado,
+    zona: mesa.zona,
+    plantaBaja: mesa.plantaBaja,
+    espacioCarriola: mesa.espacioCarriola,
+    sinEscaleras: mesa.sinEscaleras,
+  }
 }
 
 /** Agrega a la reservación los datos calculados (JOIN con cliente y mesa). */
@@ -44,6 +53,7 @@ function conCliente(r: ReservacionGuardada): Reservacion {
     ...r,
     clienteNombre: cliente?.nombre ?? '',
     clienteTelefono: cliente?.telefono ?? null,
+    clienteCorreo: cliente?.correo ?? null,
     mesaNumero: mesa?.numero ?? null,
   }
 }
@@ -70,11 +80,24 @@ function liberarMesaSiCorresponde(idMesa: number | null, exceptoId: number): voi
   if (mesa?.estado === 'reservada' && mesaSeLibera(idMesa, baseDatos.reservaciones, exceptoId)) mesa.estado = 'libre'
 }
 
+function vencerReservacionesSinLlegada(ahora = new Date()): void {
+  const toleranciaMs = baseDatos.configuracionReservacion.toleranciaMinutos * 60_000
+  for (const reservacion of baseDatos.reservaciones) {
+    if (!esVigente(reservacion.estado) || reservacion.fechaHora.getTime() + toleranciaMs > ahora.getTime()) continue
+    const mesaAnterior = reservacion.idMesa
+    reservacion.estado = 'vencida'
+    reservacion.idMesa = null
+    liberarMesaSiCorresponde(mesaAnterior, reservacion.idReservacion)
+  }
+}
+
 /** La mesa debe existir y estar libre para poder reservarla. */
 function mesaLibreParaReservar(idMesa: number): void {
   const mesa = baseDatos.mesas.find((m) => m.idMesa === idMesa)
   if (!mesa) throw new ErrorServicio('no_encontrado', `La mesa ${idMesa} no existe.`, 404)
-  if (!mesa.activa) throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesa.numero} no está disponible.`, 409)
+  if (!mesa.activa || !baseDatos.secciones.some((s) => s.nombre === mesa.zona && s.activa)) {
+    throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesa.numero} no está disponible.`, 409)
+  }
   if (mesa.estado !== 'libre') {
     throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesa.numero} ya no está libre.`, 409)
   }
@@ -94,7 +117,9 @@ function validarPersonasNuevas(personas: number): void {
 function asignar(idMesa: number, grupo: GrupoAsignacion): ResultadoAsignacion {
   const mesaGuardada = baseDatos.mesas.find((m) => m.idMesa === idMesa)
   if (!mesaGuardada) throw new ErrorServicio('no_encontrado', `La mesa ${idMesa} no existe.`, 404)
-  if (!mesaGuardada.activa) throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesaGuardada.numero} no está disponible.`, 409)
+  if (!mesaGuardada.activa || !baseDatos.secciones.some((s) => s.nombre === mesaGuardada.zona && s.activa)) {
+    throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesaGuardada.numero} no está disponible.`, 409)
+  }
   if (!mesaAsignable(aMesaSalon(idMesa))) {
     throw new ErrorServicio('mesa_no_disponible', `La mesa ${mesaGuardada.numero} ya está ocupada.`, 409)
   }
@@ -177,12 +202,15 @@ function editar(r: ReservacionGuardada, cambio: CambioReservacion): void {
 export function crearHostessMock(): HostessService {
   return {
     listarMesas() {
-      return conRetraso(() => baseDatos.mesas.filter((m) => m.activa).map((m) => aMesaSalon(m.idMesa)))
+      return conRetraso(() => baseDatos.mesas
+        .filter((m) => m.activa && baseDatos.secciones.some((s) => s.nombre === m.zona && s.activa))
+        .map((m) => aMesaSalon(m.idMesa)))
     },
 
     listarReservaciones(dia) {
       // Las reservaciones del día, de cualquier estado (la pantalla decide cuáles muestra).
       return conRetraso(() => {
+        vencerReservacionesSinLlegada()
         const buscado = dia ?? aDiaISO(new Date())
         return baseDatos.reservaciones
           .filter((r) => aDiaISO(r.fechaHora) === buscado)
@@ -273,11 +301,24 @@ export function crearHostessMock(): HostessService {
       })
     },
 
+    actualizarCorreoCliente(id, correo) {
+      return conRetraso(() => {
+        const error = validarCliente({ nombre: 'Cliente', telefono: '1234567890', correo })
+        if (error.correo) throw new ErrorServicio('estado_invalido', error.correo, 422)
+        const cliente = baseDatos.clientes.find((c) => c.idCliente === id)
+        if (!cliente) throw new ErrorServicio('no_encontrado', 'El cliente no existe.', 404)
+        cliente.correo = correo.trim()
+        return { ...cliente }
+      })
+    },
+
     crearReservacion(reservacion, claveIdempotencia) {
       return conRetrasoIdempotente(claveIdempotencia, () => {
-        if (!baseDatos.clientes.some((c) => c.idCliente === reservacion.idCliente)) {
+        const cliente = baseDatos.clientes.find((c) => c.idCliente === reservacion.idCliente)
+        if (!cliente) {
           throw new ErrorServicio('no_encontrado', 'El cliente no existe.', 404)
         }
+        if (!cliente.correo) throw new ErrorServicio('estado_invalido', 'Agrega un correo al cliente antes de crear la reservación.', 422)
         validarPersonasNuevas(reservacion.personas)
         validarFechaNueva(reservacion.fechaHora)
         if (reservacion.idMesa !== null) {

@@ -1,17 +1,37 @@
 # Pantallas del rol gerente
 
-Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×1024). El gerente tiene cuatro pantallas,
-cada una en una pestaña de la barra inferior: **Usuarios**, **Productos**, **Mesas** y **Pedidos**. Las capturas están
+Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×1024). El gerente tiene cinco pantallas,
+cada una en una pestaña de la barra inferior: **Usuarios**, **Productos**, **Mesas**, **Reservas** y **Pedidos**. Las capturas están
 en [`capturas/`](capturas/) y se tomaron con el servidor de desarrollo en modo mock (`npm run dev:demo`, usuario
-`gerente` / `1234`). El contrato de API (lo que existe y lo que se propone) está en
+`gerente` / `1234`). Los contratos de API (lo que existe y lo que se propone) están en
 [`contrato-api-gerente.md`](contrato-api-gerente.md).
 
 | Pantalla | Ruta | Requisitos | Estado de este documento |
 |---|---|---|---|
-| Usuarios | `/gerente/usuarios` | RF-USR-001 a 007 | **Por documentar** |
-| Productos e inventario | `/gerente/productos` | RF-PRO-001 a 006 | **Por documentar** |
-| Mesas | `/gerente/mesas` | RF-MES-002 a 006 | **Por documentar** |
+| Usuarios | `/gerente/usuarios` | RF-USR-001 a 007 | Funcional; documentación visual pendiente |
+| Productos e inventario | `/gerente/productos` | RF-PRO-001 a 006 | Funcional; incluye descripción obligatoria, variantes y filtros de inventario |
+| Mesas y secciones | `/gerente/mesas` | RF-MES-002 a 007 | Funcional; administración de mesas y catálogo de secciones |
+| Reservas | `/gerente/reservaciones` | Configuración de tolerancia y recordatorio (migración 010) | Funcional; ruta protegida para gerente |
 | Pedidos | `/gerente/pedidos` y `/gerente/pedidos/:idPedido` | RF-PED-002 (gerente), RF-PED-003, RF-PED-005 (parcial) | Documentada abajo |
+
+## Productos, inventario y mesas
+
+- **Productos:** la descripción es obligatoria. El campo «Presentación o variante» solo aparece para las categorías Bebidas y Postres. La categoría, el nombre y la presentación identifican una variante; intentar crear una ya existente no cambia el inventario. Para ajustar existencias se edita el producto. La lista permite distinguir Disponible, Stock bajo y Agotado.
+- **Mesas:** se administra número, capacidad, sección y disponibilidad, además de las características de planta baja, espacio para carriola y acceso sin escaleras.
+- **Secciones:** desde Gerente → Mesas → Secciones se pueden crear, renombrar, inhabilitar/habilitar y borrar. Renombrar actualiza las mesas asociadas; borrar requiere que no haya mesas asignadas. Las mesas deben pertenecer a una sección activa.
+
+## Reservas
+
+La pantalla `/gerente/reservaciones` permite configurar:
+
+| Configuración | Predeterminado | Rango |
+|---|---:|---:|
+| Tolerancia de llegada antes de marcar la reserva como vencida | 15 minutos | 5–180 minutos |
+| Anticipación del recordatorio al cliente | 5 minutos | 1–30 minutos |
+
+La pantalla está registrada bajo el grupo de rutas `/gerente` y requiere el rol `gerente`. Si la ruta se coloca dentro de otro grupo de rol, la guarda de Vue Router la rechazará; `frontend/src/router/index.test.ts` protege esta asignación.
+
+Las notificaciones requieren `RESEND_API_KEY` y `RESEND_FROM` configuradas solo en `backend/.env`, además de un dominio emisor verificado. Ver [resend-reservaciones.md](resend-reservaciones.md) para instalación, operación y diagnóstico.
 
 ## Pedidos (G4)
 

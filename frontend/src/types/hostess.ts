@@ -17,7 +17,10 @@ export interface Cliente {
  * Mesa tal como la ve la hostess: solo lo que es de `mesa`. NO incluye pedidos, cuentas ni totales
  * (esos son del mesero y del cajero).
  */
-export type MesaSalon = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estado' | 'zona'>
+export type MesaSalon = Pick<
+  Mesa,
+  'idMesa' | 'numero' | 'capacidad' | 'estado' | 'zona' | 'plantaBaja' | 'espacioCarriola' | 'sinEscaleras'
+>
 
 /** reservacion. La tabla NO tiene folio. */
 export interface Reservacion {
@@ -41,6 +44,8 @@ export interface Reservacion {
   clienteNombre: string
   /** cliente.telefono (JOIN); `null` si el cliente no dejó teléfono. */
   clienteTelefono: string | null
+  /** cliente.correo (JOIN); obligatorio para reservaciones nuevas. */
+  clienteCorreo: string | null
   /** mesa.numero (JOIN); `null` si la reservación no tiene mesa. */
   mesaNumero: number | null
 }

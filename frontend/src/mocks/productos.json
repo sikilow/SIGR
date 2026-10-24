@@ -91,6 +91,7 @@
         "idProducto": 9,
         "idCategoria": 3,
         "nombre": "Flan napolitano",
+        "presentacion": "Porción individual",
         "descripcion": "Con caramelo casero",
         "precio": 70,
         "disponible": true,
@@ -108,7 +109,8 @@
         "idProducto": 11,
         "idCategoria": 3,
         "nombre": "Pastel de tres leches",
-        "descripcion": "Rebanada individual",
+        "presentacion": "Rebanada individual",
+        "descripcion": "Acompañado de salsa inglesa",
         "precio": 80,
         "disponible": true,
         "existencia": 5
@@ -148,7 +150,8 @@
         "idProducto": 15,
         "idCategoria": 4,
         "nombre": "Cerveza artesanal",
-        "descripcion": "Botella de 355 ml",
+        "presentacion": "Botella de 355 ml",
+        "descripcion": "Cerveza artesanal clara",
         "precio": 75,
         "disponible": true,
         "existencia": 24

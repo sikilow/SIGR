@@ -98,6 +98,13 @@ async function salir() {
         </svg>
         <span>Mesas</span>
       </RouterLink>
+      <RouterLink class="nav__enlace" :to="{ name: 'gerente-reservaciones' }">
+        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M16 3v4M8 3v4M3 10h18M8 14h3M8 17h7" />
+        </svg>
+        <span>Reservas</span>
+      </RouterLink>
       <RouterLink class="nav__enlace" :to="{ name: 'gerente-pedidos' }">
         <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
@@ -231,7 +238,7 @@ async function salir() {
 
 .nav {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }

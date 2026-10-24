@@ -5,6 +5,7 @@ import type {
   CorteCaja,
   EstadoCaja,
   CambioProducto,
+  ConfiguracionReservacion,
   CambioUsuario,
   CategoriaAdmin,
   CategoriaMenu,
@@ -23,6 +24,7 @@ import type {
   PagoCajaEntrada,
   Pedido,
   ProductoAdmin,
+  SeccionAdmin,
   TipoPago,
   Usuario,
   UsuarioAdmin,
@@ -120,6 +122,10 @@ export interface UsuariosService {
 
 /** Administración del catálogo: categorías, productos e inventario. Solo el gerente. */
 export interface CatalogoService {
+  /** GET /catalogo/configuracion-reservacion */
+  obtenerConfiguracionReservacion(): Promise<ConfiguracionReservacion>
+  /** PATCH /catalogo/configuracion-reservacion */
+  actualizarConfiguracionReservacion(cambio: ConfiguracionReservacion): Promise<ConfiguracionReservacion>
   /** GET /catalogo/categorias */
   listarCategorias(): Promise<CategoriaAdmin[]>
   /** POST /catalogo/categorias */
@@ -128,6 +134,16 @@ export interface CatalogoService {
   renombrarCategoria(id: number, nombre: string): Promise<CategoriaAdmin>
   /** DELETE /catalogo/categorias/{id}. Solo si no tiene productos (si no, `estado_invalido`). */
   eliminarCategoria(id: number): Promise<void>
+  /** GET /catalogo/secciones */
+  listarSecciones(): Promise<SeccionAdmin[]>
+  /** POST /catalogo/secciones */
+  crearSeccion(nombre: string): Promise<SeccionAdmin>
+  /** PATCH /catalogo/secciones/{nombre} */
+  renombrarSeccion(nombre: string, nuevoNombre: string): Promise<SeccionAdmin>
+  /** PATCH /catalogo/secciones/{nombre} */
+  actualizarSeccion(nombre: string, cambio: { activa: boolean }): Promise<SeccionAdmin>
+  /** DELETE /catalogo/secciones/{nombre}. Solo si no tiene mesas asignadas. */
+  eliminarSeccion(nombre: string): Promise<void>
   /** GET /catalogo/productos (también los inactivos, con su inventario) */
   listarProductos(): Promise<ProductoAdmin[]>
   /** POST /catalogo/productos */

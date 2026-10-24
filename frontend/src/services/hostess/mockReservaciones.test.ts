@@ -55,6 +55,20 @@ describe('mock reservaciones: lista por día', () => {
     expect((await resolver(hostess.listarReservaciones('2026-10-15'))).map((r) => r.idReservacion)).toEqual([5])
     expect(await resolver(hostess.listarReservaciones('2026-12-25'))).toEqual([])
   })
+
+  it('vence una reservación al cumplirse la tolerancia y libera su mesa reservada', async () => {
+    const { hostess, baseDatos } = await nuevoMock()
+    const reservacion = baseDatos.reservaciones.find((r) => r.idReservacion === 3)!
+    reservacion.fechaHora = hoyA(11, 30)
+    reservacion.idMesa = 1
+    baseDatos.mesas.find((m) => m.idMesa === 1)!.estado = 'reservada'
+
+    const lista = await resolver(hostess.listarReservaciones())
+
+    expect(lista.find((r) => r.idReservacion === 3)?.estado).toBe('vencida')
+    expect(reservacion.idMesa).toBeNull()
+    expect(baseDatos.mesas.find((m) => m.idMesa === 1)?.estado).toBe('libre')
+  })
 })
 
 describe('mock reservaciones: clientes', () => {
@@ -94,6 +108,18 @@ describe('mock reservaciones: clientes', () => {
 })
 
 describe('mock reservaciones: crear', () => {
+  it('requiere correo para reservar y permite completar el correo de un cliente existente', async () => {
+    const { hostess } = await nuevoMock()
+    expect(await codigoDeError(hostess.crearReservacion({
+      idCliente: 2, fechaHora: hoyA(20), personas: 2, idMesa: null,
+    }))).toBe('estado_invalido')
+    const cliente = await resolver(hostess.actualizarCorreoCliente(2, 'patricia@correo.test'))
+    expect(cliente.correo).toBe('patricia@correo.test')
+    expect((await resolver(hostess.crearReservacion({
+      idCliente: 2, fechaHora: hoyA(20), personas: 2, idMesa: null,
+    }))).clienteCorreo).toBe('patricia@correo.test')
+  })
+
   it('sin mesa: nace pendiente y no toca ninguna mesa', async () => {
     const { hostess, baseDatos } = await nuevoMock()
     const mesasAntes = structuredClone(baseDatos.mesas)

@@ -60,11 +60,15 @@ describe('mock hostess: lecturas', () => {
       expect.objectContaining({ idMesa: 17, numero: 17, capacidad: 6, estado: 'libre' }),
       expect.objectContaining({ idMesa: 18, numero: 18, capacidad: 8, estado: 'libre' }),
     ])
-    for (const m of mesas) expect(Object.keys(m).sort()).toEqual(['capacidad', 'estado', 'idMesa', 'numero', 'zona'])
-    // Secciones de ejemplo del mock (RF-MES-007): Salón 1–8, Terraza 9–14, Barra 15–17 y la 18 sin sección
+    for (const m of mesas) {
+      expect(Object.keys(m).sort()).toEqual([
+        'capacidad', 'espacioCarriola', 'estado', 'idMesa', 'numero', 'plantaBaja', 'sinEscaleras', 'zona',
+      ])
+    }
+    // Secciones de ejemplo del mock (RF-MES-007): Salón 1–8, Terraza 9–14, Barra 15–17 y General 18
     expect(mesas.filter((m) => m.zona === 'Terraza').map((m) => m.numero)).toEqual([9, 10, 11, 12, 13, 14])
     expect(mesas.filter((m) => m.zona === 'Barra').map((m) => m.numero)).toEqual([15, 16, 17])
-    expect(mesas.find((m) => m.numero === 18)?.zona).toBeNull()
+    expect(mesas.find((m) => m.numero === 18)?.zona).toBe('General')
     expect(mesas.filter((m) => m.estado === 'libre').map((m) => m.numero)).toEqual([1, 2, 4, 6, 9, 13, 14, 15, 16, 17, 18])
     expect(mesas.filter((m) => m.estado === 'ocupada').map((m) => m.numero)).toEqual([3, 5, 8, 11, 12])
     expect(mesas.filter((m) => m.estado === 'reservada').map((m) => m.numero)).toEqual([7, 10])

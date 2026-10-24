@@ -34,6 +34,9 @@ const mesa = (idMesa: number, capacidad: number, estado: MesaSalon['estado'] = '
   capacidad,
   estado,
   zona: null,
+  plantaBaja: false,
+  espacioCarriola: false,
+  sinEscaleras: false,
 })
 
 const ESTADOS: EstadoEspera[] = ['esperando', 'asignada', 'cancelada', 'desconocido']

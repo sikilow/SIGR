@@ -14,6 +14,7 @@ import { pedidosRouter } from "./routes/pedidos";
 import { productosRouter } from "./routes/productos";
 import { reservacionesRouter } from "./routes/reservaciones";
 import { usuariosRouter } from "./routes/usuarios";
+import { iniciarProcesadorReservaciones } from "./services/notificacionesReservacion";
 
 const app = express();
 app.use(cors({ origin: ORIGENES_PERMITIDOS }));
@@ -44,3 +45,4 @@ app.use("/api", () => {
 app.use(manejarErrores);
 
 app.listen(PUERTO, () => console.log(`API en http://localhost:${PUERTO}`));
+iniciarProcesadorReservaciones();

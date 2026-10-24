@@ -32,6 +32,9 @@ const mesa = (idMesa: number, capacidad: number, estado: MesaSalon['estado'] = '
   capacidad,
   estado,
   zona: null,
+  plantaBaja: false,
+  espacioCarriola: false,
+  sinEscaleras: false,
 })
 
 const reservacion = (sobrescribir: Partial<Reservacion> = {}): Reservacion => ({
@@ -44,6 +47,7 @@ const reservacion = (sobrescribir: Partial<Reservacion> = {}): Reservacion => ({
   llegadaEn: null,
   clienteNombre: 'Carlos Medina',
   clienteTelefono: '3115550201',
+  clienteCorreo: null,
   mesaNumero: null,
   ...sobrescribir,
 })
@@ -182,6 +186,16 @@ describe('reservaciones: mesas que se ofrecen', () => {
     const opciones = mesasParaReservacion(mesas, 4, null)
     expect(opciones.map((o) => o.mesa.idMesa)).toEqual([2, 4, 6, 1])
     expect(opciones.map((o) => o.alcanza)).toEqual([true, true, true, false])
+  })
+
+  it('prioriza las mesas que cumplen preferencias sin anteponer una mesa insuficiente', () => {
+    const candidatas = [mesa(7, 4), { ...mesa(8, 6), plantaBaja: true }, { ...mesa(9, 2), plantaBaja: true }]
+    expect(mesasParaReservacion(candidatas, 4, null, { plantaBaja: true }).map((o) => o.mesa.idMesa)).toEqual([8, 7, 9])
+  })
+
+  it('prioriza sección solicitada entre las mesas con capacidad suficiente', () => {
+    const candidatas = [{ ...mesa(10, 4), zona: 'Terraza' }, { ...mesa(11, 4), zona: 'Salón' }]
+    expect(mesasParaReservacion(candidatas, 4, null, { zona: 'Salón' }).map((o) => o.mesa.idMesa)).toEqual([11, 10])
   })
 
   it('incluye la mesa que la reservación ya tiene, aunque esté reservada', () => {

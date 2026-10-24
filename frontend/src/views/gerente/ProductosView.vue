@@ -10,6 +10,7 @@ import { ErrorServicio, servicios } from '../../services'
 import { useAnunciosStore } from '../../stores/anuncios'
 import type { CategoriaAdmin, ProductoAdmin } from '../../types'
 import { formatearMoneda } from '../../utils/formato'
+import { estadoInventario } from '../../utils/inventario'
 
 const anuncios = useAnunciosStore()
 
@@ -18,21 +19,22 @@ const categorias = ref<CategoriaAdmin[]>([])
 const cargando = ref(true)
 const error = ref('')
 
-type Estado = 'todos' | 'activos' | 'inactivos' | 'poco_stock'
+type Estado = 'todos' | 'activos' | 'inactivos' | 'poco_stock' | 'agotados'
 const estado = ref<Estado>('todos')
 const categoriaFiltro = ref<number | 'todas'>('todas')
 const busqueda = ref('')
 
-// Solo los productos que controlan existencia pueden estar agotados o con poco stock.
-const agotadoPorExistencia = (p: ProductoAdmin) => p.activo && p.controlaExistencia && p.existencia === 0
-const pocoStock = (p: ProductoAdmin) => p.activo && p.controlaExistencia && p.existencia > 0 && p.existencia <= p.stockMinimo
+const agotado = (p: ProductoAdmin) => estadoInventario(p) === 'agotado'
+const pocoStock = (p: ProductoAdmin) => estadoInventario(p) === 'poco_stock'
+const detallePendiente = (p: ProductoAdmin) => !p.descripcion.trim() || p.descripcion.trim().toLocaleLowerCase() === 'detalle pendiente de completar'
 
 const lista = computed(() => {
   const q = busqueda.value.trim().toLowerCase()
   return productos.value.filter((p) => {
     if (estado.value === 'activos' && !p.activo) return false
     if (estado.value === 'inactivos' && p.activo) return false
-    if (estado.value === 'poco_stock' && !(pocoStock(p) || agotadoPorExistencia(p))) return false
+    if (estado.value === 'poco_stock' && !pocoStock(p)) return false
+    if (estado.value === 'agotados' && !agotado(p)) return false
     if (categoriaFiltro.value !== 'todas' && p.idCategoria !== categoriaFiltro.value) return false
     if (q && !`${p.nombre} ${p.descripcion}`.toLowerCase().includes(q)) return false
     return true
@@ -43,7 +45,8 @@ const cuenta = computed(() => ({
   todos: productos.value.length,
   activos: productos.value.filter((p) => p.activo).length,
   inactivos: productos.value.filter((p) => !p.activo).length,
-  poco_stock: productos.value.filter((p) => agotadoPorExistencia(p) || pocoStock(p)).length,
+  poco_stock: productos.value.filter(pocoStock).length,
+  agotados: productos.value.filter(agotado).length,
 }))
 
 async function cargar(conEsqueleto = false) {
@@ -83,7 +86,8 @@ function abrirEdicion(p: ProductoAdmin, e: Event) {
 
 async function alGuardar(p: ProductoAdmin, creado: boolean) {
   formAbierto.value = false
-  void anuncios.anunciar(creado ? `Producto «${p.nombre}» creado` : `Cambios de «${p.nombre}» guardados`)
+  const mensaje = creado ? `Producto «${p.nombre}» creado` : `Cambios de «${p.nombre}» guardados`
+  void anuncios.anunciar(mensaje)
   await cargar()
 }
 
@@ -137,7 +141,8 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
   { clave: 'todos', texto: 'Todos' },
   { clave: 'activos', texto: 'Activos' },
   { clave: 'inactivos', texto: 'Inactivos' },
-  { clave: 'poco_stock', texto: 'Poco stock o agotados' },
+  { clave: 'poco_stock', texto: 'Stock bajo' },
+  { clave: 'agotados', texto: 'Agotados' },
 ]
 </script>
 
@@ -208,7 +213,12 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
       <li v-for="p in lista" :key="p.idProducto" class="fila tarjeta" :class="{ 'fila--inactiva': !p.activo }">
         <div class="fila__datos">
           <h3>{{ p.nombre }}</h3>
-          <p class="fila__linea fila__meta">{{ p.categoria }}<template v-if="p.descripcion"> · {{ p.descripcion }}</template></p>
+          <p class="fila__linea fila__meta">
+            {{ p.categoria }}
+            <template v-if="p.presentacion"> · {{ p.presentacion }}</template>
+            <template v-if="p.descripcion"> · {{ p.descripcion }}</template>
+          </p>
+          <p v-if="detallePendiente(p)" class="fila__linea fila__meta">Completa el detalle del producto para identificar su variante.</p>
           <p class="fila__precio numero">{{ formatearMoneda(p.precio) }}</p>
           <p v-if="p.controlaExistencia" class="fila__linea">
             Existencia: <strong class="numero">{{ p.existencia }}</strong>
@@ -220,8 +230,9 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
         <div class="fila__lado">
           <div class="fila__insignias">
             <InsigniaEstado :tono="p.activo ? 'activo' : 'cancelado'" :texto="p.activo ? 'Activo' : 'Inactivo'" />
-            <InsigniaEstado v-if="agotadoPorExistencia(p)" tono="agotado" texto="Agotado" />
-            <InsigniaEstado v-else-if="pocoStock(p)" tono="listo" texto="Poco stock" />
+            <InsigniaEstado v-if="agotado(p)" tono="agotado" texto="Agotado" />
+            <InsigniaEstado v-else-if="pocoStock(p)" tono="stock_bajo" texto="Stock bajo" />
+            <InsigniaEstado v-else-if="p.controlaExistencia" tono="listo" texto="Disponible" />
           </div>
           <div class="fila__acciones">
             <button type="button" class="btn btn--secundario" :aria-label="`Editar ${p.nombre}`" @click="abrirEdicion(p, $event)">Editar</button>

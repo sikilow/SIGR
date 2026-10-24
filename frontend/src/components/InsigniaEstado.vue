@@ -76,6 +76,11 @@ defineProps<{
   --tono-texto: var(--color-ocupada-texto);
 }
 
+.insignia--stock_bajo {
+  --tono: var(--color-preparacion);
+  --tono-texto: var(--color-preparacion-texto);
+}
+
 /* En el pedido: color de marca */
 .insignia--carrito {
   --tono: var(--color-primary);

@@ -24,7 +24,9 @@ function conResumen(mesaGuardada: MesaGuardada): Mesa {
 export function crearMesasMock(): MesasService {
   return {
     listar() {
-      return conRetraso(() => baseDatos.mesas.filter((m) => m.activa).map(conResumen))
+      return conRetraso(() => baseDatos.mesas
+        .filter((m) => m.activa && baseDatos.secciones.some((s) => s.nombre === m.zona && s.activa))
+        .map(conResumen))
     },
   }
 }

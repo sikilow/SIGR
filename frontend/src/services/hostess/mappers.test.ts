@@ -45,7 +45,10 @@ const esperaDto: ListaEsperaDto = {
 describe('aMesaSalon', () => {
   it('traduce las columnas de mesa; «libre» (BD) es el mismo código en el frontend', () => {
     const dto: MesaSalonDto = { id_mesa: 1, numero: 1, capacidad: 2, estado: 'libre' }
-    expect(aMesaSalon(dto)).toEqual({ idMesa: 1, numero: 1, capacidad: 2, estado: 'libre', zona: null })
+    expect(aMesaSalon(dto)).toEqual({
+      idMesa: 1, numero: 1, capacidad: 2, estado: 'libre', zona: null,
+      plantaBaja: false, espacioCarriola: false, sinEscaleras: false,
+    })
   })
 
   it('la sección (mesa.zona) llega recortada; vacía, solo espacios, null o ausente (respuesta de asignar) = null', () => {
@@ -56,6 +59,13 @@ describe('aMesaSalon', () => {
     expect(aMesaSalon({ ...base, zona: '   ' }).zona).toBeNull()
     expect(aMesaSalon({ ...base, zona: null }).zona).toBeNull()
     expect(aMesaSalon(base).zona).toBeNull()
+  })
+
+  it('convierte las características de acceso a booleanos', () => {
+    expect(aMesaSalon({
+      id_mesa: 1, numero: 1, capacidad: 4, estado: 'libre',
+      planta_baja: '1', espacio_carriola: 0, sin_escaleras: true,
+    })).toMatchObject({ plantaBaja: true, espacioCarriola: false, sinEscaleras: true })
   })
 
   it('tolera «disponible» (nombre anterior) como libre, sin advertir', () => {
@@ -74,8 +84,11 @@ describe('aMesaSalon', () => {
       pedidos_activos: '2',
     } as MesaSalonDto
     const mesa = aMesaSalon(dto)
-    expect(mesa).toEqual({ idMesa: 3, numero: 3, capacidad: 4, estado: 'ocupada', zona: null })
-    expect(Object.keys(mesa)).toEqual(['idMesa', 'numero', 'capacidad', 'estado', 'zona'])
+    expect(mesa).toEqual({
+      idMesa: 3, numero: 3, capacidad: 4, estado: 'ocupada', zona: null,
+      plantaBaja: false, espacioCarriola: false, sinEscaleras: false,
+    })
+    expect(Object.keys(mesa)).toEqual(['idMesa', 'numero', 'capacidad', 'estado', 'zona', 'plantaBaja', 'espacioCarriola', 'sinEscaleras'])
   })
 
   it('un estado desconocido da «desconocido» con una sola advertencia', () => {

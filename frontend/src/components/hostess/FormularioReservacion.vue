@@ -67,6 +67,7 @@ const fecha = ref(dia0)
 const hora = ref(original ? aHoraISO(original.fechaHora) : horaInicial(dia0))
 const personasTexto = ref(original ? String(original.personas) : '2')
 const idMesaTexto = ref(original?.idMesa != null ? String(original.idMesa) : '')
+const preferenciasMesa = ref({ zona: '', plantaBaja: false, espacioCarriola: false, sinEscaleras: false })
 
 const intentado = ref(false)
 const enCurso = ref(false)
@@ -104,7 +105,10 @@ watch(idMesaTexto, () => {
   erroresServidor.value = { ...erroresServidor.value, mesa: undefined }
 })
 
-const opcionesMesa = computed(() => mesasParaReservacion(store.mesas, personas.value || 1, props.reservacion?.idMesa ?? null))
+const opcionesMesa = computed(() =>
+  mesasParaReservacion(store.mesas, personas.value || 1, props.reservacion?.idMesa ?? null, preferenciasMesa.value),
+)
+const zonasMesa = computed(() => [...new Set(store.mesas.map((mesa) => mesa.zona).filter((zona): zona is string => zona !== null))].sort())
 const mesaElegida = computed(() => store.mesas.find((m) => String(m.idMesa) === idMesaTexto.value) ?? null)
 const avisoCapacidad = computed(() =>
   mesaElegida.value && personas.value > 0 ? advertenciaCapacidadMesa(mesaElegida.value, personas.value) : null,
@@ -124,8 +128,11 @@ function validar(): Errores {
   if (!edita.value) {
     if (cliente.value.modo === 'existente') {
       if (!cliente.value.seleccionado) errores.cliente.cliente = 'Busca y elige un cliente, o crea uno nuevo.'
+      else if (!cliente.value.seleccionado.correo) errores.cliente.correo = 'Agrega y guarda un correo antes de hacer la reservación.'
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cliente.value.seleccionado.correo)) errores.cliente.correo = 'El correo del cliente no es válido.'
     } else {
       errores.cliente = validarCliente(cliente.value)
+      if (!cliente.value.correo.trim()) errores.cliente.correo = 'El correo es obligatorio para hacer una reservación.'
     }
   }
   const f = validarFechaHora(fecha.value, hora.value, new Date(), original?.fechaHora ?? null)
@@ -368,6 +375,17 @@ async function guardar() {
 
       <div class="campo">
         <label for="res-mesa">Mesa (opcional)</label>
+        <fieldset class="campo__preferencias">
+          <legend>Preferencias de acceso</legend>
+          <label for="res-zona">Sección preferida</label>
+          <select id="res-zona" v-model="preferenciasMesa.zona" :disabled="!mesaPermitida || enCurso">
+            <option value="">Cualquier sección</option>
+            <option v-for="zona in zonasMesa" :key="zona" :value="zona">{{ zona }}</option>
+          </select>
+          <label><input v-model="preferenciasMesa.plantaBaja" type="checkbox" /> Planta baja</label>
+          <label><input v-model="preferenciasMesa.espacioCarriola" type="checkbox" /> Espacio para carriola</label>
+          <label><input v-model="preferenciasMesa.sinEscaleras" type="checkbox" /> Sin escaleras</label>
+        </fieldset>
         <select
           id="res-mesa"
           v-model="idMesaTexto"
@@ -378,7 +396,7 @@ async function guardar() {
         >
           <option value="">Sin mesa (se elige al llegar)</option>
           <option v-for="o in opcionesMesa" :key="o.mesa.idMesa" :value="String(o.mesa.idMesa)">
-            Mesa {{ o.mesa.numero }} · para {{ o.mesa.capacidad }}{{ o.alcanza ? '' : ' · no alcanza' }}{{ o.mesa.idMesa === reservacion?.idMesa ? ' · la actual' : '' }}
+            Mesa {{ o.mesa.numero }} · {{ o.mesa.zona }} · para {{ o.mesa.capacidad }}{{ o.alcanza ? '' : ' · no alcanza' }}{{ o.mesa.idMesa === reservacion?.idMesa ? ' · la actual' : '' }}{{ o.mesa.plantaBaja ? ' · planta baja' : '' }}{{ o.mesa.espacioCarriola ? ' · carriola' : '' }}{{ o.mesa.sinEscaleras ? ' · sin escaleras' : '' }}
           </option>
         </select>
         <p id="ayuda-res-mesa" class="campo__ayuda">

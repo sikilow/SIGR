@@ -34,11 +34,11 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 | 🧾 **Pedidos** | Crear, editar, enviar a cocina y cancelar con motivo. El total lo calcula siempre el servidor | ✅ |
 | 💳 **Cuenta de mesa** | Consulta de pedidos y total; solicitud de pago en caja o digital | ✅ |
 | 👥 **Usuarios** *(gerente)* | Alta, edición, activación y cambio de contraseña | ✅ |
-| 📦 **Productos e inventario** *(gerente)* | Categorías, precios, stock mínimo y existencia opcional por producto | ✅ |
+| 📦 **Productos e inventario** *(gerente)* | Categorías, descripción obligatoria, presentación opcional para bebidas y postres, prevención de variantes duplicadas y estados Disponible, Stock bajo y Agotado. Las existencias se ajustan al editar el producto | ✅ |
 | 👨‍🍳 **Cocina** | Cola de pedidos enviados y en preparación; iniciar preparación y marcarlos listos. Actualización automática | ✅ |
 | 💵 **Caja** | Apertura/cierre de corte, cobro de cuentas solicitadas, pagos divididos, cambio y ticket imprimible | ✅ |
 | 🪑 **Hostess: Salón** | Estado de las mesas (libres, ocupadas, reservadas), próximas reservaciones y lista de espera; asignar mesa a un grupo. No ve pedidos ni cuentas | ✅ |
-| 📅 **Hostess: Reservaciones** | Lista por día, alta y edición con búsqueda de clientes, confirmar, cancelar y registrar la llegada | ✅ |
+| 📅 **Reservaciones** | Hostess: lista por día, alta y edición con correo obligatorio, sugerencias de mesa y accesibilidad, confirmar, cancelar y registrar llegada. Gerente: configura la tolerancia y anticipación de recordatorios. Las vencidas liberan su mesa y generan notificación de correo vía Resend | ✅ |
 | ⏳ **Hostess: Lista de espera** | Grupos por orden de llegada, tiempo de espera con marca de espera larga, agregar y sentar. Quitar de la lista: pendiente en la API (`PATCH`) | 🟡 |
 | 🧮 **Facturación** | Datos fiscales y facturas (el esquema ya existe) | 🚧 |
 
@@ -48,7 +48,7 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 
 | Actor | Qué necesita del sistema | Pantallas hoy |
 | --- | --- | --- |
-| 🧑‍💼 **Gerente** | Supervisar la operación: usuarios, menú e inventario, mesas, reportes y cancelaciones excepcionales | Usuarios, Productos e inventario, Mesas |
+| 🧑‍💼 **Gerente** | Supervisar la operación: usuarios, menú e inventario, mesas y pedidos del salón; administrar secciones y configurar reservaciones | Usuarios, Productos e inventario, Mesas, Reservas, Pedidos |
 | 🍽️ **Mesero** | Capturar pedidos rápido y sin errores, ver su estado, enviarlos a cocina y pedir la cuenta | Mesas, Pedido de mesa, Cuenta, Mis pedidos |
 | 👨‍🍳 **Cocinero** | Recibir pedidos claros y en orden, iniciar preparación y marcarlos listos | Cocina |
 | 💵 **Cajero** | Consultar cuentas solicitadas, cobrar, imprimir ticket y hacer el corte de caja | Caja |
@@ -121,17 +121,17 @@ Aparecieron durante el desarrollo. Los códigos son **propuestos**: falta aproba
 
 | Código | Requisito | Actor | Dónde está |
 | --- | --- | --- | --- |
-| `RF-PRO-001` | Registrar producto (nombre, descripción, categoría, precio, existencia y stock mínimo) | Gerente | `POST /api/catalogo/productos` |
-| `RF-PRO-002` | Actualizar producto (precio, categoría, existencia, stock mínimo) | Gerente | `PATCH /api/catalogo/productos/:id` |
-| `RF-PRO-003` | Activar o desactivar un producto (no se borra, hay pedidos que lo usan; el mesero lo ve como agotado) | Gerente | `PATCH /api/catalogo/productos/:id` |
-| `RF-PRO-004` | Consultar productos e inventario con filtros por estado, categoría, poco stock y búsqueda | Gerente | `GET /api/catalogo/productos` |
+| `RF-PRO-001` | Registrar producto con descripción obligatoria; presentación solo para Bebidas y Postres | Gerente | `POST /api/catalogo/productos` |
+| `RF-PRO-002` | Editar un producto, incluidos precio y existencias; no actualizar stock desde un alta duplicada | Gerente | `PATCH /api/catalogo/productos/:id` |
+| `RF-PRO-003` | Activar o desactivar un producto (estado independiente de Disponible, Stock bajo o Agotado) | Gerente | `PATCH /api/catalogo/productos/:id` |
+| `RF-PRO-004` | Consultar catálogo e inventario con filtros por estado, categoría, poco stock y búsqueda | Gerente | `GET /api/catalogo/productos` |
 | `RF-PRO-005` | Gestionar categorías del menú (crear, renombrar, borrar) | Gerente | `/api/catalogo/categorias` |
 | `RF-PRO-006` | Existencia opcional por producto: se descuenta al enviar el pedido a cocina y se bloquea el envío si no alcanza | Sistema | `POST /api/pedidos/:id/enviar`, `POST /api/productos/disponibilidad` |
-| `RF-MES-002` | Registrar mesa: número, cantidad de personas, sección (opcional) y disponibilidad | Gerente | `POST /api/catalogo/mesas` · Mesas → Nueva mesa |
+| `RF-MES-002` | Registrar mesa: número, capacidad, sección obligatoria y disponibilidad | Gerente | `POST /api/catalogo/mesas` · Mesas → Nueva mesa |
 | `RF-MES-003` | Actualizar mesa (número, cantidad de personas, sección) | Gerente | `PATCH /api/catalogo/mesas/:id` · Mesas → Editar |
 | `RF-MES-004` | Marcar una mesa como disponible o no disponible (no se borra). Una mesa no disponible no aparece para la hostess ni para el mesero y no se puede sentar, reservar ni cambiar de estado. No se puede desactivar si está ocupada, reservada, con cuenta abierta o con reservaciones vigentes | Gerente | `PATCH /api/catalogo/mesas/:id` · Mesas → No disponible / Disponible |
 | `RF-MES-005` | Consultar las mesas como gerente, incluidas las no disponibles, con filtros por disponibilidad, sección y búsqueda | Gerente | `GET /api/catalogo/mesas` · Mesas |
-| `RF-MES-006` | Sección de la mesa (`mesa.zona`, texto libre): se guarda, se edita y se filtra en la pantalla del gerente; el Salón y el Panel la muestran y agrupan (RF-MES-007) | Gerente | `mesa.zona` |
+| `RF-MES-006` | Sección obligatoria por mesa: el gerente administra el catálogo (crear, renombrar, inhabilitar/habilitar y borrar secciones); una sección inhabilitada no ofrece sus mesas al mesero ni a la hostess | Gerente | `seccion`, `mesa.zona` |
 | `RF-MES-007` | Mostrar y agrupar las mesas por sección en el Panel del mesero y el Salón de la hostess, con filtro «Sección» (`?seccion=`) combinable con el de estado | Mesero, Hostess | `/mesero/mesas`, `/hostess/salon` |
 | `RF-USR-006` | Cambiar la contraseña de un usuario | Gerente | `POST /api/usuarios/:id/contrasena` |
 | `RF-USR-007` | Desactivar y reactivar usuarios (sustituye al borrado de RF-USR-003) | Gerente | `PATCH /api/usuarios/:id` |
@@ -139,6 +139,7 @@ Aparecieron durante el desarrollo. Los códigos son **propuestos**: falta aproba
 | `RF-CUE-002` | Cerrar cuenta únicamente al registrar su pago | Cajero | `POST /api/caja/cuentas/:id/cobrar` |
 | `RF-MES-001` | Asignar mesa a un grupo y cambiar el estado de la mesa (`libre`, `ocupada`, `reservada`) | Hostess, Gerente | `POST /api/mesas/:id/asignar`, `PATCH /api/mesas/:id/estado` |
 | `RF-RES-006` | Registrar la llegada de un cliente con reservación | Hostess | `POST /api/reservaciones/:id/llegada` |
+| `RF-RES-007` | Configurar tolerancia y recordatorio; vencer la reservación, liberar la mesa y encolar avisos de correo | Gerente, Sistema | `GET/PATCH /api/catalogo/configuracion-reservacion` y servicio de notificaciones |
 | `RF-ESP-001` | Gestionar la lista de espera: agregar grupos, consultar por orden de llegada y sentarlos; la edición (`PATCH`) sigue pendiente | Hostess | `GET` y `POST /api/lista-espera` |
 | `RNF-030` | Las acciones críticas (crear, enviar, cancelar, entregar pedidos, solicitar pago, asignar mesa y cobrar) no deben duplicarse si el cliente reintenta (`Idempotency-Key`) | Sistema | `backend/src/services/idempotencia.ts`, tabla `idempotencia` |
 
@@ -152,6 +153,9 @@ Salen de lo que pidió el equipo y de la revisión del proyecto. El detalle, las
 | `RF-AUD-002` | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión |
 | `RF-USR-008` | Que cada usuario cambie su propia contraseña | Todos los roles | Hallazgo de la revisión |
 | `RF-PED-006` | Registrar quién canceló un pedido y cuándo | Sistema | Hallazgo de la revisión |
+| `RF-PED-007` | Historial de pedidos paginado y filtrable por fechas en la API | Gerente, Cajero | Pantalla Pedidos del gerente |
+| `RF-PED-008` | Incluir la observación general del pedido en las respuestas de la API | Gerente, Mesero, Cocinero | Pantalla Pedidos del gerente |
+| `RF-CUE-003` | Consultar una cuenta por id aunque ya esté cerrada | Gerente, Cajero | Pantalla Pedidos del gerente |
 
 ### Diferencias entre el ERS y lo implementado
 
@@ -162,7 +166,7 @@ Salen de lo que pidió el equipo y de la revisión del proyecto. El detalle, las
 | Estados de pedido | El ERS: pendiente, en preparación, listo, entregado | La BD agrega `Registrado`, `Cancelado` y `Pagado`; `Pendiente` se usa como «enviado a cocina» |
 | RNF-011 | Expiración a los 15 min de inactividad | El JWT dura 8 horas |
 | RNF-025 | Actualización en < 2 s | Consulta periódica cada 10 s |
-| Hostess | El README decía que su API estaba propuesta | Ya existen casi todas sus rutas en `backend/`; solo falta `PATCH /api/lista-espera/:id` |
+| Hostess | — | Las rutas de Salón, Reservaciones, clientes y asignación están implementadas; solo falta `PATCH /api/lista-espera/:id` |
 
 ### Requisitos no funcionales
 
@@ -426,8 +430,8 @@ El árbol de arriba es el modelo; las carpetas ya existen y contienen lo siguien
 | `backend/src/mocks/` | `clientes.mock.ts` y `productos.mock.ts`: datos falsos tipados para probar la API. |
 | `backend/src/utils/` | `config.ts`, `errores.ts`, `auth.ts` (JWT y permisos por rol) y `seed.ts` (usuarios de prueba). |
 | `backend/tests/` | Pruebas unitarias con Vitest: dominio, mocks y reglas de importes de caja. |
-| `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `005`). |
-| `docs/` | `arquitectura.md` y el resto de la documentación (contratos de API, equivalencias, pendientes, guía de código). |
+| `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `008`). |
+| `docs/` | `arquitectura.md` y el resto de la documentación (contratos de API, equivalencias, pendientes, guía de código y [actualización de la base](docs/actualizar-base-datos.md)). |
 
 ### Archivos y carpetas adicionales
 
@@ -481,10 +485,7 @@ cp .env.example .env.local  # pon VITE_USE_MOCK=false para usar el backend real
 npm run dev                 # http://localhost:5173
 ```
 
-> **Base de datos ya existente:** no la recrees. Ejecuta, en orden, las `database/migrations/00N_*.sql` que todavía no hayas corrido.
-> Para agregar las mesas 13-18 a una base existente, ejecuta `mysql -u root -p -e "source database/migrations/004_mesas_13_a_18.sql"` desde la raíz del proyecto. Después de insertarlas, el panel de mesas y el Salón las cargan automáticamente desde la API.
-> Si la base se creó antes de la administración de mesas del gerente, ejecuta una sola vez `mysql -u root -p -e "source database/migrations/005_mesas_zona_activa.sql"` desde la raíz. Esta migración agrega `mesa.zona` y `mesa.activa`; `database/init.sql` ya las incluye para bases nuevas.
-> Para habilitar la caja en una base existente, ejecuta una sola vez `mysql -u root -p -e "source database/migrations/006_caja.sql"` desde la raíz. Agrega a `pago` las columnas para registrar el efectivo recibido y el cambio. Las bases nuevas ya las incluyen en `database/init.sql`.
+> **Base de datos ya existente:** no la recrees ni ejecutes todas las migraciones a ciegas. Revisa cuáles están pendientes y sigue [`docs/actualizar-base-datos.md`](docs/actualizar-base-datos.md), con pasos de respaldo, comandos y verificación del esquema.
 
 ### Variables de entorno
 
@@ -498,7 +499,11 @@ DB_PASSWORD=tu_password
 DB_NAME=SIGR
 JWT_SECRET=cambia_esto_por_algo_largo
 # CORS_ORIGIN=http://localhost:5173
+# RESEND_API_KEY=re_...
+# RESEND_FROM="Restaurante <reservaciones@tu-dominio-verificado.com>"
 ```
+
+Los dos valores de Resend son opcionales hasta habilitar correos, y se configuran solo en `backend/.env`. No guardes la API key en Git ni en variables `VITE_*`. Guía completa: [`docs/resend-reservaciones.md`](docs/resend-reservaciones.md).
 
 **`frontend/.env.local`**
 
@@ -549,12 +554,24 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 | [`CONTEXTO_IA.md`](CONTEXTO_IA.md) | Resumen completo del proyecto (requisitos, base de datos, API, convenciones) para dárselo a una IA como contexto |
 | [`PENDIENTES_Y_FALTANTES.md`](docs/PENDIENTES_Y_FALTANTES.md) | Lo que falta, qué se afectaría y qué hay que decidir (mesas del gerente, auditoría, cuentas, seguridad) |
 | [`contrato-api-mesero.md`](docs/contrato-api-mesero.md) | Contrato de la API que usa el mesero (implementada en `backend/`) y diferencias con la BD |
-| [`contrato-api-hostess.md`](docs/contrato-api-hostess.md) | Endpoints **propuestos** (no implementados) para Salón, Reservaciones, Lista de espera y clientes |
-| [`equivalencias-bd.md`](docs/equivalencias-bd.md) | Tabla columna ↔ JSON ↔ TypeScript, qué es columna y qué es calculado, y los estados |
+| [`contrato-api-hostess.md`](docs/contrato-api-hostess.md) | Endpoints reales de Salón, Reservaciones, Lista de espera, clientes y configuración de reservaciones; señala lo que aún falta |
+| [`contrato-api-gerente.md`](docs/contrato-api-gerente.md) | Contrato de pedidos del gerente y cambios propuestos para ampliar el historial |
+| [`equivalencias-bd.md`](docs/equivalencias-bd.md) | Tabla columna ↔ JSON ↔ TypeScript, equivalencias de catálogo, secciones, hostess y estados |
 | [`integracion-api.md`](docs/integracion-api.md) | Lista de comprobación para conectar el frontend con la API real |
+| [`incrementos.md`](docs/incrementos.md) | Observaciones de la maestra, cambios implementados y alcance por incremento |
+| [`actualizar-base-datos.md`](docs/actualizar-base-datos.md) | Respaldo, aplicación ordenada de migraciones 007–010 y verificación de una base existente |
+| [`resend-reservaciones.md`](docs/resend-reservaciones.md) | Configuración segura y operación del correo de reservaciones con Resend |
+| [`pantallas-gerente.md`](docs/pantallas-gerente.md) | Pantallas de gerencia, incluidas reservas, secciones y pedidos |
 | [`pantallas-mesero.md`](docs/pantallas-mesero.md) | Pantallas del mesero con su ruta, caso de uso y captura |
 | [`pantallas-hostess.md`](docs/pantallas-hostess.md) | Pantallas de la hostess con su ruta y captura, y cómo funciona cada una |
 | [`capturas/`](docs/capturas/) | Capturas de las pantallas (1024×768 y 768×1024) |
+
+### Incrementos recientes
+
+- **Catálogo e inventario:** la descripción es obligatoria; presentación/variante solo se solicita para Bebidas y Postres. Un alta duplicada no altera existencias: se debe editar el producto existente para cambiar su stock.
+- **Secciones de mesas:** Gerencia puede crear, renombrar, inhabilitar, habilitar y borrar secciones; cada mesa debe pertenecer a una sección activa.
+- **Reservaciones:** correo obligatorio para nuevas reservas, preferencias de accesibilidad y sugerencias de mesa; tolerancia y recordatorio configurables por Gerencia; vencimiento, liberación de mesa y notificación con reintentos.
+- **Acceso de Gerencia:** Reservas está en `/gerente/reservaciones`, protegida para el rol gerente. La prueba de ruta y compilación del frontend pasan.
 
 ---
 

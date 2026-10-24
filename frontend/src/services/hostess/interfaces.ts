@@ -44,6 +44,8 @@ export interface HostessService {
    * válidos o si ya existe un cliente con ese teléfono.
    */
   crearCliente(cliente: NuevoCliente, claveIdempotencia?: string): Promise<Cliente>
+  /** Actualiza el correo faltante o corregido de un cliente ya registrado. */
+  actualizarCorreoCliente(id: number, correo: string): Promise<Cliente>
   /**
    * POST /reservaciones (CAMBIO PROPUESTO, con `Idempotency-Key`). Nace `pendiente`. Si trae mesa, la mesa pasa a
    * `reservada`. Fallos: `no_encontrado` (cliente o mesa), `mesa_no_disponible` (la mesa ya no está libre) y

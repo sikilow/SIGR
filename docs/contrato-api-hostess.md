@@ -25,6 +25,9 @@
 | `POST /api/reservaciones/{id}/llegada` | **Ya existe** (acepta `Idempotency-Key`) | `requiereAuth("hostess", "gerente")` |
 | `GET /api/clientes?q=` | **Ya existe** | `requiereAuth("hostess", "gerente")` |
 | `POST /api/clientes` | **Ya existe** (acepta `Idempotency-Key`) | `requiereAuth("hostess", "gerente")` |
+| `PATCH /api/clientes/{id}` | **Ya existe** (actualiza el correo para reservaciones) | `requiereAuth("hostess", "gerente")` |
+| `GET /api/catalogo/configuracion-reservacion` | **Ya existe** | `requiereAuth("gerente")` |
+| `PATCH /api/catalogo/configuracion-reservacion` | **Ya existe** | `requiereAuth("gerente")` |
 
 `GET /api/reservaciones?fecha=` (sección 2) ya se usa para el Salón y para la lista de la pantalla **Reservaciones**
 (H2), que puede pedir cualquier día. Las rutas marcadas (H2) las necesita esa pantalla; ver la sección
@@ -36,13 +39,13 @@ operación de más nivel (cambia mesa **y** grupo en una sola transacción).
 ## Qué datos ve la hostess
 
 Solo mesas, reservaciones y lista de espera. **No** ve pedidos, cuentas ni totales: el frontend usa solo
-`id_mesa`, `numero`, `capacidad` y `estado` de `GET /mesas` e **ignora** `estado_cuenta`, `pedidos_activos`,
+`id_mesa`, `numero`, `capacidad`, `zona`, `planta_baja`, `espacio_carriola`, `sin_escaleras` y `estado` de `GET /mesas` e **ignora** `estado_cuenta`, `pedidos_activos`,
 `total_cuenta`, `pedidos_listos` y `tipo_pago_solicitado` aunque lleguen. Si el equipo de API prefiere no enviárselos
 a este rol, puede hacerlo sin avisar al frontend.
 
 ## 1. `GET /api/mesas` — ya existe
 
-> **Cambio:** solo devuelve las mesas **disponibles** (`mesa.activa = TRUE`) y agrega `zona` (la «sección», puede ser `null`). Una mesa no disponible tampoco se puede sentar, reservar ni cambiar de estado: la API responde `409 mesa_no_disponible`.
+> **Cambio:** solo devuelve las mesas **disponibles** (`mesa.activa = TRUE`) y agrega `zona` y las características fijas `planta_baja`, `espacio_carriola` y `sin_escaleras`. Una mesa no disponible tampoco se puede sentar, reservar ni cambiar de estado: la API responde `409 mesa_no_disponible`.
 
 Sin cambios. Campos usados: `id_mesa`, `numero`, `capacidad`, `estado` (`libre` | `ocupada` | `reservada`).
 La interfaz del salón llama **«Libre»** al estado `libre` (el frontend usa el mismo código `libre`; `aEstadoMesa`
@@ -66,6 +69,7 @@ reservaciones».
     "llegada_en": null,
     "cliente_nombre": "Carlos Medina",
     "cliente_telefono": "3115550201",
+    "cliente_correo": "carlos.medina@correo.test",
     "mesa_numero": 9
   }
 ]
@@ -74,7 +78,7 @@ reservaciones».
 | Campo | Origen |
 |---|---|
 | `id_reservacion`, `id_cliente`, `id_mesa`, `fecha_hora`, `personas`, `estado`, `llegada_en` | columnas de `reservacion` (`id_mesa` y `llegada_en` pueden ser `null`) |
-| `cliente_nombre`, `cliente_telefono` | **calculados**: `JOIN cliente` (`nombre`, `telefono`; el teléfono puede ser `null`) |
+| `cliente_nombre`, `cliente_telefono`, `cliente_correo` | **calculados**: `JOIN cliente` (`nombre`, `telefono`, `correo`; teléfono/correo pueden ser `null`) |
 | `mesa_numero` | **calculado**: `LEFT JOIN mesa` (`mesa.numero`); `null` si no tiene mesa |
 
 `reservacion` **no tiene folio**: el frontend no lo muestra ni lo espera.
@@ -205,11 +209,34 @@ Cuerpo (todas son columnas de `reservacion`):
 ```
 
 Respuesta `201`: la reservación con los mismos campos que `GET /reservaciones` (incluidos `cliente_nombre`,
-`cliente_telefono` y `mesa_numero`, **calculados**). Errores: `404 no_encontrado` (cliente o mesa), `409 mesa_no_disponible`,
-`422 estado_invalido` (fecha pasada o a más de un año, personas fuera de 1 a 20, o `id_mesa` con fecha que no es hoy).
+`cliente_telefono`, `cliente_correo` y `mesa_numero`, **calculados**). El cliente debe tener correo válido antes del alta.
+Errores: `404 no_encontrado` (cliente o mesa), `409 mesa_no_disponible`, `422 estado_invalido` (correo faltante,
+fecha pasada o a más de un año, personas fuera de 1 a 20, o `id_mesa` con fecha que no es hoy).
 
 El frontend crea primero al cliente (si es nuevo) y después la reservación (dos llamadas, cada una con su clave). Si la
 segunda falla, el cliente ya existe y **no se vuelve a crear** al reintentar.
+
+### `PATCH /api/clientes/{id}` — actualizar correo
+
+Cuerpo: `{ "correo": "cliente@correo.test" }`. Completa o corrige el correo de un cliente existente antes de crear una
+reservación. Valida formato y longitud máxima de 120. Errores: `404 no_encontrado` si no existe y `422 estado_invalido`
+si el correo no es válido.
+
+### Vencimientos, correo y configuración (migración 010)
+
+La API procesa notificaciones en segundo plano. El recordatorio se programa los minutos configurados antes de la hora
+reservada. Si una reservación `pendiente` o `confirmada` no registra llegada antes de `fecha_hora + tolerancia`, pasa a
+`vencida`, pierde su mesa reservada (que se libera si no hay otra reservación vigente) y genera un correo vía Resend. Los
+fallos quedan en `notificacion_reservacion` y se reintentan.
+
+Solo Gerencia puede consultar y modificar `GET/PATCH /api/catalogo/configuracion-reservacion`:
+
+```json
+{ "tolerancia_minutos": 15, "recordatorio_minutos": 5 }
+```
+
+La actualización requiere ambos campos enteros; tolerancia de 5–180 minutos y recordatorio de 1–30 minutos. Configura el
+envío con `RESEND_API_KEY` y `RESEND_FROM` en `backend/.env`; ver [`resend-reservaciones.md`](resend-reservaciones.md).
 
 ### `PATCH /api/reservaciones/{id}`
 
@@ -312,14 +339,14 @@ Viven en `src/utils/asignacion.ts`, con pruebas en `asignacion.test.ts`.
 - **Avisos que NO bloquean:** personas > `capacidad` de la mesa; mesa `reservada` que se da a un grupo distinto de su
   reservación. La API **no** debe rechazarlos (la hostess decide: junta sillas, etc.).
 
-## Estados de texto libre (SIN CONFIRMAR)
+## Estados persistidos como texto libre
 
-`reservacion.estado` y `lista_espera.estado` son `VARCHAR(25)` **sin `CHECK`**. El frontend asume estos valores, que
-salen de los datos de ejemplo (`seed_demo.sql`) y **hay que confirmarlos con el equipo de BD**:
+`reservacion.estado` y `lista_espera.estado` son `VARCHAR(25)` **sin `CHECK`**. El backend y el frontend usan estos
+valores; `vencida` se asigna al procesar la tolerancia de llegada:
 
 | Columna | Valores asumidos | Por defecto en la BD |
 |---|---|---|
-| `reservacion.estado` | `pendiente`, `confirmada`, `llego`, `cancelada` | `pendiente` |
+| `reservacion.estado` | `pendiente`, `confirmada`, `llego`, `cancelada`, `vencida` | `pendiente` |
 | `lista_espera.estado` | `esperando`, `asignada`, `cancelada` | `esperando` |
 
 > **SUPUESTO sin confirmar (H3):** `cancelada` (el grupo se fue) **no** sale de los datos de ejemplo (`seed_demo.sql` solo trae

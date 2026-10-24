@@ -5,9 +5,11 @@ funciona completo con datos simulados; cambiar a la API real no requiere tocar n
 configuración y, si las respuestas no coinciden, [`services/api/mappers.ts`](../frontend/src/services/api/mappers.ts)
 (y los helpers de conversión de [`conversion.ts`](../frontend/src/services/api/conversion.ts)).
 
-**Levantar la API (una vez):** crear la base con `database/init.sql` (y, si la base ya existía, las migraciones `01` y `02`),
+**Levantar la API (una vez):** crear la base con `database/init.sql` (y, si la base ya existía, aplicar las migraciones pendientes de `database/migrations/`, incluidas `007_catalogo_descripciones_obligatorias.sql`, `008_presentacion_producto.sql`, `009_secciones_mesas.sql` y `010_reservaciones_y_caracteristicas.sql`),
 copiar `backend/.env.example` a `backend/.env` (clave `JWT_SECRET` y datos de MySQL), `npm install` y `npm run dev` dentro de
 `backend/` (escucha en `http://localhost:3000`). Los usuarios de prueba se crean con `npx tsx src/utils/seed.ts` (contraseña `1234`).
+
+Para enviar recordatorios y avisos de reservaciones vencidas configura `RESEND_API_KEY` y `RESEND_FROM` en `backend/.env`, como indica la guía [`resend-reservaciones.md`](resend-reservaciones.md). La API key se mantiene solo en el backend; los correos fallidos quedan en la cola para reintento.
 
 Documentos relacionados: [`contrato-api-mesero.md`](contrato-api-mesero.md) (lo que el frontend espera),
 [`equivalencias-bd.md`](equivalencias-bd.md) (cada identificador del frontend frente a la tabla y columna de la BD) y

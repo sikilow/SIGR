@@ -5,6 +5,7 @@
 import { computed, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import type { CambioProducto, CategoriaAdmin, ProductoAdmin } from '../types'
+import { categoriaAdmitePresentacion } from '../utils/presentacionProducto'
 import DialogoModal from './DialogoModal.vue'
 
 const props = defineProps<{
@@ -19,6 +20,7 @@ const props = defineProps<{
 const emit = defineEmits<{ cerrar: []; guardado: [producto: ProductoAdmin, creado: boolean] }>()
 
 const nombre = ref('')
+const presentacion = ref('')
 const descripcion = ref('')
 const idCategoria = ref<number | ''>('')
 // Los números se editan como texto para poder validar "vacío" y "12.5" con claridad.
@@ -32,6 +34,14 @@ const enCurso = ref(false)
 const errorServidor = ref('')
 
 const editando = computed(() => props.producto !== null)
+const mostrarPresentacion = computed(() => {
+  const categoria = props.categorias.find((c) => c.idCategoria === idCategoria.value)
+  return categoria ? categoriaAdmitePresentacion(categoria.nombre) : false
+})
+
+watch(idCategoria, () => {
+  if (!mostrarPresentacion.value) presentacion.value = ''
+})
 
 watch(
   () => props.abierto,
@@ -39,10 +49,11 @@ watch(
     if (!abierto) return
     const p = props.producto
     nombre.value = p?.nombre ?? ''
+    presentacion.value = p?.presentacion ?? ''
     descripcion.value = p?.descripcion ?? ''
     idCategoria.value = p?.idCategoria ?? props.categoriaInicial ?? props.categorias[0]?.idCategoria ?? ''
     precio.value = p ? String(p.precio) : ''
-    existencia.value = p ? String(p.existencia) : '0'
+    existencia.value = p ? String(p.existencia) : ''
     stockMinimo.value = p ? String(p.stockMinimo) : '0'
     activo.value = p?.activo ?? true
     controlaExistencia.value = p?.controlaExistencia ?? true
@@ -60,6 +71,7 @@ const errores = computed(() => {
   const n = nombre.value.trim()
   if (!n) e.nombre = 'Escribe el nombre del producto.'
   else if (n.length > 100) e.nombre = 'Máximo 100 caracteres.'
+  if (mostrarPresentacion.value && presentacion.value.trim().length > 100) e.presentacion = 'Máximo 100 caracteres.'
   if (idCategoria.value === '') e.categoria = 'Elige una categoría.'
   const p = aNumero(precio.value)
   if (Number.isNaN(p)) e.precio = 'Escribe el precio (ejemplo: 85 o 85.50).'
@@ -70,7 +82,10 @@ const errores = computed(() => {
     if (!esEnteroNoNegativo(aNumero(existencia.value))) e.existencia = 'Escribe un número entero de 0 en adelante.'
     if (!esEnteroNoNegativo(aNumero(stockMinimo.value))) e.stockMinimo = 'Escribe un número entero de 0 en adelante.'
   }
-  if (descripcion.value.trim().length > 255) e.descripcion = 'Máximo 255 caracteres.'
+  if (!descripcion.value.trim() || descripcion.value.trim().toLocaleLowerCase() === 'detalle pendiente de completar') {
+    e.descripcion = 'Describe la presentación, porción o características del producto.'
+  }
+  else if (descripcion.value.trim().length > 255) e.descripcion = 'Máximo 255 caracteres.'
   return e
 })
 
@@ -80,7 +95,11 @@ function cambios(): CambioProducto {
   const p = props.producto
   if (!p) return {}
   const c: CambioProducto = {}
+  const categoriaOriginal = props.categorias.find((categoria) => categoria.idCategoria === p.idCategoria)
+  const presentacionOriginalPermitida = categoriaOriginal ? categoriaAdmitePresentacion(categoriaOriginal.nombre) : false
   if (nombre.value.trim() !== p.nombre) c.nombre = nombre.value
+  if (mostrarPresentacion.value && presentacion.value.trim() !== p.presentacion) c.presentacion = presentacion.value
+  else if (!mostrarPresentacion.value && presentacionOriginalPermitida && p.presentacion) c.presentacion = ''
   if (descripcion.value.trim() !== p.descripcion) c.descripcion = descripcion.value
   if (idCategoria.value !== '' && idCategoria.value !== p.idCategoria) c.idCategoria = idCategoria.value
   if (aNumero(precio.value) !== p.precio) c.precio = aNumero(precio.value)
@@ -97,7 +116,7 @@ function cambios(): CambioProducto {
 async function guardar() {
   if (enCurso.value) return
   tocado.value = true
-  const primero = ['nombre', 'categoria', 'precio', 'existencia', 'stockMinimo', 'descripcion'].find((k) => errores.value[k])
+  const primero = ['nombre', 'presentacion', 'categoria', 'precio', 'existencia', 'stockMinimo', 'descripcion'].find((k) => errores.value[k])
   if (primero) {
     document.getElementById(`prod-${primero}`)?.focus()
     return
@@ -113,20 +132,18 @@ async function guardar() {
       }
       emit('guardado', await servicios.catalogo.actualizarProducto(props.producto.idProducto, c), false)
     } else {
-      emit(
-        'guardado',
-        await servicios.catalogo.crearProducto({
-          idCategoria: idCategoria.value as number,
-          nombre: nombre.value,
-          descripcion: descripcion.value,
-          precio: aNumero(precio.value),
-          activo: activo.value,
-          controlaExistencia: controlaExistencia.value,
-          existencia: controlaExistencia.value ? aNumero(existencia.value) : 0,
-          stockMinimo: controlaExistencia.value ? aNumero(stockMinimo.value) : 0,
-        }),
-        true,
-      )
+      const producto = await servicios.catalogo.crearProducto({
+        idCategoria: idCategoria.value as number,
+        nombre: nombre.value,
+        presentacion: mostrarPresentacion.value ? presentacion.value : '',
+        descripcion: descripcion.value,
+        precio: aNumero(precio.value),
+        activo: activo.value,
+        controlaExistencia: controlaExistencia.value,
+        existencia: controlaExistencia.value ? aNumero(existencia.value) : 0,
+        stockMinimo: controlaExistencia.value ? aNumero(stockMinimo.value) : 0,
+      })
+      emit('guardado', producto, true)
     }
   } catch (e) {
     errorServidor.value = e instanceof ErrorServicio ? e.message : 'Ocurrió un error inesperado.'
@@ -148,10 +165,23 @@ async function guardar() {
         <p v-if="campoErr('nombre')" id="prod-nombre-e" class="texto-error form__error">{{ campoErr('nombre') }}</p>
       </div>
 
+      <div v-if="mostrarPresentacion" class="campo">
+        <label for="prod-presentacion">Presentación o variante</label>
+        <input id="prod-presentacion" v-model="presentacion" type="text" autocomplete="off" maxlength="100"
+          placeholder="Ej.: lata de 355 ml, botella de 1 litro, rebanada individual"
+          :aria-invalid="campoErr('presentacion') ? 'true' : undefined"
+          :aria-describedby="campoErr('presentacion') ? 'prod-presentacion-ayuda prod-presentacion-e' : 'prod-presentacion-ayuda'" />
+        <p id="prod-presentacion-ayuda" class="form__ayuda">Distingue variantes de bebidas, cervezas, postres u otros productos. Si coincide categoría, nombre y presentación, el alta se rechazará como duplicada.</p>
+        <p v-if="campoErr('presentacion')" id="prod-presentacion-e" class="texto-error form__error">{{ campoErr('presentacion') }}</p>
+      </div>
+
       <div class="campo">
-        <label for="prod-descripcion">Descripción <span class="form__opcional">(opcional)</span></label>
-        <input id="prod-descripcion" v-model="descripcion" type="text" autocomplete="off" maxlength="255"
-          :aria-invalid="campoErr('descripcion') ? 'true' : undefined" :aria-describedby="campoErr('descripcion') ? 'prod-descripcion-e' : undefined" />
+        <label for="prod-descripcion">Descripción <span aria-hidden="true">*</span></label>
+        <input id="prod-descripcion" v-model="descripcion" type="text" autocomplete="off" maxlength="255" required
+          placeholder="Ej.: contiene nuez, servido con hielo, acompañado de ensalada"
+          :aria-invalid="campoErr('descripcion') ? 'true' : undefined"
+          :aria-describedby="campoErr('descripcion') ? 'prod-descripcion-ayuda prod-descripcion-e' : 'prod-descripcion-ayuda'" />
+        <p id="prod-descripcion-ayuda" class="form__ayuda">Agrega detalles relevantes que no correspondan a la presentación (por ejemplo, ingredientes o acompañamientos).</p>
         <p v-if="campoErr('descripcion')" id="prod-descripcion-e" class="texto-error form__error">{{ campoErr('descripcion') }}</p>
       </div>
 
@@ -162,6 +192,7 @@ async function guardar() {
             <option v-if="categorias.length === 0" value="" disabled>Primero crea una categoría</option>
             <option v-for="c in categorias" :key="c.idCategoria" :value="c.idCategoria">{{ c.nombre }}</option>
           </select>
+          <p class="form__ayuda">Usa categorías del menú como bebidas, entradas, platos fuertes o postres.</p>
           <p v-if="campoErr('categoria')" class="texto-error form__error">{{ campoErr('categoria') }}</p>
         </div>
 
@@ -187,6 +218,7 @@ async function guardar() {
           <div class="campo">
             <label for="prod-existencia">Existencia</label>
             <input id="prod-existencia" v-model="existencia" type="text" inputmode="numeric" autocomplete="off"
+              required
               :aria-invalid="campoErr('existencia') ? 'true' : undefined" :aria-describedby="campoErr('existencia') ? 'prod-existencia-e' : undefined" />
             <p v-if="campoErr('existencia')" id="prod-existencia-e" class="texto-error form__error">{{ campoErr('existencia') }}</p>
           </div>
@@ -198,11 +230,12 @@ async function guardar() {
           </div>
         </div>
         <p class="form__ayuda">Con existencia 0 el mesero lo ve como agotado y no puede agregar más de lo que hay. La existencia se descuenta sola al enviar un pedido a cocina, y se bloquea el envío si no alcanza.</p>
+        <p class="form__ayuda">Si el producto ya está registrado, búscalo y usa Editar para establecer su existencia; no se modifica desde el alta.</p>
       </fieldset>
 
       <label class="form__casilla">
         <input v-model="activo" type="checkbox" />
-        <span>Activo en el menú <span class="form__opcional">(si lo desmarcas, el mesero lo ve como agotado)</span></span>
+        <span>Activo en el menú <span class="form__opcional">(si lo desmarcas, no se muestra en el menú del mesero)</span></span>
       </label>
 
       <div v-if="errorServidor" class="form__alerta" role="alert">
