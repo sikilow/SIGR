@@ -30,7 +30,7 @@ Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×
 | 10 | Registrar llegada | _(mismo diálogo)_ | Si la reservación no tiene mesa, se elige entre las libres (con aviso de capacidad que no bloquea) | [h2-05-registrar-llegada-1024x768](capturas/h2-05-registrar-llegada-1024x768.png) |
 | 11 | Cancelar reservación | _(mismo diálogo)_ | Confirmación de una acción destructiva; avisa que la mesa se libera | [h2-06-cancelar-reservacion-1024x768](capturas/h2-06-cancelar-reservacion-1024x768.png) |
 | 12 | Reservaciones (768×1024) | `/hostess/reservaciones` | Igual que la 6, con el estado debajo del nombre | [h2-07-reservaciones-768x1024](capturas/h2-07-reservaciones-768x1024.png) |
-| 13 | Cliente nuevo con errores (768×1024) | _(diálogo de Reservaciones)_ | Alta de cliente (nombre, teléfono y correo obligatorio para reservar) con varios errores a la vez | [h2-08-cliente-nuevo-errores-768x1024](capturas/h2-08-cliente-nuevo-errores-768x1024.png) |
+| 13 | Cliente nuevo con errores (768×1024) | _(diálogo de Reservaciones)_ | Alta de cliente (nombre, teléfono y correo opcional) con varios errores a la vez | [h2-08-cliente-nuevo-errores-768x1024](capturas/h2-08-cliente-nuevo-errores-768x1024.png) |
 
 ### Lista de espera (H3)
 
@@ -97,9 +97,10 @@ Mismo comportamiento que el Panel del mesero (ver [`pantallas-mesero.md`](pantal
 1. **Lista:** `/hostess/reservaciones` muestra hoy; las flechas, el campo de fecha y «Hoy» cambian de día. La lista se
    actualiza sola cada pocos segundos. El filtro (`?estado=`) y la búsqueda no cambian el día.
 2. **Nueva reservación:** cliente (buscar uno existente por nombre o teléfono, o crear uno con nombre, teléfono de
-   10 dígitos y correo obligatorio), fecha y hora (no pasadas), personas (1 a 20), preferencias opcionales de sección y
+   10 dígitos y correo opcional), fecha y hora (no pasadas), personas (1 a 20), preferencias opcionales de sección y
    accesibilidad, y mesa opcional. Si el cliente ya existe sin correo válido, se puede completar o corregir el correo
-   desde el selector. La mesa solo se ofrece para reservaciones **de hoy** y solo entre las **libres**; las sugerencias
+   desde el selector para recibir notificaciones; no es requisito para guardar la reservación. La mesa solo se ofrece
+   para reservaciones **de hoy** y solo entre las **libres**; las sugerencias
    priorizan sección, planta baja, espacio para carriola, acceso sin escaleras y capacidad. Si las personas no caben se
    avisa, sin bloquear. Al guardar la lista va al día de la reservación y la resalta.
 3. **Editar:** solo `pendiente` o `confirmada`; el cliente no cambia. Se puede cambiar fecha, hora, personas y mesa.
@@ -113,9 +114,9 @@ Mismo comportamiento que el Panel del mesero (ver [`pantallas-mesero.md`](pantal
    reservaciones.
 
 La tolerancia de llegada y la anticipación de los recordatorios se configuran desde **Gerente → Reservas**. El backend
-envía las notificaciones con Resend; los fallos quedan registrados en la cola para reintento. La API requiere la
-migración `010_reservaciones_y_caracteristicas.sql` y `RESEND_API_KEY`/`RESEND_FROM` en el entorno del backend. Consulta
-[resend-reservaciones.md](resend-reservaciones.md).
+envía confirmaciones, recordatorios y vencimientos por una cola común con Resend o SMTP; los fallos quedan registrados
+para reintento. La base requiere las migraciones `010_reservaciones_y_caracteristicas.sql` y
+`011_cola_unificada_resend.sql`. Consulta [resend-reservaciones.md](resend-reservaciones.md).
 
 ## Cómo funciona «Asignar mesa»
 

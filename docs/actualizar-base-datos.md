@@ -62,8 +62,9 @@ Si la columna `presentacion` y el índice ya existen, 008 ya fue aplicada. Si la
 | `008_presentacion_producto.sql` | Presentación/variante del producto e índice de búsqueda | Una vez |
 | `009_secciones_mesas.sql` | Catálogo administrable de secciones y sección obligatoria en cada mesa | Una vez |
 | `010_reservaciones_y_caracteristicas.sql` | Características de acceso, configuración de reservaciones y cola de correo | Una vez |
+| `011_cola_unificada_resend.sql` | Evento de confirmación y deduplicación por `(id_reservacion, tipo, evento)` | Una vez, tras 010 |
 
-La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes.
+La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. La migración 011 tiene sus propios pasos de respaldo, inspección y verificación en la sección «Migración 011».
 
 ## 3. Verificar el resultado
 
@@ -109,15 +110,35 @@ Pop-Location
 
 En el formulario **Gerente → Productos**, una variante nueva se identifica por categoría, nombre y presentación. Si ya existe, el sistema rechaza el alta y pide editar el producto existente para cambiar su inventario. Ejemplo: Coca-Cola «lata de 355 ml» y «botella de 1 litro» son variantes diferentes; repetir la misma presentación no crea otra fila.
 
-## Correo de reservaciones con Resend
+## Correo de reservaciones con Resend o Gmail SMTP
 
-Las reservaciones nuevas requieren un correo del cliente. Desde **Gerente → Reservas** se pueden cambiar la tolerancia (15 minutos por defecto; de 5 a 180) y la anticipación del recordatorio (5 minutos por defecto; de 1 a 30). La tolerancia se cuenta desde la hora reservada. Si no se registra la llegada antes de vencer, la reservación cambia a `vencida`, se libera su mesa y se pone en cola un correo explicativo. La API procesa recordatorios y reintenta las notificaciones fallidas.
+El correo del cliente es opcional para registrar una reservación. Si existe, las confirmaciones, recordatorios y avisos de vencimiento se procesan en la misma cola y se envían a la dirección guardada para ese cliente. Desde **Gerente → Reservas** se configuran la tolerancia (15 minutos por defecto; 5–180) y la anticipación del recordatorio (5 minutos por defecto; 1–30). Sin llegada tras `fecha_hora + tolerancia_minutos`, el servicio revalida bajo bloqueo que siga pendiente o confirmada, marca `vencida`, libera la mesa y encola una sola notificación.
 
-Para habilitar los correos, configura `RESEND_API_KEY` y `RESEND_FROM` en `backend/.env`, luego reinicia el backend. Resend requiere un dominio emisor verificado. No compartas ni guardes la API key en Git. Los mensajes que fallen quedan en la cola con su error y se reintentan. Revisa la guía completa de instalación, operación y diagnóstico en [`resend-reservaciones.md`](resend-reservaciones.md).
+Configura un único remitente `CORREO_REMITENTE` y selecciona `CORREO_PROVEEDOR=resend` o `smtp`. Si no se selecciona proveedor, el backend prefiere Resend cuando hay `RESEND_API_KEY`, después SMTP cuando hay usuario y contraseña; si no hay credenciales, el correo queda desactivado. Gmail requiere contraseña de aplicación (16 caracteres, no la contraseña habitual), `smtp.gmail.com`, puerto 465, y que el correo autenticado coincida con `CORREO_REMITENTE`. El límite aproximado de una cuenta personal es 500 mensajes al día y 100 destinatarios por mensaje; el error `550 5.4.5` reintenta después de seis horas. Consulta [`resend-reservaciones.md`](resend-reservaciones.md) para el resto de la configuración. No guardes credenciales en Git ni en documentación.
+
+## Migración 011: cola unificada de correo
+
+La migración requiere que 010 ya esté aplicada. No la ejecuté en ninguna base. Haz el respaldo y la prueba únicamente en una base de desarrollo aislada; sustituye `SIGR_desarrollo` si tu base de desarrollo tiene otro nombre.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR_desarrollo --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR_desarrollo-antes-011.sql"
+
+# Inspecciona el nombre real del CHECK existente antes de cambiarlo.
+mysql -h localhost -P 3306 -u root -p SIGR_desarrollo -e "SHOW CREATE TABLE notificacion_reservacion\G"
+
+# Aplica el archivo al esquema de desarrollo seleccionado (sin ejecutar la migración en producción).
+Get-Content -Raw ".\database\migrations\011_cola_unificada_resend.sql" | mysql -h localhost -P 3306 -u root -p SIGR_desarrollo
+
+# Comprueba el CHECK, el índice compuesto y que no se duplicó ningún evento.
+mysql -h localhost -P 3306 -u root -p SIGR_desarrollo -e "SHOW CREATE TABLE notificacion_reservacion\G; SHOW INDEX FROM notificacion_reservacion; SELECT id_reservacion, tipo, evento, COUNT(*) AS cantidad FROM notificacion_reservacion GROUP BY id_reservacion, tipo, evento HAVING COUNT(*) > 1;"
+```
+
+El script localiza por su expresión el `CHECK` anterior de `tipo`, cuyo nombre autogenerado se ve con `SHOW CREATE TABLE`; así no supone que la restricción se llame igual en todas las bases. Agrega `evento` (vacío para recordatorios y vencimientos; `creada` o `confirmada` para confirmaciones) y reemplaza la clave única por `(id_reservacion, tipo, evento)`. No inserta confirmaciones retroactivas para reservaciones antiguas. En `database/init.sql` ya está el esquema final para bases nuevas.
 
 ## Base nueva o entorno de demostración
 
-- **Base nueva y vacía:** ejecuta `database/init.sql`; este esquema ya incluye los cambios de las migraciones. No apliques después 001–010 sobre esa misma base.
+- **Base nueva y vacía:** ejecuta `database/init.sql`; este esquema ya incluye los cambios de las migraciones 001–011. No las apliques después sobre esa misma base.
 - **Base de desarrollo en Docker que ya contiene datos:** no uses `docker compose down -v`, ya que elimina el volumen de la base. Con el contenedor activo y el puerto 3306 publicado, los comandos `mysql` anteriores la actualizan igual que una instalación local.
 - Guarda el respaldo de forma segura. No lo agregues al repositorio ni lo compartas: contiene los datos de la base.
 

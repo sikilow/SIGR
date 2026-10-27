@@ -2,7 +2,7 @@
 
 > Archivo pensado para pegarse (o adjuntarse) al inicio de una conversación con una IA.
 > Resume qué es el proyecto, qué se decidió, qué ya existe en el código y qué falta.
-> Última revisión: 23 de octubre de 2026. Si algo de aquí contradice el código, **gana el código**; avísalo y corrige este archivo.
+> Última revisión: 31 de octubre de 2026. Si algo de aquí contradice el código, **gana el código**; avísalo y corrige este archivo.
 
 ## 0. Instrucciones para la IA
 
@@ -104,11 +104,11 @@ SIGR/
 │   │   ├── controllers/        auth, catalogo, cuentas, hostess (clientes + reservaciones + lista de
 │   │   │                       espera), menu, mesas, pedidos, productos, usuarios (la lógica)
 │   │   ├── models/dominio.ts   DTOs, consultas compartidas, estados del pedido, reglas de existencia, validar()
-│   │   ├── services/           db.ts (pool y transacciones) e idempotencia.ts (Idempotency-Key)
+│   │   ├── services/           db.ts, idempotencia.ts, correo.ts (Resend/SMTP), notificacionesReservacion.ts (cola común)
 │   │   ├── mocks/              clientes.mock.ts y productos.mock.ts
 │   │   └── utils/              config.ts (JWT_SECRET, PUERTO, CORS), errores.ts (ErrorApi),
 │   │                           auth.ts (requiereAuth(...roles)) y seed.ts (usuarios de prueba)
-│   ├── tests/                  dominio, mocks, caja y envío de notificaciones (34 pruebas actuales, Vitest)
+│   ├── tests/                  dominio, mocks, caja, correo, cola y hostess (Vitest)
 │   ├── .env.example, package.json, tsconfig.json
 ├── frontend/
 │   ├── index.html, main.ts, vite.config.ts
@@ -123,7 +123,7 @@ SIGR/
 │       ├── utils/              carrito, reglas de negocio, formato, contraste
 │       ├── assets/             vacía por ahora (.gitkeep)
 │       └── types/, layouts/, composables/, styles/   (adicionales: el código depende de ellas)
-├── database/                   init.sql, docker-compose.yml, seed_demo.sql (opcional) y migrations/001 a 010
+├── database/                   init.sql, docker-compose.yml, seed_demo.sql (opcional) y migrations/001 a 011
 ├── docs/                       arquitectura.md, contratos, equivalencias, incrementos, integración,
 │                               pantallas, actualización de BD, Resend, pendientes, guía de código y capturas
 ├── CONTEXTO_IA.md              este archivo
@@ -223,7 +223,8 @@ Falta aprobarlos con el equipo y agregarlos al ERS.
 | RF-CUE-002 | Cerrar cuenta únicamente al registrar su pago | Cajero | `POST /api/caja/cuentas/:id/cobrar` |
 | RF-MES-001 | Asignar mesa a un grupo y cambiar el estado de la mesa (`libre`, `ocupada`, `reservada`) | Hostess, Gerente | `POST /api/mesas/:id/asignar`, `PATCH /api/mesas/:id/estado` |
 | RF-RES-006 | Registrar la llegada de un cliente con reservación | Hostess | `POST /api/reservaciones/:id/llegada` |
-| RF-RES-007 | Configurar tolerancia de llegada y anticipación de recordatorios; vencer reservaciones sin llegada, liberar su mesa y enviar avisos | Gerente, Sistema | `GET/PATCH /api/catalogo/configuracion-reservacion`, servicio de notificaciones y migración 010 |
+| RF-RES-007 | Configurar tolerancia de llegada y anticipación de recordatorios; vencer reservaciones sin llegada, liberar su mesa y enviar avisos | Gerente, Sistema | `GET/PATCH /api/catalogo/configuracion-reservacion`, cola de notificaciones y migraciones 010–011 |
+| RF-COR-001 | Encolar correo de confirmación al crear y confirmar reservaciones dentro de la transacción; el correo no bloquea ni revierte la operación | Sistema | `notificacion_reservacion`, `backend/src/services/correo.ts` y `backend/src/controllers/hostess.ts` |
 | RF-ESP-001 | Gestionar la lista de espera: agregar grupos, consultar por orden de llegada y sentarlos; la edición (`PATCH`) sigue pendiente | Hostess | `GET` y `POST /api/lista-espera` |
 | RNF-030 | Las acciones críticas (crear, enviar, cancelar, entregar pedidos, solicitar pago, asignar mesa y cobrar) no deben duplicarse si el cliente reintenta (`Idempotency-Key`) | Sistema | `backend/src/services/idempotencia.ts`, tabla `idempotencia` |
 
@@ -315,7 +316,7 @@ Requisitos futuros (fuera del alcance actual):
 - Reportes avanzados de ventas, desempeño y análisis de datos
 - Aplicación móvil para el personal
 - Integración con servicios de entrega a domicilio
-- Notificaciones automáticas a clientes (confirmación de reservas, recordatorios)
+- Notificaciones automáticas a clientes (recordatorios y otros avisos)
 - Sistema de fidelización (puntos, promociones o descuentos)
 - Facturación electrónica
 - Control de inventario de ingredientes o insumos
@@ -332,6 +333,7 @@ Cuando aparezca algo que no está arriba, agrégalo aquí y también en la tabla
 
 | RF-MES-007 | Mostrar y agrupar por sección en el Salón de la hostess y en el Panel de mesas, con filtro por sección (el backend ya envía `zona`) | Hostess, Mesero | Detalle pendiente de RF-MES-006 | IMPLEMENTADO (frontend; falta aprobarlo en el ERS, ver 5.2) | 2026-10-21 |
 | RF-RES-007 | Configurar tolerancia y recordatorio; vencer reservaciones, liberar mesa y notificar | Gerente, Sistema | Revisión del incremento de reservaciones | IMPLEMENTADO (falta aprobarlo en el ERS, ver 5.2) | 2026-10-23 |
+| RF-COR-001 | Enviar a la dirección del cliente las confirmaciones creadas al registrar y confirmar, con transporte Resend o SMTP y reintentos en cola | Sistema | Solicitud de correo transaccional | IMPLEMENTADO (falta aprobarlo en el ERS) | 2026-10-31 |
 | RF-AUD-001 | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo | PROPUESTO (sin construir) | oct. 2026 |
 | RF-AUD-002 | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
 | RF-USR-008 | Que cada usuario cambie su propia contraseña | Todos los roles | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
@@ -344,7 +346,7 @@ Detalle, decisiones pendientes (D-1 a D-5) y hallazgos P-01 a P-16: `docs/PENDIE
 
 ## 6. Modelo de datos (MySQL, base `SIGR`)
 
-Notación: `*` clave primaria, `→tabla` clave foránea. El esquema actualizado está en `database/init.sql`. Las migraciones `001`–`010` incluyen, además del esquema inicial, control de existencia, caja, descripciones y presentación de productos, catálogo de secciones (`seccion`), características de acceso de mesas, configuración de reservaciones y cola de notificaciones (`notificacion_reservacion`). Las migraciones `007`–`010` son el tramo de cambios recientes; revisa cuáles ya se aplicaron y sigue [`docs/actualizar-base-datos.md`](docs/actualizar-base-datos.md). No ejecutes `init.sql` sobre una base existente.
+Notación: `*` clave primaria, `→tabla` clave foránea. El esquema actualizado está en `database/init.sql`. Las migraciones `001`–`011` incluyen, además del esquema inicial, control de existencia, caja, descripciones y presentación de productos, catálogo de secciones (`seccion`), características de acceso de mesas, configuración de reservaciones y cola unificada de correo (`notificacion_reservacion`). La migración `011` agrega `evento` y el índice único compuesto para confirmaciones; revisa cuáles ya se aplicaron y sigue [`docs/actualizar-base-datos.md`](docs/actualizar-base-datos.md). No ejecutes `init.sql` sobre una base existente.
 
 ```
 
@@ -360,7 +362,7 @@ disponibilidadProducto: id_inventario*, id_producto→producto, existencia, stoc
 seccion: nombre*, activa
 reservacion: id_reservacion*, id_cliente→cliente, id_mesa→mesa, fecha_hora, personas, estado, llegada_en
 configuracion_reservacion: tolerancia_minutos, recordatorio_minutos
-notificacion_reservacion: id_notificacion*, id_reservacion→reservacion, tipo, destinatario, estado, intentos, ultimo_error
+notificacion_reservacion: id_notificacion*, id_reservacion→reservacion, tipo (`recordatorio`, `vencida`, `confirmacion`), evento (vacío o `creada`/`confirmada`), destinatario, estado, intentos, ultimo_error
 lista_espera: id_espera*, id_cliente→cliente, personas, registrado_en, estado
 cuenta: id_cuenta*, id_mesa→mesa, abierta_en, cerrada_en, estado, tipo_pago_solicitado
 estado_pedido: id_estado*, nombre
@@ -419,7 +421,7 @@ Formato de error: `{ "codigo", "mensaje" }`. Códigos: `no_autenticado`, `creden
 | `GET /clientes`, `POST /clientes` | hostess, gerente | Buscar y registrar clientes (teléfono único) |
 | `PATCH /clientes/:id` | hostess, gerente | Completar o corregir el correo de un cliente para una reservación |
 | `GET /reservaciones?fecha=` | hostess, gerente | Reservaciones del día |
-| `POST /reservaciones` | hostess, gerente | Crea una reservación |
+| `POST /reservaciones` | hostess, gerente | Crea una reservación; el correo del cliente es opcional y, si existe, se encola su confirmación |
 | `PATCH /reservaciones/:id` | hostess, gerente | Confirma, cancela o cambia fecha, personas o mesa |
 | `POST /reservaciones/:id/llegada` | hostess, gerente | Registra la llegada |
 | `GET /lista-espera?estado=`, `POST /lista-espera` | hostess, gerente | Consulta y agrega grupos |
@@ -466,7 +468,7 @@ Copy-Item .env.example .env.local   # pon VITE_USE_MOCK=false para usar el backe
 npm run dev
 ```
 
-Variables: `backend/.env` con `PORT`, `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET` y opcional `CORS_ORIGIN`; `frontend/.env.local` con `VITE_USE_MOCK` y `VITE_API_URL=http://localhost:3000/api`.
+Variables: `backend/.env` con `PORT`, `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, opcional `CORS_ORIGIN` y configuración de correo (`CORREO_PROVEEDOR`, `CORREO_REMITENTE`, `RESEND_API_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`); `frontend/.env.local` con `VITE_USE_MOCK` y `VITE_API_URL=http://localhost:3000/api`. Si no se especifica proveedor, se prefiere Resend cuando hay API key; si no, SMTP cuando hay usuario y contraseña; sin credenciales el correo queda desactivado. Gmail requiere contraseña de aplicación de 16 caracteres, usa `smtp.gmail.com:465`, sustituye el remitente por la cuenta autenticada y limita aproximadamente a 500 mensajes/día y 100 destinatarios/mensaje; el error `550 5.4.5` espera seis horas antes del reintento.
 
 Antes de entregar: `npm run build` y `npm test` en `backend/`, y `npm run check` en `frontend/` (tipos, pruebas y build).
 
@@ -485,7 +487,7 @@ Antes de entregar: `npm run build` y `npm test` en `backend/`, y `npm run check`
 7. ~~Sección de la mesa en el Salón y el Panel~~ (RF-MES-007): implementado. La administración del catálogo también está en Gerente → Mesas. Queda por hacer una prueba operativa en el entorno MySQL compartido y confirmar si las secciones se consideran sensibles a mayúsculas.
 8. **Auditoría** (RF-AUD-001 y 002): quién cambia una contraseña, a quién y cuándo. Un trigger de MySQL no conoce al usuario del sistema; la API tendría que pasarle su id. Opciones y recomendación en `docs/PENDIENTES_Y_FALTANTES.md`.
 9. Cambio de contraseña propio (RF-USR-008), quién canceló un pedido (RF-PED-006: no hay columna; la pantalla del gerente muestra el motivo pero no quién ni cuándo; opciones en `docs/contrato-api-gerente.md`, sección 4) y las reglas del dominio sin aplicar (validación de capacidad y regla 11). La tolerancia de reservaciones ya es configurable.
-10. Pruebas de rutas del backend contra una base de datos (31 pruebas actuales: funciones del dominio, mocks y validación de importes; no cubren rutas con MySQL) y protecciones básicas de la API (límite de intentos, cabeceras de seguridad).
+10. Pruebas de rutas del backend contra una base de datos (las pruebas Vitest actuales simulan servicios y no cubren rutas con MySQL) y protecciones básicas de la API (límite de intentos, cabeceras de seguridad).
 
 ## 12. Glosario
 
@@ -516,7 +518,7 @@ Esta sección existe para que una IA (o una persona nueva) pueda explicar y repe
 | Una ruta nueva de la API | `backend/src/routes/<recurso>.ts` (solo la ruta, el permiso y el controlador) y se monta en `backend/src/index.ts` |
 | La lógica de esa ruta (validar, reglas, SQL, respuesta) | `backend/src/controllers/<recurso>.ts` |
 | Una consulta o regla que usan varios controladores | `backend/src/models/dominio.ts` |
-| Algo de conexión, transacciones o idempotencia | `backend/src/services/` |
+| Algo de conexión, transacciones, idempotencia o correo saliente | `backend/src/services/` |
 | Configuración, errores, permisos o un script auxiliar | `backend/src/utils/` |
 | Datos falsos para probar la API | `backend/src/mocks/<recurso>.mock.ts` |
 | Una prueba del backend | `backend/tests/<tema>.test.ts` |
@@ -1210,10 +1212,24 @@ Al terminar, dame el BLOQUE DE ACTUALIZACIÓN de la sección 15.
 
 Más reciente primero. Cada IA agrega aquí su bloque de actualización.
 
-### 2026-10-23 · Catálogo, secciones, reservaciones y Resend
-- Qué se consolidó: Incremento 1 del catálogo exige descripción, distingue Disponible/Stock bajo/Agotado, permite presentación únicamente para Bebidas y Postres y rechaza una variante duplicada sin alterar existencias; el inventario se ajusta editando el producto. Gerencia administra secciones (crear, renombrar, habilitar/inhabilitar y borrar) y las mesas requieren una sección activa. Reservaciones incorpora correo obligatorio, actualización del correo de clientes existentes, preferencias de sección y accesibilidad, sugerencias de mesas y filtro Vencida. Gerencia configura tolerancia (15 min predeterminados, 5–180) y recordatorio (5 min, 1–30); el backend vence reservaciones, libera mesas y procesa correo mediante Resend con cola y reintentos.
+### 2026-10-31 · Cola unificada de correo y Gmail SMTP (RF-COR-001)
+- Qué se hizo: las confirmaciones `creada`/`confirmada`, recordatorios y vencimientos comparten `notificacion_reservacion` y el servicio `enviarCorreo` con transporte Resend o Gmail SMTP. La confirmación se inserta dentro de la transacción y el ciclo se dispara tras el commit sin esperar el envío; el correo del cliente es opcional para guardar la reservación.
+- Archivos nuevos o cambiados: `backend/src/services/correo.ts`, `backend/src/services/notificacionesReservacion.ts`, `backend/src/controllers/hostess.ts`, `backend/src/utils/config.ts`, `backend/.env.example`, `backend/package.json`, `backend/package-lock.json`, pruebas `backend/tests/correo.test.ts`, `backend/tests/configCorreo.test.ts`, `backend/tests/hostessReservaciones.test.ts`, `backend/tests/notificacionesReservacion.test.ts` y `backend/tests/resend.test.ts`; `database/init.sql`, nueva `database/migrations/011_cola_unificada_resend.sql`; `README.md`, `CONTEXTO_IA.md`, `docs/arquitectura.md`, `docs/resend-reservaciones.md` y `docs/actualizar-base-datos.md`.
+- Decisiones tomadas: `CORREO_REMITENTE` es el remitente único; el proveedor se autodetecta (Resend, luego SMTP, o correo desactivado). Gmail usa contraseña de aplicación, quita espacios de `SMTP_PASS`, limita aproximadamente a 500 mensajes/día y 100 destinatarios/mensaje, y `550 5.4.5` espera seis horas. El índice único `(id_reservacion, tipo, evento)` deduplica cada evento y la migración no crea confirmaciones retroactivas.
+- Requerimientos nuevos o cambiados: RF-COR-001 pasa a confirmaciones encoladas con reintentos; reservar sin correo es permitido. Se conserva la tolerancia, revalidación bajo bloqueo, estados permitidos, liberación de mesa y deduplicación de vencidas.
+- Verificación: backend `npm run build` aprobado; `npm test` aprobó 55 pruebas. No se hizo envío real ni se aplicó la migración a ninguna base de datos.
+- Pendiente o por verificar: respaldar, revisar con `SHOW CREATE TABLE`, aplicar 011 y verificarla manualmente en una base de desarrollo; completar la prueba manual con dos correos bajo SMTP o Resend configurado.
+- Secciones de este archivo que hay que actualizar: 3, 5, 6, 7, 9, 11 y 16.
+
+### 2026-10-24 · Confirmaciones de reservación con Resend (RF-COR-001; histórico, supersedido el 2026-10-31)
+- En esa fecha se añadió el transporte Resend y el envío directo de confirmaciones después del commit. Esa implementación y el remitente separado quedaron reemplazados por la cola y el transporte común registrados arriba.
+- El estado actual usa `CORREO_REMITENTE` como remitente único; `RESEND_FROM` fue retirado. La migración 011 y las variables SMTP se documentan en la entrada del 2026-10-31.
+- La verificación registrada en esa entrega fue de 39 pruebas y build; no se había probado envío real.
+
+### 2026-10-23 · Catálogo, secciones, reservaciones y Resend (histórico)
+- Qué se consolidó entonces: Incremento 1 del catálogo exige descripción, distingue Disponible/Stock bajo/Agotado, permite presentación únicamente para Bebidas y Postres y rechaza una variante duplicada sin alterar existencias; el inventario se ajusta editando el producto. Gerencia administra secciones (crear, renombrar, habilitar/inhabilitar y borrar) y las mesas requieren una sección activa. Reservaciones incorporaba correo obligatorio (decisión supersedida el 2026-10-31: ahora es opcional), actualización del correo de clientes existentes, preferencias de sección y accesibilidad, sugerencias de mesas y filtro Vencida. Gerencia configura tolerancia (15 min predeterminados, 5–180) y recordatorio (5 min, 1–30); el backend vence reservaciones, libera mesas y procesa correo mediante Resend con cola y reintentos.
 - Acceso del gerente: la pantalla de configuración está en `/gerente/reservaciones`. Se corrigió una ruta que había quedado bajo el grupo de Mesero y provocaba «Tu rol no tiene acceso a esa pantalla». La prueba `frontend/src/router/index.test.ts` comprueba la ruta y el rol requerido.
-- Persistencia y configuración: migraciones 007–010 y `database/init.sql`; guía de bases existentes en `docs/actualizar-base-datos.md`; variables exclusivas del backend `RESEND_API_KEY` y `RESEND_FROM` y procedimientos en `docs/resend-reservaciones.md`. La clave compartida en la conversación no se guardó ni se usó; no hay envío real validado.
+- Persistencia y configuración en ese corte: migraciones 007–010 y `database/init.sql`; la configuración vigente de correo y la migración 011 se registran en la entrada del 2026-10-31.
 - Documentación sincronizada: `README.md`, este contexto, `docs/incrementos.md`, `docs/pantallas-gerente.md`, `docs/pantallas-hostess.md`, `docs/equivalencias-bd.md`, `docs/contrato-api-hostess.md`, `docs/integracion-api.md`, `docs/actualizar-base-datos.md`, `docs/resend-reservaciones.md` y `docs/PENDIENTES_Y_FALTANTES.md`.
 - Verificación registrada: backend `npm run build` y 34 pruebas aprobadas, `npm audit` con cero vulnerabilidades; frontend: prueba específica de ruta aprobada y `npm run build` correcto; `git diff --check` sin errores. No se aplicaron migraciones a una base real ni se envió correo real.
 - Pendiente de operación: revocar la key compartida en Resend, emitir una nueva y colocarla solo en el gestor de secretos o `backend/.env`, verificar el dominio emisor y probar en una base aislada. Aplicar 007–010 a bases existentes solo si aún no se ejecutaron.

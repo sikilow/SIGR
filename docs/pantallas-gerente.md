@@ -31,7 +31,7 @@ La pantalla `/gerente/reservaciones` permite configurar:
 
 La pantalla está registrada bajo el grupo de rutas `/gerente` y requiere el rol `gerente`. Si la ruta se coloca dentro de otro grupo de rol, la guarda de Vue Router la rechazará; `frontend/src/router/index.test.ts` protege esta asignación.
 
-Las notificaciones requieren `RESEND_API_KEY` y `RESEND_FROM` configuradas solo en `backend/.env`, además de un dominio emisor verificado. Ver [resend-reservaciones.md](resend-reservaciones.md) para instalación, operación y diagnóstico.
+Las notificaciones usan el transporte común configurado en `backend/.env`: Resend con dominio emisor verificado o SMTP. Gmail requiere contraseña de aplicación y que `SMTP_USER` coincida con `CORREO_REMITENTE`. Ver [resend-reservaciones.md](resend-reservaciones.md) para instalación, operación y diagnóstico.
 
 ## Pedidos (G4)
 

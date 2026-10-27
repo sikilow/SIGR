@@ -118,14 +118,20 @@ INSERT INTO configuracion_reservacion (id, tolerancia_minutos, recordatorio_minu
 CREATE TABLE notificacion_reservacion (
   id_notificacion INT AUTO_INCREMENT PRIMARY KEY,
   id_reservacion INT NOT NULL,
-  tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('recordatorio', 'vencida')),
+  tipo VARCHAR(20) NOT NULL,
+  evento VARCHAR(20) NOT NULL DEFAULT '',
   destinatario VARCHAR(120) NOT NULL,
   estado VARCHAR(20) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'enviada')),
   intentos SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   ultimo_error VARCHAR(500) NULL,
   creada_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   enviada_en DATETIME NULL,
-  UNIQUE KEY uq_notificacion_reservacion_tipo (id_reservacion, tipo),
+  CONSTRAINT chk_notificacion_tipo CHECK (tipo IN ('recordatorio', 'vencida', 'confirmacion')),
+  CONSTRAINT chk_notificacion_evento CHECK (
+    (tipo = 'confirmacion' AND evento IN ('creada', 'confirmada'))
+    OR (tipo IN ('recordatorio', 'vencida') AND evento = '')
+  ),
+  UNIQUE KEY uq_notificacion_reservacion_evento (id_reservacion, tipo, evento),
   INDEX idx_notificacion_pendiente (estado, creada_en),
   CONSTRAINT fk_notificacion_id_reservacion FOREIGN KEY (id_reservacion) REFERENCES reservacion (id_reservacion) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;

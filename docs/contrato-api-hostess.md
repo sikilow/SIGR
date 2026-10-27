@@ -226,8 +226,8 @@ si el correo no es válido.
 
 La API procesa notificaciones en segundo plano. El recordatorio se programa los minutos configurados antes de la hora
 reservada. Si una reservación `pendiente` o `confirmada` no registra llegada antes de `fecha_hora + tolerancia`, pasa a
-`vencida`, pierde su mesa reservada (que se libera si no hay otra reservación vigente) y genera un correo vía Resend. Los
-fallos quedan en `notificacion_reservacion` y se reintentan.
+`vencida`, pierde su mesa reservada (que se libera si no hay otra reservación vigente) y genera un correo en la cola
+común. Los fallos quedan en `notificacion_reservacion` y se reintentan por Resend o SMTP.
 
 Solo Gerencia puede consultar y modificar `GET/PATCH /api/catalogo/configuracion-reservacion`:
 
@@ -235,8 +235,9 @@ Solo Gerencia puede consultar y modificar `GET/PATCH /api/catalogo/configuracion
 { "tolerancia_minutos": 15, "recordatorio_minutos": 5 }
 ```
 
-La actualización requiere ambos campos enteros; tolerancia de 5–180 minutos y recordatorio de 1–30 minutos. Configura el
-envío con `RESEND_API_KEY` y `RESEND_FROM` en `backend/.env`; ver [`resend-reservaciones.md`](resend-reservaciones.md).
+La actualización requiere ambos campos enteros; tolerancia de 5–180 minutos y recordatorio de 1–30 minutos. Configura
+`CORREO_PROVEEDOR`, `CORREO_REMITENTE` y las credenciales de Resend o SMTP en `backend/.env`; el detalle está en
+[`resend-reservaciones.md`](resend-reservaciones.md).
 
 ### `PATCH /api/reservaciones/{id}`
 

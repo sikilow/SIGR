@@ -1,96 +1,83 @@
-# Integración de Resend para reservaciones
+# Correo de reservaciones: Resend o Gmail SMTP
 
-Esta guía explica cómo SIGR envía recordatorios y avisos de vencimiento mediante [Resend](https://resend.com), qué configurar en el backend y cómo comprobar el resultado.
+SIGR usa un único procesador y una sola cola (`notificacion_reservacion`) para confirmaciones, recordatorios y reservaciones vencidas. El servicio `backend/src/services/correo.ts` es el único punto de envío y admite el SDK de Resend o Nodemailer con SMTP.
 
-## Seguridad de la API key
+## Seguridad y configuración
 
-La API key compartida en el chat debe considerarse expuesta. Revócala desde el panel de Resend y crea una nueva antes de habilitar el envío. No la copies a este documento, a `backend/.env.example`, al código fuente, a capturas ni a Git.
+No guardes la contraseña de Gmail, la contraseña de aplicación ni la API key de Resend en Git, en este documento, en capturas ni en comandos. Coloca credenciales únicamente en el archivo local ignorado `backend/.env` o en el gestor de secretos del despliegue. El repositorio solo contiene variables vacías en `backend/.env.example`.
 
-Guarda la nueva key únicamente en el archivo local `backend/.env`, que no debe versionarse. No la escribas en comandos de terminal que queden en el historial ni en mensajes de commit. Si una key real llegó a un repositorio, aunque luego se borre, revócala y reemplázala.
+Variables del backend:
 
-## Qué se implementó
+| Variable | Uso |
+| --- | --- |
+| `CORREO_PROVEEDOR` | `resend` o `smtp`. Si queda vacía: elige Resend si hay `RESEND_API_KEY`, luego SMTP si hay `SMTP_USER` y `SMTP_PASS`; de otro modo, correo desactivado. |
+| `CORREO_REMITENTE` | Remitente común para todos los mensajes. |
+| `RESEND_API_KEY` | API key de Resend cuando se selecciona ese transporte. |
+| `SMTP_HOST` | Servidor SMTP; por defecto `smtp.gmail.com`. |
+| `SMTP_PORT` | Puerto SMTP; por defecto `465` (TLS seguro). También se puede usar `587` con STARTTLS. |
+| `SMTP_USER` | Cuenta autenticada del servidor SMTP. |
+| `SMTP_PASS` | Contraseña de aplicación de Gmail, no la contraseña normal. Se eliminan los espacios antes de autenticar. |
 
-- El backend usa la API HTTPS de Resend directamente; no requiere Nodemailer ni configuración SMTP.
-- `backend/src/services/notificacionesReservacion.ts` envía solicitudes `POST` a `https://api.resend.com/emails` desde un proceso del servidor, incluyendo `RESEND_API_KEY` como Bearer token.
-- El remitente se toma de `RESEND_FROM`; destinatario, asunto y texto se forman según el tipo de notificación: recordatorio o reservación vencida.
-- Si la API de Resend responde con error o no está configurada, la notificación no se marca como enviada. El backend guarda el error e intenta enviarla más adelante mediante la cola `notificacion_reservacion`.
-- La clave nunca se envía al frontend ni se devuelve desde un endpoint.
+### Gmail SMTP
 
-## Configuración inicial
+1. Activa la verificación en dos pasos en la cuenta de Google y crea una contraseña de aplicación de 16 caracteres. No uses la contraseña normal de Gmail.
+2. En `backend/.env`, selecciona `smtp`; usa `smtp.gmail.com`, puerto `465`, la cuenta en `SMTP_USER` y la contraseña de aplicación en `SMTP_PASS`.
+3. `CORREO_REMITENTE` debe ser exactamente la cuenta de `SMTP_USER` (puede incluir un nombre visible, por ejemplo `La Madalena <cuenta@gmail.com>`). Gmail reemplaza el remitente por la cuenta autenticada.
+4. Reinicia el backend. Los timeouts de conexión, saludo y socket son de aproximadamente 10 segundos.
 
-### 1. Verificar el dominio emisor
+Una cuenta personal de Gmail permite aproximadamente 500 mensajes diarios y hasta 100 destinatarios por mensaje; Google puede aplicar límites adicionales. El error `550 5.4.5` se trata como reintentable y espera seis horas antes del siguiente intento. Para mayor volumen, usa un proveedor transaccional con dominio verificado.
 
-En Resend, agrega un dominio propio y completa las verificaciones DNS que muestra el panel. Debe aparecer verificado para poder enviar a clientes. Usa un remitente de ese dominio, por ejemplo `Reservaciones <reservaciones@tudominio.com>`.
+### Resend
 
-Para pruebas iniciales, Resend puede restringir el envío a direcciones permitidas en la cuenta; sigue los requisitos que muestra tu panel. No uses un remitente de ejemplo en producción.
+1. Verifica un dominio en Resend y crea una API key privada.
+2. Selecciona `resend` (o deja el proveedor vacío y configura `RESEND_API_KEY`) y define `CORREO_REMITENTE` con una dirección autorizada por Resend.
+3. No uses una dirección de prueba como remitente de producción. Resend puede limitar los destinatarios permitidos hasta que verifiques el dominio.
 
-### 2. Crear una API key
+El cambio de transporte no requiere una lista blanca de destinatarios: cada aviso se envía al correo guardado para el cliente de esa reservación.
 
-En el panel, crea una API key con permisos de envío de correo para este proyecto. Copia el valor una sola vez y mantenlo privado. Si se pierde o se comparte, revócala y crea otra.
+## Qué hace la cola
 
-### 3. Configurar `backend/.env`
+- Al registrar una reservación, se agrega el evento `confirmacion/creada`; al confirmar una reservación pendiente, se agrega `confirmacion/confirmada`. La fila se inserta dentro de la transacción de la reservación y el ciclo de envío se dispara inmediatamente después del commit, sin esperar al correo.
+- Si el cliente no tiene correo, se permite guardar la reservación y no se agrega una confirmación.
+- Recordatorios se programan con `recordatorio_minutos` configurado por Gerencia.
+- Al pasar `fecha_hora + tolerancia_minutos` sin llegada, el procesador revalida bajo bloqueo que el estado siga siendo `pendiente` o `confirmada`; luego la marca `vencida`, libera su mesa si corresponde y encola un único aviso. No encola si la reservación ya llegó o se canceló.
+- El mensaje de vencimiento incluye la tolerancia vigente, la fecha y hora reservadas e invita a contactar al restaurante.
+- Los fallos guardan un intento, el error y la fecha de reintento en la misma cola. Los errores habituales mantienen el backoff progresivo existente (hasta una hora); `550 5.4.5` espera seis horas.
+- La migración 011 no crea confirmaciones para reservaciones anteriores. Solo las nuevas acciones de creación y confirmación producen esos eventos.
+- Un correo fallido no revierte ni bloquea el cambio de estado de la reservación.
 
-Copia las variables de ejemplo, sin incluir una key real en el repositorio:
-
-```env
-RESEND_API_KEY=re_pon_aqui_la_key_nueva
-RESEND_FROM="Restaurante <reservaciones@tudominio.com>"
-```
-
-`RESEND_FROM` debe usar una dirección asociada al dominio verificado en Resend. Conserva también las variables requeridas de MySQL y `JWT_SECRET` en ese mismo archivo. No agregues `VITE_RESEND_API_KEY` ni una variable `RESEND_API_KEY` al entorno del frontend: la key es exclusivamente del backend.
-
-### 4. Reiniciar el backend
-
-Las variables de entorno se leen al iniciar el proceso. Desde PowerShell:
-
-```powershell
-Push-Location backend
-npm run dev
-Pop-Location
-```
-
-En el entorno de despliegue, configura `RESEND_API_KEY` y `RESEND_FROM` en el administrador de secretos de la plataforma, y reinicia el servicio. No subas `backend/.env`.
-
-## Flujo de las notificaciones
-
-1. El backend revisa la cola aproximadamente cada 30 segundos.
-2. Crea el recordatorio cuando la hora de la reservación entra en el intervalo configurado por el gerente.
-3. Una reservación pendiente o confirmada que pasa de `fecha_hora + tolerancia_minutos` sin llegada se marca `vencida`. En la misma operación, se desvincula la mesa y se libera si no queda otra reservación vigente.
-4. Se crea una notificación de vencimiento explicativa para el correo del cliente.
-5. Cuando Resend acepta el mensaje, la fila se marca `enviada`. Ante errores de red, key inválida, dominio no verificado o límite del proveedor, se conserva como pendiente, se incrementa `intentos`, se guarda `ultimo_error` y se programa un nuevo intento con espera progresiva.
-
-La tabla `notificacion_reservacion` evita crear más de un aviso del mismo tipo por reservación. Un fallo en el correo no revierte el estado de vencimiento ni bloquea que se libere la mesa.
+La unicidad de `(id_reservacion, tipo, evento)` evita duplicar `creada`, `confirmada`, recordatorio o vencimiento. Recordatorios y vencimientos usan `evento = ''`.
 
 ## Comprobación
 
-1. Confirma que la migración `010_reservaciones_y_caracteristicas.sql` está aplicada y existe `notificacion_reservacion`.
-2. Configura un correo válido para un cliente de prueba y crea una reservación futura desde **Hostess → Reservaciones**.
-3. Para probar un recordatorio sin esperar, desde **Gerente → Reservas** configura una anticipación que incluya la hora de prueba; el proceso de backend debe dejar una notificación `recordatorio`.
-4. Comprueba en Resend → Emails que aparece el mensaje y que el estado sea aceptado/entregado según el panel.
-5. Para verificar el error controlado, usa una key de prueba inválida solo en un entorno local sin datos reales, reinicia el backend y revisa `notificacion_reservacion.ultimo_error` e `intentos`. Después restaura la key válida.
-6. No pruebes el vencimiento modificando datos reales de clientes. Usa una base de desarrollo aislada y una reservación de prueba.
-
-Consulta el estado de la cola en MySQL:
+Para revisar la cola:
 
 ```sql
-SELECT id_notificacion, id_reservacion, tipo, estado, intentos, ultimo_error, creada_en, enviada_en
+SELECT id_notificacion, id_reservacion, tipo, evento, destinatario, estado,
+       intentos, ultimo_error, creada_en, enviada_en
 FROM notificacion_reservacion
 ORDER BY id_notificacion DESC
 LIMIT 20;
 ```
 
-Si no se envía:
+En una base de desarrollo, registra dos clientes con correos distintos, crea una reservación para cada uno y comprueba que cada confirmación llega al correo correspondiente. Después ajusta **Gerente → Reservas** a una tolerancia breve y crea una reservación de prueba sin registrar su llegada; verifica el aviso de vencimiento y el mensaje con los minutos configurados. No pruebes con datos de clientes reales ni compartas credenciales.
 
-- Revisa que el backend se reinició después de configurar variables.
-- Comprueba que `RESEND_API_KEY` no tenga espacios ni comillas sobrantes y que no haya sido revocada.
-- Verifica que `RESEND_FROM` coincida con el dominio verificado.
-- Lee `ultimo_error` en la cola y los logs del backend; nunca imprimas el valor de la API key.
-- Revisa en Resend el registro del mensaje, la verificación del dominio y los límites de la cuenta.
+La migración debe aplicarse manualmente a una base de desarrollo con respaldo previo. Los comandos de respaldo, inspección del `CHECK`, aplicación y verificación están en [`actualizar-base-datos.md`](actualizar-base-datos.md), sección «Migración 011».
 
-## Fuentes oficiales
+## Pruebas y diagnóstico
 
-- [Resend — Introduction](https://resend.com/docs/introduction)
-- [Resend — Send Email API](https://resend.com/docs/api-reference/emails/send-email)
-- [Resend — Verified Domains](https://resend.com/docs/dashboard/domains/introduction)
-- [Resend — Create an API key](https://resend.com/docs/create-an-api-key)
-- [Resend — Node.js Quickstart](https://resend.com/docs/send-with-nodejs)
+Las pruebas Vitest simulan Nodemailer y Resend; no usan red real. Para comprobar el código:
+
+```powershell
+Push-Location backend
+npm run build
+npm test
+Pop-Location
+```
+
+Si falla el envío:
+
+- Comprueba `CORREO_PROVEEDOR`, `CORREO_REMITENTE` y la configuración del proveedor; reinicia el backend tras cambiar el entorno.
+- En Gmail, confirma que la contraseña es una contraseña de aplicación y que `SMTP_USER` coincide con el correo de `CORREO_REMITENTE`.
+- Revisa `ultimo_error`, `intentos` y `creada_en` de la notificación, además de los logs (los destinatarios se enmascaran).
+- Nunca imprimas `SMTP_PASS` ni `RESEND_API_KEY`.

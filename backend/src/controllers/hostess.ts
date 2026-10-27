@@ -4,6 +4,9 @@ import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/d
 import { idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 import { conIdempotencia } from "../services/idempotencia";
+import { esCorreoValido } from "../services/correo";
+import { solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
+import type { RowDataPacket } from "mysql2/promise";
 
 const FiltroReservaciones = z.object({ fecha: z.string().optional() });
 const FiltroEspera = z.object({ estado: z.enum(["esperando", "asignada", "cancelada"]).optional() });
@@ -89,6 +92,28 @@ async function cargarEspera(ex: Ejecutor, id: number) {
 function exigirRegistro<T>(registro: T | null, nombre: string): T {
   if (!registro) throw new ErrorApi(500, "desconocido", `No se pudo recuperar el registro recién creado (${nombre}).`);
   return registro;
+}
+
+async function encolarConfirmacionReservacion(
+  cx: Ejecutor,
+  reservacion: RowDataPacket,
+  evento: "creada" | "confirmada",
+): Promise<void> {
+  if (typeof reservacion.cliente_correo !== "string" || !esCorreoValido(reservacion.cliente_correo)) {
+    return;
+  }
+  await ejecutar(
+    cx,
+    `INSERT INTO notificacion_reservacion (id_reservacion, tipo, evento, destinatario)
+     SELECT r.id_reservacion, 'confirmacion', ?, c.correo
+       FROM reservacion r
+       JOIN cliente c ON c.id_cliente = r.id_cliente
+      WHERE r.id_reservacion = ?
+        AND c.correo IS NOT NULL
+        AND TRIM(c.correo) <> ''
+     ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion`,
+    [evento, reservacion.id_reservacion],
+  );
 }
 
 function esFechaISOValida(fecha: string): boolean {
@@ -246,9 +271,6 @@ export const crearReservacion = async (req: Request, res: Response) => {
 
       const [cliente] = await filas(cx, "SELECT id_cliente, correo FROM cliente WHERE id_cliente = ?", [datos.id_cliente]);
       if (!cliente) throw new ErrorApi(404, "no_encontrado", "El cliente no existe.");
-      if (typeof cliente.correo !== "string" || cliente.correo.trim() === "") {
-        throw new ErrorApi(422, "estado_invalido", "El cliente debe tener un correo registrado para crear una reservación.");
-      }
 
       if (datos.id_mesa !== undefined && datos.id_mesa !== null) {
         const [mesa] = await filas(
@@ -271,7 +293,12 @@ export const crearReservacion = async (req: Request, res: Response) => {
         "INSERT INTO reservacion (id_cliente, id_mesa, fecha_hora, personas) VALUES (?, ?, ?, ?)",
         [datos.id_cliente, datos.id_mesa ?? null, datos.fecha_hora, datos.personas],
       );
-      return exigirRegistro(await cargarReservacion(cx, insertado.insertId), "reservación");
+      const reservacion = exigirRegistro(await cargarReservacion(cx, insertado.insertId), "reservación");
+      await encolarConfirmacionReservacion(cx, reservacion, "creada");
+      return reservacion;
+    }).then((reservacion) => {
+      solicitarProcesamientoReservaciones();
+      return reservacion;
     }),
   );
 };
@@ -374,7 +401,16 @@ export const editarReservacion = async (req: Request, res: Response) => {
         if (mesaFinal !== mesaAnterior) await liberarMesaSiCorresponde(cx, mesaAnterior, id);
       }
 
-      return exigirRegistro(await cargarReservacion(cx, id), "reservación");
+      const reservacionActualizada = exigirRegistro(await cargarReservacion(cx, id), "reservación");
+      if (cambio.estado === "confirmada") {
+        await encolarConfirmacionReservacion(cx, reservacionActualizada, "confirmada");
+      }
+      return reservacionActualizada;
+    }).then((reservacion) => {
+      if (cambio.estado === "confirmada") {
+        solicitarProcesamientoReservaciones();
+      }
+      return reservacion;
     }),
   );
 };

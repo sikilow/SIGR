@@ -24,7 +24,7 @@ flowchart LR
 | `routes/` | **Endpoints.** Cada archivo solo dice «esta ruta, con este permiso, la atiende este controlador». |
 | `controllers/` | **Lógica de negocio.** Valida la entrada, aplica las reglas, consulta la base y arma la respuesta. |
 | `models/` | **Modelos de datos.** Los DTO (la forma exacta del JSON), las consultas compartidas, los estados del pedido y las reglas de existencia (`dominio.ts`). |
-| `services/` | **Conexión y servicios de infraestructura:** pool de MySQL y transacciones (`db.ts`) e idempotencia (`idempotencia.ts`). |
+| `services/` | **Conexión y servicios de infraestructura:** pool y transacciones (`db.ts`), idempotencia (`idempotencia.ts`), transporte unificado de correo Resend/SMTP (`correo.ts`) y cola de confirmaciones, recordatorios y vencimientos (`notificacionesReservacion.ts`). |
 | `utils/` | Funciones auxiliares: configuración (`config.ts`), errores uniformes (`errores.ts`), autenticación y permisos por rol (`auth.ts`) y el script de usuarios de prueba (`seed.ts`). |
 | `mocks/` | Datos falsos tipados para probar la API sin tocar la base real. |
 | `../tests/` | Pruebas unitarias (Vitest). |
@@ -43,6 +43,10 @@ flowchart LR
 | `src/utils/` | Funciones auxiliares (carrito, reglas de negocio, formato, contraste). |
 | `src/assets/`, `public/` | Imágenes, íconos y archivos estáticos. |
 | Carpetas adicionales | `src/types/` (modelos y estados), `src/layouts/` (estructura de cada rol), `src/composables/` (lógica reutilizable de Vue) y `src/styles/` (tokens de diseño y estilos base). |
+
+### Correo de reservaciones
+
+Las confirmaciones se insertan en `notificacion_reservacion` dentro de la misma transacción que crea o confirma la reservación. Después del commit se solicita el procesamiento sin esperar al proveedor; el ciclo periódico también recoge cualquier aviso pendiente. El mismo procesador entrega confirmaciones, recordatorios y avisos de vencimiento por `enviarCorreo`, que selecciona Resend o SMTP. La columna `evento` diferencia `creada` y `confirmada`; el índice único compuesto deduplica cada evento. Fallos se guardan en la fila y se reintentan; el límite diario de Gmail (`550 5.4.5`) espera seis horas.
 
 ### Base de datos (`database/`)
 
