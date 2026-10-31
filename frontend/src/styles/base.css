@@ -1,4 +1,4 @@
-/* Reinicio mínimo y componentes base reutilizables. */
+/* Reinicio mínimo y componentes base reutilizables · v2 «Madalena». */
 *,
 *::before,
 *::after {
@@ -25,7 +25,11 @@ body {
   font-size: var(--texto-base);
   line-height: 1.55;
   color: var(--color-text);
-  background: var(--color-bg);
+  background:
+    radial-gradient(900px 420px at 100% 0%, rgb(233 162 59 / 14%), transparent 65%),
+    radial-gradient(760px 420px at 0% 100%, rgb(194 65 12 / 6%), transparent 70%),
+    var(--color-bg);
+  background-attachment: fixed;
   -webkit-tap-highlight-color: transparent;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -53,6 +57,8 @@ h1 {
 
 h2 {
   font-size: var(--texto-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 h3 {
@@ -118,10 +124,14 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   min-width: var(--tactil-min);
   padding: 0 var(--espacio-5);
   border: 2px solid var(--color-primary);
-  border-radius: var(--radio);
+  border-radius: var(--radio-sm);
   background: var(--color-primary);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 20%),
+    0 3px 8px rgb(138 43 7 / 26%);
   color: var(--color-on-primary);
-  font-weight: 650;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   text-decoration: none;
   touch-action: manipulation;
   transition:
@@ -141,7 +151,9 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   .btn:hover:not(:disabled):not([aria-disabled='true']) {
     background: var(--color-primary-dark);
     border-color: var(--color-primary-dark);
-    box-shadow: var(--sombra);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 14%),
+      0 5px 14px rgb(138 43 7 / 32%);
   }
 }
 
@@ -149,6 +161,9 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 .btn--peligro {
   background: var(--color-peligro);
   border-color: var(--color-peligro);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 18%),
+    0 3px 8px rgb(122 23 18 / 24%);
   color: #fff;
 }
 
@@ -163,6 +178,7 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 .btn--peligro-suave {
   background: var(--color-peligro-fondo);
   border-color: var(--color-peligro);
+  box-shadow: none;
   color: var(--color-peligro-texto);
 }
 
@@ -205,13 +221,15 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 .btn--secundario {
   background: var(--color-surface);
   border-color: var(--color-borde-fuerte);
+  box-shadow: none;
   color: var(--color-primary-dark);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .btn--secundario:hover:not(:disabled):not([aria-disabled='true']) {
-    background: var(--color-primary-soft);
-    border-color: var(--color-primary);
+    background: var(--color-primary-suave);
+    border-color: var(--color-primary-dark);
+    box-shadow: none;
     color: var(--color-primary-dark);
   }
 }
@@ -276,8 +294,8 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   gap: var(--espacio-2);
   min-height: var(--tactil-min);
   padding: 0 var(--espacio-5);
-  border: 2px solid var(--color-borde-fuerte);
-  border-radius: 999px;
+  border: 1.5px solid var(--color-borde-control);
+  border-radius: var(--radio-pill);
   background: var(--color-surface);
   color: var(--color-text);
   font-weight: 600;
@@ -295,15 +313,17 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 
 @media (hover: hover) and (pointer: fine) {
   .chip:hover {
-    border-color: var(--color-primary);
-    background: var(--color-primary-soft);
+    border-color: var(--color-primary-dark);
+    background: var(--color-primary-suave);
   }
 }
 
 .chip--activo,
+.chip--activo:hover,
 .chip--activo:active {
   border-color: var(--color-primary-dark);
   background: var(--color-primary-dark);
+  box-shadow: 0 3px 8px rgb(138 43 7 / 28%);
   color: var(--color-on-primary);
 }
 
@@ -336,7 +356,7 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   width: 100%;
   min-height: var(--tactil-min);
   padding: 0 var(--espacio-4);
-  border: 2px solid var(--color-borde-fuerte);
+  border: 1.5px solid var(--color-borde-control);
   border-radius: var(--radio-sm);
   background: var(--color-surface);
   color: var(--color-text);
@@ -345,6 +365,18 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   transition:
     border-color var(--duracion-rapida) ease,
     box-shadow var(--duracion-rapida) ease;
+}
+
+.campo input:hover,
+.campo select:hover,
+.campo textarea:hover {
+  border-color: var(--color-primary-dark);
+}
+
+.campo input::placeholder,
+.campo textarea::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
 }
 
 .campo select {
@@ -518,12 +550,12 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 }
 
 .aviso--info {
-  border-color: var(--color-info);
-  background: var(--color-info-fondo);
+  border-color: var(--color-primary);
+  background: var(--color-primary-suave);
 }
 
 .aviso--info p {
-  color: var(--color-info-texto);
+  color: var(--color-primary-dark);
 }
 
 .aviso--exito {
@@ -551,9 +583,9 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   align-items: center;
   gap: var(--espacio-3);
   padding: var(--espacio-10) var(--espacio-4);
-  border: 2px dashed var(--color-borde-fuerte);
+  border: 2px dashed var(--color-borde-control);
   border-radius: var(--radio);
-  background: var(--color-surface);
+  background: rgb(255 255 255 / 55%);
   text-align: center;
 }
 

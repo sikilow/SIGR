@@ -356,7 +356,7 @@ async function solicitar() {
   gap: var(--espacio-3);
   min-height: 64px;
   padding: var(--espacio-3) var(--espacio-4);
-  border: 2px solid var(--color-muted);
+  border: 1.5px solid var(--color-borde-control);
   border-radius: var(--radio);
   background: var(--color-surface);
   cursor: pointer;

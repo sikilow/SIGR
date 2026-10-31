@@ -689,4 +689,6 @@ async function entrar() {
     animation: none;
   }
 }
+
+/* El login del rediseño A ya usa el panel de marca y la serifa; se conserva tal cual. */
 </style>

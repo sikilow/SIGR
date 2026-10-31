@@ -1,26 +1,28 @@
 /*
-  Tokens de diseño de SIGR · La Madalena
-  Identidad cálida y editorial: barro cocido, agave y maíz sobre papel de algodón.
-  La paleta es deliberada, no un tema genérico: el barro es la acción, el agave
-  comunica disponibilidad y el maíz marca lo que requiere atención.
+  Tokens de diseño de SIGR · v2 «Madalena».
+  Paleta cálida (chile, maíz y crema) con contraste WCAG AA verificado (npm run contraste y utils/contraste.ts).
+  Se conservan todos los nombres de variables del rediseño anterior para no romper componentes;
+  las nuevas están marcadas con «v2».
 */
 :root {
-  /* ---------- Paleta base ---------- */
-  --color-primary: #a63a1f;
-  --color-primary-dark: #7a2a16;
-  --color-primary-soft: #f3e1d7;
-  --color-bg: #f7f0e5;
-  --color-surface: #fffcf7;
-  --color-surface-2: #f2e9db;
-  --color-text: #1e241f;
-  --color-muted: #5d6459;
-  --color-border: #d9cbb8;
-  /* Borde con contraste ≥ 3:1 para límites que identifican un control (WCAG 1.4.11) */
-  --color-borde-fuerte: #8c8172;
-  --color-on-primary: #fff9f3;
-  --color-error: #a42222;
+  /* ---------- Paleta base v2 ---------- */
+  --color-primary: #b83d0d;
+  --color-primary-dark: #8a2b07;
+  --color-primary-soft: #fbe6d8; /* alias histórico */
+  --color-primary-suave: #fbe6d8; /* v2 */
+  --color-bg: #fbf6ef;
+  --color-surface: #ffffff;
+  --color-surface-2: #f5ede2;
+  --color-text: #261c16;
+  --color-muted: #66564a;
+  --color-border: #e8dccb;
+  --color-borde-fuerte: #8a786b; /* alias histórico */
+  --color-borde-control: #8a786b; /* v2 */
+  --color-on-primary: #ffffff;
+  --color-error: #b3261e;
+  --color-acento: #e9a23b;
 
-  /* Acentos de identidad */
+  /* Acentos de identidad (se conservan) */
   --color-secondary: #2e6b58;
   --color-secondary-dark: #1f4e3f;
   --color-secondary-soft: #e1eee8;
@@ -29,39 +31,39 @@
   --color-maiz-fondo: #fbf0d9;
 
   /* ---------- Estados de mesa y de pedido ---------- */
-  --color-libre: #2e6b45;
-  --color-ocupada: #a83226;
-  --color-reservada: #2b5f8c;
-  --color-listo: #9a5b00;
+  --color-libre: #1e8a4a;
+  --color-ocupada: #c93a2b;
+  --color-reservada: #2b5fd9;
+  --color-listo: #c26a00;
 
-  --color-libre-texto: #1f4a2f;
-  --color-ocupada-texto: #7e241b;
-  --color-reservada-texto: #1e4668;
-  --color-listo-texto: #6e4000;
-
-  --color-listo-fondo: #fbf1dc;
+  /* Variantes oscuras para texto de estado (contraste AA ≥ 4.5:1 sobre blanco) */
+  --color-libre-texto: #14633a;
+  --color-ocupada-texto: #9a1b1b;
+  --color-reservada-texto: #1d47a8;
+  --color-listo-texto: #8a4a00;
+  --color-listo-fondo: #fff4dc;
 
   /* Controles deshabilitados (relleno neutro y texto oscuro legible) */
-  --color-deshabilitado-borde: #cfc2af;
-  --color-deshabilitado-fondo: #efe7db;
-  --color-deshabilitado-texto: #5d6459;
+  --color-deshabilitado-borde: #cdbfaf;
+  --color-deshabilitado-fondo: #ece3d9;
+  --color-deshabilitado-texto: #4a4039;
 
   /* Acción destructiva */
-  --color-peligro: #a42222;
-  --color-peligro-texto: #7a1818;
-  --color-peligro-fondo: #fbeae8;
+  --color-peligro: #b3261e;
+  --color-peligro-texto: #7a1712;
+  --color-peligro-fondo: #fdf0ee;
 
   /* Estados del pedido */
-  --color-registrado: #5d6459;
-  --color-registrado-texto: #3a4038;
-  --color-enviado: #2563a8;
-  --color-enviado-texto: #1b4a7e;
-  --color-preparacion: #6d3fa6;
-  --color-preparacion-texto: #512c7e;
-  --color-entregado: #2e6b45;
-  --color-entregado-texto: #1f4a2f;
-  --color-pagado: #0f6b63;
-  --color-pagado-texto: #0a4c46;
+  --color-registrado: #6b7280;
+  --color-registrado-texto: #374151;
+  --color-enviado: #2563eb;
+  --color-enviado-texto: #1e40af;
+  --color-preparacion: #7c3aed;
+  --color-preparacion-texto: #5b21b6;
+  --color-entregado: #1e8a4a;
+  --color-entregado-texto: #14633a;
+  --color-pagado: #0f766e;
+  --color-pagado-texto: #115e59;
 
   /* Estados de cuenta */
   --color-cuenta-abierta: #2b5f8c;
@@ -136,12 +138,15 @@
   --color-advertencia-fondo: #fbf0d9;
 
   /* ---------- Forma ---------- */
-  --radio: 16px;
-  --radio-sm: 10px;
+  --radio: 20px;
+  --radio-sm: 12px;
   --radio-lg: 24px;
-  --sombra: 0 1px 2px rgb(30 36 31 / 6%), 0 8px 24px -16px rgb(30 36 31 / 22%);
-  --sombra-elevada: 0 2px 4px rgb(30 36 31 / 8%), 0 24px 48px -20px rgb(30 36 31 / 30%);
-  --sombra-suave: 0 1px 0 rgb(30 36 31 / 5%);
+  --radio-pill: 999px;
+  --sombra: 0 1px 2px rgb(70 38 20 / 8%), 0 6px 18px rgb(70 38 20 / 7%);
+  --sombra-alta: 0 2px 4px rgb(70 38 20 / 10%), 0 14px 34px rgb(70 38 20 / 14%);
+  --sombra-elevada: 0 2px 4px rgb(70 38 20 / 10%), 0 24px 48px -20px rgb(70 38 20 / 30%);
+  --sombra-suave: 0 1px 0 rgb(70 38 20 / 5%);
+  --gradiente-marca: linear-gradient(135deg, #c2410c 0%, #8a2b07 100%);
 
   /* ---------- Espaciado (base de 4 px) ---------- */
   --espacio-1: 4px;
@@ -157,7 +162,7 @@
   /* ---------- Táctil y estructura ---------- */
   --tactil-min: 48px;
   --altura-barra-superior: 64px;
-  --altura-nav-inferior: 72px;
+  --altura-nav-inferior: 76px;
   --ancho-sidebar: 248px;
   --ancho-contenido: 1440px;
   --grid-columnas: 4;

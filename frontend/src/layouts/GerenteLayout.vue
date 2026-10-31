@@ -448,4 +448,68 @@ async function salir() {
     padding: 0;
   }
 }
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.barra {
+  position: relative;
+  z-index: 3;
+  background: var(--gradiente-marca);
+  border-bottom: 3px solid var(--color-acento);
+  box-shadow: 0 4px 16px rgb(70 30 10 / 22%);
+}
+
+.barra__restaurante {
+  font-family: var(--fuente-titulo);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.barra .btn--secundario {
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
+}
+
+.avisos__texto {
+  border-radius: var(--radio-pill);
+  box-shadow: var(--sombra-alta);
+}
+
+.nav {
+  position: relative;
+  z-index: 2;
+  padding: 0 var(--espacio-2);
+  border-top: none;
+  box-shadow: 0 -8px 24px rgb(70 38 20 / 9%);
+}
+
+.nav .nav__enlace {
+  gap: 2px;
+  border-radius: var(--radio-sm);
+}
+
+.nav .nav__enlace:active {
+  background: var(--color-surface-2);
+}
+
+/* Ícono dentro de una «píldora» que se tiñe en la pestaña activa */
+.nav .nav__enlace svg {
+  box-sizing: content-box;
+  padding: 4px 20px;
+  border-radius: var(--radio-pill);
+  transition: background-color 150ms ease-out;
+}
+
+/* Activo: píldora tintada + texto oscuro y en negrita (no depende solo del color) */
+.nav .nav__enlace.router-link-active {
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-primary-dark);
+  font-weight: 700;
+}
+
+.nav .nav__enlace.router-link-active svg {
+  background: var(--color-primary-suave);
+}
+
+/* La navegación lateral de escritorio ya la define el rediseño A (`.sidebar`). */
 </style>
