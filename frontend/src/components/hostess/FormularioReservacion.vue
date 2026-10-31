@@ -533,7 +533,7 @@ async function guardar() {
 .select {
   min-height: var(--tactil-min);
   padding: 0 var(--espacio-3);
-  border: 2px solid var(--color-muted);
+  border: 1.5px solid var(--color-borde-control);
   border-radius: var(--radio-sm);
   background: var(--color-surface);
   font-weight: 400;

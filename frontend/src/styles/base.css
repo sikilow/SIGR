@@ -1,4 +1,4 @@
-/* Reinicio mínimo y componentes base reutilizables. */
+/* Reinicio mínimo y componentes base reutilizables · v2 «Madalena». */
 *,
 *::before,
 *::after {
@@ -25,7 +25,12 @@ body {
   font-size: var(--texto-base);
   line-height: 1.5;
   color: var(--color-text);
-  background: var(--color-bg);
+  background:
+    radial-gradient(900px 420px at 100% 0%, rgb(233 162 59 / 14%), transparent 65%),
+    radial-gradient(760px 420px at 0% 100%, rgb(194 65 12 / 6%), transparent 70%),
+    var(--color-bg);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -36,17 +41,23 @@ h3 {
   line-height: 1.25;
 }
 
-/* Jerarquía única: título de pantalla o de diálogo (h2) y de bloque o tarjeta (h3) */
+/* Jerarquía única: título de pantalla o de diálogo (h2, serifa) y de bloque o tarjeta (h3) */
 h2 {
+  font-family: var(--fuente-titulo);
   font-size: var(--texto-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 h3 {
   font-size: var(--texto-lg);
+  font-weight: 700;
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -83,15 +94,20 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   min-width: var(--tactil-min);
   padding: 0 var(--espacio-5);
   border: 2px solid var(--color-primary);
-  border-radius: var(--radio);
+  border-radius: var(--radio-sm);
   background: var(--color-primary);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 20%),
+    0 3px 8px rgb(138 43 7 / 26%);
   color: var(--color-on-primary);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   text-decoration: none;
   cursor: pointer;
   touch-action: manipulation;
   transition:
     background-color 150ms ease-out,
+    box-shadow 150ms ease-out,
     transform 100ms ease-out;
 }
 
@@ -103,12 +119,18 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 .btn:hover:not(:disabled):not([aria-disabled='true']) {
   background: var(--color-primary-dark);
   border-color: var(--color-primary-dark);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    0 5px 14px rgb(138 43 7 / 32%);
 }
 
 /* Acción destructiva (p. ej. cancelar): relleno de peligro con texto blanco (AA); siempre con texto + ícono */
 .btn--peligro {
   border-color: var(--color-peligro);
   background: var(--color-peligro);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 18%),
+    0 3px 8px rgb(122 23 18 / 24%);
 }
 
 .btn--peligro:hover:not(:disabled):not([aria-disabled='true']) {
@@ -119,6 +141,7 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 /* Destructiva de menor peso (acción disponible en una pantalla, pero no la principal) */
 .btn--peligro-suave {
   background: var(--color-surface);
+  box-shadow: none;
   color: var(--color-peligro-texto);
   border-color: var(--color-peligro);
 }
@@ -126,6 +149,7 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 .btn--peligro-suave:hover:not(:disabled):not([aria-disabled='true']) {
   border-color: var(--color-peligro-texto);
   background: var(--color-peligro-fondo);
+  box-shadow: none;
   color: var(--color-peligro-texto);
 }
 
@@ -134,6 +158,7 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 .btn[aria-disabled='true'] {
   border-color: var(--color-deshabilitado-borde);
   background: var(--color-deshabilitado-fondo);
+  box-shadow: none;
   color: var(--color-deshabilitado-texto);
   cursor: not-allowed;
 }
@@ -172,11 +197,14 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 
 .btn--secundario {
   background: var(--color-surface);
+  box-shadow: none;
   color: var(--color-primary-dark);
 }
 
 .btn--secundario:hover:not(:disabled):not([aria-disabled='true']) {
-  background: var(--color-bg);
+  background: var(--color-primary-suave);
+  border-color: var(--color-primary-dark);
+  box-shadow: none;
   color: var(--color-primary-dark);
 }
 
@@ -187,14 +215,21 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   gap: var(--espacio-2);
   min-height: var(--tactil-min);
   padding: 0 var(--espacio-5);
-  border: 2px solid var(--color-muted);
-  border-radius: 999px;
+  border: 1.5px solid var(--color-borde-control);
+  border-radius: var(--radio-pill);
   background: var(--color-surface);
   color: var(--color-text);
   font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
-  transition: background-color 150ms ease-out;
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+
+.chip:hover {
+  border-color: var(--color-primary-dark);
+  background: var(--color-primary-suave);
 }
 
 .chip:active {
@@ -202,9 +237,11 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 }
 
 .chip--activo,
+.chip--activo:hover,
 .chip--activo:active {
   border-color: var(--color-primary-dark);
   background: var(--color-primary-dark);
+  box-shadow: 0 3px 8px rgb(138 43 7 / 28%);
   color: var(--color-on-primary);
 }
 
@@ -223,13 +260,27 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   font-weight: 600;
 }
 
-.campo input {
+.campo input,
+.campo select {
   min-height: var(--tactil-min);
   padding: 0 var(--espacio-4);
-  border: 2px solid var(--color-muted);
+  border: 1.5px solid var(--color-borde-control);
   border-radius: var(--radio-sm);
   background: var(--color-surface);
   font-weight: 400;
+  transition: border-color 150ms ease-out;
+}
+
+.campo input:hover,
+.campo select:hover,
+.campo textarea:hover {
+  border-color: var(--color-primary-dark);
+}
+
+.campo input::placeholder,
+.campo textarea::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
 }
 
 .texto-error {
@@ -278,7 +329,7 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   padding: var(--espacio-3) var(--espacio-4);
   border: 2px solid var(--color-error);
   border-radius: var(--radio);
-  background: var(--color-surface);
+  background: var(--color-peligro-fondo);
 }
 
 .aviso svg {
@@ -294,6 +345,7 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 
 .aviso--info {
   border-color: var(--color-primary);
+  background: var(--color-primary-suave);
   color: var(--color-primary-dark);
 }
 
@@ -308,8 +360,9 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   align-items: center;
   gap: var(--espacio-3);
   padding: var(--espacio-10) var(--espacio-4);
-  border: 2px dashed var(--color-muted);
+  border: 2px dashed var(--color-borde-control);
   border-radius: var(--radio);
+  background: rgb(255 255 255 / 55%);
   text-align: center;
 }
 
@@ -346,7 +399,7 @@ a.btn {
 .campo textarea {
   min-height: 112px;
   padding: var(--espacio-3) var(--espacio-4);
-  border: 2px solid var(--color-muted);
+  border: 1.5px solid var(--color-borde-control);
   border-radius: var(--radio-sm);
   background: var(--color-surface);
   font: inherit;

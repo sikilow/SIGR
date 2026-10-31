@@ -203,4 +203,87 @@ const textoCuenta = computed(() =>
     box-shadow: 0 0 0 16px rgb(217 119 6 / 0%);
   }
 }
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.mesa {
+  --estado-texto: var(--color-muted);
+
+  position: relative;
+  overflow: hidden;
+  padding: var(--espacio-4) var(--espacio-4) var(--espacio-4) var(--espacio-5);
+  border-top: 1px solid var(--color-border);
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    var(--color-surface);
+  box-shadow: var(--sombra);
+}
+
+.mesa--libre {
+  --estado-texto: var(--color-libre-texto);
+
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    var(--color-surface);
+  box-shadow: var(--sombra);
+}
+
+.mesa--ocupada {
+  --estado-texto: var(--color-ocupada-texto);
+
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    #fff4f1;
+}
+
+.mesa--reservada {
+  --estado-texto: var(--color-reservada-texto);
+
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    #f3f6ff;
+  box-shadow: var(--sombra);
+}
+
+.mesa:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sombra-alta);
+}
+
+.mesa:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+.mesa__numero,
+.mesa--libre .mesa__numero,
+.mesa--reservada .mesa__numero {
+  color: var(--estado-texto);
+  font-family: var(--fuente-titulo);
+  font-size: 2.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.mesa__etiqueta {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mesa__cabecera {
+  flex-wrap: wrap;
+  column-gap: var(--espacio-2);
+}
+
+.mesa__capacidad {
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mesa:hover,
+  .mesa:active {
+    transform: none;
+  }
+}
 </style>

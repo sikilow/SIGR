@@ -147,4 +147,31 @@ defineExpose({ cerrar: () => dialogo.value?.close() })
     opacity: 0;
   }
 }
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.dialogo::backdrop {
+  background: rgb(38 28 22 / 56%);
+  backdrop-filter: blur(3px);
+}
+
+.dialogo--hoja {
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -10px 34px rgb(38 28 22 / 28%);
+}
+
+/* Asa de la hoja inferior: indica que se puede cerrar y que viene de abajo */
+.dialogo--hoja::before {
+  content: '';
+  display: block;
+  width: 44px;
+  height: 5px;
+  margin: calc(var(--espacio-2) * -1) auto var(--espacio-3);
+  border-radius: var(--radio-pill);
+  background: var(--color-border);
+}
+
+.dialogo--centro {
+  border-radius: 24px;
+  box-shadow: var(--sombra-alta);
+}
 </style>

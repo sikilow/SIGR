@@ -1,41 +1,48 @@
 /*
-  Tokens de diseño de SIGR.
-  PROVISIONAL: la paleta está pendiente de confirmación por el usuario.
+  Tokens de diseño de SIGR · v2 «Madalena».
+  Paleta cálida (chile, maíz y crema) con contraste WCAG AA verificado (npm run contraste y utils/contraste.ts).
+  Se conservan todos los nombres de variables; las nuevas están marcadas con «v2».
 */
 :root {
   /* Paleta base */
-  --color-primary: #c2410c;
-  --color-primary-dark: #9a3412;
-  --color-bg: #fff8f1;
+  --color-primary: #b83d0d;
+  --color-primary-dark: #8a2b07;
+  --color-bg: #fbf6ef;
   --color-surface: #ffffff;
-  --color-text: #1f2937;
-  --color-muted: #6b7280;
-  --color-border: #e7d9cc;
+  --color-text: #261c16;
+  --color-muted: #66564a;
+  --color-border: #e8dccb;
   --color-on-primary: #ffffff;
-  --color-error: #b91c1c;
+  --color-error: #b3261e;
+
+  /* v2: superficies y acentos */
+  --color-surface-2: #f5ede2;
+  --color-primary-suave: #fbe6d8;
+  --color-acento: #e9a23b;
+  --color-borde-control: #8a786b;
 
   /* Estados de mesa y de pedido (para íconos y bordes; contraste ≥ 3:1 sobre blanco) */
-  --color-libre: #16a34a;
-  --color-ocupada: #dc2626;
-  --color-reservada: #2563eb;
-  --color-listo: #d97706;
+  --color-libre: #1e8a4a;
+  --color-ocupada: #c93a2b;
+  --color-reservada: #2b5fd9;
+  --color-listo: #c26a00;
 
   /* Variantes oscuras para TEXTO de estado (contraste AA ≥ 4.5:1 sobre blanco) */
-  --color-libre-texto: #166534;
-  --color-ocupada-texto: #991b1b;
-  --color-reservada-texto: #1e40af;
-  --color-listo-texto: #92400e;
+  --color-libre-texto: #14633a;
+  --color-ocupada-texto: #9a1b1b;
+  --color-reservada-texto: #1d47a8;
+  --color-listo-texto: #8a4a00;
 
   /* Controles deshabilitados (relleno neutro y texto oscuro legible) */
-  --color-deshabilitado-borde: #c9bbaa;
+  --color-deshabilitado-borde: #cdbfaf;
   --color-deshabilitado-fondo: #ece3d9;
-  --color-deshabilitado-texto: #4b5563;
-  --color-listo-fondo: #fffbeb;
+  --color-deshabilitado-texto: #4a4039;
+  --color-listo-fondo: #fff4dc;
 
   /* Acción destructiva (cancelar): relleno, variante oscura para texto/hover (AA sobre blanco) */
-  --color-peligro: #b91c1c;
-  --color-peligro-texto: #7f1d1d;
-  --color-peligro-fondo: #fef2f2;
+  --color-peligro: #b3261e;
+  --color-peligro-texto: #7a1712;
+  --color-peligro-fondo: #fdf0ee;
 
   /* Estados del pedido: color para ícono/borde y variante oscura para texto (AA sobre blanco) */
   --color-registrado: #6b7280;
@@ -44,15 +51,18 @@
   --color-enviado-texto: #1e40af;
   --color-preparacion: #7c3aed;
   --color-preparacion-texto: #5b21b6;
-  --color-entregado: #16a34a;
-  --color-entregado-texto: #166534;
+  --color-entregado: #1e8a4a;
+  --color-entregado-texto: #14633a;
   --color-pagado: #0f766e;
   --color-pagado-texto: #115e59;
 
   /* Forma */
-  --radio: 16px;
-  --radio-sm: 8px;
-  --sombra: 0 1px 3px rgb(31 41 55 / 12%), 0 1px 2px rgb(31 41 55 / 8%);
+  --radio: 20px;
+  --radio-sm: 12px;
+  --radio-pill: 999px;
+  --sombra: 0 1px 2px rgb(70 38 20 / 8%), 0 6px 18px rgb(70 38 20 / 7%);
+  --sombra-alta: 0 2px 4px rgb(70 38 20 / 10%), 0 14px 34px rgb(70 38 20 / 14%);
+  --gradiente-marca: linear-gradient(135deg, #c2410c 0%, #8a2b07 100%);
 
   /* Escala de espaciado (base de 4px) */
   --espacio-1: 4px;
@@ -68,10 +78,11 @@
   /* Táctil: objetivo mínimo de 48px */
   --tactil-min: 48px;
   --altura-barra-superior: 64px;
-  --altura-nav-inferior: 72px;
+  --altura-nav-inferior: 76px;
 
-  /* Tipografía del sistema */
+  /* Tipografía: cuerpo del sistema (legible) y títulos con serifa cálida (aspecto de carta de restaurante) */
   --fuente: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fuente-titulo: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
   --texto-sm: 0.875rem;
   --texto-base: 1rem;
   --texto-lg: 1.25rem;

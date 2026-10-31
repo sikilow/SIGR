@@ -95,4 +95,15 @@ const contadores = (): Contador[] => [
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.resumen__item {
+  box-shadow: var(--sombra);
+}
+
+.resumen__numero {
+  font-family: var(--fuente-titulo);
+  font-size: 2rem;
+  font-weight: 700;
+}
 </style>

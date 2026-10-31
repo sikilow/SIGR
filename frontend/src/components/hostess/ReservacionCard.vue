@@ -153,4 +153,28 @@ const finalizada = computed(() => props.reservacion.estado === 'llego' || props.
     transform: none;
   }
 }
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.reserva:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--sombra-alta);
+}
+
+.reserva:active {
+  transform: scale(0.99);
+  box-shadow: none;
+}
+
+.reserva__hora {
+  font-family: var(--fuente-titulo);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reserva:hover,
+  .reserva:active {
+    transform: none;
+  }
+}
 </style>

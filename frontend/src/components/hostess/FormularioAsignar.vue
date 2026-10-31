@@ -437,7 +437,7 @@ async function confirmar() {
 .personas__campo {
   width: 6rem;
   min-height: var(--tactil-min);
-  border: 2px solid var(--color-muted);
+  border: 1.5px solid var(--color-borde-control);
   border-radius: var(--radio-sm);
   background: var(--color-surface);
   font-size: var(--texto-xl);

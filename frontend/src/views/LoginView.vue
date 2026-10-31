@@ -279,4 +279,67 @@ async function entrar() {
     animation: none;
   }
 }
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.login__marca h1 {
+  font-family: var(--fuente-titulo);
+  font-size: 2.5rem;
+  letter-spacing: -0.01em;
+}
+
+.login__tarjeta {
+  padding: var(--espacio-8);
+  border-radius: 28px;
+  box-shadow: var(--sombra-alta);
+}
+
+.login__titulo {
+  font-family: var(--fuente-titulo);
+}
+
+/* Tablet horizontal y escritorio: panel de marca a la izquierda y formulario a la derecha */
+@media (min-width: 56em) {
+  .login {
+    display: grid;
+    grid-template-columns: minmax(340px, 5fr) minmax(440px, 6fr);
+    gap: 0;
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .login__marca {
+    justify-content: center;
+    gap: var(--espacio-4);
+    padding: var(--espacio-12);
+    background:
+      radial-gradient(420px 320px at 92% 6%, rgb(233 162 59 / 38%), transparent 65%),
+      radial-gradient(380px 300px at 0% 100%, rgb(255 255 255 / 12%), transparent 70%),
+      var(--gradiente-marca);
+    color: var(--color-on-primary);
+  }
+
+  .login__marca > :first-child {
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 10px rgb(255 255 255 / 92%),
+      0 10px 30px rgb(0 0 0 / 28%);
+  }
+
+  .login__marca h1 {
+    margin-top: var(--espacio-4);
+    font-size: 4rem;
+  }
+
+  .login__sub {
+    max-width: 18ch;
+    color: rgb(255 255 255 / 94%);
+    font-size: var(--texto-lg);
+  }
+
+  .login__tarjeta {
+    align-self: center;
+    justify-self: center;
+    margin: var(--espacio-8);
+  }
+}
 </style>

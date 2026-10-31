@@ -295,7 +295,7 @@ const personas = (n: number) => (n === 1 ? '1 persona' : `${n} personas`)
 .filtros { display: flex; flex-direction: column; gap: var(--espacio-3); }
 .filtros__chips { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
 .filtros__campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--espacio-3); }
-.campo select { min-height: var(--tactil-min); padding: 0 var(--espacio-4); border: 2px solid var(--color-muted); border-radius: var(--radio-sm); background: var(--color-surface); font-weight: 400; }
+.campo select { min-height: var(--tactil-min); padding: 0 var(--espacio-4); border: 1.5px solid var(--color-borde-control); border-radius: var(--radio-sm); background: var(--color-surface); font-weight: 400; }
 .campo input[type='search'] { min-height: var(--tactil-min); }
 
 .lista { display: flex; flex-direction: column; gap: var(--espacio-3); margin: 0; padding: 0; list-style: none; }

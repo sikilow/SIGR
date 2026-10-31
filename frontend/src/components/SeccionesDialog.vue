@@ -213,7 +213,7 @@ async function borrar() {
 .secciones__estado--inactiva { color: var(--color-peligro-texto); }
 .secciones__acciones { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
 .secciones__edicion { display: flex; flex: 1; flex-wrap: wrap; gap: var(--espacio-2); }
-.secciones__edicion input { flex: 1; min-width: 160px; min-height: var(--tactil-min); padding: 0 var(--espacio-4); border: 2px solid var(--color-muted); border-radius: var(--radio-sm); background: var(--color-surface); }
+.secciones__edicion input { flex: 1; min-width: 160px; min-height: var(--tactil-min); padding: 0 var(--espacio-4); border: 1.5px solid var(--color-borde-control); border-radius: var(--radio-sm); background: var(--color-surface); }
 .secciones__confirmar { margin: 0; color: var(--color-peligro-texto); font-weight: 700; }
 .secciones__vacio { margin: 0; color: var(--color-muted); text-align: center; }
 .secciones__alerta { padding: var(--espacio-3) var(--espacio-4); border: 2px solid var(--color-peligro); border-radius: var(--radio); background: var(--color-peligro-fondo); }

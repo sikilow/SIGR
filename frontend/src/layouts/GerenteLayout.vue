@@ -268,4 +268,103 @@ async function salir() {
   box-shadow: inset 0 4px 0 var(--color-primary);
   background: var(--color-bg);
 }
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.barra {
+  position: relative;
+  z-index: 3;
+  background: var(--gradiente-marca);
+  border-bottom: 3px solid var(--color-acento);
+  box-shadow: 0 4px 16px rgb(70 30 10 / 22%);
+}
+
+.barra__restaurante {
+  font-family: var(--fuente-titulo);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.barra .btn--secundario {
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
+}
+
+.avisos__texto {
+  border-radius: var(--radio-pill);
+  box-shadow: var(--sombra-alta);
+}
+
+.nav {
+  position: relative;
+  z-index: 2;
+  padding: 0 var(--espacio-2);
+  border-top: none;
+  box-shadow: 0 -8px 24px rgb(70 38 20 / 9%);
+}
+
+.nav__enlace {
+  gap: 2px;
+  border-radius: var(--radio-sm);
+}
+
+.nav__enlace:active {
+  background: var(--color-surface-2);
+}
+
+/* Ícono dentro de una «píldora» que se tiñe en la pestaña activa */
+.nav__enlace svg {
+  box-sizing: content-box;
+  padding: 4px 20px;
+  border-radius: var(--radio-pill);
+  transition: background-color 150ms ease-out;
+}
+
+/* Activo: píldora tintada + texto oscuro y en negrita (no depende solo del color) */
+.nav__enlace.router-link-active {
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-primary-dark);
+  font-weight: 700;
+}
+
+.nav__enlace.router-link-active svg {
+  background: var(--color-primary-suave);
+}
+
+/* Escritorio: la navegación pasa a una columna lateral (en tablet y teléfono sigue abajo) */
+@media (min-width: 68.75em) {
+  .layout,
+  .layout--demo {
+    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-rows: auto minmax(var(--altura-barra-superior), auto) minmax(0, 1fr);
+  }
+
+  .layout > :not(.barra):not(.nav):not(.contenido):not(.avisos):not(.saltar-contenido) {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .layout > .barra {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .layout > .nav {
+    grid-column: 1;
+    grid-row: 3;
+    grid-template-columns: 1fr;
+    grid-auto-rows: 88px;
+    align-content: start;
+    gap: var(--espacio-2);
+    padding: var(--espacio-4) var(--espacio-2);
+    border-right: 1px solid var(--color-border);
+    box-shadow: 2px 0 14px rgb(70 38 20 / 6%);
+  }
+
+  .layout > .contenido {
+    grid-column: 2;
+    grid-row: 3;
+    padding: var(--espacio-8);
+  }
+}
 </style>
