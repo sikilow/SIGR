@@ -12,7 +12,7 @@ const props = defineProps<{
   cantidades: Record<number, number>
 }>()
 
-defineEmits<{ agregar: [producto: Producto] }>()
+defineEmits<{ agregar: [producto: Producto]; quitar: [producto: Producto] }>()
 
 const seleccionada = ref<number | null>(null)
 const busqueda = ref('')
@@ -92,7 +92,12 @@ function elegirCategoria(idCategoria: number) {
 
     <ul v-if="productos.length > 0" class="menu__cuadricula">
       <li v-for="producto in productos" :key="producto.idProducto">
-        <ProductoCard :producto="producto" :en-pedido="cantidades[producto.idProducto] ?? 0" @agregar="$emit('agregar', $event)" />
+        <ProductoCard
+          :producto="producto"
+          :en-pedido="cantidades[producto.idProducto] ?? 0"
+          @agregar="$emit('agregar', $event)"
+          @quitar="$emit('quitar', $event)"
+        />
       </li>
     </ul>
 

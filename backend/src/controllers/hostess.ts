@@ -94,18 +94,20 @@ function exigirRegistro<T>(registro: T | null, nombre: string): T {
   return registro;
 }
 
-async function encolarConfirmacionReservacion(
+async function encolarNotificacionReservacion(
   cx: Ejecutor,
   reservacion: RowDataPacket,
-  evento: "creada" | "confirmada",
+  tipo: "confirmacion" | "cancelacion",
+  evento: "creada" | "confirmada" | "",
 ): Promise<void> {
   if (typeof reservacion.cliente_correo !== "string" || !esCorreoValido(reservacion.cliente_correo)) {
     return;
   }
+  // `tipo` sale de una unión cerrada (no de la petición), por eso puede ir literal en el SQL.
   await ejecutar(
     cx,
     `INSERT INTO notificacion_reservacion (id_reservacion, tipo, evento, destinatario)
-     SELECT r.id_reservacion, 'confirmacion', ?, c.correo
+     SELECT r.id_reservacion, '${tipo}', ?, c.correo
        FROM reservacion r
        JOIN cliente c ON c.id_cliente = r.id_cliente
       WHERE r.id_reservacion = ?
@@ -294,7 +296,7 @@ export const crearReservacion = async (req: Request, res: Response) => {
         [datos.id_cliente, datos.id_mesa ?? null, datos.fecha_hora, datos.personas],
       );
       const reservacion = exigirRegistro(await cargarReservacion(cx, insertado.insertId), "reservación");
-      await encolarConfirmacionReservacion(cx, reservacion, "creada");
+      await encolarNotificacionReservacion(cx, reservacion, "confirmacion", "creada");
       return reservacion;
     }).then((reservacion) => {
       solicitarProcesamientoReservaciones();
@@ -403,11 +405,13 @@ export const editarReservacion = async (req: Request, res: Response) => {
 
       const reservacionActualizada = exigirRegistro(await cargarReservacion(cx, id), "reservación");
       if (cambio.estado === "confirmada") {
-        await encolarConfirmacionReservacion(cx, reservacionActualizada, "confirmada");
+        await encolarNotificacionReservacion(cx, reservacionActualizada, "confirmacion", "confirmada");
+      } else if (cambio.estado === "cancelada") {
+        await encolarNotificacionReservacion(cx, reservacionActualizada, "cancelacion", "");
       }
       return reservacionActualizada;
     }).then((reservacion) => {
-      if (cambio.estado === "confirmada") {
+      if (cambio.estado === "confirmada" || cambio.estado === "cancelada") {
         solicitarProcesamientoReservaciones();
       }
       return reservacion;

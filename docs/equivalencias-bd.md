@@ -142,19 +142,19 @@ Las rutas de Salón, reservaciones, clientes y asignación descritas en esta sec
 | `Reservacion` | `reservacion.fecha_hora`, `llegada_en` | `fechaHora` (`Date`), `llegadaEn` (`Date \| null`) | `fecha_hora`, `llegada_en` | columnas DATETIME (`llegada_en` NULL hasta que llega) |
 | `Reservacion` | `reservacion.estado` | `estado` (`pendiente` \| `confirmada` \| `llego` \| `cancelada` \| `vencida`) | `estado` | columna `VARCHAR`; el proceso del backend escribe `vencida` tras cumplirse la tolerancia |
 | `Reservacion` | `cliente.nombre`, `cliente.telefono`, `mesa.numero` (JOIN) | `clienteNombre`, `clienteTelefono`, `mesaNumero` | `cliente_nombre`, `cliente_telefono`, `mesa_numero` | **calculados** (JOIN) |
-| `Reservacion` | `cliente.correo` (JOIN) | `clienteCorreo` | `cliente_correo` | calculado (JOIN); obligatorio y válido para crear una reservación, aunque `cliente.correo` admita `NULL` |
+| `Reservacion` | `cliente.correo` (JOIN) | `clienteCorreo` | `cliente_correo` | calculado (JOIN); opcional para crear una reservación. Si falta, no se encola la confirmación |
 | Preferencias de reservación | — | selección de sección y características de acceso | no se persisten como columnas de `reservacion` | criterios del frontend para ayudar a elegir mesa; las características físicas se guardan en `mesa` |
 | `ListaEspera` | `lista_espera.id_espera`, `id_cliente`, `personas`, `registrado_en` | `idEspera`, `idCliente`, `personas`, `registradoEn` (`Date`) | snake_case | columnas (`registrado_en` DATETIME, default ahora) |
 | `ListaEspera` | `lista_espera.estado` | `estado` (`esperando` \| `asignada` \| `cancelada`) | `estado` | columna **de texto libre, sin `CHECK`** (default `esperando`); `cancelada` es un **supuesto del frontend** |
 | `ListaEspera` | `cliente.nombre`, `cliente.telefono` (JOIN) | `clienteNombre`, `clienteTelefono` | `cliente_nombre`, `cliente_telefono` | **calculados** (JOIN) |
 | `GrupoAsignacion`, `NuevaReservacion`, `NuevaEspera`, `NuevoCliente`, `CambioReservacion`, `CambioEspera` | — | — | cuerpos de petición con nombres de columna | solo frontend (ver el contrato de la hostess) |
 
-### Configuración y notificaciones de reservaciones (migración 010)
+### Configuración y notificaciones de reservaciones (migraciones 010–012)
 
 | Concepto | Tabla.columna | Nombre JSON | Naturaleza |
 |---|---|---|---|
 | Configuración del restaurante | `configuracion_reservacion.tolerancia_minutos`, `recordatorio_minutos` | `tolerancia_minutos`, `recordatorio_minutos` | persistido; valores predeterminados: 15 y 5 minutos |
-| Notificación de correo | `notificacion_reservacion.id_reservacion`, `tipo`, `destinatario`, `estado`, `intentos`, `ultimo_error`, `creada_en`, `enviada_en` | la cola no se expone al frontend | outbox del backend para recordatorios y vencimientos; Resend procesa los envíos y los fallos se reintentan |
+| Notificación de correo | `notificacion_reservacion.id_reservacion`, `tipo`, `evento`, `destinatario`, `estado`, `intentos`, `ultimo_error`, `creada_en`, `enviada_en` | la cola no se expone al frontend | outbox del backend para confirmaciones, recordatorios, vencimientos y cancelaciones; Resend o SMTP procesan los envíos y los fallos se reintentan. El HTML y el texto se arman en `plantillasCorreo.ts` |
 
 La configuración se consulta y actualiza mediante `GET/PATCH /api/catalogo/configuracion-reservacion` (solo gerente). Consulta [`resend-reservaciones.md`](resend-reservaciones.md) para configurar el proveedor sin exponer su API key.
 

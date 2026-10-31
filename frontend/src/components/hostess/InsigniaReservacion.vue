@@ -44,6 +44,11 @@ const texto = computed(() => ETIQUETA_ESTADO_RESERVACION[props.estado])
         <circle cx="12" cy="12" r="9" />
         <path d="m9 9 6 6M15 9l-6 6" />
       </template>
+      <!-- vencida: reloj con signo de exclamación -->
+      <template v-else-if="estado === 'vencida'">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2M12 17v.01" />
+      </template>
       <!-- desconocido: signo de interrogación -->
       <template v-else>
         <circle cx="12" cy="12" r="9" />
@@ -80,22 +85,27 @@ const texto = computed(() => ETIQUETA_ESTADO_RESERVACION[props.estado])
 }
 
 .insignia--pendiente {
-  --tono: var(--color-listo);
-  --tono-texto: var(--color-listo-texto);
+  --tono: var(--color-reservacion-pendiente);
+  --tono-texto: var(--color-reservacion-pendiente-texto);
 }
 
 .insignia--confirmada {
-  --tono: var(--color-reservada);
-  --tono-texto: var(--color-reservada-texto);
+  --tono: var(--color-reservacion-confirmada);
+  --tono-texto: var(--color-reservacion-confirmada-texto);
 }
 
 .insignia--llego {
-  --tono: var(--color-libre);
-  --tono-texto: var(--color-libre-texto);
+  --tono: var(--color-reservacion-llego);
+  --tono-texto: var(--color-reservacion-llego-texto);
 }
 
 .insignia--cancelada {
-  --tono: var(--color-peligro);
-  --tono-texto: var(--color-peligro-texto);
+  --tono: var(--color-reservacion-cancelada);
+  --tono-texto: var(--color-reservacion-cancelada-texto);
+}
+
+.insignia--vencida {
+  --tono: var(--color-reservacion-vencida);
+  --tono-texto: var(--color-reservacion-vencida-texto);
 }
 </style>

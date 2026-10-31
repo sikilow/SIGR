@@ -24,7 +24,7 @@ flowchart LR
 | `routes/` | **Endpoints.** Cada archivo solo dice «esta ruta, con este permiso, la atiende este controlador». |
 | `controllers/` | **Lógica de negocio.** Valida la entrada, aplica las reglas, consulta la base y arma la respuesta. |
 | `models/` | **Modelos de datos.** Los DTO (la forma exacta del JSON), las consultas compartidas, los estados del pedido y las reglas de existencia (`dominio.ts`). |
-| `services/` | **Conexión y servicios de infraestructura:** pool y transacciones (`db.ts`), idempotencia (`idempotencia.ts`), transporte unificado de correo Resend/SMTP (`correo.ts`) y cola de confirmaciones, recordatorios y vencimientos (`notificacionesReservacion.ts`). |
+| `services/` | **Conexión y servicios de infraestructura:** pool y transacciones (`db.ts`), idempotencia (`idempotencia.ts`), transporte unificado de correo Resend/SMTP (`correo.ts`), plantillas HTML y de texto de las reservaciones (`plantillasCorreo.ts`) y cola de confirmaciones, recordatorios, vencimientos y cancelaciones (`notificacionesReservacion.ts`). |
 | `utils/` | Funciones auxiliares: configuración (`config.ts`), errores uniformes (`errores.ts`), autenticación y permisos por rol (`auth.ts`) y el script de usuarios de prueba (`seed.ts`). |
 | `mocks/` | Datos falsos tipados para probar la API sin tocar la base real. |
 | `../tests/` | Pruebas unitarias (Vitest). |
@@ -46,7 +46,9 @@ flowchart LR
 
 ### Correo de reservaciones
 
-Las confirmaciones se insertan en `notificacion_reservacion` dentro de la misma transacción que crea o confirma la reservación. Después del commit se solicita el procesamiento sin esperar al proveedor; el ciclo periódico también recoge cualquier aviso pendiente. El mismo procesador entrega confirmaciones, recordatorios y avisos de vencimiento por `enviarCorreo`, que selecciona Resend o SMTP. La columna `evento` diferencia `creada` y `confirmada`; el índice único compuesto deduplica cada evento. Fallos se guardan en la fila y se reintentan; el límite diario de Gmail (`550 5.4.5`) espera seis horas.
+Las confirmaciones y cancelaciones se insertan en `notificacion_reservacion` dentro de la misma transacción que crea, confirma o cancela la reservación. Después del commit se solicita el procesamiento sin esperar al proveedor; el ciclo periódico también recoge cualquier aviso pendiente. El mismo procesador entrega confirmaciones, recordatorios, vencimientos y cancelaciones por `enviarCorreo`, que selecciona Resend o SMTP. La columna `evento` diferencia `creada` y `confirmada`; el índice único compuesto deduplica cada evento. Fallos se guardan en la fila y se reintentan; el límite diario de Gmail (`550 5.4.5`) espera seis horas.
+
+El contenido se arma en `plantillasCorreo.ts`: cada plantilla devuelve `asunto`, `texto` y `html`. El HTML es una tarjeta editorial de hasta 600 px con marco agave, papel cálido y un acento por tipo de aviso, construida con tablas y estilos en línea, sin imágenes. El texto plano viaja como alternativa y el diseño no altera la cola ni las reglas de negocio.
 
 ### Base de datos (`database/`)
 
@@ -54,7 +56,7 @@ Las confirmaciones se insertan en `notificacion_reservacion` dentro de la misma 
 | --- | --- |
 | `docker-compose.yml` | Levanta MySQL 8 en un contenedor. |
 | `init.sql` | Script inicial: crea la base `SIGR` con sus 23 tablas, los catálogos y los datos base. |
-| `migrations/` | Cambios incrementales (`001` a `005`) para bases que ya existían. |
+| `migrations/` | Cambios incrementales (`001` a `012`) para bases que ya existían. |
 | `seed_demo.sql` | Datos de demostración opcionales (mesas 7 a 18, cuentas, clientes, reservaciones, lista de espera). |
 
 ## 3. Cómo viaja una petición
@@ -99,7 +101,7 @@ sequenceDiagram
 
 | Dónde | Comando | Qué cubre |
 | --- | --- | --- |
-| `backend/` | `npm test` | Funciones puras del dominio (estados, validación, ids de ruta) y los datos de los mocks. |
+| `backend/` | `npm test` | Funciones puras del dominio (estados, validación, ids de ruta), datos de los mocks, transporte y plantillas de correo, y cola de notificaciones. |
 | `frontend/` | `npm test` | Conversión de datos, servicios simulados, reglas de negocio, stores y utilidades. |
 | `frontend/` | `npm run check` | Tipos, pruebas y build; debe pasar antes de entregar. |
 

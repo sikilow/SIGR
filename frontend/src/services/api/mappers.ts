@@ -94,6 +94,8 @@ export interface ProductoDto {
   disponible: Booleano
   /** Unidades en inventario; null o ausente = no controla existencia (se prepara al momento). */
   existencia?: Numerico | null
+  /** Umbral de stock bajo configurado en disponibilidadProducto.stock_minimo. */
+  stock_minimo?: Numerico | null
 }
 
 export interface CategoriaMenuDto {
@@ -202,6 +204,7 @@ export function aProducto(dto: ProductoDto): Producto {
     precio: aNumero(dto.precio, 'precio'),
     disponible: aBooleano(dto.disponible, 'disponible'),
     ...(dto.existencia != null ? { existencia: aNumero(dto.existencia, 'existencia') } : {}),
+    ...(dto.stock_minimo != null ? { stockMinimo: aNumero(dto.stock_minimo, 'stock_minimo') } : {}),
   }
 }
 

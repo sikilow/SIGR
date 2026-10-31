@@ -54,6 +54,7 @@ describe("procesador de la cola de reservaciones", () => {
     expect(enviarCorreoMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
       para: "ana@gmail.com",
       texto: expect.stringContaining("Hola Ana"),
+      html: expect.stringContaining("max-width:600px"),
     }));
     expect(enviarCorreoMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
       para: "luis@outlook.com",
@@ -100,6 +101,28 @@ describe("procesador de la cola de reservaciones", () => {
     expect(enviarCorreoMock).toHaveBeenCalledWith(expect.objectContaining({
       texto: expect.stringContaining("contacta al restaurante"),
     }));
+  });
+
+  it("envía el correo de cancelación y marca el aviso como enviado", async () => {
+    filasMock.mockResolvedValue([{
+      ...avisoBase,
+      tipo: "cancelacion",
+      evento: "",
+      mesa_numero: null,
+    }]);
+
+    await __pruebas.procesarNotificaciones();
+
+    expect(enviarCorreoMock).toHaveBeenCalledWith(expect.objectContaining({
+      para: "cliente@gmail.com",
+      asunto: "Tu reservación fue cancelada",
+      texto: expect.stringContaining("Hola Ana, tu reservación en La Madalena"),
+    }));
+    expect(ejecutarMock).toHaveBeenCalledWith(
+      {},
+      expect.stringContaining("SET estado = 'enviada'"),
+      [4],
+    );
   });
 
   it("en un error 550 5.4.5 guarda el fallo e incrementa el intento con espera de seis horas", async () => {

@@ -94,6 +94,11 @@ export const router = createRouter({
           name: 'gerente-pedidos',
           component: () => import('../views/gerente/PedidosView.vue'),
         },
+        {
+          path: 'sistema',
+          name: 'gerente-sistema',
+          component: () => import('../views/gerente/SistemaView.vue'),
+        },
       ],
     },
     {

@@ -9,8 +9,13 @@ export type TonoEstado =
   | 'listo'
   | 'cuenta'
   | 'cuenta_abierta'
+  | 'cuenta_por_pagar'
+  | 'cuenta_pagada'
   | 'agotado'
   | 'stock_bajo'
+  | 'producto_disponible'
+  | 'producto_stock_bajo'
+  | 'producto_agotado'
   | 'carrito'
   // Estados del pedido (`listo` se comparte con el aviso "Pedido listo" del panel)
   | 'registrado'
@@ -60,14 +65,29 @@ withDefaults(defineProps<{ tono: TonoEstado; tamano?: number }>(), { tamano: 20 
       <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
       <path d="M9 8h6M9 12h6" />
     </template>
-    <!-- agotado: círculo tachado -->
-    <template v-else-if="tono === 'agotado'">
+    <!-- agotado / producto agotado: círculo tachado -->
+    <template v-else-if="tono === 'agotado' || tono === 'producto_agotado'">
       <circle cx="12" cy="12" r="9" />
       <path d="m9 9 6 6M15 9l-6 6" />
     </template>
-    <template v-else-if="tono === 'stock_bajo'">
+    <template v-else-if="tono === 'stock_bajo' || tono === 'producto_stock_bajo'">
       <path d="M12 3 2.8 19h18.4L12 3Z" />
       <path d="M12 9v4M12 16v.01" />
+    </template>
+    <!-- producto disponible: palomita en círculo -->
+    <template v-else-if="tono === 'producto_disponible'">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12 3 3 5-6" />
+    </template>
+    <!-- cuenta por pagar: recibo con signo de pesos -->
+    <template v-else-if="tono === 'cuenta_por_pagar'">
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+      <path d="M12 7v8M9.5 9.5h3.8a1.7 1.7 0 0 1 0 3.4H9.5" />
+    </template>
+    <!-- cuenta pagada: recibo con palomita -->
+    <template v-else-if="tono === 'cuenta_pagada'">
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+      <path d="m9 11 2 2 4-4" />
     </template>
     <!-- en el pedido: carrito -->
     <template v-else-if="tono === 'carrito'">

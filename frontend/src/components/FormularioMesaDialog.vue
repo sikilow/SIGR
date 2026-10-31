@@ -133,7 +133,7 @@ async function guardar() {
 </script>
 
 <template>
-  <DialogoModal :abierto="abierto" etiqueta-id="form-mesa-titulo" variante="centro" :cerrable="!enCurso" :origen-foco="origenFoco ?? null" @cerrar="emit('cerrar')">
+  <DialogoModal :abierto="abierto" etiqueta-id="form-mesa-titulo" :cerrable="!enCurso" :origen-foco="origenFoco ?? null" @cerrar="emit('cerrar')">
     <form class="form" novalidate @submit.prevent="guardar">
       <h2 id="form-mesa-titulo">{{ editando ? `Editar mesa ${mesa?.numero}` : 'Nueva mesa' }}</h2>
 
@@ -167,20 +167,44 @@ async function guardar() {
 
       <fieldset class="campo">
         <legend>Características de acceso</legend>
-        <label class="form__casilla"><input v-model="plantaBaja" type="checkbox" /><span>Planta baja</span></label>
-        <label class="form__casilla"><input v-model="espacioCarriola" type="checkbox" /><span>Espacio para carriola</span></label>
-        <label class="form__casilla"><input v-model="sinEscaleras" type="checkbox" /><span>Acceso sin escaleras</span></label>
+        <div class="form__accesos">
+          <label class="opcion-acceso">
+            <input v-model="plantaBaja" type="checkbox" />
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 21V5a2 2 0 0 1 2-2h9M9 21h11M4 12h11M19 8v13" />
+            </svg>
+            <span>Planta baja</span>
+          </label>
+          <label class="opcion-acceso">
+            <input v-model="espacioCarriola" type="checkbox" />
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 4h2.2l1.6 9.5h10.5L20 7H6" />
+              <circle cx="9" cy="19" r="1.6" />
+              <circle cx="17" cy="19" r="1.6" />
+              <path d="M12 4v4" />
+            </svg>
+            <span>Espacio para carriola</span>
+          </label>
+          <label class="opcion-acceso">
+            <input v-model="sinEscaleras" type="checkbox" />
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 20h4v-4h4v-4h4V8h4" />
+              <circle cx="6" cy="5" r="2" />
+            </svg>
+            <span>Acceso sin escaleras</span>
+          </label>
+        </div>
       </fieldset>
 
-      <label class="form__casilla">
+      <label class="interruptor form__disponible">
         <input v-model="activa" type="checkbox" />
         <span>
           Disponible
-          <span class="form__opcional">(si lo desmarcas, la mesa no aparece para la hostess ni para el mesero)</span>
+          <span class="form__opcional">Si lo apagas, la mesa no aparece para la hostess ni para el mesero.</span>
         </span>
       </label>
 
-      <div v-if="errorServidor" class="form__alerta" role="alert">
+      <div v-if="errorServidor" class="aviso aviso--error" role="alert">
         <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7v6M12 16.5v.01" />
@@ -206,13 +230,60 @@ async function guardar() {
 
 .campo input[aria-invalid='true'], .campo select[aria-invalid='true'] { border-color: var(--color-peligro); }
 
-.form__opcional { color: var(--color-muted); font-size: var(--texto-sm); font-weight: 400; }
+.form__opcional { display: block; color: var(--color-muted); font-size: var(--texto-sm); font-weight: 400; }
 .form__error { margin: 0; font-size: var(--texto-sm); }
 
-.form__casilla { display: flex; align-items: center; gap: var(--espacio-3); min-height: var(--tactil-min); font-weight: 600; cursor: pointer; }
-.form__casilla input { flex: none; width: 24px; height: 24px; accent-color: var(--color-primary-dark); }
+.form__disponible {
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radio);
+  background: var(--color-surface-2);
+}
 
-.form__alerta { display: flex; gap: var(--espacio-3); padding: var(--espacio-3) var(--espacio-4); border: 2px solid var(--color-peligro); border-radius: var(--radio); background: var(--color-peligro-fondo); color: var(--color-peligro-texto); }
-.form__alerta svg { flex: none; margin-top: var(--espacio-1); }
-.form__alerta p { margin: 0; color: var(--color-text); font-weight: 600; }
+.form__accesos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--espacio-2);
+}
+
+.opcion-acceso {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  min-height: var(--tactil-min);
+  padding: var(--espacio-2) var(--espacio-3);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.opcion-acceso input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--color-primary);
+}
+
+.opcion-acceso svg {
+  flex: none;
+  color: var(--color-muted);
+}
+
+.opcion-acceso:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+}
+
+.opcion-acceso:has(input:checked) svg {
+  color: var(--color-primary-dark);
+}
+
+.opcion-acceso:has(input:focus-visible) {
+  outline: 3px solid var(--color-primary-dark);
+  outline-offset: 2px;
+}
 </style>

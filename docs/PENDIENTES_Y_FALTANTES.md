@@ -81,7 +81,7 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 | P-02 | **No se guarda quién canceló un pedido** | Solo se guarda el motivo (`id_motivo`), no el usuario ni la fecha de cancelación. Código propuesto: RF-PED-006. Relacionado con RNF-026 y RNF-027. | Verificado |
 | P-03 | **Seguridad del ERS sin cubrir** | RNF-009 (bloqueo tras 5 intentos), RNF-011 (expiración por inactividad: hoy el token dura 8 horas fijas), RNF-012 (invalidar la sesión al salir), RNF-017 (registro de accesos no autorizados). | Verificado |
 | P-04 | **Sin protecciones básicas de la API** | El backend no usa límite de peticiones (contra fuerza bruta) ni cabeceras de seguridad. No hay HTTPS configurado en el proyecto. | Verificado en `package.json`; el HTTPS es por validar |
-| P-05 | **Las pruebas del backend son mínimas** | `backend/tests/` cubre dominio, mocks, importes y el cliente de correo (34 pruebas), pero no las rutas ni las reglas que requieren base de datos. El frontend sí tiene pruebas unitarias y de rutas, pero falta una prueba integral contra MySQL. | Verificado |
+| P-05 | **Las pruebas del backend son mínimas** | `backend/tests/` cubre dominio, mocks, importes, transporte, plantillas y cola de correo (64 pruebas en 9 archivos), pero no las rutas ni las reglas que requieren base de datos. El frontend sí tiene pruebas unitarias y de rutas, pero falta una prueba integral contra MySQL. | Verificado |
 | P-06 | **Pantallas pendientes** | Caja ya está disponible en `/cajero/caja`; facturación fiscal aún no tiene proveedor, API ni pantalla. | Parcial |
 | P-07 | **Falta `PATCH /api/lista-espera/:id`** | Quitar o editar un grupo de la lista de espera. | Verificado |
 

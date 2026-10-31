@@ -38,7 +38,7 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 | 👨‍🍳 **Cocina** | Cola de pedidos enviados y en preparación; iniciar preparación y marcarlos listos. Actualización automática | ✅ |
 | 💵 **Caja** | Apertura/cierre de corte, cobro de cuentas solicitadas, pagos divididos, cambio y ticket imprimible | ✅ |
 | 🪑 **Hostess: Salón** | Estado de las mesas (libres, ocupadas, reservadas), próximas reservaciones y lista de espera; asignar mesa a un grupo. No ve pedidos ni cuentas | ✅ |
-| 📅 **Reservaciones** | Hostess: lista por día, alta y edición con correo opcional, sugerencias de mesa y accesibilidad, confirmar, cancelar y registrar llegada. Gerente: configura la tolerancia y anticipación de recordatorios. Confirmaciones, recordatorios y vencimientos usan una cola común con reintentos | ✅ |
+| 📅 **Reservaciones** | Hostess: lista por día, alta y edición con correo opcional, sugerencias de mesa y accesibilidad, confirmar, cancelar y registrar llegada. Gerente: configura la tolerancia y anticipación de recordatorios. Confirmaciones, recordatorios, vencimientos y cancelaciones usan una cola común con reintentos y correos HTML con texto alternativo | ✅ |
 | ⏳ **Hostess: Lista de espera** | Grupos por orden de llegada, tiempo de espera con marca de espera larga, agregar y sentar. Quitar de la lista: pendiente en la API (`PATCH`) | 🟡 |
 | 🧮 **Facturación** | Datos fiscales y facturas (el esquema ya existe) | 🚧 |
 
@@ -140,7 +140,7 @@ Aparecieron durante el desarrollo. Los códigos son **propuestos**: falta aproba
 | `RF-MES-001` | Asignar mesa a un grupo y cambiar el estado de la mesa (`libre`, `ocupada`, `reservada`) | Hostess, Gerente | `POST /api/mesas/:id/asignar`, `PATCH /api/mesas/:id/estado` |
 | `RF-RES-006` | Registrar la llegada de un cliente con reservación | Hostess | `POST /api/reservaciones/:id/llegada` |
 | `RF-RES-007` | Configurar tolerancia y recordatorio; vencer la reservación, liberar la mesa y encolar avisos de correo | Gerente, Sistema | `GET/PATCH /api/catalogo/configuracion-reservacion` y servicio de notificaciones |
-| `RF-COR-001` | Encolar correo de confirmación al crear y confirmar una reservación dentro de la transacción; procesarlo sin bloquear la respuesta | Sistema | `POST /api/reservaciones`, `PATCH /api/reservaciones/:id` y `notificacion_reservacion` |
+| `RF-COR-001` | Encolar correos de confirmación y cancelación de reservaciones dentro de la transacción; procesarlos sin bloquear la respuesta y enviarlos con HTML y texto alternativo | Sistema | `POST /api/reservaciones`, `PATCH /api/reservaciones/:id`, `notificacion_reservacion` y `backend/src/services/plantillasCorreo.ts` |
 | `RF-ESP-001` | Gestionar la lista de espera: agregar grupos, consultar por orden de llegada y sentarlos; la edición (`PATCH`) sigue pendiente | Hostess | `GET` y `POST /api/lista-espera` |
 | `RNF-030` | Las acciones críticas (crear, enviar, cancelar, entregar pedidos, solicitar pago, asignar mesa y cobrar) no deben duplicarse si el cliente reintenta (`Idempotency-Key`) | Sistema | `backend/src/services/idempotencia.ts`, tabla `idempotencia` |
 
@@ -427,11 +427,11 @@ El árbol de arriba es el modelo; las carpetas ya existen y contienen lo siguien
 | `backend/src/routes/` | **Endpoints**: `auth`, `catalogo`, `clientes`, `cuentas`, `listaEspera`, `menu`, `mesas`, `pedidos`, `productos`, `reservaciones` y `usuarios`. Cada archivo solo enlaza ruta, permiso y controlador. |
 | `backend/src/controllers/` | **Lógica de negocio**, un archivo por área. `hostess.ts` atiende las rutas de clientes, reservaciones y lista de espera porque comparten funciones de apoyo. |
 | `backend/src/models/` | `dominio.ts`: DTOs, consultas compartidas, estados del pedido y reglas de existencia. |
-| `backend/src/services/` | `db.ts` (pool de MySQL y transacciones), `idempotencia.ts`, `correo.ts` (transporte Resend o SMTP) y `notificacionesReservacion.ts` (cola común de confirmaciones, recordatorios y vencimientos). |
+| `backend/src/services/` | `db.ts` (pool de MySQL y transacciones), `idempotencia.ts`, `correo.ts` (transporte Resend o SMTP), `plantillasCorreo.ts` (diseño HTML y texto de los avisos) y `notificacionesReservacion.ts` (cola común de confirmaciones, recordatorios, vencimientos y cancelaciones). |
 | `backend/src/mocks/` | `clientes.mock.ts` y `productos.mock.ts`: datos falsos tipados para probar la API. |
 | `backend/src/utils/` | `config.ts`, `errores.ts`, `auth.ts` (JWT y permisos por rol) y `seed.ts` (usuarios de prueba). |
-| `backend/tests/` | Pruebas unitarias con Vitest: dominio, mocks y reglas de importes de caja. |
-| `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `008`). |
+| `backend/tests/` | Pruebas unitarias con Vitest: dominio, mocks, caja, transporte, plantillas de correo y cola de notificaciones. |
+| `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `012`). |
 | `docs/` | `arquitectura.md` y el resto de la documentación (contratos de API, equivalencias, pendientes, guía de código y [actualización de la base](docs/actualizar-base-datos.md)). |
 
 ### Archivos y carpetas adicionales
@@ -565,8 +565,8 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 | [`equivalencias-bd.md`](docs/equivalencias-bd.md) | Tabla columna ↔ JSON ↔ TypeScript, equivalencias de catálogo, secciones, hostess y estados |
 | [`integracion-api.md`](docs/integracion-api.md) | Lista de comprobación para conectar el frontend con la API real |
 | [`incrementos.md`](docs/incrementos.md) | Observaciones de la maestra, cambios implementados y alcance por incremento |
-| [`actualizar-base-datos.md`](docs/actualizar-base-datos.md) | Respaldo, aplicación ordenada de migraciones 007–010 y verificación de una base existente |
-| [`resend-reservaciones.md`](docs/resend-reservaciones.md) | Configuración segura y operación del correo de reservaciones con Resend o Gmail SMTP |
+| [`actualizar-base-datos.md`](docs/actualizar-base-datos.md) | Respaldo, aplicación ordenada de migraciones 007–012 y verificación de una base existente |
+| [`resend-reservaciones.md`](docs/resend-reservaciones.md) | Configuración segura, operación y diseño HTML del correo de reservaciones con Resend o Gmail SMTP |
 | [`pantallas-gerente.md`](docs/pantallas-gerente.md) | Pantallas de gerencia, incluidas reservas, secciones y pedidos |
 | [`pantallas-mesero.md`](docs/pantallas-mesero.md) | Pantallas del mesero con su ruta, caso de uso y captura |
 | [`pantallas-hostess.md`](docs/pantallas-hostess.md) | Pantallas de la hostess con su ruta y captura, y cómo funciona cada una |
@@ -576,7 +576,7 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 
 - **Catálogo e inventario:** la descripción es obligatoria; presentación/variante solo se solicita para Bebidas y Postres. Un alta duplicada no altera existencias: se debe editar el producto existente para cambiar su stock.
 - **Secciones de mesas:** Gerencia puede crear, renombrar, inhabilitar, habilitar y borrar secciones; cada mesa debe pertenecer a una sección activa.
-- **Reservaciones:** correo opcional para nuevas reservas, preferencias de accesibilidad y sugerencias de mesa; tolerancia y recordatorio configurables por Gerencia; vencimiento, liberación de mesa y confirmaciones/avisos en una cola común con reintentos.
+- **Reservaciones:** correo opcional para nuevas reservas, preferencias de accesibilidad y sugerencias de mesa; tolerancia y recordatorio configurables por Gerencia; vencimiento, liberación de mesa y confirmaciones, recordatorios, avisos de vencimiento y cancelaciones en una cola común con reintentos. Los avisos usan una tarjeta editorial en HTML de hasta 600 px y conservan una versión de texto plano como alternativa.
 - **Acceso de Gerencia:** Reservas está en `/gerente/reservaciones`, protegida para el rol gerente. La prueba de ruta y compilación del frontend pasan.
 
 ---

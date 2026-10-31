@@ -40,7 +40,13 @@ const textoReservacion = computed(() =>
         <span class="mesa__etiqueta">Mesa</span>
         <span class="mesa__numero">{{ mesa.numero }}</span>
       </span>
-      <span class="mesa__capacidad">{{ formatearCapacidad(mesa.capacidad) }}</span>
+      <span class="mesa__capacidad">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="8" r="3" />
+          <path d="M3 19c0-3.1 2.7-5.5 6-5.5s6 2.4 6 5.5M16 5.5a3 3 0 0 1 0 5M18 14.2c1.7.7 3 2.4 3 4.8" />
+        </svg>
+        {{ formatearCapacidad(mesa.capacidad) }}
+      </span>
     </span>
 
     <span v-if="mostrarSeccion" class="mesa__seccion">
@@ -50,7 +56,13 @@ const textoReservacion = computed(() =>
 
     <InsigniaEstado :tono="mesa.estado" :texto="ETIQUETA_ESTADO_MESA[mesa.estado]" />
 
-    <span v-if="textoReservacion" class="mesa__reservacion">{{ textoReservacion }}</span>
+    <span v-if="textoReservacion" class="mesa__reservacion">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </svg>
+      {{ textoReservacion }}
+    </span>
   </button>
 </template>
 
@@ -135,8 +147,15 @@ const textoReservacion = computed(() =>
 }
 
 .mesa__capacidad {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-1);
   color: var(--color-muted);
   font-size: var(--texto-sm);
+}
+
+.mesa__capacidad svg {
+  flex: none;
 }
 
 /* Sección: texto pequeño bajo el número; un nombre largo (hasta 40 caracteres) se parte sin ensanchar la tarjeta */
@@ -150,10 +169,18 @@ const textoReservacion = computed(() =>
 }
 
 .mesa__reservacion {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-1);
   max-width: 100%;
   overflow-wrap: anywhere;
   font-size: var(--texto-sm);
   font-weight: 600;
+}
+
+.mesa__reservacion svg {
+  flex: none;
+  color: var(--color-reservada);
 }
 
 /* Resaltado de cambio reciente: anillo fijo (sin movimiento) + pulso solo si se permite animar */

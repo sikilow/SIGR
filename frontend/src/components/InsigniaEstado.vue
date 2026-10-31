@@ -71,14 +71,21 @@ defineProps<{
 }
 
 /* Agotado: rojo de error */
-.insignia--agotado {
-  --tono: var(--color-error);
-  --tono-texto: var(--color-ocupada-texto);
+.insignia--agotado,
+.insignia--producto_agotado {
+  --tono: var(--color-producto-agotado);
+  --tono-texto: var(--color-producto-agotado-texto);
 }
 
-.insignia--stock_bajo {
-  --tono: var(--color-preparacion);
-  --tono-texto: var(--color-preparacion-texto);
+.insignia--stock_bajo,
+.insignia--producto_stock_bajo {
+  --tono: var(--color-producto-stock-bajo);
+  --tono-texto: var(--color-producto-stock-bajo-texto);
+}
+
+.insignia--producto_disponible {
+  --tono: var(--color-producto-disponible);
+  --tono-texto: var(--color-producto-disponible-texto);
 }
 
 /* En el pedido: color de marca */
@@ -87,11 +94,21 @@ defineProps<{
   --tono-texto: var(--color-primary-dark);
 }
 
-/* Cuenta solicitada / abierta: usan el color de marca (no hay token propio de estado) */
+/* Cuenta: abierta (azul), por pagar (maíz) y pagada (verde) */
 .insignia--cuenta,
 .insignia--cuenta_abierta {
-  --tono: var(--color-primary);
-  --tono-texto: var(--color-primary-dark);
+  --tono: var(--color-cuenta-abierta);
+  --tono-texto: var(--color-cuenta-abierta-texto);
+}
+
+.insignia--cuenta_por_pagar {
+  --tono: var(--color-cuenta-por-pagar);
+  --tono-texto: var(--color-cuenta-por-pagar-texto);
+}
+
+.insignia--cuenta_pagada {
+  --tono: var(--color-cuenta-pagada);
+  --tono-texto: var(--color-cuenta-pagada-texto);
 }
 
 /* Estados del pedido: cada uno con su ícono y su par color/texto oscuro */

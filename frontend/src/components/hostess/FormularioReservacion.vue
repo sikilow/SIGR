@@ -377,14 +377,40 @@ async function guardar() {
         <label for="res-mesa">Mesa (opcional)</label>
         <fieldset class="campo__preferencias">
           <legend>Preferencias de acceso</legend>
-          <label for="res-zona">Sección preferida</label>
-          <select id="res-zona" v-model="preferenciasMesa.zona" :disabled="!mesaPermitida || enCurso">
-            <option value="">Cualquier sección</option>
-            <option v-for="zona in zonasMesa" :key="zona" :value="zona">{{ zona }}</option>
-          </select>
-          <label><input v-model="preferenciasMesa.plantaBaja" type="checkbox" /> Planta baja</label>
-          <label><input v-model="preferenciasMesa.espacioCarriola" type="checkbox" /> Espacio para carriola</label>
-          <label><input v-model="preferenciasMesa.sinEscaleras" type="checkbox" /> Sin escaleras</label>
+          <div class="campo">
+            <label for="res-zona">Sección preferida</label>
+            <select id="res-zona" v-model="preferenciasMesa.zona" :disabled="!mesaPermitida || enCurso">
+              <option value="">Cualquier sección</option>
+              <option v-for="zona in zonasMesa" :key="zona" :value="zona">{{ zona }}</option>
+            </select>
+          </div>
+          <div class="campo__opciones">
+            <label class="opcion-acceso">
+              <input v-model="preferenciasMesa.plantaBaja" type="checkbox" />
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 21V5a2 2 0 0 1 2-2h9M9 21h11M4 12h11M19 8v13" />
+              </svg>
+              <span>Planta baja</span>
+            </label>
+            <label class="opcion-acceso">
+              <input v-model="preferenciasMesa.espacioCarriola" type="checkbox" />
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 4h2.2l1.6 9.5h10.5L20 7H6" />
+                <circle cx="9" cy="19" r="1.6" />
+                <circle cx="17" cy="19" r="1.6" />
+                <path d="M12 4v4" />
+              </svg>
+              <span>Espacio para carriola</span>
+            </label>
+            <label class="opcion-acceso">
+              <input v-model="preferenciasMesa.sinEscaleras" type="checkbox" />
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 20h4v-4h4v-4h4V8h4" />
+                <circle cx="6" cy="5" r="2" />
+              </svg>
+              <span>Sin escaleras</span>
+            </label>
+          </div>
         </fieldset>
         <select
           id="res-mesa"
@@ -564,6 +590,74 @@ async function guardar() {
   font-weight: 700;
 }
 
+.campo__preferencias {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--espacio-3) var(--espacio-4) var(--espacio-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radio);
+  background: var(--color-surface-2);
+}
+
+.campo__preferencias legend {
+  padding-inline: var(--espacio-1);
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.campo__opciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--espacio-2);
+}
+
+.opcion-acceso {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  min-height: var(--tactil-min);
+  padding: var(--espacio-2) var(--espacio-3);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.opcion-acceso input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--color-primary);
+}
+
+.opcion-acceso svg {
+  flex: none;
+  color: var(--color-muted);
+}
+
+.opcion-acceso:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+}
+
+.opcion-acceso:has(input:checked) svg {
+  color: var(--color-primary-dark);
+}
+
+.opcion-acceso:has(input:focus-visible) {
+  outline: 3px solid var(--color-primary-dark);
+  outline-offset: 2px;
+}
+
 .advertencias:empty {
   display: none;
 }
@@ -574,10 +668,10 @@ async function guardar() {
   gap: var(--espacio-3);
   margin: 0;
   padding: var(--espacio-3) var(--espacio-4);
-  border: 2px solid var(--color-listo);
+  border: 2px solid var(--color-advertencia);
   border-radius: var(--radio-sm);
-  background: var(--color-listo-fondo);
-  color: var(--color-listo-texto);
+  background: var(--color-advertencia-fondo);
+  color: var(--color-advertencia-texto);
 }
 
 .advertencia svg {

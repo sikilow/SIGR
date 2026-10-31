@@ -209,9 +209,10 @@ Cuerpo (todas son columnas de `reservacion`):
 ```
 
 Respuesta `201`: la reservación con los mismos campos que `GET /reservaciones` (incluidos `cliente_nombre`,
-`cliente_telefono`, `cliente_correo` y `mesa_numero`, **calculados**). El cliente debe tener correo válido antes del alta.
-Errores: `404 no_encontrado` (cliente o mesa), `409 mesa_no_disponible`, `422 estado_invalido` (correo faltante,
-fecha pasada o a más de un año, personas fuera de 1 a 20, o `id_mesa` con fecha que no es hoy).
+`cliente_telefono`, `cliente_correo` y `mesa_numero`, **calculados**). El correo del cliente es opcional: si existe y es
+válido, se encola la confirmación; si no, la reservación se guarda sin aviso. Errores: `404 no_encontrado` (cliente o
+mesa), `409 mesa_no_disponible`, `422 estado_invalido` (fecha pasada o a más de un año, personas fuera de 1 a 20, o
+`id_mesa` con fecha que no es hoy).
 
 El frontend crea primero al cliente (si es nuevo) y después la reservación (dos llamadas, cada una con su clave). Si la
 segunda falla, el cliente ya existe y **no se vuelve a crear** al reintentar.
@@ -222,12 +223,13 @@ Cuerpo: `{ "correo": "cliente@correo.test" }`. Completa o corrige el correo de u
 reservación. Valida formato y longitud máxima de 120. Errores: `404 no_encontrado` si no existe y `422 estado_invalido`
 si el correo no es válido.
 
-### Vencimientos, correo y configuración (migración 010)
+### Vencimientos, correo y configuración (migraciones 010–012)
 
 La API procesa notificaciones en segundo plano. El recordatorio se programa los minutos configurados antes de la hora
 reservada. Si una reservación `pendiente` o `confirmada` no registra llegada antes de `fecha_hora + tolerancia`, pasa a
 `vencida`, pierde su mesa reservada (que se libera si no hay otra reservación vigente) y genera un correo en la cola
-común. Los fallos quedan en `notificacion_reservacion` y se reintentan por Resend o SMTP.
+común. Los fallos quedan en `notificacion_reservacion` y se reintentan por Resend o SMTP. El cuerpo se arma en
+`backend/src/services/plantillasCorreo.ts` y se envía como HTML con una versión de texto plano alternativa.
 
 Solo Gerencia puede consultar y modificar `GET/PATCH /api/catalogo/configuracion-reservacion`:
 

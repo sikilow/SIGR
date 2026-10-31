@@ -263,6 +263,7 @@ export const baseDatos: BaseDatosMock = {
     { idUsuario: 3, idRol: 4, nombre: 'Marta Solís', correo: 'marta.solis@lamadalena.example', activo: true, rol: 'cajero', nombreUsuario: 'cajero', contrasena: '1234' },
     { idUsuario: 4, idRol: 5, nombre: 'Sofía Mendoza', correo: 'sofia.mendoza@lamadalena.example', activo: true, rol: 'hostess', nombreUsuario: 'hostess', contrasena: '1234' },
     { idUsuario: 5, idRol: 2, nombre: 'Rosa Mesera', correo: 'rosa.mesera@lamadalena.example', activo: true, rol: 'mesero', nombreUsuario: 'mesero2', contrasena: '1234' },
+    { idUsuario: 6, idRol: 3, nombre: 'Diego Cruz', correo: 'diego.cruz@lamadalena.example', activo: true, rol: 'cocinero', nombreUsuario: 'cocinero', contrasena: '1234' },
   ],
   mesas: crearMesas(),
   secciones: ['General', 'Salón', 'Terraza', 'Barra'].map((nombre) => ({ nombre, activa: true })),

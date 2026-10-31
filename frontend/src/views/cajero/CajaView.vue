@@ -1,13 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import InsigniaEstado from '../../components/InsigniaEstado.vue'
 import { servicios } from '../../services'
-import type { CuentaCaja, EstadoCaja, PagoCajaEntrada, VentaCaja } from '../../types'
+import {
+  ETIQUETA_ESTADO_PEDIDO,
+  type CuentaCaja,
+  type EstadoCaja,
+  type PagoCajaEntrada,
+  type VentaCaja,
+} from '../../types'
+
+interface LineaTicket {
+  cantidad: number
+  nombreProducto: string
+  importe: number
+}
 
 const estado = ref<EstadoCaja | null>(null)
 const seleccionadaId = ref<number | null>(null)
 const pagos = ref<PagoCajaEntrada[]>([])
 const recibidoReporte = ref<number | null>(null)
 const ventaReciente = ref<VentaCaja | null>(null)
+const lineasTicket = ref<LineaTicket[]>([])
+const meseroTicket = ref('')
 const error = ref<string | null>(null)
 const cargando = ref(true)
 const procesando = ref(false)
@@ -35,6 +50,10 @@ function moneda(cantidad: number): string {
 
 function fecha(fechaHora: Date): string {
   return new Intl.DateTimeFormat('es-MX', { dateStyle: 'short', timeStyle: 'short' }).format(fechaHora)
+}
+
+function tipoPago(item: CuentaCaja): string {
+  return item.cuenta.tipoPagoSolicitado === 'digital' ? 'Pago digital' : 'Cobro en caja'
 }
 
 async function cargar() {
@@ -86,6 +105,14 @@ function esEfectivo(idMetodo: number): boolean {
   return estado.value?.metodosPago.find((metodo) => metodo.idMetodo === idMetodo)?.nombre.toLowerCase() === 'efectivo'
 }
 
+function nombreMetodo(idMetodo: number): string {
+  return estado.value?.metodosPago.find((metodo) => metodo.idMetodo === idMetodo)?.nombre ?? 'Método'
+}
+
+function usarTotalSistema() {
+  if (estado.value?.corte) recibidoReporte.value = estado.value.corte.totalVentas
+}
+
 async function abrirCorte() {
   procesando.value = true
   error.value = null
@@ -106,6 +133,7 @@ async function cerrarCorte() {
   try {
     const corte = await servicios.caja.cerrarCorte(recibidoReporte.value)
     diferenciaCorte.value = corte.diferencia ?? 0
+    recibidoReporte.value = null
     await cargar()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'No se pudo cerrar el corte.'
@@ -119,18 +147,25 @@ async function cobrar() {
   if (!cuenta || !puedeCobrar.value) return
   procesando.value = true
   error.value = null
+  lineasTicket.value = cuenta.cuenta.pedidos.flatMap((pedido) =>
+    pedido.estado === 'cancelado'
+      ? []
+      : pedido.detalle.map((linea) => ({
+          cantidad: linea.cantidad,
+          nombreProducto: linea.nombreProducto,
+          importe: linea.cantidad * linea.precioUnitario,
+        })),
+  )
+  meseroTicket.value = cuenta.meseroNombre
   try {
-    ventaReciente.value = await servicios.caja.cobrar(
-      cuenta.cuenta.idCuenta,
-      pagos.value,
-      window.crypto.randomUUID(),
-    )
+    ventaReciente.value = await servicios.caja.cobrar(cuenta.cuenta.idCuenta, pagos.value, window.crypto.randomUUID())
     seleccionadaId.value = null
     pagos.value = []
     recibidoReporte.value = null
     diferenciaCorte.value = null
     await cargar()
   } catch (e) {
+    lineasTicket.value = []
     error.value = e instanceof Error ? e.message : 'No se pudo completar el cobro.'
   } finally {
     procesando.value = false
@@ -145,64 +180,122 @@ onMounted(cargar)
 </script>
 
 <template>
-  <div class="caja">
-    <header class="encabezado">
+  <div class="caja pagina">
+    <header class="pagina__encabezado">
       <div>
-        <p class="sobrelinea">Punto de venta</p>
+        <p class="sobretitulo">Punto de venta</p>
         <h2>Caja</h2>
-        <p class="subtitulo">Cuentas solicitadas por el mesero y corte de turno.</p>
+        <p>Cuentas solicitadas por el mesero y corte del turno.</p>
       </div>
-      <button class="btn btn--secundario" type="button" :disabled="cargando || procesando" @click="cargar">
+      <button class="btn btn--secundario no-imprimir" type="button" :disabled="cargando || procesando" @click="cargar">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+        </svg>
         Actualizar
       </button>
     </header>
 
-    <p v-if="error" class="alerta alerta--error" role="alert">{{ error }}</p>
-    <p v-if="diferenciaCorte !== null" class="alerta" role="status">
-      Corte cerrado. Diferencia reportada: <strong>{{ moneda(diferenciaCorte) }}</strong>
-    </p>
-    <p v-if="cargando" class="estado-carga" role="status">Cargando caja…</p>
+    <div v-if="error" class="aviso aviso--error no-imprimir" role="alert">
+      <p>{{ error }}</p>
+      <button type="button" class="btn btn--secundario" :disabled="cargando || procesando" @click="cargar">Reintentar</button>
+    </div>
+    <div v-if="diferenciaCorte !== null" class="aviso aviso--exito no-imprimir" role="status">
+      <p>Corte cerrado. Diferencia reportada: <strong>{{ moneda(diferenciaCorte) }}</strong></p>
+      <button type="button" class="btn btn--secundario" @click="diferenciaCorte = null">Cerrar</button>
+    </div>
+
+    <template v-if="cargando && !estado">
+      <div class="esqueletos" aria-hidden="true">
+        <div class="esqueleto esqueleto--corte" />
+        <div class="esqueleto" />
+        <div class="esqueleto" />
+      </div>
+      <p class="solo-lectores" role="status">Cargando caja…</p>
+    </template>
 
     <template v-else-if="estado">
       <section class="corte panel" aria-labelledby="corte-titulo">
-        <div>
-          <h3 id="corte-titulo">Corte de caja</h3>
-          <template v-if="estado.corte">
-            <p>Abierto desde {{ fecha(estado.corte.inicio) }}</p>
-            <p class="total-corte">Ventas del turno: <strong>{{ moneda(estado.corte.totalVentas) }}</strong></p>
-          </template>
-          <p v-else>No hay un corte abierto. Abre uno para registrar cobros.</p>
+        <div class="corte__info">
+          <div class="corte__titulo">
+            <h3 id="corte-titulo">Corte de caja</h3>
+            <InsigniaEstado
+              :tono="estado.corte ? 'cuenta_abierta' : 'desconocido'"
+              :texto="estado.corte ? 'Abierto' : 'Sin abrir'"
+            />
+          </div>
+          <p v-if="estado.corte" class="corte__meta">Abierto desde {{ fecha(estado.corte.inicio) }}</p>
+          <p v-else class="corte__meta">Abre un corte para comenzar a registrar cobros del turno.</p>
+
+          <div class="corte__cifras">
+            <div class="corte__cifra">
+              <span>Ventas del turno</span>
+              <strong class="numero">{{ moneda(estado.corte?.totalVentas ?? 0) }}</strong>
+            </div>
+            <div class="corte__cifra">
+              <span>Cuentas por cobrar</span>
+              <strong class="numero">{{ estado.cuentas.length }}</strong>
+            </div>
+          </div>
         </div>
-        <button v-if="!estado.corte" class="btn" type="button" :disabled="procesando" @click="abrirCorte">
-          Abrir corte
-        </button>
-        <form v-else class="form-corte" @submit.prevent="cerrarCorte">
-          <label for="total-reportado">Total de ventas reportado</label>
-          <input id="total-reportado" v-model.number="recibidoReporte" type="number" min="0" step="0.01" required>
-          <button class="btn btn--secundario" type="submit" :disabled="procesando">Cerrar corte</button>
-        </form>
+
+        <div class="corte__acciones">
+          <button v-if="!estado.corte" class="btn btn--grande" type="button" :disabled="procesando" @click="abrirCorte">
+            Abrir corte
+          </button>
+          <form v-else class="form-corte" @submit.prevent="cerrarCorte">
+            <div class="campo">
+              <label for="total-reportado">Total de ventas reportado</label>
+              <input id="total-reportado" v-model.number="recibidoReporte" type="number" min="0" step="0.01" required>
+              <p class="campo__ayuda">El sistema registra {{ moneda(estado.corte.totalVentas) }}.</p>
+            </div>
+            <div class="form-corte__acciones">
+              <button type="button" class="btn btn--texto" @click="usarTotalSistema">Usar total del sistema</button>
+              <button class="btn" type="submit" :disabled="procesando">Cerrar corte</button>
+            </div>
+          </form>
+        </div>
       </section>
 
       <div class="columnas">
         <section class="panel cuentas" aria-labelledby="cuentas-titulo">
           <div class="titulo-seccion">
             <h3 id="cuentas-titulo">Cuentas por cobrar</h3>
-            <span class="contador">{{ estado.cuentas.length }}</span>
+            <span class="contador numero">{{ estado.cuentas.length }}</span>
           </div>
-          <p v-if="!estado.cuentas.length" class="vacio">No hay cuentas solicitadas para cobrar.</p>
+
+          <div v-if="!estado.cuentas.length" class="vacio">
+            <h4>Todo cobrado</h4>
+            <p>Cuando un mesero solicite la cuenta, aparecerá aquí.</p>
+          </div>
+
           <ul v-else class="lista-cuentas">
             <li v-for="item in estado.cuentas" :key="item.cuenta.idCuenta">
               <button
                 class="cuenta"
                 :class="{ 'cuenta--seleccionada': seleccionadaId === item.cuenta.idCuenta }"
                 type="button"
+                :aria-pressed="seleccionadaId === item.cuenta.idCuenta"
                 @click="seleccionar(item)"
               >
-                <span class="cuenta__mesa">Mesa {{ item.mesaNumero }}</span>
-                <span>{{ item.cuenta.pedidos.length }} pedidos</span>
-                <strong>{{ moneda(item.cuenta.total) }}</strong>
-                <span v-if="item.pedidosSinEntregar.length" class="bloqueada">
-                  {{ item.pedidosSinEntregar.length }} pedido(s) sin entregar
+                <span class="cuenta__cabecera">
+                  <span class="cuenta__mesa">Mesa {{ item.mesaNumero }}</span>
+                  <strong class="cuenta__total numero">{{ moneda(item.cuenta.total) }}</strong>
+                </span>
+                <span class="cuenta__meta">
+                  {{ item.cuenta.pedidos.length }} {{ item.cuenta.pedidos.length === 1 ? 'pedido' : 'pedidos' }}
+                  <template v-if="item.meseroNombre"> · {{ item.meseroNombre }}</template>
+                </span>
+                <span class="cuenta__insignias">
+                  <InsigniaEstado tono="cuenta_por_pagar" texto="Por cobrar" />
+                  <InsigniaEstado
+                    :tono="item.cuenta.tipoPagoSolicitado === 'digital' ? 'cuenta_abierta' : 'cuenta_pagada'"
+                    :texto="tipoPago(item)"
+                  />
+                  <InsigniaEstado
+                    v-if="item.pedidosSinEntregar.length"
+                    tono="agotado"
+                    :texto="`${item.pedidosSinEntregar.length} sin entregar`"
+                  />
                 </span>
               </button>
             </li>
@@ -211,210 +304,330 @@ onMounted(cargar)
 
         <section class="panel detalle" aria-labelledby="detalle-titulo">
           <h3 id="detalle-titulo">Detalle del cobro</h3>
+
           <template v-if="cuentaSeleccionada">
-            <p class="total-cuenta">Mesa {{ cuentaSeleccionada.mesaNumero }} · Cuenta #{{ cuentaSeleccionada.cuenta.idCuenta }}</p>
+            <div class="detalle__cabecera">
+              <div>
+                <p class="sobretitulo">Cuenta #{{ cuentaSeleccionada.cuenta.idCuenta }}</p>
+                <h4>Mesa {{ cuentaSeleccionada.mesaNumero }}</h4>
+                <p class="detalle__meta">
+                  <template v-if="cuentaSeleccionada.meseroNombre">Atendió: {{ cuentaSeleccionada.meseroNombre }}</template>
+                  <template v-else>Sin mesero registrado</template>
+                </p>
+              </div>
+              <strong class="detalle__total numero">{{ moneda(cuentaSeleccionada.cuenta.total) }}</strong>
+            </div>
+
+            <div class="detalle__insignias">
+              <InsigniaEstado
+                :tono="cuentaSeleccionada.cuenta.tipoPagoSolicitado === 'digital' ? 'cuenta_abierta' : 'cuenta_pagada'"
+                :texto="tipoPago(cuentaSeleccionada)"
+              />
+              <InsigniaEstado
+                v-if="cuentaSeleccionada.pedidosSinEntregar.length"
+                tono="agotado"
+                :texto="`${cuentaSeleccionada.pedidosSinEntregar.length} pedido(s) sin entregar`"
+                ajustar
+              />
+            </div>
+
             <ul class="pedidos">
-              <li v-for="pedido in cuentaSeleccionada.cuenta.pedidos" :key="pedido.idPedido">
-                <div class="pedido-titulo">
+              <li v-for="pedido in cuentaSeleccionada.cuenta.pedidos" :key="pedido.idPedido" class="pedido">
+                <div class="pedido__titulo">
                   <strong>Pedido #{{ pedido.idPedido }}</strong>
-                  <span>{{ pedido.estado }}</span>
+                  <span class="pedido__estado">{{ ETIQUETA_ESTADO_PEDIDO[pedido.estado] }}</span>
                 </div>
                 <ul class="lineas">
                   <li v-for="(linea, i) in pedido.detalle" :key="`${pedido.idPedido}-${linea.idProducto}-${i}`">
-                    <span>{{ linea.cantidad }} × {{ linea.nombreProducto }}</span>
-                    <span>{{ moneda(linea.cantidad * linea.precioUnitario) }}</span>
+                    <span><span class="lineas__cantidad numero">{{ linea.cantidad }}×</span> {{ linea.nombreProducto }}</span>
+                    <span class="numero">{{ moneda(linea.cantidad * linea.precioUnitario) }}</span>
                   </li>
                 </ul>
               </li>
             </ul>
-            <p v-if="cuentaSeleccionada.pedidosSinEntregar.length" class="alerta alerta--error" role="status">
-              No se puede cobrar hasta que todos los pedidos estén entregados.
-            </p>
-            <p class="total-cuenta">Total: <strong>{{ moneda(cuentaSeleccionada.cuenta.total) }}</strong></p>
 
-            <fieldset class="pagos">
+            <p v-if="cuentaSeleccionada.pedidosSinEntregar.length" class="aviso aviso--error" role="status">
+              <span>No se puede cobrar hasta que todos los pedidos estén entregados.</span>
+            </p>
+
+            <fieldset class="pagos" :disabled="procesando">
               <legend>Forma de pago</legend>
-              <div v-for="pago in pagos" :key="pago.idMetodo" class="fila-pago">
-                <label :for="`metodo-${pago.idMetodo}`">Método</label>
-                <select
-                  :id="`metodo-${pago.idMetodo}`"
-                  :value="pago.idMetodo"
-                  @change="cambiarMetodo(pago, Number(($event.target as HTMLSelectElement).value))"
-                >
-                  <option
-                    v-for="metodo in estado.metodosPago.filter((item) =>
-                      item.idMetodo === pago.idMetodo || !pagos.some((otro) => otro.idMetodo === item.idMetodo),
-                    )"
-                    :key="metodo.idMetodo"
-                    :value="metodo.idMetodo"
+              <div v-for="pago in pagos" :key="pago.idMetodo" class="pago">
+                <div class="pago__fila">
+                  <div class="campo">
+                    <label :for="`metodo-${pago.idMetodo}`">Método</label>
+                    <select
+                      :id="`metodo-${pago.idMetodo}`"
+                      :value="pago.idMetodo"
+                      @change="cambiarMetodo(pago, Number(($event.target as HTMLSelectElement).value))"
+                    >
+                      <option
+                        v-for="metodo in estado.metodosPago.filter((item) =>
+                          item.idMetodo === pago.idMetodo || !pagos.some((otro) => otro.idMetodo === item.idMetodo),
+                        )"
+                        :key="metodo.idMetodo"
+                        :value="metodo.idMetodo"
+                      >
+                        {{ metodo.nombre }}
+                      </option>
+                    </select>
+                  </div>
+                  <div class="campo">
+                    <label :for="`pago-${pago.idMetodo}`">Importe aplicado</label>
+                    <input
+                      :id="`pago-${pago.idMetodo}`"
+                      :value="pago.monto"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      :aria-label="`Importe aplicado: ${nombreMetodo(pago.idMetodo)}`"
+                      @input="cambiarMonto(pago, Number(($event.target as HTMLInputElement).value))"
+                    >
+                  </div>
+                  <button
+                    v-if="pagos.length > 1"
+                    class="btn btn--icono quitar-pago"
+                    type="button"
+                    :aria-label="`Quitar ${nombreMetodo(pago.idMetodo)}`"
+                    @click="pagos = pagos.filter((item) => item.idMetodo !== pago.idMetodo)"
                   >
-                    {{ metodo.nombre }}
-                  </option>
-                </select>
-                <label :for="`pago-${pago.idMetodo}`">Aplicado</label>
-                <input
-                  :id="`pago-${pago.idMetodo}`"
-                  :value="pago.monto"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  :aria-label="`Importe aplicado: ${estado.metodosPago.find((metodo) => metodo.idMetodo === pago.idMetodo)?.nombre}`"
-                  @input="cambiarMonto(pago, Number(($event.target as HTMLInputElement).value))"
-                >
-                <button
-                  v-if="pagos.length > 1"
-                  class="btn btn--secundario quitar-pago"
-                  type="button"
-                  :aria-label="`Quitar ${estado.metodosPago.find((metodo) => metodo.idMetodo === pago.idMetodo)?.nombre}`"
-                  @click="pagos = pagos.filter((item) => item.idMetodo !== pago.idMetodo)"
-                >
-                  Quitar
-                </button>
-                <label v-if="esEfectivo(pago.idMetodo)" :for="`recibido-${pago.idMetodo}`">Recibido</label>
-                <input
-                  v-if="esEfectivo(pago.idMetodo)"
-                  :id="`recibido-${pago.idMetodo}`"
-                  v-model.number="pago.montoRecibido"
-                  type="number"
-                  :min="pago.monto"
-                  step="0.01"
-                  aria-label="Efectivo recibido"
-                >
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                      <path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div v-if="esEfectivo(pago.idMetodo)" class="pago__efectivo">
+                  <div class="campo">
+                    <label :for="`recibido-${pago.idMetodo}`">Efectivo recibido</label>
+                    <input
+                      :id="`recibido-${pago.idMetodo}`"
+                      v-model.number="pago.montoRecibido"
+                      type="number"
+                      :min="pago.monto"
+                      step="0.01"
+                      aria-label="Efectivo recibido"
+                    >
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn--secundario"
+                    :disabled="pago.montoRecibido === pago.monto"
+                    @click="pago.montoRecibido = pago.monto"
+                  >
+                    Exacto
+                  </button>
+                </div>
               </div>
+
               <button
                 v-if="pagos.length < estado.metodosPago.length && pagos.length < 3"
                 class="btn btn--secundario"
                 type="button"
                 @click="agregarMetodo"
               >
-                Agregar método
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Agregar método de pago
               </button>
             </fieldset>
-            <p class="resumen-pago">Por aplicar: <strong>{{ moneda(faltante) }}</strong></p>
-            <p class="resumen-pago">Cambio: <strong>{{ moneda(cambio) }}</strong></p>
-            <button class="btn btn-cobrar" type="button" :disabled="!puedeCobrar || procesando" @click="cobrar">
-              Cobrar y cerrar cuenta
+
+            <div class="resumen-pago" aria-live="polite">
+              <p><span>Aplicado</span><strong class="numero">{{ moneda(totalAplicado) }}</strong></p>
+              <p :class="{ 'resumen-pago__alerta': Math.abs(faltante) >= 0.005 }">
+                <span>{{ faltante >= 0 ? 'Por aplicar' : 'Excedente' }}</span>
+                <strong class="numero">{{ moneda(Math.abs(faltante)) }}</strong>
+              </p>
+              <p v-if="cambio > 0" class="resumen-pago__cambio">
+                <span>Cambio</span><strong class="numero">{{ moneda(cambio) }}</strong>
+              </p>
+            </div>
+
+            <button class="btn btn--grande btn-cobrar" type="button" :disabled="!puedeCobrar || procesando" @click="cobrar">
+              {{ procesando ? 'Procesando cobro…' : 'Cobrar y cerrar cuenta' }}
             </button>
           </template>
-          <p v-else class="vacio">Selecciona una cuenta solicitada para revisar el detalle.</p>
+
+          <div v-else class="vacio">
+            <h4>Elige una cuenta</h4>
+            <p>Selecciona una cuenta solicitada para revisar el detalle y cobrar.</p>
+          </div>
         </section>
       </div>
     </template>
 
-    <section v-if="ventaReciente" class="ticket panel" aria-labelledby="ticket-titulo">
-      <div>
-        <p class="sobrelinea">Cobro completado</p>
-        <h3 id="ticket-titulo">Ticket · Venta #{{ ventaReciente.idVenta }}</h3>
-        <p>Mesa {{ ventaReciente.mesaNumero }} · {{ fecha(ventaReciente.fechaHora) }}</p>
-        <p>Total: <strong>{{ moneda(ventaReciente.total) }}</strong></p>
-        <ul>
+    <section v-else class="vacio no-imprimir" role="alert">
+      <h3>No se pudo mostrar la caja</h3>
+      <p>Revisa la conexión e inténtalo de nuevo.</p>
+      <button type="button" class="btn" @click="cargar">Reintentar</button>
+    </section>
+
+    <section v-if="ventaReciente" class="ticket-panel" aria-labelledby="ticket-titulo">
+      <div class="ticket-panel__barra no-imprimir">
+        <div>
+          <p class="sobretitulo">Cobro completado</p>
+          <h3 id="ticket-titulo">Ticket · Venta #{{ ventaReciente.idVenta }}</h3>
+          <p>Mesa {{ ventaReciente.mesaNumero }} · {{ fecha(ventaReciente.fechaHora) }}</p>
+        </div>
+        <div class="ticket-panel__acciones">
+          <button class="btn btn--secundario" type="button" @click="ventaReciente = null">Cerrar</button>
+          <button class="btn" type="button" @click="imprimirTicket">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2" />
+              <path d="M6 14h12v7H6z" />
+            </svg>
+            Imprimir ticket
+          </button>
+        </div>
+      </div>
+
+      <!-- Ticket de 80 mm: en pantalla se muestra como papel; al imprimir solo sale esto -->
+      <div class="ticket">
+        <div class="ticket__marca">
+          <strong>La Madalena</strong>
+          <span>SIGR · Comprobante de venta</span>
+        </div>
+
+        <dl class="ticket__datos">
+          <div><dt>Ticket</dt><dd>#{{ ventaReciente.idVenta }}</dd></div>
+          <div><dt>Mesa</dt><dd>{{ ventaReciente.mesaNumero }}</dd></div>
+          <div><dt>Fecha</dt><dd>{{ fecha(ventaReciente.fechaHora) }}</dd></div>
+          <div v-if="meseroTicket"><dt>Mesero</dt><dd>{{ meseroTicket }}</dd></div>
+        </dl>
+
+        <table class="ticket__tabla">
+          <thead>
+            <tr><th scope="col">Cant</th><th scope="col">Producto</th><th scope="col">Importe</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="(linea, i) in lineasTicket" :key="i">
+              <td class="numero">{{ linea.cantidad }}</td>
+              <td>{{ linea.nombreProducto }}</td>
+              <td class="numero">{{ moneda(linea.importe) }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="ticket__total"><span>Total</span><strong class="numero">{{ moneda(ventaReciente.total) }}</strong></p>
+
+        <ul class="ticket__pagos">
           <li v-for="(pago, i) in ventaReciente.pagos" :key="i">
-            {{ pago.metodo }}: {{ moneda(pago.monto) }}
-            <span v-if="pago.metodo.toLowerCase() === 'efectivo'">
-              · recibido {{ moneda(pago.montoRecibido) }} · cambio {{ moneda(pago.cambio) }}
-            </span>
+            <span>{{ pago.metodo }}</span>
+            <span class="numero">{{ moneda(pago.monto) }}</span>
           </li>
         </ul>
-        <p v-if="ventaReciente.cambio">Cambio total: <strong>{{ moneda(ventaReciente.cambio) }}</strong></p>
+        <p v-if="ventaReciente.cambio" class="ticket__cambio">
+          <span>Cambio</span><strong class="numero">{{ moneda(ventaReciente.cambio) }}</strong>
+        </p>
+
+        <p class="ticket__gracias">¡Gracias por su visita!</p>
+        <p class="ticket__nota">Conserve este comprobante.</p>
       </div>
-      <button class="btn btn--secundario no-imprimir" type="button" @click="imprimirTicket">Imprimir ticket</button>
-    </section>
-    <section v-else-if="!estado && !cargando" class="panel" role="status">
-      No se pudo mostrar la caja. Revisa la conexión e inténtalo de nuevo.
     </section>
   </div>
 </template>
 
 <style scoped>
 .caja {
-  max-width: 78rem;
-  margin: 0 auto;
-  padding: clamp(1rem, 3vw, 2rem);
-  color: var(--color-text);
+  max-width: 1200px;
 }
 
-.encabezado,
-.corte,
-.titulo-seccion,
-.ticket {
-  display: flex;
+.caja h2 {
+  font-size: clamp(1.9rem, 1.4rem + 1.8vw, 2.6rem);
+}
+
+.esqueletos {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--espacio-5);
+}
+
+.esqueleto--corte {
+  grid-column: 1 / -1;
+  min-height: 180px;
+}
+
+.esqueletos .esqueleto {
+  min-height: 340px;
+}
+
+.corte {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  gap: var(--espacio-6);
+  border-top: 6px solid var(--color-primary);
 }
 
-.encabezado h2 {
-  margin: 0.2rem 0;
-  font-size: clamp(1.7rem, 5vw, 2.3rem);
+.corte__titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-3);
 }
 
-.sobrelinea {
-  margin: 0;
-  color: var(--color-primary);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.corte__titulo h3 {
+  font-size: var(--texto-xl);
 }
 
-.subtitulo,
-.corte p,
-.ticket p {
-  margin: 0.35rem 0;
+.corte__meta {
+  margin: var(--espacio-1) 0 0;
+  color: var(--color-muted);
 }
 
-.panel {
-  margin-top: 1rem;
-  padding: 1rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0.85rem;
-  background: var(--color-surface);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 5%);
+.corte__cifras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-6);
+  margin-top: var(--espacio-4);
 }
 
-.corte h3,
-.detalle h3,
-.cuentas h3,
-.ticket h3 {
-  margin: 0 0 0.45rem;
+.corte__cifra {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.corte__cifra span {
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+}
+
+.corte__cifra strong {
+  font-family: var(--fuente-titulo);
+  font-size: var(--texto-2xl);
+  line-height: 1;
+  letter-spacing: -0.02em;
 }
 
 .form-corte {
   display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 0.6rem;
+  flex-direction: column;
+  gap: var(--espacio-2);
 }
 
-.form-corte label {
+.form-corte input {
   width: 100%;
 }
 
-.form-corte input,
-.fila-pago input {
-  min-height: 2.7rem;
-  width: 8.5rem;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0.45rem;
-  background: var(--color-bg);
-  color: var(--color-text);
+.form-corte__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
 }
 
-.fila-pago select {
-  min-height: 2.7rem;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0.45rem;
-  background: var(--color-bg);
-  color: var(--color-text);
+.form-corte__acciones .btn:last-child {
+  flex: 1;
 }
 
 .columnas {
   display: grid;
-  grid-template-columns: minmax(15rem, 0.8fr) minmax(20rem, 1.2fr);
-  gap: 1rem;
+  grid-template-columns: minmax(17rem, 0.85fr) minmax(24rem, 1.15fr);
   align-items: start;
+  gap: var(--espacio-5);
 }
 
 .cuentas,
@@ -422,179 +635,544 @@ onMounted(cargar)
   min-width: 0;
 }
 
-.contador {
-  min-width: 1.8rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 2rem;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  text-align: center;
+.titulo-seccion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-4);
 }
 
-.lista-cuentas,
-.pedidos,
-.lineas,
-.ticket ul {
+.titulo-seccion h3 {
+  margin: 0;
+}
+
+.contador {
   display: grid;
-  gap: 0.65rem;
+  place-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 var(--espacio-2);
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 700;
+}
+
+.lista-cuentas {
+  display: grid;
+  gap: var(--espacio-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .cuenta {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
   width: 100%;
-  grid-template-columns: 1fr auto;
-  gap: 0.2rem 0.5rem;
-  padding: 0.85rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0.65rem;
+  padding: var(--espacio-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radio);
   background: var(--color-bg);
   color: var(--color-text);
   text-align: left;
-  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    border-color var(--duracion-rapida) ease,
+    background-color var(--duracion-rapida) ease,
+    transform var(--duracion-rapida) var(--curva-salida);
+}
+
+.cuenta:active {
+  transform: scale(0.99);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cuenta:hover {
+    border-color: var(--color-borde-fuerte);
+    background: var(--color-surface-2);
+  }
 }
 
 .cuenta--seleccionada {
-  border: 2px solid var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: inset 4px 0 0 var(--color-primary);
+}
+
+.cuenta__cabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espacio-3);
 }
 
 .cuenta__mesa {
+  font-family: var(--fuente-titulo);
+  font-size: var(--texto-xl);
+  font-weight: 600;
+}
+
+.cuenta__total {
+  color: var(--color-primary-dark);
+  font-size: var(--texto-lg);
   font-weight: 700;
 }
 
-.bloqueada {
-  grid-column: 1 / -1;
-  color: var(--color-danger, #a12b1f);
-  font-size: 0.9rem;
-  font-weight: 700;
+.cuenta__meta {
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  overflow-wrap: anywhere;
 }
 
-.pedido-titulo,
-.lineas li {
+.cuenta__insignias {
   display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: var(--espacio-1) var(--espacio-2);
 }
 
-.pedidos > li {
-  padding: 0.65rem 0;
-  border-bottom: 1px solid var(--color-border);
+.detalle__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  margin-top: var(--espacio-3);
+}
+
+.detalle__cabecera h4 {
+  margin: 0;
+  font-family: var(--fuente-titulo);
+  font-size: var(--texto-xl);
+  font-weight: 600;
+}
+
+.detalle__meta {
+  margin: var(--espacio-1) 0 0;
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+}
+
+.detalle__total {
+  color: var(--color-primary-dark);
+  font-size: var(--texto-2xl);
+  line-height: 1;
+}
+
+.detalle__insignias {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+  margin-top: var(--espacio-3);
+}
+
+.pedidos {
+  display: grid;
+  gap: var(--espacio-3);
+  margin: var(--espacio-4) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pedido {
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface-2);
+}
+
+.pedido__titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+}
+
+.pedido__estado {
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 600;
 }
 
 .lineas {
-  margin-top: 0.45rem;
-  font-size: 0.94rem;
+  display: grid;
+  gap: var(--espacio-1);
+  margin: var(--espacio-2) 0 0;
+  padding: 0;
+  list-style: none;
 }
 
-.total-cuenta {
+.lineas li {
   display: flex;
   justify-content: space-between;
-  margin: 1rem 0;
-  font-size: 1.15rem;
+  gap: var(--espacio-3);
+  font-size: var(--texto-sm);
+}
+
+.lineas__cantidad {
+  display: inline-block;
+  min-width: 1.8rem;
+  color: var(--color-primary-dark);
+  font-weight: 700;
 }
 
 .pagos {
   display: grid;
-  gap: 0.65rem;
-  margin: 1rem 0;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0.6rem;
+  gap: var(--espacio-3);
+  margin: var(--espacio-4) 0;
+  padding: var(--espacio-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radio);
+  background: var(--color-surface-2);
 }
 
 .pagos legend {
-  padding: 0 0.3rem;
+  padding-inline: var(--espacio-1);
+  font-size: var(--texto-lg);
   font-weight: 700;
 }
 
-.fila-pago {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem;
+.pago {
+  padding: var(--espacio-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface);
 }
 
-.fila-pago label {
-  font-size: 0.9rem;
-  font-weight: 600;
+.pago__fila {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1.2fr) minmax(7rem, 0.8fr) auto;
+  align-items: end;
+  gap: var(--espacio-2);
+}
+
+.pago__fila .campo input,
+.pago__fila .campo select {
+  width: 100%;
+}
+
+.pago__efectivo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--espacio-2);
+  margin-top: var(--espacio-2);
+  padding-top: var(--espacio-2);
+  border-top: 1px dashed var(--color-border);
+}
+
+.pago__efectivo .campo {
+  flex: 1 1 10rem;
 }
 
 .quitar-pago {
-  min-height: 2.7rem;
-  min-width: auto;
-  padding-inline: 0.65rem;
+  margin-bottom: 1px;
 }
 
 .resumen-pago {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  margin: 0.4rem 0;
+  gap: var(--espacio-2) var(--espacio-5);
+  margin-top: var(--espacio-4);
+  padding: var(--espacio-3) var(--espacio-4);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface-2);
+}
+
+.resumen-pago p {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espacio-2);
+  margin: 0;
+}
+
+.resumen-pago span {
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+}
+
+.resumen-pago strong {
+  font-size: var(--texto-lg);
+}
+
+.resumen-pago__alerta strong,
+.resumen-pago__alerta span {
+  color: var(--color-peligro-texto);
+}
+
+.resumen-pago__cambio strong {
+  color: var(--color-exito-texto);
 }
 
 .btn-cobrar {
   width: 100%;
-  margin-top: 0.75rem;
+  margin-top: var(--espacio-3);
 }
 
-.vacio,
-.estado-carga {
-  padding: 1rem 0;
-  color: var(--color-text-muted, #5c6068);
+.detalle > .vacio {
+  margin-top: var(--espacio-3);
 }
 
-.alerta {
-  margin: 0.75rem 0;
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  background: var(--color-surface-variant, #f4f1eb);
+/* ---------- Ticket 80 mm ---------- */
+.ticket-panel {
+  display: grid;
+  gap: var(--espacio-4);
+  justify-items: center;
+  padding-top: var(--espacio-2);
 }
 
-.alerta--error {
-  border: 1px solid #a12b1f;
-  color: #7e1c14;
+.ticket-panel__barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  width: 100%;
+  padding: var(--espacio-4);
+  border: 2px solid var(--color-exito);
+  border-radius: var(--radio);
+  background: var(--color-exito-fondo);
+}
+
+.ticket-panel__barra h3 {
+  margin: 0;
+}
+
+.ticket-panel__barra p {
+  margin: var(--espacio-1) 0 0;
+  color: var(--color-exito-texto);
+}
+
+.ticket-panel__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
 }
 
 .ticket {
-  align-items: start;
+  width: 80mm;
+  max-width: 100%;
+  padding: 5mm 4mm;
+  border-radius: var(--radio-sm);
+  background: #fff;
+  box-shadow: var(--sombra-elevada);
+  color: #111;
+  font-family: ui-monospace, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
-@media (max-width: 46rem) {
-  .encabezado {
-    align-items: flex-start;
-    flex-direction: column;
+.ticket__marca {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1mm;
+  padding-bottom: 3mm;
+  border-bottom: 1px dashed #555;
+  text-align: center;
+}
+
+.ticket__marca strong {
+  font-family: var(--fuente-titulo);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.ticket__marca span {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ticket__datos {
+  display: grid;
+  gap: 1mm;
+  margin: 3mm 0;
+  padding-bottom: 3mm;
+  border-bottom: 1px dashed #555;
+}
+
+.ticket__datos div {
+  display: flex;
+  justify-content: space-between;
+  gap: 3mm;
+}
+
+.ticket__datos dt,
+.ticket__datos dd {
+  margin: 0;
+}
+
+.ticket__datos dt {
+  color: #555;
+}
+
+.ticket__tabla {
+  width: 100%;
+  margin: 0 0 3mm;
+  border-collapse: collapse;
+  font-size: 10.5px;
+}
+
+.ticket__tabla th,
+.ticket__tabla td {
+  padding: 1.2mm 0;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px dotted #aaa;
+}
+
+.ticket__tabla th:nth-child(1),
+.ticket__tabla td:nth-child(1) {
+  width: 8mm;
+  padding-right: 1.5mm;
+}
+
+.ticket__tabla th:nth-child(2),
+.ticket__tabla td:nth-child(2) {
+  padding-right: 2mm;
+}
+
+.ticket__tabla th:last-child,
+.ticket__tabla td:last-child {
+  width: 22mm;
+  padding-left: 1.5mm;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ticket__total {
+  display: flex;
+  justify-content: space-between;
+  gap: 3mm;
+  margin: 0;
+  padding: 2mm 0;
+  border-top: 2px solid #111;
+  border-bottom: 1px dashed #555;
+  font-size: 14px;
+}
+
+.ticket__pagos {
+  display: grid;
+  gap: 1mm;
+  margin: 2mm 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticket__pagos li,
+.ticket__cambio {
+  display: flex;
+  justify-content: space-between;
+  gap: 3mm;
+}
+
+.ticket__cambio {
+  margin: 1mm 0 0;
+  font-weight: 700;
+}
+
+.ticket__gracias {
+  margin: 4mm 0 0;
+  padding-top: 3mm;
+  border-top: 1px dashed #555;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ticket__nota {
+  margin: 1mm 0 0;
+  color: #555;
+  text-align: center;
+  font-size: 9.5px;
+}
+
+@media (max-width: 64em) {
+  .corte {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .columnas {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(17rem, 0.9fr) minmax(20rem, 1.1fr);
+  }
+}
+
+@media (max-width: 52em) {
+  .columnas,
+  .esqueletos {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .corte,
-  .ticket {
-    align-items: stretch;
-    flex-direction: column;
+  .esqueletos .esqueleto {
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 30em) {
+  .pago__fila {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pago__fila .campo:first-child {
+    grid-column: 1 / -1;
   }
 }
 
 @media print {
-  .encabezado,
-  .corte,
-  .columnas,
-  .alerta,
-  .no-imprimir {
+  @page {
+    size: 80mm auto;
+    margin: 3mm;
+  }
+
+  .caja > :not(.ticket-panel) {
     display: none !important;
   }
 
-  .caja {
-    max-width: none;
-    padding: 0;
+  .ticket-panel {
+    display: block !important;
+    width: 100% !important;
+    padding: 0 !important;
   }
 
   .ticket {
-    display: block;
-    border: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0;
     box-shadow: none;
+    font-size: 10.5px;
+    line-height: 1.35;
+  }
+
+  .ticket__tabla {
+    table-layout: fixed;
+    font-size: 10px;
+  }
+
+  .ticket__tabla th,
+  .ticket__tabla td {
+    padding: 1mm 0;
+  }
+
+  .ticket__tabla th:nth-child(1),
+  .ticket__tabla td:nth-child(1) {
+    width: 7mm;
+  }
+
+  .ticket__tabla th:last-child,
+  .ticket__tabla td:last-child {
+    width: 20mm;
+  }
+
+  .ticket__tabla td:nth-child(2) {
+    overflow-wrap: anywhere;
   }
 }
 </style>

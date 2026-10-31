@@ -19,34 +19,43 @@ Guía para poner una base MySQL existente al día con el esquema del proyecto si
 
 ## 2. Aplicar solo las migraciones pendientes
 
-Si ya aplicaste 007–009, ejecuta únicamente **010**:
+Si ya aplicaste 007–010, ejecuta únicamente **011** y después **012**:
 
 ```powershell
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/010_reservaciones_y_caracteristicas.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_cancelacion.sql"
 ```
 
-Si ya aplicaste 007–008, pero aún no 009, ejecuta 009 y después 010. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
+Si ya aplicaste 007–009, ejecuta 010, 011 y 012 en ese orden. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
 
-Si las migraciones 007–010 siguen pendientes, aplícalas en orden (una sola vez cada una):
+Si las migraciones 007–012 siguen pendientes, aplícalas en orden (una sola vez cada una):
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/007_catalogo_descripciones_obligatorias.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/008_presentacion_producto.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/009_secciones_mesas.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/010_reservaciones_y_caracteristicas.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_cancelacion.sql"
 ```
 
 Escribe la contraseña de MySQL cuando la solicite. Asegúrate de conectarte al mismo servidor y usuario configurados en `backend/.env`.
 
-La migración **007** convierte las descripciones vacías o `NULL` a «Detalle pendiente de completar» y luego las vuelve obligatorias. La migración **008** agrega la columna `presentacion` y un índice para buscar productos por categoría, nombre y presentación. La migración **009** crea el catálogo de secciones, registra las secciones ya usadas, asigna «General» a mesas sin sección y hace obligatoria `mesa.zona`. La migración **010** agrega características de acceso de mesas, configuración de tolerancia y recordatorio, y la cola de notificaciones por correo. Las descripciones de relleno deben sustituirse después desde **Gerente → Productos** por información real.
+La migración **007** convierte las descripciones vacías o `NULL` a «Detalle pendiente de completar» y luego las vuelve obligatorias. La migración **008** agrega la columna `presentacion` y un índice para buscar productos por categoría, nombre y presentación. La migración **009** crea el catálogo de secciones, registra las secciones ya usadas, asigna «General» a mesas sin sección y hace obligatoria `mesa.zona`. La migración **010** agrega características de acceso de mesas, configuración de tolerancia y recordatorio, y la cola de notificaciones por correo. La migración **011** agrega `evento` a la cola, permite confirmaciones y cambia la deduplicación por `(id_reservacion, tipo, evento)`. La migración **012** permite el tipo `cancelacion` en esa misma cola. Las descripciones de relleno deben sustituirse después desde **Gerente → Productos** por información real.
 
-No ejecutes de nuevo 007–010 si ya se aplicaron: son cambios de esquema que no están diseñados para repetirse. Si no sabes si se ejecutaron, revisa primero el esquema:
+No ejecutes de nuevo 007–012 si ya se aplicaron: son cambios de esquema que no están diseñados para repetirse. Si no sabes si se ejecutaron, revisa primero el esquema:
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "USE SIGR; SHOW COLUMNS FROM producto LIKE 'descripcion'; SHOW COLUMNS FROM producto LIKE 'presentacion'; SHOW INDEX FROM producto WHERE Key_name = 'idx_producto_variante'; SHOW TABLES LIKE 'seccion'; SHOW COLUMNS FROM mesa LIKE 'zona';"
 ```
 
-Si la columna `presentacion` y el índice ya existen, 008 ya fue aplicada. Si la descripción ya figura como `NOT NULL`, 007 probablemente ya fue aplicada. Si existe la tabla `seccion` y `mesa.zona` es `NOT NULL`, 009 ya fue aplicada. Para 010 confirma que existen `mesa.planta_baja`, `mesa.espacio_carriola`, `mesa.sin_escaleras`, `configuracion_reservacion` y `notificacion_reservacion`; confirma también con quien administra la base antes de repetir una migración.
+Si la columna `presentacion` y el índice ya existen, 008 ya fue aplicada. Si la descripción ya figura como `NOT NULL`, 007 probablemente ya fue aplicada. Si existe la tabla `seccion` y `mesa.zona` es `NOT NULL`, 009 ya fue aplicada. Para 010 confirma que existen `mesa.planta_baja`, `mesa.espacio_carriola`, `mesa.sin_escaleras`, `configuracion_reservacion` y `notificacion_reservacion`. Para 011 confirma que `notificacion_reservacion` tiene la columna `evento` y la clave única `uq_notificacion_reservacion_evento`. Para 012 revisa que los CHECK de `tipo` incluyan `cancelacion`:
+
+```sql
+SHOW CREATE TABLE notificacion_reservacion\G
+```
+
+Confirma también con quien administra la base antes de repetir una migración.
 
 ### Historial de migraciones
 
@@ -63,8 +72,9 @@ Si la columna `presentacion` y el índice ya existen, 008 ya fue aplicada. Si la
 | `009_secciones_mesas.sql` | Catálogo administrable de secciones y sección obligatoria en cada mesa | Una vez |
 | `010_reservaciones_y_caracteristicas.sql` | Características de acceso, configuración de reservaciones y cola de correo | Una vez |
 | `011_cola_unificada_resend.sql` | Evento de confirmación y deduplicación por `(id_reservacion, tipo, evento)` | Una vez, tras 010 |
+| `012_correo_cancelacion.sql` | Tipo `cancelacion` en la cola de correo de reservaciones | Una vez, tras 011 |
 
-La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. La migración 011 tiene sus propios pasos de respaldo, inspección y verificación en la sección «Migración 011».
+La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
 ## 3. Verificar el resultado
 
@@ -87,6 +97,7 @@ SHOW COLUMNS FROM mesa LIKE 'espacio_carriola';
 SHOW COLUMNS FROM mesa LIKE 'sin_escaleras';
 SHOW TABLES LIKE 'configuracion_reservacion';
 SHOW TABLES LIKE 'notificacion_reservacion';
+SHOW CREATE TABLE notificacion_reservacion\G
 SELECT * FROM configuracion_reservacion;
 SELECT nombre, activa FROM seccion ORDER BY nombre;
 SELECT id_mesa, numero, zona FROM mesa ORDER BY numero;
@@ -98,7 +109,7 @@ FROM producto
 WHERE descripcion = 'Detalle pendiente de completar';
 ```
 
-Confirma que `producto.presentacion` exista como `VARCHAR(100)`, que `descripcion` sea `NOT NULL`, que aparezca el índice `idx_producto_variante`, que `seccion` contenga las secciones del restaurante, que `mesa.zona` sea obligatoria y que existan las columnas/tablas de 010. Las mesas que antes estaban sin sección quedan en «General» y pueden reasignarse desde **Gerente → Mesas**. Completa las descripciones de productos con texto pendiente con su información real.
+Confirma que `producto.presentacion` exista como `VARCHAR(100)`, que `descripcion` sea `NOT NULL`, que aparezca el índice `idx_producto_variante`, que `seccion` contenga las secciones del restaurante, que `mesa.zona` sea obligatoria y que existan las columnas/tablas de 010. En `notificacion_reservacion` deben existir `evento`, la clave única por `(id_reservacion, tipo, evento)` y los CHECK con `confirmacion` y `cancelacion`. Las mesas que antes estaban sin sección quedan en «General» y pueden reasignarse desde **Gerente → Mesas**. Completa las descripciones de productos con texto pendiente con su información real.
 
 Después de verificar, inicia el backend con las variables de conexión apuntando a esa misma base. Desde la raíz:
 
@@ -112,13 +123,13 @@ En el formulario **Gerente → Productos**, una variante nueva se identifica por
 
 ## Correo de reservaciones con Resend o Gmail SMTP
 
-El correo del cliente es opcional para registrar una reservación. Si existe, las confirmaciones, recordatorios y avisos de vencimiento se procesan en la misma cola y se envían a la dirección guardada para ese cliente. Desde **Gerente → Reservas** se configuran la tolerancia (15 minutos por defecto; 5–180) y la anticipación del recordatorio (5 minutos por defecto; 1–30). Sin llegada tras `fecha_hora + tolerancia_minutos`, el servicio revalida bajo bloqueo que siga pendiente o confirmada, marca `vencida`, libera la mesa y encola una sola notificación.
+El correo del cliente es opcional para registrar una reservación. Si existe, las confirmaciones, recordatorios, avisos de vencimiento y cancelaciones se procesan en la misma cola y se envían a la dirección guardada para ese cliente. Desde **Gerente → Reservas** se configuran la tolerancia (15 minutos por defecto; 5–180) y la anticipación del recordatorio (5 minutos por defecto; 1–30). Sin llegada tras `fecha_hora + tolerancia_minutos`, el servicio revalida bajo bloqueo que siga pendiente o confirmada, marca `vencida`, libera la mesa y encola una sola notificación. Si la reservación se cancela desde hostess, se encola un correo de cancelación solo cuando la reservación estaba pendiente o confirmada y el cliente tiene un correo válido.
 
-Configura un único remitente `CORREO_REMITENTE` y selecciona `CORREO_PROVEEDOR=resend` o `smtp`. Si no se selecciona proveedor, el backend prefiere Resend cuando hay `RESEND_API_KEY`, después SMTP cuando hay usuario y contraseña; si no hay credenciales, el correo queda desactivado. Gmail requiere contraseña de aplicación (16 caracteres, no la contraseña habitual), `smtp.gmail.com`, puerto 465, y que el correo autenticado coincida con `CORREO_REMITENTE`. El límite aproximado de una cuenta personal es 500 mensajes al día y 100 destinatarios por mensaje; el error `550 5.4.5` reintenta después de seis horas. Consulta [`resend-reservaciones.md`](resend-reservaciones.md) para el resto de la configuración. No guardes credenciales en Git ni en documentación.
+Configura un único remitente `CORREO_REMITENTE` y selecciona `CORREO_PROVEEDOR=resend` o `smtp`. Si no se selecciona proveedor, el backend prefiere Resend cuando hay `RESEND_API_KEY`, después SMTP cuando hay usuario y contraseña; si no hay credenciales, el correo queda desactivado. Gmail requiere contraseña de aplicación (16 caracteres, no la contraseña habitual), `smtp.gmail.com`, puerto 465, y que el correo autenticado coincida con `CORREO_REMITENTE`. El límite aproximado de una cuenta personal es 500 mensajes al día y 100 destinatarios por mensaje; el error `550 5.4.5` reintenta después de seis horas. Los avisos usan las plantillas HTML y de texto de `backend/src/services/plantillasCorreo.ts`. Consulta [`resend-reservaciones.md`](resend-reservaciones.md) para el resto de la configuración. No guardes credenciales en Git ni en documentación.
 
 ## Migración 011: cola unificada de correo
 
-La migración requiere que 010 ya esté aplicada. No la ejecuté en ninguna base. Haz el respaldo y la prueba únicamente en una base de desarrollo aislada; sustituye `SIGR_desarrollo` si tu base de desarrollo tiene otro nombre.
+La migración requiere que 010 ya esté aplicada. Haz el respaldo y la prueba únicamente en una base de desarrollo aislada; sustituye `SIGR_desarrollo` si tu base de desarrollo tiene otro nombre.
 
 ```powershell
 New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
@@ -136,9 +147,25 @@ mysql -h localhost -P 3306 -u root -p SIGR_desarrollo -e "SHOW CREATE TABLE noti
 
 El script localiza por su expresión el `CHECK` anterior de `tipo`, cuyo nombre autogenerado se ve con `SHOW CREATE TABLE`; así no supone que la restricción se llame igual en todas las bases. Agrega `evento` (vacío para recordatorios y vencimientos; `creada` o `confirmada` para confirmaciones) y reemplaza la clave única por `(id_reservacion, tipo, evento)`. No inserta confirmaciones retroactivas para reservaciones antiguas. En `database/init.sql` ya está el esquema final para bases nuevas.
 
+## Migración 012: correo de cancelación
+
+La migración requiere que 011 ya esté aplicada: reemplaza los CHECK nombrados `chk_notificacion_tipo` y `chk_notificacion_evento` que crea 011. Si tu base tiene otros nombres, inspecciónalos antes con `SHOW CREATE TABLE notificacion_reservacion\G` y ajusta los `DROP CHECK` del script.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR_desarrollo --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR_desarrollo-antes-012.sql"
+
+mysql -h localhost -P 3306 -u root -p SIGR_desarrollo -e "SHOW CREATE TABLE notificacion_reservacion\G"
+Get-Content -Raw ".\database\migrations\012_correo_cancelacion.sql" | mysql -h localhost -P 3306 -u root -p SIGR_desarrollo
+
+mysql -h localhost -P 3306 -u root -p SIGR_desarrollo -e "SHOW CREATE TABLE notificacion_reservacion\G; SELECT tipo, COUNT(*) FROM notificacion_reservacion GROUP BY tipo;"
+```
+
+El CHECK de `tipo` queda con `recordatorio`, `vencida`, `confirmacion` y `cancelacion`; el de `evento` exige `creada` o `confirmada` para confirmaciones y `''` para los demás tipos. Si el script falla porque los CHECK no se llaman así, no lo repitas a ciegas: corrige los nombres en una copia revisada. La cancelación de una reservación pendiente o confirmada encola el aviso una sola vez por reservación. En `database/init.sql` ya está el esquema final para bases nuevas.
+
 ## Base nueva o entorno de demostración
 
-- **Base nueva y vacía:** ejecuta `database/init.sql`; este esquema ya incluye los cambios de las migraciones 001–011. No las apliques después sobre esa misma base.
+- **Base nueva y vacía:** ejecuta `database/init.sql`; este esquema ya incluye los cambios de las migraciones 001–012. No las apliques después sobre esa misma base.
 - **Base de desarrollo en Docker que ya contiene datos:** no uses `docker compose down -v`, ya que elimina el volumen de la base. Con el contenedor activo y el puerto 3306 publicado, los comandos `mysql` anteriores la actualizan igual que una instalación local.
 - Guarda el respaldo de forma segura. No lo agregues al repositorio ni lo compartas: contiene los datos de la base.
 

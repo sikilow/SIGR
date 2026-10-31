@@ -17,6 +17,8 @@ export interface Producto {
   disponible: boolean
   /** Unidades que quedan. Ausente = no controla existencia (se prepara al momento): sin tope por existencia. */
   existencia?: number
+  /** disponibilidadProducto.stock_minimo: por debajo de este número se avisa "stock bajo". */
+  stockMinimo?: number
 }
 
 export interface CategoriaMenu {

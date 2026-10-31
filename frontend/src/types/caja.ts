@@ -13,6 +13,8 @@ export interface PedidoPendienteCaja {
 export interface CuentaCaja {
   cuenta: Cuenta
   mesaNumero: number
+  /** Nombres de los meseros que atendieron la cuenta (pedido.id_mesero). */
+  meseroNombre: string
   pedidosSinEntregar: PedidoPendienteCaja[]
 }
 

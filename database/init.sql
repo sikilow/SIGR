@@ -126,10 +126,10 @@ CREATE TABLE notificacion_reservacion (
   ultimo_error VARCHAR(500) NULL,
   creada_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   enviada_en DATETIME NULL,
-  CONSTRAINT chk_notificacion_tipo CHECK (tipo IN ('recordatorio', 'vencida', 'confirmacion')),
+  CONSTRAINT chk_notificacion_tipo CHECK (tipo IN ('recordatorio', 'vencida', 'confirmacion', 'cancelacion')),
   CONSTRAINT chk_notificacion_evento CHECK (
     (tipo = 'confirmacion' AND evento IN ('creada', 'confirmada'))
-    OR (tipo IN ('recordatorio', 'vencida') AND evento = '')
+    OR (tipo IN ('recordatorio', 'vencida', 'cancelacion') AND evento = '')
   ),
   UNIQUE KEY uq_notificacion_reservacion_evento (id_reservacion, tipo, evento),
   INDEX idx_notificacion_pendiente (estado, creada_en),

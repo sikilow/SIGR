@@ -1,5 +1,13 @@
 import { consumirErrorEnvioCorreo, enviarCorreo } from "./correo";
 import { ejecutar, filas, pool, transaccion } from "./db";
+import {
+  plantillaCancelacion,
+  plantillaConfirmacion,
+  plantillaRecordatorio,
+  plantillaVencida,
+  type CorreoReservacion,
+  type DatosReservacion,
+} from "./plantillasCorreo";
 import type { RowDataPacket } from "mysql2/promise";
 
 const INTERVALO_PROCESAMIENTO_MS = 30_000;
@@ -8,7 +16,7 @@ const ESPERA_CUOTA_GMAIL_SEGUNDOS = 6 * 60 * 60;
 
 interface AvisoReservacion extends RowDataPacket {
   id_notificacion: number;
-  tipo: "recordatorio" | "vencida" | "confirmacion";
+  tipo: "recordatorio" | "vencida" | "confirmacion" | "cancelacion";
   evento: "creada" | "confirmada" | "";
   destinatario: string;
   fecha_hora: string;
@@ -111,31 +119,35 @@ async function procesarNotificaciones(): Promise<void> {
   );
   for (const aviso of pendientes) {
     const id = Number(aviso.id_notificacion);
-    const fecha = new Date(String(aviso.fecha_hora)).toLocaleString("es-MX");
-    const fechaHora = String(aviso.fecha_hora);
-    const fechaTexto = `${fechaHora.slice(0, 10)} a las ${fechaHora.slice(11, 16)}`;
     const idempotencyKey = `notificacion-reservacion/${id}`;
-    const mesa = aviso.mesa_numero == null ? "" : ` La mesa asignada es la ${aviso.mesa_numero}.`;
-    let asunto: string;
-    let texto: string;
+    const datos: DatosReservacion = {
+      nombre: String(aviso.nombre),
+      fechaHora: String(aviso.fecha_hora),
+      personas: Number(aviso.personas),
+      mesaNumero: aviso.mesa_numero == null ? null : Number(aviso.mesa_numero),
+      toleranciaMinutos: Number(aviso.tolerancia_minutos),
+    };
 
+    let correo: CorreoReservacion;
     if (aviso.tipo === "confirmacion") {
-      const confirmada = aviso.evento === "confirmada";
-      asunto = confirmada ? "Reservación confirmada" : "Reservación registrada";
-      texto = `Hola ${aviso.nombre}, tu reservación en La Madalena quedó ${confirmada ? "confirmada" : "registrada"} para el ${fechaTexto}, para ${aviso.personas} persona(s).${mesa} ¡Te esperamos!`;
+      correo = plantillaConfirmacion({
+        ...datos,
+        evento: aviso.evento === "confirmada" ? "confirmada" : "creada",
+      });
     } else if (aviso.tipo === "vencida") {
-      asunto = "Tu reservación venció";
-      texto = `Hola ${aviso.nombre}, no registramos tu llegada a La Madalena dentro de los ${aviso.tolerancia_minutos} minutos de tolerancia. Tu reservación del ${fechaTexto} para ${aviso.personas} persona(s) venció y la mesa quedó liberada. Si tienes dudas o deseas visitarnos, contacta al restaurante para consultar disponibilidad.`;
+      correo = plantillaVencida(datos);
+    } else if (aviso.tipo === "cancelacion") {
+      correo = plantillaCancelacion(datos);
     } else {
-      asunto = "Recordatorio de tu reservación";
-      texto = `Hola ${aviso.nombre}, te recordamos tu reservación en La Madalena para el ${fecha}, para ${aviso.personas} persona(s).${mesa} ¡Te esperamos!`;
+      correo = plantillaRecordatorio(datos);
     }
 
     try {
       const enviada = await enviarCorreo({
         para: String(aviso.destinatario),
-        asunto,
-        texto,
+        asunto: correo.asunto,
+        texto: correo.texto,
+        html: correo.html,
         idempotencyKey,
       });
       if (!enviada) {

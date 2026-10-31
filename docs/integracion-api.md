@@ -5,11 +5,11 @@ funciona completo con datos simulados; cambiar a la API real no requiere tocar n
 configuración y, si las respuestas no coinciden, [`services/api/mappers.ts`](../frontend/src/services/api/mappers.ts)
 (y los helpers de conversión de [`conversion.ts`](../frontend/src/services/api/conversion.ts)).
 
-**Levantar la API (una vez):** crear la base con `database/init.sql` (y, si la base ya existía, aplicar las migraciones pendientes de `database/migrations/`, incluidas `007_catalogo_descripciones_obligatorias.sql`, `008_presentacion_producto.sql`, `009_secciones_mesas.sql`, `010_reservaciones_y_caracteristicas.sql` y `011_cola_unificada_resend.sql`),
+**Levantar la API (una vez):** crear la base con `database/init.sql` (y, si la base ya existía, aplicar las migraciones pendientes de `database/migrations/`, incluidas `007_catalogo_descripciones_obligatorias.sql`, `008_presentacion_producto.sql`, `009_secciones_mesas.sql`, `010_reservaciones_y_caracteristicas.sql`, `011_cola_unificada_resend.sql` y `012_correo_cancelacion.sql`),
 copiar `backend/.env.example` a `backend/.env` (clave `JWT_SECRET` y datos de MySQL), `npm install` y `npm run dev` dentro de
 `backend/` (escucha en `http://localhost:3000`). Los usuarios de prueba se crean con `npx tsx src/utils/seed.ts` (contraseña `1234`).
 
-Para enviar confirmaciones, recordatorios y avisos de reservaciones vencidas configura el transporte común Resend o SMTP y el remitente `CORREO_REMITENTE` en `backend/.env`, como indica la guía [`resend-reservaciones.md`](resend-reservaciones.md). Las credenciales se mantienen solo en el backend; los correos fallidos quedan en la cola para reintento.
+Para enviar confirmaciones, recordatorios, avisos de reservaciones vencidas y cancelaciones configura el transporte común Resend o SMTP y el remitente `CORREO_REMITENTE` en `backend/.env`, como indica la guía [`resend-reservaciones.md`](resend-reservaciones.md). El contenido se arma en `backend/src/services/plantillasCorreo.ts` y se envía como HTML con una versión de texto plano alternativa; las credenciales se mantienen solo en el backend y los correos fallidos quedan en la cola para reintento.
 
 Documentos relacionados: [`contrato-api-mesero.md`](contrato-api-mesero.md) (lo que el frontend espera),
 [`equivalencias-bd.md`](equivalencias-bd.md) (cada identificador del frontend frente a la tabla y columna de la BD) y

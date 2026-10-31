@@ -154,6 +154,18 @@ describe("confirmaciones encoladas por la hostess", () => {
     expect(solicitarProcesamientoMock).toHaveBeenCalledOnce();
   });
 
+  it("encola la cancelación sin evento al cancelar una reservación vigente", async () => {
+    await editarReservacion(req({ estado: "cancelada" }, "123"), res());
+
+    expect(ejecutarMock).toHaveBeenCalledWith(
+      cxPrueba,
+      expect.stringContaining("'cancelacion'"),
+      ["", 123],
+    );
+    expect(avisosConfirmados).toHaveLength(1);
+    expect(solicitarProcesamientoMock).toHaveBeenCalledOnce();
+  });
+
   it("guarda una reservación sin correo y no encola notificación", async () => {
     clienteCorreo = null;
 

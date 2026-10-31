@@ -95,7 +95,8 @@
         "descripcion": "Con caramelo casero",
         "precio": 70,
         "disponible": true,
-        "existencia": 8
+        "existencia": 8,
+        "stockMinimo": 10
       },
       {
         "idProducto": 10,
@@ -113,7 +114,8 @@
         "descripcion": "Acompañado de salsa inglesa",
         "precio": 80,
         "disponible": true,
-        "existencia": 5
+        "existencia": 5,
+        "stockMinimo": 10
       }
     ]
   },
@@ -136,7 +138,8 @@
         "descripcion": "Vaso grande",
         "precio": 45,
         "disponible": true,
-        "existencia": 12
+        "existencia": 12,
+        "stockMinimo": 10
       },
       {
         "idProducto": 14,
@@ -154,7 +157,8 @@
         "descripcion": "Cerveza artesanal clara",
         "precio": 75,
         "disponible": true,
-        "existencia": 24
+        "existencia": 24,
+        "stockMinimo": 10
       }
     ]
   }

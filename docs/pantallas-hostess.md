@@ -114,9 +114,10 @@ Mismo comportamiento que el Panel del mesero (ver [`pantallas-mesero.md`](pantal
    reservaciones.
 
 La tolerancia de llegada y la anticipación de los recordatorios se configuran desde **Gerente → Reservas**. El backend
-envía confirmaciones, recordatorios y vencimientos por una cola común con Resend o SMTP; los fallos quedan registrados
-para reintento. La base requiere las migraciones `010_reservaciones_y_caracteristicas.sql` y
-`011_cola_unificada_resend.sql`. Consulta [resend-reservaciones.md](resend-reservaciones.md).
+envía confirmaciones, recordatorios, vencimientos y cancelaciones por una cola común con Resend o SMTP; los avisos usan
+una tarjeta editorial en HTML con texto plano alternativo y los fallos quedan registrados para reintento. La base requiere
+las migraciones `010_reservaciones_y_caracteristicas.sql`, `011_cola_unificada_resend.sql` y
+`012_correo_cancelacion.sql`. Consulta [resend-reservaciones.md](resend-reservaciones.md).
 
 ## Cómo funciona «Asignar mesa»
 

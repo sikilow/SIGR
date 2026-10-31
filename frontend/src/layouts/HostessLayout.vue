@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AvisoGlobal from '../components/AvisoGlobal.vue'
 import FranjaDemo from '../components/FranjaDemo.vue'
 import LogoMarca from '../components/LogoMarca.vue'
 import { usandoMock } from '../services'
-import { useAnunciosStore } from '../stores/anuncios'
 import { useSesionStore } from '../stores/sesion'
 import { ETIQUETA_ROL } from '../types'
 
 const sesion = useSesionStore()
-const anuncios = useAnunciosStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -43,6 +42,7 @@ async function salir() {
   <div class="layout" :class="{ 'layout--demo': usandoMock }">
     <a class="saltar-contenido" href="#contenido-principal">Saltar al contenido</a>
     <FranjaDemo />
+    <AvisoGlobal />
     <header class="barra">
       <div class="barra__marca">
         <LogoMarca :tamano="40" invertido />
@@ -61,16 +61,6 @@ async function salir() {
         </button>
       </div>
     </header>
-
-    <!-- Avisos breves ("Pedido #5 cancelado", "Pedido #8, mesa 5: listo"): visibles y anunciados, sin quitar el foco -->
-    <div class="avisos" role="status" aria-live="polite" aria-atomic="true">
-      <p v-if="anuncios.texto" class="avisos__texto">
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <path d="m5 12 5 5 9-10" />
-        </svg>
-        {{ anuncios.texto }}
-      </p>
-    </div>
 
     <main id="contenido-principal" ref="contenido" class="contenido" tabindex="-1">
       <RouterView />
@@ -142,6 +132,11 @@ async function salir() {
   .barra__restaurante {
     font-size: var(--texto-lg);
   }
+
+  /* En teléfonos la barra queda en una sola línea: marca y salida. */
+  .barra .barra__datos {
+    display: none;
+  }
 }
 
 .barra__restaurante {
@@ -177,49 +172,6 @@ async function salir() {
   padding: var(--espacio-6);
   /* Barras fijas al fondo de una pantalla no deben tapar el control enfocado con el teclado */
   scroll-padding-bottom: 160px;
-}
-
-/* Aviso breve, arriba y centrado (no tapa las acciones del fondo); no recibe toques */
-.avisos {
-  position: fixed;
-  top: calc(var(--altura-barra-superior) + var(--espacio-3));
-  left: 50%;
-  z-index: 50;
-  width: max-content;
-  max-width: calc(100% - var(--espacio-8));
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.avisos__texto {
-  display: flex;
-  align-items: center;
-  gap: var(--espacio-2);
-  margin: 0;
-  padding: var(--espacio-3) var(--espacio-5);
-  border: 2px solid var(--color-entregado-texto);
-  border-radius: var(--radio);
-  background: var(--color-surface);
-  box-shadow: 0 8px 24px rgb(31 41 55 / 25%);
-  color: var(--color-entregado-texto);
-  font-weight: 700;
-}
-
-.avisos__texto svg {
-  flex: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .avisos__texto {
-    animation: entrar-aviso 200ms ease-out;
-  }
-}
-
-@keyframes entrar-aviso {
-  from {
-    transform: translateY(-12px);
-    opacity: 0;
-  }
 }
 
 .nav {

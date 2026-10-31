@@ -1,60 +1,149 @@
 /*
-  Tokens de diseño de SIGR.
-  PROVISIONAL: la paleta está pendiente de confirmación por el usuario.
+  Tokens de diseño de SIGR · La Madalena
+  Identidad cálida y editorial: barro cocido, agave y maíz sobre papel de algodón.
+  La paleta es deliberada, no un tema genérico: el barro es la acción, el agave
+  comunica disponibilidad y el maíz marca lo que requiere atención.
 */
 :root {
-  /* Paleta base */
-  --color-primary: #c2410c;
-  --color-primary-dark: #9a3412;
-  --color-bg: #fff8f1;
-  --color-surface: #ffffff;
-  --color-text: #1f2937;
-  --color-muted: #6b7280;
-  --color-border: #e7d9cc;
-  --color-on-primary: #ffffff;
-  --color-error: #b91c1c;
+  /* ---------- Paleta base ---------- */
+  --color-primary: #a63a1f;
+  --color-primary-dark: #7a2a16;
+  --color-primary-soft: #f3e1d7;
+  --color-bg: #f7f0e5;
+  --color-surface: #fffcf7;
+  --color-surface-2: #f2e9db;
+  --color-text: #1e241f;
+  --color-muted: #5d6459;
+  --color-border: #d9cbb8;
+  /* Borde con contraste ≥ 3:1 para límites que identifican un control (WCAG 1.4.11) */
+  --color-borde-fuerte: #8c8172;
+  --color-on-primary: #fff9f3;
+  --color-error: #a42222;
 
-  /* Estados de mesa y de pedido (para íconos y bordes; contraste ≥ 3:1 sobre blanco) */
-  --color-libre: #16a34a;
-  --color-ocupada: #dc2626;
-  --color-reservada: #2563eb;
-  --color-listo: #d97706;
+  /* Acentos de identidad */
+  --color-secondary: #2e6b58;
+  --color-secondary-dark: #1f4e3f;
+  --color-secondary-soft: #e1eee8;
+  --color-maiz: #c58a24;
+  --color-maiz-texto: #7a4e08;
+  --color-maiz-fondo: #fbf0d9;
 
-  /* Variantes oscuras para TEXTO de estado (contraste AA ≥ 4.5:1 sobre blanco) */
-  --color-libre-texto: #166534;
-  --color-ocupada-texto: #991b1b;
-  --color-reservada-texto: #1e40af;
-  --color-listo-texto: #92400e;
+  /* ---------- Estados de mesa y de pedido ---------- */
+  --color-libre: #2e6b45;
+  --color-ocupada: #a83226;
+  --color-reservada: #2b5f8c;
+  --color-listo: #9a5b00;
+
+  --color-libre-texto: #1f4a2f;
+  --color-ocupada-texto: #7e241b;
+  --color-reservada-texto: #1e4668;
+  --color-listo-texto: #6e4000;
+
+  --color-listo-fondo: #fbf1dc;
 
   /* Controles deshabilitados (relleno neutro y texto oscuro legible) */
-  --color-deshabilitado-borde: #c9bbaa;
-  --color-deshabilitado-fondo: #ece3d9;
-  --color-deshabilitado-texto: #4b5563;
-  --color-listo-fondo: #fffbeb;
+  --color-deshabilitado-borde: #cfc2af;
+  --color-deshabilitado-fondo: #efe7db;
+  --color-deshabilitado-texto: #5d6459;
 
-  /* Acción destructiva (cancelar): relleno, variante oscura para texto/hover (AA sobre blanco) */
-  --color-peligro: #b91c1c;
-  --color-peligro-texto: #7f1d1d;
-  --color-peligro-fondo: #fef2f2;
+  /* Acción destructiva */
+  --color-peligro: #a42222;
+  --color-peligro-texto: #7a1818;
+  --color-peligro-fondo: #fbeae8;
 
-  /* Estados del pedido: color para ícono/borde y variante oscura para texto (AA sobre blanco) */
-  --color-registrado: #6b7280;
-  --color-registrado-texto: #374151;
-  --color-enviado: #2563eb;
-  --color-enviado-texto: #1e40af;
-  --color-preparacion: #7c3aed;
-  --color-preparacion-texto: #5b21b6;
-  --color-entregado: #16a34a;
-  --color-entregado-texto: #166534;
-  --color-pagado: #0f766e;
-  --color-pagado-texto: #115e59;
+  /* Estados del pedido */
+  --color-registrado: #5d6459;
+  --color-registrado-texto: #3a4038;
+  --color-enviado: #2563a8;
+  --color-enviado-texto: #1b4a7e;
+  --color-preparacion: #6d3fa6;
+  --color-preparacion-texto: #512c7e;
+  --color-entregado: #2e6b45;
+  --color-entregado-texto: #1f4a2f;
+  --color-pagado: #0f6b63;
+  --color-pagado-texto: #0a4c46;
 
-  /* Forma */
+  /* Estados de cuenta */
+  --color-cuenta-abierta: #2b5f8c;
+  --color-cuenta-abierta-texto: #1e4668;
+  --color-cuenta-abierta-fondo: #e6eff6;
+  --color-cuenta-por-pagar: #8a5200;
+  --color-cuenta-por-pagar-texto: #6e4000;
+  --color-cuenta-por-pagar-fondo: #fbf0d9;
+  --color-cuenta-pagada: #2e6b45;
+  --color-cuenta-pagada-texto: #1f4a2f;
+  --color-cuenta-pagada-fondo: #e7f1e9;
+
+  /* Estados de reservación */
+  --color-reservacion-pendiente: #8a5200;
+  --color-reservacion-pendiente-texto: #6e4000;
+  --color-reservacion-pendiente-fondo: #fbf0d9;
+  --color-reservacion-confirmada: #2e6b45;
+  --color-reservacion-confirmada-texto: #1f4a2f;
+  --color-reservacion-confirmada-fondo: #e7f1e9;
+  --color-reservacion-llego: #2b5f8c;
+  --color-reservacion-llego-texto: #1e4668;
+  --color-reservacion-llego-fondo: #e6eff6;
+  --color-reservacion-cancelada: #5d6459;
+  --color-reservacion-cancelada-texto: #3a4038;
+  --color-reservacion-cancelada-fondo: #f0ece4;
+  --color-reservacion-vencida: #a42222;
+  --color-reservacion-vencida-texto: #7a1818;
+  --color-reservacion-vencida-fondo: #fbeae8;
+
+  /* Estados de lista de espera */
+  --color-espera-esperando: #2b5f8c;
+  --color-espera-esperando-texto: #1e4668;
+  --color-espera-esperando-fondo: #e6eff6;
+  --color-espera-asignada: #2e6b45;
+  --color-espera-asignada-texto: #1f4a2f;
+  --color-espera-asignada-fondo: #e7f1e9;
+  --color-espera-cancelada: #5d6459;
+  --color-espera-cancelada-texto: #3a4038;
+  --color-espera-cancelada-fondo: #f0ece4;
+  --color-espera-larga: #a42222;
+  --color-espera-larga-texto: #7a1818;
+  --color-espera-larga-fondo: #fbeae8;
+
+  /* Estados de producto */
+  --color-producto-disponible: #2e6b45;
+  --color-producto-disponible-texto: #1f4a2f;
+  --color-producto-disponible-fondo: #e7f1e9;
+  --color-producto-stock-bajo: #8a5200;
+  --color-producto-stock-bajo-texto: #6e4000;
+  --color-producto-stock-bajo-fondo: #fbf0d9;
+  --color-producto-agotado: #a42222;
+  --color-producto-agotado-texto: #7a1818;
+  --color-producto-agotado-fondo: #fbeae8;
+  --color-producto-sin-control: #5d6459;
+  --color-producto-sin-control-texto: #3a4038;
+  --color-producto-sin-control-fondo: #f0ece4;
+
+  /* Pedido cancelado: distinto de un error del sistema */
+  --color-cancelado: #a42222;
+  --color-cancelado-texto: #7a1818;
+  --color-cancelado-fondo: #fbeae8;
+
+  /* Avisos */
+  --color-exito: #2e6b45;
+  --color-exito-texto: #1f4a2f;
+  --color-exito-fondo: #e7f1e9;
+  --color-info: #2b5f8c;
+  --color-info-texto: #1e4668;
+  --color-info-fondo: #e6eff6;
+  --color-advertencia: #8a5200;
+  --color-advertencia-texto: #6e4000;
+  --color-advertencia-fondo: #fbf0d9;
+
+  /* ---------- Forma ---------- */
   --radio: 16px;
-  --radio-sm: 8px;
-  --sombra: 0 1px 3px rgb(31 41 55 / 12%), 0 1px 2px rgb(31 41 55 / 8%);
+  --radio-sm: 10px;
+  --radio-lg: 24px;
+  --sombra: 0 1px 2px rgb(30 36 31 / 6%), 0 8px 24px -16px rgb(30 36 31 / 22%);
+  --sombra-elevada: 0 2px 4px rgb(30 36 31 / 8%), 0 24px 48px -20px rgb(30 36 31 / 30%);
+  --sombra-suave: 0 1px 0 rgb(30 36 31 / 5%);
 
-  /* Escala de espaciado (base de 4px) */
+  /* ---------- Espaciado (base de 4 px) ---------- */
   --espacio-1: 4px;
   --espacio-2: 8px;
   --espacio-3: 12px;
@@ -65,16 +154,42 @@
   --espacio-10: 40px;
   --espacio-12: 48px;
 
-  /* Táctil: objetivo mínimo de 48px */
+  /* ---------- Táctil y estructura ---------- */
   --tactil-min: 48px;
   --altura-barra-superior: 64px;
   --altura-nav-inferior: 72px;
+  --ancho-sidebar: 248px;
+  --ancho-contenido: 1440px;
+  --grid-columnas: 4;
 
-  /* Tipografía del sistema */
-  --fuente: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* ---------- Tipografía ---------- */
+  --fuente: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fuente-titulo: 'Fraunces', Georgia, 'Times New Roman', serif;
   --texto-sm: 0.875rem;
   --texto-base: 1rem;
   --texto-lg: 1.25rem;
   --texto-xl: 1.5rem;
   --texto-2xl: 2rem;
+  --texto-3xl: 2.75rem;
+
+  /* ---------- Movimiento ---------- */
+  --duracion-rapida: 140ms;
+  --duracion-normal: 220ms;
+  --duracion-lenta: 320ms;
+  --curva-salida: cubic-bezier(0.23, 1, 0.32, 1);
+  --curva-entrada-salida: cubic-bezier(0.77, 0, 0.175, 1);
+  --curva-cajon: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Tablet: 8 columnas. Escritorio: 12 columnas. */
+@media (min-width: 768px) {
+  :root {
+    --grid-columnas: 8;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --grid-columnas: 12;
+  }
 }
