@@ -2,6 +2,8 @@
 
 Esta carpeta explica el código de SIGR para que el equipo lo entienda y pueda defenderlo. Cada documento va por **bloques de líneas** (`L12–L30`), con **qué hace** y **por qué está así**.
 
+Para la documentación funcional y de arquitectura actualizada, consulta el [índice general](../README.md) y la [guía del frontend](../frontend.md). La guía de esta carpeta es un recorrido pedagógico por bloques de código; no sustituye los contratos de API ni pretende documentar cada componente.
+
 ## Importante: el proyecto se reorganizó
 
 Después de escribir los documentos 01 a 05 el proyecto pasó a la estructura acordada (ver `README.md`, sección «Estructura del proyecto»). Las explicaciones siguen valiendo, pero **los números de línea y las rutas de los documentos 01 a 05 corresponden a los archivos anteriores**. Para encontrar cada cosa hoy:

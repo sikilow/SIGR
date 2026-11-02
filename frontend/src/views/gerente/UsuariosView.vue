@@ -208,6 +208,7 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
             <span class="fila__rol">{{ ETIQUETA_ROL[u.rol] }}</span>
             · usuario <strong>{{ u.nombreUsuario }}</strong>
           </p>
+          <p v-if="u.esPrimerGerente" class="fila__linea fila__meta">Gerente inicial protegido</p>
           <p class="fila__linea">{{ u.correo }}<template v-if="u.telefono"> · {{ u.telefono }}</template></p>
           <p class="fila__linea fila__meta">Último acceso: {{ fechaCorta(u.ultimoAcceso) }}</p>
         </div>
@@ -221,10 +222,11 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
               v-if="u.activo"
               type="button"
               class="btn btn--peligro-suave"
+              :disabled="u.esPrimerGerente || u.idUsuario === sesion.usuario?.idUsuario"
               :aria-label="`Desactivar a ${u.nombre}`"
-              :aria-disabled="u.idUsuario === sesion.usuario?.idUsuario ? 'true' : undefined"
-              :title="u.idUsuario === sesion.usuario?.idUsuario ? 'No puedes desactivarte a ti mismo' : undefined"
-              @click="u.idUsuario !== sesion.usuario?.idUsuario && pedirCambioEstado(u, $event)"
+              :aria-disabled="u.idUsuario === sesion.usuario?.idUsuario || u.esPrimerGerente ? 'true' : undefined"
+              :title="u.esPrimerGerente ? 'El primer gerente no se puede desactivar' : u.idUsuario === sesion.usuario?.idUsuario ? 'No puedes desactivarte a ti mismo' : undefined"
+              @click="u.idUsuario !== sesion.usuario?.idUsuario && !u.esPrimerGerente && pedirCambioEstado(u, $event)"
             >
               Desactivar
             </button>
@@ -238,6 +240,7 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
       :abierto="formAbierto"
       :usuario="usuarioEnEdicion"
       :es-yo="usuarioEnEdicion !== null && usuarioEnEdicion.idUsuario === sesion.usuario?.idUsuario"
+      :es-primer-gerente="usuarioEnEdicion?.esPrimerGerente"
       :origen-foco="origenForm"
       @cerrar="formAbierto = false"
       @guardado="alGuardar"

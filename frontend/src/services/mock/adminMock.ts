@@ -37,6 +37,9 @@ function aAdmin(id: number): UsuarioAdmin {
   const e = datosExtra(u.idUsuario, u.nombreUsuario)
   return {
     idUsuario: u.idUsuario,
+    esPrimerGerente: baseDatos.usuarios
+      .filter((candidato) => candidato.rol === 'gerente')
+      .sort((a, b) => a.idUsuario - b.idUsuario)[0]?.idUsuario === u.idUsuario,
     nombre: u.nombre,
     correo: e.correo,
     nombreUsuario: u.nombreUsuario,
@@ -88,6 +91,15 @@ export function crearUsuariosMock(): UsuariosService {
       return conRetraso(() => {
         const u = baseDatos.usuarios.find((x) => x.idUsuario === id)
         if (!u) throw noExiste('El usuario')
+        const primerGerente = baseDatos.usuarios
+          .filter((candidato) => candidato.rol === 'gerente')
+          .sort((a, b) => a.idUsuario - b.idUsuario)[0]
+        if (
+          primerGerente?.idUsuario === id &&
+          ((c.activo === false) || (c.rol !== undefined && c.rol !== 'gerente'))
+        ) {
+          throw new ErrorServicio('estado_invalido', 'El primer gerente no se puede desactivar ni cambiar de rol.', 409)
+        }
         const dejaDeSerGerente = u.rol === 'gerente' && u.activo !== false && ((c.activo === false) || (c.rol !== undefined && c.rol !== 'gerente'))
         if (dejaDeSerGerente) {
           if (id === idSesion()) throw new ErrorServicio('estado_invalido', 'No puedes desactivarte ni cambiarte el rol a ti mismo.', 409)
@@ -107,10 +119,13 @@ export function crearUsuariosMock(): UsuariosService {
       })
     },
 
-    cambiarContrasena(id, contrasena) {
+    cambiarContrasena(id, contrasena, contrasenaActual) {
       return conRetraso(() => {
         const u = baseDatos.usuarios.find((x) => x.idUsuario === id)
         if (!u) throw noExiste('El usuario')
+        if (contrasenaActual !== u.contrasena) {
+          throw new ErrorServicio('credenciales_invalidas', 'La contraseña anterior del usuario es incorrecta.', 401)
+        }
         u.contrasena = contrasena
       })
     },

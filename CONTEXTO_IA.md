@@ -124,7 +124,7 @@ SIGR/
 │       ├── utils/              carrito, reglas de negocio, formato, contraste
 │       ├── assets/             vacía por ahora (.gitkeep)
 │       └── types/, layouts/, composables/, styles/   (adicionales: el código depende de ellas)
-├── database/                   init.sql, docker-compose.yml, seed_demo.sql (opcional) y migrations/001 a 012
+├── database/                   init.sql, docker-compose.yml, seed_demo.sql (opcional) y migrations/001 a 013
 ├── docs/                       arquitectura.md, contratos, equivalencias, incrementos, integración,
 │                               pantallas, actualización de BD, Resend, pendientes, guía de código y capturas
 ├── CONTEXTO_IA.md              este archivo
@@ -335,10 +335,11 @@ Cuando aparezca algo que no está arriba, agrégalo aquí y también en la tabla
 | RF-MES-007 | Mostrar y agrupar por sección en el Salón de la hostess y en el Panel de mesas, con filtro por sección (el backend ya envía `zona`) | Hostess, Mesero | Detalle pendiente de RF-MES-006 | IMPLEMENTADO (frontend; falta aprobarlo en el ERS, ver 5.2) | 2026-10-21 |
 | RF-RES-007 | Configurar tolerancia y recordatorio; vencer reservaciones, liberar mesa y notificar | Gerente, Sistema | Revisión del incremento de reservaciones | IMPLEMENTADO (falta aprobarlo en el ERS, ver 5.2) | 2026-10-23 |
 | RF-COR-001 | Enviar a la dirección del cliente las confirmaciones creadas al registrar y confirmar, y la cancelación al cancelar una reservación vigente, con transporte Resend o SMTP, reintentos en cola y correo HTML con texto alternativo | Sistema | Solicitud de correo transaccional | IMPLEMENTADO (falta aprobarlo en el ERS) | 2026-10-31 |
-| RF-AUD-001 | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo | PROPUESTO (sin construir) | oct. 2026 |
-| RF-AUD-002 | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
-| RF-USR-008 | Que cada usuario cambie su propia contraseña | Todos los roles | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
-| RF-PED-006 | Registrar quién canceló un pedido y cuándo | Sistema | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
+| RF-AUD-001 | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo | IMPLEMENTADO en migración 013; pendiente de aplicación en cada base | oct. 2026 |
+| RF-AUD-002 | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión | IMPLEMENTADO en migración 013; pendiente de aplicación en cada base | oct. 2026 |
+| RF-USR-008 | Que Gerencia cambie la contraseña de un usuario validando la contraseña anterior de este | Gerente | Solicitud del equipo | IMPLEMENTADO en API, frontend y mock | oct. 2026 |
+| RF-USR-009 | Proteger al primer gerente contra desactivación, cambio de rol o eliminación | Sistema, Gerente | Solicitud del equipo | IMPLEMENTADO en API y migración 013; pendiente de aplicación en cada base | oct. 2026 |
+| RF-PED-006 | Registrar quién canceló un pedido y cuándo | Sistema | Hallazgo de la revisión | Cubierto por auditoría general en migración 013; pendiente de aplicación en cada base | oct. 2026 |
 | RF-PED-007 | Historial de pedidos paginado y por fechas en la API: `GET /api/pedidos?desde=&hasta=&limite=&pagina=` con total en `X-Total-Count` (P-11) | Gerente, Cajero | Pantalla Pedidos del gerente (`docs/contrato-api-gerente.md`, sección 3) | PROPUESTO (sin construir) | 2026-10-21 |
 | RF-PED-008 | Enviar la observación general del pedido (`pedido.observaciones`, ya es columna) en las respuestas de pedidos | Gerente, Mesero, Cocinero | Pantalla Pedidos del gerente (`docs/contrato-api-gerente.md`, sección 1) | PROPUESTO (sin construir) | 2026-10-21 |
 | RF-CUE-003 | Consultar una cuenta por su id aunque ya esté cerrada (`GET /api/cuentas/:id`, gerente y cajero) | Gerente, Cajero | Pantalla Pedidos del gerente (`docs/contrato-api-gerente.md`, sección 5) | PROPUESTO (sin construir) | 2026-10-21 |
@@ -347,7 +348,7 @@ Detalle, decisiones pendientes (D-1 a D-5) y hallazgos P-01 a P-16: `docs/PENDIE
 
 ## 6. Modelo de datos (MySQL, base `SIGR`)
 
-Notación: `*` clave primaria, `→tabla` clave foránea. El esquema actualizado está en `database/init.sql`. Las migraciones `001`–`012` incluyen, además del esquema inicial, control de existencia, caja, descripciones y presentación de productos, catálogo de secciones (`seccion`), características de acceso de mesas, configuración de reservaciones y cola unificada de correo (`notificacion_reservacion`). La migración `011` agrega `evento` y el índice único compuesto para confirmaciones; la `012` habilita el tipo `cancelacion`. Revisa cuáles ya se aplicaron y sigue [`docs/actualizar-base-datos.md`](docs/actualizar-base-datos.md). No ejecutes `init.sql` sobre una base existente.
+Notación: `*` clave primaria, `→tabla` clave foránea. El esquema actualizado está en `database/init.sql`. Las migraciones `001`–`013` incluyen, además del esquema inicial, control de existencia, caja, descripciones y presentación de productos, catálogo de secciones (`seccion`), características de acceso de mesas, configuración de reservaciones, cola unificada de correo (`notificacion_reservacion`) y auditoría/protección del gerente inicial. La migración `011` agrega `evento` y el índice único compuesto para confirmaciones; la `012` habilita el tipo `cancelacion`; la `013` crea triggers de auditoría y protege al gerente inicial. Revisa cuáles ya se aplicaron y sigue [`docs/actualizar-base-datos.md`](docs/actualizar-base-datos.md). No ejecutes `init.sql` sobre una base existente.
 
 ```
 
@@ -491,7 +492,7 @@ Antes de entregar: `npm run build` y `npm test` en `backend/`, y `npm run check`
 6. Decidir qué pasa con el borrado de clientes y actualizar el ERS con los requisitos de la sección 5.2.
 7. ~~Sección de la mesa en el Salón y el Panel~~ (RF-MES-007): implementado. La administración del catálogo también está en Gerente → Mesas. Queda por hacer una prueba operativa en el entorno MySQL compartido y confirmar si las secciones se consideran sensibles a mayúsculas.
 8. **Auditoría** (RF-AUD-001 y 002): quién cambia una contraseña, a quién y cuándo. Un trigger de MySQL no conoce al usuario del sistema; la API tendría que pasarle su id. Opciones y recomendación en `docs/PENDIENTES_Y_FALTANTES.md`.
-9. Cambio de contraseña propio (RF-USR-008), quién canceló un pedido (RF-PED-006: no hay columna; la pantalla del gerente muestra el motivo pero no quién ni cuándo; opciones en `docs/contrato-api-gerente.md`, sección 4) y las reglas del dominio sin aplicar (validación de capacidad y regla 11). La tolerancia de reservaciones ya es configurable.
+9. Aplicar la migración 013 en cada base y probar la auditoría con MySQL. RF-USR-008 ya está implementado: solo Gerencia inicia el cambio y el usuario afectado proporciona su contraseña anterior. RF-PED-006 queda consultable en auditoría, pero no como campos en la respuesta del pedido (ver `docs/contrato-api-gerente.md`, sección 4). Siguen pendientes las reglas del dominio sin aplicar (validación de capacidad y regla 11). La tolerancia de reservaciones ya es configurable.
 10. Pruebas de rutas del backend contra una base de datos (las pruebas Vitest actuales simulan servicios y no cubren rutas con MySQL) y protecciones básicas de la API (límite de intentos, cabeceras de seguridad).
 
 ## 12. Glosario

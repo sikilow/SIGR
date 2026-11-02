@@ -15,20 +15,31 @@ Guía para poner una base MySQL existente al día con el esquema del proyecto si
 
    Cambia host, puerto y usuario si tu servidor usa otros valores. En Docker, el puerto publicado por `database/docker-compose.yml` es `3306`; la contraseña predeterminada de desarrollo es `sigr1234`.
 3. Comprueba que el respaldo exista y no esté vacío antes de continuar.
-4. Abre PowerShell en la raíz del repositorio. El cliente `mysql` debe estar instalado y ser accesible desde la terminal. Si usas otros valores de conexión, reemplaza `root` y `localhost:3306` por `DB_USER` y `DB_HOST`/puerto; estos scripts usan explícitamente la base `SIGR`, así que ese es el valor esperado de `DB_NAME`. `DB_PASSWORD` se solicita de forma interactiva con `-p`.
+4. Abre PowerShell en la raíz del repositorio. Si la terminal está en `backend`, puedes calcular la ruta al archivo desde cualquiera de esas dos carpetas con los comandos de la sección siguiente. El cliente `mysql` debe estar instalado y ser accesible desde la terminal. Si usas otros valores de conexión, reemplaza `root` y `localhost:3306` por `DB_USER` y `DB_HOST`/puerto; estos scripts usan explícitamente la base `SIGR`, así que ese es el valor esperado de `DB_NAME`. `DB_PASSWORD` se solicita de forma interactiva con `-p`.
 
 ## 2. Aplicar solo las migraciones pendientes
 
-Si ya aplicaste 007–010, ejecuta únicamente **011** y después **012**:
+Si ya aplicaste 007–012, ejecuta únicamente **013**:
+
+```powershell
+Get-Content -Raw "..\database\migrations\013_auditoria_seguridad.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+```
+
+Ese comando es para PowerShell abierto en `backend\`. Si estás en la raíz del repositorio, usa la ruta `.\database\migrations\013_auditoria_seguridad.sql`. Ejecuta el comando como una línea completa; no pegues varias instrucciones de PowerShell juntas en una sola línea sin separadores.
+
+La migración 013 puede volver a ejecutarse para completar una ejecución interrumpida: conserva las tablas existentes y reemplaza los triggers y el procedimiento de auditoría. Si MySQL informa un error, corrige la causa y vuelve a ejecutar el comando completo; no hace falta borrar manualmente tablas ni triggers.
+
+Si ya aplicaste 007–010, ejecuta **011**, **012** y **013** en ese orden:
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_cancelacion.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/013_auditoria_seguridad.sql"
 ```
 
-Si ya aplicaste 007–009, ejecuta 010, 011 y 012 en ese orden. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
+Si ya aplicaste 007–009, ejecuta 010, 011, 012 y 013 en ese orden. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
 
-Si las migraciones 007–012 siguen pendientes, aplícalas en orden (una sola vez cada una):
+Si las migraciones 007–013 siguen pendientes, aplícalas en orden (una sola vez cada una):
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/007_catalogo_descripciones_obligatorias.sql"
@@ -37,13 +48,14 @@ mysql -h localhost -P 3306 -u root -p -e "source database/migrations/009_seccion
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/010_reservaciones_y_caracteristicas.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_cancelacion.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/013_auditoria_seguridad.sql"
 ```
 
 Escribe la contraseña de MySQL cuando la solicite. Asegúrate de conectarte al mismo servidor y usuario configurados en `backend/.env`.
 
-La migración **007** convierte las descripciones vacías o `NULL` a «Detalle pendiente de completar» y luego las vuelve obligatorias. La migración **008** agrega la columna `presentacion` y un índice para buscar productos por categoría, nombre y presentación. La migración **009** crea el catálogo de secciones, registra las secciones ya usadas, asigna «General» a mesas sin sección y hace obligatoria `mesa.zona`. La migración **010** agrega características de acceso de mesas, configuración de tolerancia y recordatorio, y la cola de notificaciones por correo. La migración **011** agrega `evento` a la cola, permite confirmaciones y cambia la deduplicación por `(id_reservacion, tipo, evento)`. La migración **012** permite el tipo `cancelacion` en esa misma cola. Las descripciones de relleno deben sustituirse después desde **Gerente → Productos** por información real.
+La migración **007** convierte las descripciones vacías o `NULL` a «Detalle pendiente de completar» y luego las vuelve obligatorias. La migración **008** agrega la columna `presentacion` y un índice para buscar productos por categoría, nombre y presentación. La migración **009** crea el catálogo de secciones, registra las secciones ya usadas, asigna «General» a mesas sin sección y hace obligatoria `mesa.zona`. La migración **010** agrega características de acceso de mesas, configuración de tolerancia y recordatorio, y la cola de notificaciones por correo. La migración **011** agrega `evento` a la cola, permite confirmaciones y cambia la deduplicación por `(id_reservacion, tipo, evento)`. La migración **012** permite el tipo `cancelacion` en esa misma cola. La **013** protege al gerente inicial y audita INSERT/UPDATE/DELETE en las 26 tablas de negocio y en la tabla de configuración de seguridad mediante triggers; también crea `sp_consultar_auditoria`. Requiere privilegios MySQL para crear tablas, triggers y procedimientos. Las descripciones de relleno deben sustituirse después desde **Gerente → Productos** por información real.
 
-No ejecutes de nuevo 007–012 si ya se aplicaron: son cambios de esquema que no están diseñados para repetirse. Si no sabes si se ejecutaron, revisa primero el esquema:
+No ejecutes de nuevo 007–012 si ya se aplicaron: son cambios de esquema que no están diseñados para repetirse. La 013 puede volver a crear sus triggers y procedimiento; aun así, detén la API y respalda la base antes de reaplicarla. Si no sabes si se ejecutaron, revisa primero el esquema:
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "USE SIGR; SHOW COLUMNS FROM producto LIKE 'descripcion'; SHOW COLUMNS FROM producto LIKE 'presentacion'; SHOW INDEX FROM producto WHERE Key_name = 'idx_producto_variante'; SHOW TABLES LIKE 'seccion'; SHOW COLUMNS FROM mesa LIKE 'zona';"
@@ -73,6 +85,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `010_reservaciones_y_caracteristicas.sql` | Características de acceso, configuración de reservaciones y cola de correo | Una vez |
 | `011_cola_unificada_resend.sql` | Evento de confirmación y deduplicación por `(id_reservacion, tipo, evento)` | Una vez, tras 010 |
 | `012_correo_cancelacion.sql` | Tipo `cancelacion` en la cola de correo de reservaciones | Una vez, tras 011 |
+| `013_auditoria_seguridad.sql` | Protege al gerente inicial y audita INSERT/UPDATE/DELETE en las tablas de negocio | Una vez, tras el esquema y usuarios iniciales |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
@@ -163,9 +176,27 @@ mysql -h localhost -P 3306 -u root -p SIGR_desarrollo -e "SHOW CREATE TABLE noti
 
 El CHECK de `tipo` queda con `recordatorio`, `vencida`, `confirmacion` y `cancelacion`; el de `evento` exige `creada` o `confirmada` para confirmaciones y `''` para los demás tipos. Si el script falla porque los CHECK no se llaman así, no lo repitas a ciegas: corrige los nombres en una copia revisada. La cancelación de una reservación pendiente o confirmada encola el aviso una sola vez por reservación. En `database/init.sql` ya está el esquema final para bases nuevas.
 
+## Migración 013: seguridad y auditoría
+
+Haz un respaldo y detén la API antes de aplicar esta migración. Debe ejecutarse después de que existan las tablas y los usuarios iniciales; identifica al gerente más antiguo como protegido. La API en ejecución necesita que se haya aplicado, pues la consulta de usuarios incluye esa marca.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-013.sql"
+Get-Content -Raw ".\database\migrations\013_auditoria_seguridad.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+```
+
+Verifica el gerente designado, los triggers y el procedimiento antes de reiniciar la API:
+
+```powershell
+mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT * FROM configuracion_seguridad; SELECT COUNT(*) AS triggers_auditoria FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND TRIGGER_NAME LIKE 'trg_aud_%'; SHOW PROCEDURE STATUS WHERE Db = DATABASE() AND Name = 'sp_consultar_auditoria'; CALL sp_consultar_auditoria(NULL, NULL, NULL, NULL, 10);"
+```
+
+La migración requiere `CREATE TRIGGER`, `CREATE ROUTINE` y permisos para crear las tablas de auditoría. Los triggers guardan cada cambio de fila junto con el actor autenticado de la API. Se excluyen el hash de contraseña y la respuesta almacenada para idempotencia. Los procesos SQL o de fondo sin actor autenticado producen `actor_id = NULL`. Consulta [Protección de usuarios y auditoría](auditoria-seguridad.md) para entender los datos registrados y los límites de seguridad.
+
 ## Base nueva o entorno de demostración
 
-- **Base nueva y vacía:** ejecuta `database/init.sql`; este esquema ya incluye los cambios de las migraciones 001–012. No las apliques después sobre esa misma base.
+- **Base nueva y vacía:** ejecuta `database/init.sql` y el seed de usuarios iniciales; aplica `013_auditoria_seguridad.sql` después del seed y antes de iniciar la API. `init.sql` ya incluye los cambios de esquema anteriores (001–012), así que no los apliques otra vez.
 - **Base de desarrollo en Docker que ya contiene datos:** no uses `docker compose down -v`, ya que elimina el volumen de la base. Con el contenedor activo y el puerto 3306 publicado, los comandos `mysql` anteriores la actualizan igual que una instalación local.
 - Guarda el respaldo de forma segura. No lo agregues al repositorio ni lo compartas: contiene los datos de la base.
 

@@ -5,6 +5,8 @@ import type { Rol } from './usuario'
 export interface UsuarioAdmin {
   /** usuario.id_usuario */
   idUsuario: number
+  /** Marca el gerente inicial protegido por la configuración de seguridad de la base. */
+  esPrimerGerente?: boolean
   nombre: string
   correo: string
   /** credenciales.nombre_usuario: nombre para iniciar sesión (no es el nombre real). */

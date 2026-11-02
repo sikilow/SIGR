@@ -144,16 +144,17 @@ Aparecieron durante el desarrollo. Los códigos son **propuestos**: falta aproba
 | `RF-ESP-001` | Gestionar la lista de espera: agregar grupos, consultar por orden de llegada y sentarlos; la edición (`PATCH`) sigue pendiente | Hostess | `GET` y `POST /api/lista-espera` |
 | `RNF-030` | Las acciones críticas (crear, enviar, cancelar, entregar pedidos, solicitar pago, asignar mesa y cobrar) no deben duplicarse si el cliente reintenta (`Idempotency-Key`) | Sistema | `backend/src/services/idempotencia.ts`, tabla `idempotencia` |
 
-### Requerimientos propuestos que aún no se construyen
+### Requerimientos nuevos y su estado
 
 Salen de lo que pidió el equipo y de la revisión del proyecto. El detalle, las decisiones pendientes y otros hallazgos están en [`docs/PENDIENTES_Y_FALTANTES.md`](docs/PENDIENTES_Y_FALTANTES.md).
 
 | Código | Requisito | Actor | Origen |
 | --- | --- | --- | --- |
-| `RF-AUD-001` | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo |
-| `RF-AUD-002` | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión |
-| `RF-USR-008` | Que cada usuario cambie su propia contraseña | Todos los roles | Hallazgo de la revisión |
-| `RF-PED-006` | Registrar quién canceló un pedido y cuándo | Sistema | Hallazgo de la revisión |
+| `RF-AUD-001` | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Implementado en la migración 013; `campos_modificados` identifica el hash actualizado sin almacenarlo. Requiere aplicar la migración |
+| `RF-AUD-002` | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Implementado en la migración 013: triggers de INSERT/UPDATE/DELETE en las tablas de negocio. Requiere aplicar la migración |
+| `RF-USR-008` | Que Gerencia cambie la contraseña de un usuario validando la contraseña anterior de este | Gerente | Implementado; requiere contraseña anterior también al cambiar la del propio gerente |
+| `RF-USR-009` | Proteger al primer gerente contra desactivación, cambio de rol o eliminación | Sistema, Gerente | Implementado en API y migración 013; requiere aplicar la migración |
+| `RF-PED-006` | Registrar quién canceló un pedido y cuándo | Sistema | Cubierto por la auditoría general en migración 013; no se agrega aún a la respuesta del pedido |
 | `RF-PED-007` | Historial de pedidos paginado y filtrable por fechas en la API | Gerente, Cajero | Pantalla Pedidos del gerente |
 | `RF-PED-008` | Incluir la observación general del pedido en las respuestas de la API | Gerente, Mesero, Cocinero | Pantalla Pedidos del gerente |
 | `RF-CUE-003` | Consultar una cuenta por id aunque ya esté cerrada | Gerente, Cajero | Pantalla Pedidos del gerente |
@@ -427,12 +428,12 @@ El árbol de arriba es el modelo; las carpetas ya existen y contienen lo siguien
 | `backend/src/routes/` | **Endpoints**: `auth`, `catalogo`, `clientes`, `cuentas`, `listaEspera`, `menu`, `mesas`, `pedidos`, `productos`, `reservaciones` y `usuarios`. Cada archivo solo enlaza ruta, permiso y controlador. |
 | `backend/src/controllers/` | **Lógica de negocio**, un archivo por área. `hostess.ts` atiende las rutas de clientes, reservaciones y lista de espera porque comparten funciones de apoyo. |
 | `backend/src/models/` | `dominio.ts`: DTOs, consultas compartidas, estados del pedido y reglas de existencia. |
-| `backend/src/services/` | `db.ts` (pool de MySQL y transacciones), `idempotencia.ts`, `correo.ts` (transporte Resend o SMTP), `plantillasCorreo.ts` (diseño HTML y texto de los avisos) y `notificacionesReservacion.ts` (cola común de confirmaciones, recordatorios, vencimientos y cancelaciones). |
+| `backend/src/services/` | `db.ts` (pool, transacciones y contexto del actor de auditoría), `contextoAuditoria.ts`, `idempotencia.ts`, `correo.ts` (transporte Resend o SMTP), `plantillasCorreo.ts` (diseño HTML y texto de los avisos) y `notificacionesReservacion.ts` (cola común de confirmaciones, recordatorios, vencimientos y cancelaciones). |
 | `backend/src/mocks/` | `clientes.mock.ts` y `productos.mock.ts`: datos falsos tipados para probar la API. |
 | `backend/src/utils/` | `config.ts`, `errores.ts`, `auth.ts` (JWT y permisos por rol) y `seed.ts` (usuarios de prueba). |
 | `backend/tests/` | Pruebas unitarias con Vitest: dominio, mocks, caja, transporte, plantillas de correo y cola de notificaciones. |
-| `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `012`). |
-| `docs/` | `arquitectura.md` y el resto de la documentación (contratos de API, equivalencias, pendientes, guía de código y [actualización de la base](docs/actualizar-base-datos.md)). |
+| `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `013`). |
+| `docs/` | `arquitectura.md` y el resto de la documentación (contratos de API, equivalencias, pendientes, guía de código, [seguridad y auditoría](docs/auditoria-seguridad.md) y [actualización de la base](docs/actualizar-base-datos.md)). |
 
 ### Archivos y carpetas adicionales
 
@@ -475,6 +476,8 @@ cd backend
 npm install
 cp .env.example .env        # edita DB_PASSWORD (con Docker: sigr1234) y JWT_SECRET
 npx tsx src/utils/seed.ts         # crea los usuarios de prueba
+# (obligatorio, después del seed) instala protección del gerente inicial y auditoría:
+Get-Content -Raw "..\database\migrations\013_auditoria_seguridad.sql" | mysql -u root -p SIGR
 npm run dev                 # http://localhost:3000
 # (opcional, base recién creada) datos de demostración, ver el encabezado de database/seed_demo.sql:
 # mysql --default-character-set=utf8mb4 -u root -p SIGR < ../database/seed_demo.sql   (crea además a mesero2)
@@ -553,23 +556,30 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 
 ## Documentación (`docs/`)
 
+El índice por tema y por rol está en [`docs/README.md`](docs/README.md).
+
 | Documento | Para qué sirve |
 | --- | --- |
 | [`arquitectura.md`](docs/arquitectura.md) | Capas, responsabilidad de cada carpeta, flujo de una petición y decisiones de diseño |
+| [`frontend.md`](docs/frontend.md) | Rutas, roles, servicios, sesión, stores, polling, variables y pruebas del frontend |
 | [`guia-codigo/`](docs/guia-codigo/00_INDICE_Y_RECURSOS.md) | Guía de estudio: el código explicado por bloques de líneas, con recursos |
 | [`CONTEXTO_IA.md`](CONTEXTO_IA.md) | Resumen completo del proyecto (requisitos, base de datos, API, convenciones) para dárselo a una IA como contexto |
 | [`PENDIENTES_Y_FALTANTES.md`](docs/PENDIENTES_Y_FALTANTES.md) | Lo que falta, qué se afectaría y qué hay que decidir (mesas del gerente, auditoría, cuentas, seguridad) |
 | [`contrato-api-mesero.md`](docs/contrato-api-mesero.md) | Contrato de la API que usa el mesero (implementada en `backend/`) y diferencias con la BD |
 | [`contrato-api-hostess.md`](docs/contrato-api-hostess.md) | Endpoints reales de Salón, Reservaciones, Lista de espera, clientes y configuración de reservaciones; señala lo que aún falta |
 | [`contrato-api-gerente.md`](docs/contrato-api-gerente.md) | Contrato de pedidos del gerente y cambios propuestos para ampliar el historial |
+| [`contrato-api-caja.md`](docs/contrato-api-caja.md) | Contrato de Caja: estado, cortes, cobros, pagos y validaciones |
 | [`equivalencias-bd.md`](docs/equivalencias-bd.md) | Tabla columna ↔ JSON ↔ TypeScript, equivalencias de catálogo, secciones, hostess y estados |
 | [`integracion-api.md`](docs/integracion-api.md) | Lista de comprobación para conectar el frontend con la API real |
 | [`incrementos.md`](docs/incrementos.md) | Observaciones de la maestra, cambios implementados y alcance por incremento |
-| [`actualizar-base-datos.md`](docs/actualizar-base-datos.md) | Respaldo, aplicación ordenada de migraciones 007–012 y verificación de una base existente |
+| [`actualizar-base-datos.md`](docs/actualizar-base-datos.md) | Respaldo, aplicación ordenada de migraciones 007–013 y verificación de una base existente |
+| [`auditoria-seguridad.md`](docs/auditoria-seguridad.md) | Protección del gerente inicial, cambio de contraseña y bitácora general |
 | [`resend-reservaciones.md`](docs/resend-reservaciones.md) | Configuración segura, operación y diseño HTML del correo de reservaciones con Resend o Gmail SMTP |
 | [`pantallas-gerente.md`](docs/pantallas-gerente.md) | Pantallas de gerencia, incluidas reservas, secciones y pedidos |
 | [`pantallas-mesero.md`](docs/pantallas-mesero.md) | Pantallas del mesero con su ruta, caso de uso y captura |
+| [`pantallas-cocinero.md`](docs/pantallas-cocinero.md) | Cola de Cocina, transiciones de pedido, actualización y errores |
 | [`pantallas-hostess.md`](docs/pantallas-hostess.md) | Pantallas de la hostess con su ruta y captura, y cómo funciona cada una |
+| [`guia-codigo/caja_frontend_backend.md`](docs/guia-codigo/caja_frontend_backend.md) | Recorrido del flujo de Caja en frontend y backend |
 | [`capturas/`](docs/capturas/) | Capturas de las pantallas (1024×768 y 768×1024) |
 
 ### Incrementos recientes

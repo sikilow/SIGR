@@ -17,7 +17,7 @@
 | `POST /api/pedidos/:id/cancelar` | **Ya existe** (acepta `Idempotency-Key`) | `requiereAuth("mesero", "gerente")` | Cancelar como gerente, incluso en preparación |
 | `GET /api/mesas/:id/cuenta` | **Ya existe** | Cualquier rol con sesión | Cuenta activa de la mesa del pedido |
 | `GET /api/pedidos?desde=&hasta=&limite=&pagina=` | **CAMBIO PROPUESTO** (P-11) | Igual que hoy | Historial sin traer todo |
-| Quién canceló y cuándo (RF-PED-006) | **Sin columna** (ver sección 4) | — | No se muestra |
+| Quién canceló y cuándo (RF-PED-006) | Bitácora `sigr_auditoria` (migración 013), no columnas de `pedido` | `sp_consultar_auditoria` (acceso a base de datos) | Consultable en auditoría; no incluido en la respuesta del pedido |
 
 ## 1. `GET /api/pedidos` — Ya existe
 
@@ -72,17 +72,13 @@ Reglas del servidor, en este orden:
 - Cuando exista, el frontend cambiaría `listar()` de `services/api/` y del mock para pasar `desde`, `hasta` y
   `pagina`; la pantalla ya está separada en «día» y «todos los días».
 
-## 4. Quién canceló y cuándo (RF-PED-006) — sin columna todavía
+## 4. Quién canceló y cuándo (RF-PED-006)
 
-Hoy la tabla `pedido` solo guarda `id_motivo` (y el texto en `motivo_cancelacion`). **No se guarda el usuario que
-canceló ni la hora de la cancelación** (hallazgo P-02). Por eso la pantalla muestra el motivo, pero no «cancelado por
-Luis Ramírez a las 21:40», aunque para una cancelación excepcional del gerente sería la información más útil.
-
-Opciones (decisión del equipo; se relaciona con la bitácora RF-AUD-002):
-
-- Columnas `pedido.id_cancelado_por` (→ `usuario`) y `pedido.cancelado_en` (`DATETIME`), llenadas en la misma
-  transacción de `cancelarPedido`. Requiere migración `00N_*.sql` y actualizar `database/init.sql`.
-- O un registro en la bitácora general de eventos (RF-AUD-002), que también cubre RNF-026.
+Después de aplicar `013_auditoria_seguridad.sql`, la auditoría general registra quién y cuándo cambió una fila de
+`pedido`, con los estados y valores anterior/nuevo. Consulta los eventos mediante `sp_consultar_auditoria` (ver
+[Protección de usuarios y auditoría](auditoria-seguridad.md)). El esquema todavía no tiene las columnas
+`pedido.id_cancelado_por` ni `pedido.cancelado_en`; si se necesitan directamente en cada respuesta de pedido,
+se requiere una migración adicional.
 
 ## 5. Otras limitaciones que la pantalla explica
 

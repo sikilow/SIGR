@@ -20,6 +20,13 @@ en [`capturas/`](capturas/) y se tomaron con el servidor de desarrollo en modo m
 - **Mesas:** se administra número, capacidad, sección y disponibilidad, además de las características de planta baja, espacio para carriola y acceso sin escaleras.
 - **Secciones:** desde Gerente → Mesas → Secciones se pueden crear, renombrar, inhabilitar/habilitar y borrar. Renombrar actualiza las mesas asociadas; borrar requiere que no haya mesas asignadas. Las mesas deben pertenecer a una sección activa.
 
+## Usuarios y seguridad
+
+- **Gerente inicial:** se identifica como «Gerente inicial protegido». No se puede desactivar ni cambiar de rol; la API y MySQL aplican la misma protección. Requiere la migración 013.
+- **Cambio de contraseña:** solo Gerencia puede iniciarlo y se solicita la contraseña anterior de la cuenta afectada antes de guardar la nueva; también aplica cuando Gerencia modifica su propia cuenta.
+- **Restablecimiento de otra persona:** Gerencia puede establecer una contraseña nueva sin conocer la anterior.
+- Los cambios de datos se registran en la auditoría de MySQL; consulta [Protección de usuarios y auditoría](auditoria-seguridad.md).
+
 ## Reservas
 
 La pantalla `/gerente/reservaciones` permite configurar:

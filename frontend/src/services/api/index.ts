@@ -73,6 +73,7 @@ export function crearServiciosApi(): Servicios {
           throw error
         }
       },
+
     },
 
     mesas: {
@@ -170,8 +171,10 @@ export function crearServiciosApi(): Servicios {
         return aUsuarioAdmin(await solicitar<UsuarioAdminDto>('PATCH', `/usuarios/${id}`, { cuerpo }))
       },
 
-      async cambiarContrasena(id, contrasena) {
-        await solicitar<{ ok: boolean }>('POST', `/usuarios/${id}/contrasena`, { cuerpo: { contrasena } })
+      async cambiarContrasena(id, contrasena, contrasenaActual) {
+        await solicitar<{ ok: boolean }>('POST', `/usuarios/${id}/contrasena`, {
+          cuerpo: { contrasena, contrasena_actual: contrasenaActual },
+        })
       },
     },
 

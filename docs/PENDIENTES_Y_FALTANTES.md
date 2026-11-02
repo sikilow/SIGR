@@ -39,35 +39,20 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 
 - ~~Mostrar o agrupar por sección en el Salón y el Panel (RF-MES-007).~~ Implementado; la validación automatizada y el build están cubiertos, falta la prueba operativa contra una base compartida del restaurante.
 - Una mesa con cuenta activa sigue sin poder desactivarse; tras el cobro se cierra la cuenta y se libera la mesa (ver D-3 y P-01).
-- No se registra quién creó, editó o desactivó una mesa (ver la bitácora, RF-AUD-002).
+- La bitácora de mesa está implementada en la migración 013; falta aplicarla en cada base y probarla con MySQL.
 - Las bases existentes deben aplicar, en orden, las migraciones que les falten; los cambios recientes de catálogo, secciones y reservaciones están en 007–010. Ver `docs/actualizar-base-datos.md`.
 
-### 1.2 Auditoría: quién cambia una contraseña
+### 1.2 Auditoría y cambio de contraseña
 
-**Lo que hay hoy (verificado):** el gerente restablece la contraseña de otro usuario con `POST /api/usuarios/:id/contrasena`. La tabla `credenciales` solo guarda `password_hash` y `ultimo_acceso`. **No se registra quién cambió la contraseña ni cuándo.** Además un usuario **no puede cambiar su propia contraseña**: solo el gerente puede.
+**Estado actual:** solo Gerencia puede iniciar el cambio con `POST /api/usuarios/:id/contrasena`. La persona afectada debe proporcionar su contraseña anterior, incluso si se cambia la del propio gerente. La migración `013_auditoria_seguridad.sql` instala triggers transaccionales que registran actor, usuario afectado y fecha; nunca guardan la contraseña ni su hash. Debe aplicarse una vez en cada base después de preparar el esquema y los usuarios iniciales.
 
 | Código propuesto | Requerimiento | Verificación |
 | --- | --- | --- |
-| RF-AUD-001 | Registrar en la base de datos **quién** (usuario que actúa), **a quién** (usuario afectado) y **cuándo** se cambia una contraseña, sin guardar nunca la contraseña ni su hash en el registro | Verificado: no existe |
-| RF-USR-008 | Que cada usuario pueda **cambiar su propia contraseña** (pidiendo la actual) | Verificado: no existe |
-| RF-AUD-002 | **Bitácora general de eventos** (ver 2.3): es la forma natural de cubrir RF-AUD-001 y completa RNF-017 y RNF-026 | Verificado: RNF-017 y RNF-026 no están implementados |
+| RF-AUD-001 | Registrar quién, a quién y cuándo se cambia una contraseña, sin guardar la contraseña ni su hash | Implementado por la auditoría de `credenciales`; el campo `password_hash` solo aparece en `campos_modificados` |
+| RF-USR-008 | Que Gerencia cambie la contraseña de un usuario validando la contraseña anterior de este | Implementado en API, frontend y mock; aplica también al gerente que cambia la propia |
+| RF-AUD-002 | Bitácora de INSERT/UPDATE/DELETE de las tablas de negocio | Implementado por triggers de la migración 013; pendiente aplicar la migración en cada base |
 
-**Sobre usar un trigger (importante para decidir):**
-
-- Un trigger de MySQL **no sabe qué usuario del sistema** hizo el cambio. La API se conecta a la base con **una sola cuenta de MySQL** y todos los usuarios del sistema pasan por ella. El trigger solo ve esa cuenta.
-- Para que un trigger registre al usuario real, la API tendría que **avisarle quién es** antes de cada cambio (por ejemplo guardando el id en una variable de la sesión de MySQL, en la **misma conexión** y en la misma transacción que el `UPDATE`). Hoy la ruta de cambio de contraseña usa el pool directamente, sin transacción, así que eso exigiría reorganizarla.
-- Un trigger sí garantiza que **ningún cambio se escape**, aunque alguien edite la tabla a mano. Por eso a veces se usa como red de seguridad.
-
-| Opción | Cómo funcionaría | Ventajas | Desventajas |
-| --- | --- | --- | --- |
-| A | Dos columnas nuevas en `credenciales`: quién y cuándo fue el último cambio | Muy simple | Solo guarda **el último** cambio, no el historial |
-| B | Una tabla de bitácora; la **API** escribe un registro en cada cambio | Historial completo, visible y fácil de probar | Si alguien cambia la tabla directo en SQL, no queda registro |
-| C | Un trigger sobre `credenciales` que escribe en la bitácora cuando cambia `password_hash`, usando el id que la API le pasa | No se escapa ningún cambio | Lógica «escondida» en la base; depende de que la API pase siempre el id |
-| B + C | La API escribe la bitácora y el trigger actúa como respaldo | Lo más robusto | Más trabajo |
-
-**Recomendación (para validar):** la opción **B** como base, porque cubre también RNF-026, y evaluar **C** solo si el profesor o el cliente piden garantía a nivel de base de datos.
-
-**Qué registrar en la bitácora de contraseñas:** usuario que actúa, usuario afectado, fecha y hora, tipo de acción (restablecida por gerente o cambiada por el propio usuario). **Nunca** la contraseña ni el hash. La dirección IP es opcional y, por ser un dato personal, conviene valorarla frente a RNF-028 y RNF-029 (protección de datos).
+El actor autenticado se establece en la sesión MySQL que ejecuta la transacción. Se eligió guardar la bitácora en la misma base para que el cambio y su registro sean atómicos; los scripts externos sin actor autenticado quedan con `actor_id = NULL`. La migración protege además al primer gerente contra desactivación, cambio de rol o borrado. Para el diseño, los datos sensibles excluidos y los límites operativos, consulta [`auditoria-seguridad.md`](auditoria-seguridad.md).
 
 ---
 
@@ -78,8 +63,8 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 | Id | Hallazgo | Detalle | Verificación |
 | --- | --- | --- | --- |
 | P-01 | **Resuelto: cierre de cuenta al cobrar** | `POST /api/caja/cuentas/:id/cobrar` registra la venta y los pagos y, en la misma transacción, marca pedidos pagados, llena `cerrada_en`, cierra la cuenta y libera la mesa. No permite cobrar cuentas no solicitadas ni pedidos sin entregar. | Resuelto |
-| P-02 | **No se guarda quién canceló un pedido** | Solo se guarda el motivo (`id_motivo`), no el usuario ni la fecha de cancelación. Código propuesto: RF-PED-006. Relacionado con RNF-026 y RNF-027. | Verificado |
-| P-03 | **Seguridad del ERS sin cubrir** | RNF-009 (bloqueo tras 5 intentos), RNF-011 (expiración por inactividad: hoy el token dura 8 horas fijas), RNF-012 (invalidar la sesión al salir), RNF-017 (registro de accesos no autorizados). | Verificado |
+| P-02 | **Auditoría de cancelaciones** | La migración 013 audita quién y cuándo modificó el pedido, incluidos estado y valores anterior/nuevo. No hay campos dedicados `pedido.id_cancelado_por` ni `pedido.cancelado_en`; la auditoría no se expone en la respuesta del pedido. | Implementado en migración; falta aplicarla en cada base y probar MySQL |
+| P-03 | **Seguridad del ERS sin cubrir** | RNF-009 (bloqueo tras 5 intentos), RNF-011 (expiración por inactividad: hoy el token dura 8 horas fijas), RNF-012 (invalidar la sesión al salir) y registro de accesos fallidos/no autorizados. La auditoría 013 cubre cambios exitosos en datos, no intentos de acceso fallidos. | Parcial |
 | P-04 | **Sin protecciones básicas de la API** | El backend no usa límite de peticiones (contra fuerza bruta) ni cabeceras de seguridad. No hay HTTPS configurado en el proyecto. | Verificado en `package.json`; el HTTPS es por validar |
 | P-05 | **Las pruebas del backend son mínimas** | `backend/tests/` cubre dominio, mocks, importes, transporte, plantillas y cola de correo (64 pruebas en 9 archivos), pero no las rutas ni las reglas que requieren base de datos. El frontend sí tiene pruebas unitarias y de rutas, pero falta una prueba integral contra MySQL. | Verificado |
 | P-06 | **Pantallas pendientes** | Caja ya está disponible en `/cajero/caja`; facturación fiscal aún no tiene proveedor, API ni pantalla. | Parcial |
@@ -98,18 +83,18 @@ Antes las mesas solo se creaban con scripts SQL. Ahora el gerente tiene la panta
 
 ### 2.3 Auditoría y bitácora (amplía 1.2)
 
-El ERS pide registrar cancelaciones, confirmaciones y modificaciones (RNF-026). Hoy no existe una bitácora. Eventos candidatos a registrar:
+La migración 013 registra cambios de filas en las tablas de negocio. La bitácora no registra intentos de acceso fallidos ni eventos que no impliquen INSERT/UPDATE/DELETE:
 
 | Evento | Qué guardar | Estado hoy |
 | --- | --- | --- |
-| Cambio de contraseña | Actor, afectado, fecha | No se guarda |
-| Alta, edición o desactivación de usuario | Quién y qué cambió | No se guarda |
-| Cambio de precio o de existencia de un producto | Quién, valor anterior y nuevo | No se guarda |
-| Cancelación de pedido | Quién, cuándo, motivo | Solo el motivo |
-| Cambio de estado de una mesa | Quién y cuándo | No se guarda |
-| Intentos de acceso fallidos o no autorizados | Usuario, hora | No se guarda |
+| Cambio de contraseña | Actor, afectado, fecha; el hash no se almacena | Migración 013 |
+| Alta, edición o desactivación de usuario | Quién y qué cambió, excepto campos secretos | Migración 013 |
+| Cambio de precio o de existencia de un producto | Quién, valor anterior y nuevo | Migración 013 |
+| Cancelación de pedido | Quién, cuándo, motivo y cambio de estado | Migración 013; no se incluye en la respuesta del pedido |
+| Cambio de estado de una mesa | Quién y cuándo | Migración 013 |
+| Intentos de acceso fallidos o no autorizados | Usuario, hora | No capturado por la bitácora 013; pendiente RNF-017 |
 
-Por validar: cuánto tiempo se conserva la bitácora y quién puede consultarla (probablemente solo el gerente). Es un dato personal y aplica RNF-028 y RNF-029.
+La migración 013 debe aplicarse y probarse en cada base. También queda por definir el periodo de conservación y quién puede consultar la bitácora (probablemente solo el gerente). Es un dato personal y aplica RNF-028 y RNF-029.
 
 ### 2.4 Base de datos
 
@@ -128,7 +113,7 @@ Por validar: cuánto tiempo se conserva la bitácora y quién puede consultarla 
 | P-13 | Todos los usuarios de prueba usan la contraseña `1234`; hay que eliminarlos o cambiarlas. No se obliga a cambiar la contraseña inicial. | Verificado |
 | P-14 | Política de contraseñas: hoy solo se exige de 6 a 72 caracteres, sin complejidad. | Verificado |
 | P-15 | No hay integración continua (carpeta `.github`) ni respaldos de la base documentados. | Verificado |
-| P-16 | Falta documentación del gerente: existen contratos y pantallas del mesero y de la hostess, pero **no hay contrato de API ni documento de pantallas del gerente** (usuarios y productos). | Verificado |
+| P-16 | Documentación de Gerencia (API de pedidos y pantallas de usuarios/productos) | Ya existen `docs/contrato-api-gerente.md` y `docs/pantallas-gerente.md`. | Resuelto |
 
 ---
 
@@ -148,9 +133,9 @@ Son sugerencias mías, **no requisitos**. Solo valen si el restaurante las neces
 
 ## 4. Orden sugerido de trabajo (para discutir)
 
-1. Confirmar las decisiones D-3 a D-5 de las mesas y elegir la opción de auditoría (A, B o C); D-1 y D-2 ya se resolvieron con el catálogo de secciones.
-2. Bitácora (RF-AUD-001 y 002) y prueba operativa de secciones/mesas en el entorno compartido (RF-MES-007).
-3. Cambio de contraseña propio (RF-USR-008) y seguridad del ERS (P-03 y P-04).
+1. Confirmar las decisiones D-3 a D-5 de las mesas; D-1 y D-2 ya se resolvieron con el catálogo de secciones.
+2. Aplicar y probar la migración 013 en cada base; prueba operativa de secciones/mesas en el entorno compartido (RF-MES-007).
+3. Implementar los controles de seguridad del ERS aún pendientes (P-03 y P-04); RF-USR-008 ya está implementado.
 4. Facturación fiscal (RF-VEN-002), historial de ventas (RF-VEN-003) e informes (RF-VEN-004).
 5. Pruebas de rutas del backend contra una base de datos (P-05).
 6. Actualizar el ERS y documentación cuando se validen las reglas pendientes.

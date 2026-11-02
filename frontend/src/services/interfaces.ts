@@ -116,8 +116,8 @@ export interface UsuariosService {
   crear(usuario: NuevoUsuario): Promise<UsuarioAdmin>
   /** PATCH /usuarios/{id}. Desactivar = `{ activo: false }` (los usuarios no se borran). */
   actualizar(id: number, cambio: CambioUsuario): Promise<UsuarioAdmin>
-  /** POST /usuarios/{id}/contrasena */
-  cambiarContrasena(id: number, contrasena: string): Promise<void>
+  /** POST /usuarios/{id}/contrasena. El usuario afectado debe proporcionar su contraseña anterior. */
+  cambiarContrasena(id: number, contrasena: string, contrasenaActual: string): Promise<void>
 }
 
 /** Administración del catálogo: categorías, productos e inventario. Solo el gerente. */

@@ -303,6 +303,7 @@ export function deItemsDisponibilidad(items: ItemDisponibilidad[]) {
 
 export interface UsuarioAdminDto {
   id_usuario: Numerico
+  es_primer_gerente?: Booleano
   id_rol: Numerico
   nombre: string
   correo: string
@@ -382,6 +383,7 @@ export function aUsuarioAdmin(dto: UsuarioAdminDto): UsuarioAdmin {
   if (!rol) throw new ErrorServicio('desconocido', `Respuesta inválida de la API: el rol ${JSON.stringify(dto.rol)} no existe.`)
   return {
     idUsuario: aNumero(dto.id_usuario, 'id_usuario'),
+    esPrimerGerente: dto.es_primer_gerente === undefined ? false : aBooleano(dto.es_primer_gerente, 'es_primer_gerente'),
     nombre: dto.nombre,
     correo: dto.correo,
     nombreUsuario: dto.nombre_usuario,

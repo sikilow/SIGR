@@ -24,7 +24,7 @@ flowchart LR
 | `routes/` | **Endpoints.** Cada archivo solo dice «esta ruta, con este permiso, la atiende este controlador». |
 | `controllers/` | **Lógica de negocio.** Valida la entrada, aplica las reglas, consulta la base y arma la respuesta. |
 | `models/` | **Modelos de datos.** Los DTO (la forma exacta del JSON), las consultas compartidas, los estados del pedido y las reglas de existencia (`dominio.ts`). |
-| `services/` | **Conexión y servicios de infraestructura:** pool y transacciones (`db.ts`), idempotencia (`idempotencia.ts`), transporte unificado de correo Resend/SMTP (`correo.ts`), plantillas HTML y de texto de las reservaciones (`plantillasCorreo.ts`) y cola de confirmaciones, recordatorios, vencimientos y cancelaciones (`notificacionesReservacion.ts`). |
+| `services/` | **Conexión y servicios de infraestructura:** pool, transacciones y contexto del actor para auditoría (`db.ts`, `contextoAuditoria.ts`), idempotencia (`idempotencia.ts`), transporte unificado de correo Resend/SMTP (`correo.ts`), plantillas HTML y de texto de las reservaciones (`plantillasCorreo.ts`) y cola de confirmaciones, recordatorios, vencimientos y cancelaciones (`notificacionesReservacion.ts`). |
 | `utils/` | Funciones auxiliares: configuración (`config.ts`), errores uniformes (`errores.ts`), autenticación y permisos por rol (`auth.ts`) y el script de usuarios de prueba (`seed.ts`). |
 | `mocks/` | Datos falsos tipados para probar la API sin tocar la base real. |
 | `../tests/` | Pruebas unitarias (Vitest). |
@@ -56,7 +56,7 @@ El contenido se arma en `plantillasCorreo.ts`: cada plantilla devuelve `asunto`,
 | --- | --- |
 | `docker-compose.yml` | Levanta MySQL 8 en un contenedor. |
 | `init.sql` | Script inicial: crea la base `SIGR` con sus 23 tablas, los catálogos y los datos base. |
-| `migrations/` | Cambios incrementales (`001` a `012`) para bases que ya existían. |
+| `migrations/` | Cambios incrementales (`001` a `013`) para bases que ya existían. |
 | `seed_demo.sql` | Datos de demostración opcionales (mesas 7 a 18, cuentas, clientes, reservaciones, lista de espera). |
 
 ## 3. Cómo viaja una petición

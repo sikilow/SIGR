@@ -163,6 +163,7 @@ La configuración se consulta y actualiza mediante `GET/PATCH /api/catalogo/conf
 | Concepto del frontend | Tabla.columna | Nombre en TypeScript | Nombre en JSON | Naturaleza |
 |---|---|---|---|---|
 | `UsuarioAdmin.idUsuario` | `usuario.id_usuario` | `idUsuario` | `id_usuario` | columna |
+| `UsuarioAdmin.esPrimerGerente` | `configuracion_seguridad.id_primer_gerente` (comparado con `usuario.id_usuario`) | `esPrimerGerente` | `es_primer_gerente` | calculado; requiere la migración `013_auditoria_seguridad.sql` |
 | `UsuarioAdmin.nombreUsuario` | `credenciales.nombre_usuario` | `nombreUsuario` | `nombre_usuario` | columna |
 | `UsuarioAdmin.telefono` | `perfil_usuario.telefono` | `telefono` | `telefono` | columna de una tabla fuera del alcance del mesero |
 | `UsuarioAdmin.creadoEn` | `usuario.creado_en` | `creadoEn` (`Date`) | `creado_en` | columna |

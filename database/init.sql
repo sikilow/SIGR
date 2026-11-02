@@ -1,7 +1,8 @@
 -- SIGR · Script inicial de la base de datos (esquema + datos base)
--- Crea la base SIGR con sus 23 tablas, los catálogos (roles, estados de pedido, métodos de pago)
+-- Crea la base SIGR con sus 26 tablas, los catálogos (roles, estados de pedido, métodos de pago)
 -- y los datos base (mesas 1 a 6, menú y un cliente de prueba).
 -- Los usuarios con contraseña NO se crean aquí: se crean con `npx tsx src/utils/seed.ts` (en backend/).
+-- Después del seed, aplicar 013_auditoria_seguridad.sql antes de iniciar la API.
 -- Datos de demostración opcionales: seed_demo.sql. Bases ya existentes: migrations/.
 
 -- PROYECTO SIGR - PRACTICA P23

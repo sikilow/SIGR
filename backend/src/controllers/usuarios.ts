@@ -32,6 +32,7 @@ const Contrasena = z.string().min(6, "mínimo 6 caracteres").max(72, "máximo 72
 /** Claves = columnas: usuario.*, credenciales.nombre_usuario/ultimo_acceso, perfil_usuario.telefono. `rol` es calculado (rol.nombre). */
 export interface UsuarioAdminDto {
   id_usuario: number;
+  es_primer_gerente: boolean;
   id_rol: number;
   nombre: string;
   correo: string;
@@ -46,6 +47,7 @@ export interface UsuarioAdminDto {
 
 const SELECT_USUARIO = `
   SELECT u.id_usuario, u.id_rol, u.nombre, u.correo, c.nombre_usuario, r.nombre AS rol, u.activo,
+         (u.id_usuario = (SELECT id_primer_gerente FROM configuracion_seguridad WHERE id = 1)) AS es_primer_gerente,
          p.telefono, u.creado_en, c.ultimo_acceso
     FROM usuario u
     JOIN rol r ON r.id_rol = u.id_rol
@@ -55,6 +57,7 @@ const SELECT_USUARIO = `
 function aDto(r: Record<string, unknown>): UsuarioAdminDto {
   return {
     id_usuario: r.id_usuario as number,
+    es_primer_gerente: Boolean(r.es_primer_gerente),
     id_rol: r.id_rol as number,
     nombre: r.nombre as string,
     correo: r.correo as string,
@@ -161,11 +164,20 @@ export const editarUsuario = async (req: Request, res: Response) => {
     // FOR UPDATE: dos gerentes editando a la vez no pueden dejar el sistema sin gerente activo.
     const [actual] = await filas(
       cx,
-      `SELECT u.activo, LOWER(r.nombre) AS rol FROM usuario u JOIN rol r ON r.id_rol = u.id_rol
+      `SELECT u.activo, LOWER(r.nombre) AS rol,
+              (u.id_usuario = (SELECT id_primer_gerente FROM configuracion_seguridad WHERE id = 1)) AS es_primer_gerente
+         FROM usuario u JOIN rol r ON r.id_rol = u.id_rol
         WHERE u.id_usuario = ? FOR UPDATE`,
       [id],
     );
     if (!actual) throw new ErrorApi(404, "no_encontrado", "El usuario no existe.");
+
+    if (
+      Boolean(actual.es_primer_gerente) &&
+      ((d.activo !== undefined && !d.activo) || (d.rol !== undefined && d.rol !== "gerente"))
+    ) {
+      throw new ErrorApi(409, "estado_invalido", "El primer gerente no se puede desactivar ni cambiar de rol.");
+    }
 
     const dejaDeSerGerenteActivo =
       Boolean(actual.activo) &&
@@ -214,14 +226,23 @@ export const editarUsuario = async (req: Request, res: Response) => {
   res.json(await cargarUsuario(pool, id));
 };
 
-const CambiarContrasena = z.object({ contrasena: Contrasena });
+const CambiarContrasena = z.object({
+  contrasena: Contrasena,
+  contrasena_actual: z.string().min(1),
+});
 
-/** POST /api/usuarios/:id/contrasena  { contrasena }  →  { ok: true }. El gerente restablece la contraseña de cualquiera. */
+/** POST /api/usuarios/:id/contrasena: Gerencia inicia el cambio y el usuario afectado verifica su contraseña actual. */
 export const cambiarContrasena = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
-  const { contrasena } = validar(CambiarContrasena, req.body);
+  const { contrasena, contrasena_actual } = validar(CambiarContrasena, req.body);
   const hash = await bcrypt.hash(contrasena, 10);
-  const r = await ejecutar(pool, "UPDATE credenciales SET password_hash = ? WHERE id_usuario = ?", [hash, id]);
-  if (r.affectedRows === 0) throw new ErrorApi(404, "no_encontrado", "El usuario no existe.");
+  await transaccion(async (cx) => {
+    const [fila] = await filas(cx, "SELECT password_hash FROM credenciales WHERE id_usuario = ? FOR UPDATE", [id]);
+    if (!fila) throw new ErrorApi(404, "no_encontrado", "El usuario no existe.");
+    if (!(await bcrypt.compare(contrasena_actual, fila.password_hash as string))) {
+      throw new ErrorApi(401, "credenciales_invalidas", "La contraseña anterior del usuario es incorrecta.");
+    }
+    await ejecutar(cx, "UPDATE credenciales SET password_hash = ? WHERE id_usuario = ?", [hash, id]);
+  });
   res.json({ ok: true });
 };

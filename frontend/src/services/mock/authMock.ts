@@ -63,5 +63,6 @@ export function crearAuthMock(): AuthService {
     obtenerSesion() {
       return conRetraso(() => usuarioActual())
     },
+
   }
 }
