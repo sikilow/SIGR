@@ -29,6 +29,7 @@ export function crearCajaMock(): CajaService {
                 total: pedidos.filter((pedido) => pedido.estado !== 'cancelado').reduce((suma, pedido) => suma + pedido.total, 0),
               },
               mesaNumero: baseDatos.mesas.find((mesa) => mesa.idMesa === cuenta.idMesa)?.numero ?? cuenta.idMesa,
+              meseroNombre: [...new Set(pedidos.map((pedido) => pedido.nombreMesero))].join(' · '),
               pedidosSinEntregar: pedidos
                 .filter((pedido) => !['entregado', 'cancelado'].includes(pedido.estado))
                 .map((pedido) => ({ idPedido: pedido.idPedido, estado: pedido.estado })),

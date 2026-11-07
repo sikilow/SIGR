@@ -1,9 +1,11 @@
 <script setup lang="ts">
 // Panel de mesas: pantalla de inicio del mesero. Solo usa el store de mesas
 // (que a su vez usa services/index.ts); no sabe si los datos vienen del mock o de la API.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import FiltroSeccion from '../../components/FiltroSeccion.vue'
 import FiltrosMesas from '../../components/FiltrosMesas.vue'
+import GruposMesas from '../../components/GruposMesas.vue'
 import HojaAccionesMesa from '../../components/HojaAccionesMesa.vue'
 import IndicadorActualizacion from '../../components/IndicadorActualizacion.vue'
 import MesaCard from '../../components/MesaCard.vue'
@@ -11,6 +13,7 @@ import ResumenMesas from '../../components/ResumenMesas.vue'
 import { usePolling } from '../../composables/usePolling'
 import { filtroDesdeConsulta, useMesasStore, type FiltroMesas } from '../../stores/mesas'
 import type { Mesa } from '../../types'
+import { TODAS_LAS_SECCIONES, describirFiltroMesas, seccionDesdeConsulta, sufijoSeccion } from '../../utils/secciones'
 
 const store = useMesasStore()
 const route = useRoute()
@@ -25,11 +28,52 @@ watch(
   { immediate: true },
 )
 
-function cambiarFiltro(filtro: FiltroMesas) {
+// ---------- Filtro de sección sincronizado con la URL (?seccion=..., RF-MES-007) ----------
+watch(
+  () => route.query.seccion,
+  (valor) => {
+    store.seccion = seccionDesdeConsulta(valor)
+  },
+  { immediate: true },
+)
+
+/** Cambia la URL (sin agregar historial) y anuncia el resultado a los lectores de pantalla. */
+async function aplicarConsulta(cambios: { estado?: FiltroMesas; seccion?: string }) {
   const consulta = { ...route.query }
-  if (filtro === 'todas') delete consulta.estado
-  else consulta.estado = filtro
-  void router.replace({ query: consulta })
+  if (cambios.estado !== undefined) {
+    if (cambios.estado === 'todas') delete consulta.estado
+    else consulta.estado = cambios.estado
+  }
+  if (cambios.seccion !== undefined) {
+    if (cambios.seccion === TODAS_LAS_SECCIONES) delete consulta.seccion
+    else consulta.seccion = cambios.seccion
+  }
+  await router.replace({ query: consulta })
+  await nextTick()
+  anuncioFiltro.value = describirFiltroMesas(store.mesasFiltradas.length, ANUNCIO_ESTADO[store.filtro], store.seccionActiva)
+}
+
+function cambiarFiltro(filtro: FiltroMesas) {
+  void aplicarConsulta({ estado: filtro })
+}
+
+function cambiarSeccion(seccion: string) {
+  void aplicarConsulta({ seccion })
+}
+
+function verTodas() {
+  void aplicarConsulta({ estado: 'todas', seccion: TODAS_LAS_SECCIONES })
+}
+
+/** Región aria-live: se llena solo cuando el mesero cambia un filtro (no con la actualización automática). */
+const anuncioFiltro = ref('')
+
+const ANUNCIO_ESTADO: Record<FiltroMesas, string | null> = {
+  todas: null,
+  libre: 'libres',
+  ocupada: 'ocupadas',
+  reservada: 'reservadas',
+  listo: 'con pedido listo',
 }
 
 const MENSAJE_VACIO: Record<FiltroMesas, string> = {
@@ -39,6 +83,8 @@ const MENSAJE_VACIO: Record<FiltroMesas, string> = {
   reservada: 'No hay mesas reservadas',
   listo: 'No hay pedidos listos por servir',
 }
+
+const hayFiltros = computed(() => store.filtro !== 'todas' || store.seccionActiva !== TODAS_LAS_SECCIONES)
 
 // ---------- Actualización automática ----------
 const { iniciar, ejecutarAhora } = usePolling(() => store.cargar())
@@ -109,8 +155,20 @@ onBeforeUnmount(() => {
         :reservadas="store.contadores.reservada"
         :pedidos-listos="store.contadores.pedidosListos"
       />
-      <FiltrosMesas :model-value="store.filtro" @update:model-value="cambiarFiltro" />
+      <div class="panel__filtros">
+        <FiltrosMesas :model-value="store.filtro" @update:model-value="cambiarFiltro" />
+        <FiltroSeccion
+          v-if="store.variasSecciones"
+          id-campo="panel-seccion"
+          :model-value="store.seccionActiva"
+          :secciones="store.secciones"
+          @update:model-value="cambiarSeccion"
+        />
+      </div>
     </template>
+
+    <!-- Resultado de cambiar un filtro (estado o sección), sin mover el foco -->
+    <p class="solo-lectores" role="status" aria-live="polite">{{ anuncioFiltro }}</p>
 
     <!-- Carga inicial: esqueleto con la forma de las tarjetas -->
     <div v-if="store.cargando" class="cuadricula" aria-hidden="true">
@@ -127,18 +185,23 @@ onBeforeUnmount(() => {
 
     <!-- Vacío (por filtro) -->
     <div v-else-if="store.mesasFiltradas.length === 0" class="vacio">
-      <h3>{{ MENSAJE_VACIO[store.filtro] }}</h3>
-      <button v-if="store.filtro !== 'todas'" type="button" class="btn btn--secundario" @click="cambiarFiltro('todas')">
+      <h3>{{ MENSAJE_VACIO[store.filtro] }}{{ sufijoSeccion(store.seccionActiva) }}</h3>
+      <button v-if="hayFiltros" type="button" class="btn btn--secundario" @click="verTodas">
         Ver todas las mesas
       </button>
     </div>
 
-    <!-- Cuadrícula de mesas -->
-    <ul v-else class="cuadricula" aria-label="Mesas">
-      <li v-for="mesa in store.mesasFiltradas" :key="mesa.idMesa">
-        <MesaCard :mesa="mesa" :resaltada="resaltadas.includes(mesa.idMesa)" @seleccionar="mesaSeleccionadaId = $event.idMesa" />
-      </li>
-    </ul>
+    <!-- Cuadrícula de mesas: agrupada por sección si hay más de una (si no, una sola cuadrícula, como antes) -->
+    <GruposMesas v-else :grupos="store.grupos" :agrupar="store.variasSecciones" id-base="panel-grupo" ancho-minimo="200px">
+      <template #mesa="{ mesa }">
+        <MesaCard
+          :mesa="mesa"
+          :resaltada="resaltadas.includes(mesa.idMesa)"
+          :mostrar-seccion="store.variasSecciones"
+          @seleccionar="mesaSeleccionadaId = $event.idMesa"
+        />
+      </template>
+    </GruposMesas>
 
     <HojaAccionesMesa :mesa="mesaSeleccionada" @cerrar="mesaSeleccionadaId = null" />
   </section>
@@ -159,18 +222,20 @@ onBeforeUnmount(() => {
   gap: var(--espacio-4);
 }
 
-.cuadricula {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--espacio-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/* Chips de estado y select de sección en una fila; con poco ancho (tablet vertical, zoom) el select baja */
+.panel__filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3) var(--espacio-4);
 }
 
-/* Las tarjetas de una misma fila igualan su altura */
-.cuadricula > li {
-  display: flex;
+/* Esqueleto de la carga inicial (la cuadrícula real está en GruposMesas) */
+.cuadricula {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  gap: var(--espacio-4);
 }
 
 /* Las tarjetas de mesa son más altas que el esqueleto base */

@@ -22,14 +22,18 @@ withDefaults(defineProps<{ tamano?: number; invertido?: boolean }>(), { tamano: 
   flex: none;
   width: var(--tamano-logo);
   height: var(--tamano-logo);
+  border: 2px solid var(--color-maiz);
   border-radius: 50%;
   background: var(--color-primary);
   color: var(--color-on-primary);
+  box-shadow: inset 0 0 0 3px rgb(255 249 243 / 18%);
 }
 
 .logo--invertido {
   background: var(--color-on-primary);
   color: var(--color-primary);
+  border-color: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 3px rgb(166 58 31 / 10%);
 }
 
 .logo svg {

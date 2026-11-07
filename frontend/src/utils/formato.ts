@@ -41,3 +41,17 @@ export function formatearEspera(desde: Date, ahora: Date = new Date()): string {
   if (minutos < 60) return `${minutos} min`
   return `${Math.floor(minutos / 60)} h ${String(minutos % 60).padStart(2, '0')} min`
 }
+
+// Abreviaturas fijas: no dependen de la versión de ICU del navegador (toLocaleDateString varía entre «oct» y «oct.»).
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+/** Historial: hoy → "18:30"; otro día → "20 oct · 18:30"; otro año → "20 oct 2025 · 18:30". */
+export function formatearFechaHoraCorta(fecha: Date, ahora: Date = new Date()): string {
+  const hora = formatearHora(fecha)
+  if (!hora) return ''
+  const mismoDia =
+    fecha.getFullYear() === ahora.getFullYear() && fecha.getMonth() === ahora.getMonth() && fecha.getDate() === ahora.getDate()
+  if (mismoDia) return hora
+  const anio = fecha.getFullYear() === ahora.getFullYear() ? '' : ` ${fecha.getFullYear()}`
+  return `${fecha.getDate()} ${MESES_CORTOS[fecha.getMonth()]}${anio} · ${hora}`
+}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// El gerente restablece la contraseña de otro usuario (no hace falta conocer la anterior).
+// Gerencia inicia el cambio; el usuario afectado confirma su contraseña anterior.
 import { computed, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import { CONTRASENA_MAX, CONTRASENA_MIN, type UsuarioAdmin } from '../types'
@@ -8,6 +8,7 @@ import DialogoModal from './DialogoModal.vue'
 const props = defineProps<{ abierto: boolean; usuario: UsuarioAdmin | null; origenFoco?: HTMLElement | null }>()
 const emit = defineEmits<{ cerrar: []; cambiada: [usuario: UsuarioAdmin] }>()
 
+const actual = ref('')
 const nueva = ref('')
 const repetir = ref('')
 const ver = ref(false)
@@ -18,7 +19,13 @@ const errorServidor = ref('')
 watch(
   () => props.abierto,
   (abierto) => {
-    if (!abierto) return
+    if (!abierto) {
+      actual.value = ''
+      nueva.value = ''
+      repetir.value = ''
+      return
+    }
+    actual.value = ''
     nueva.value = ''
     repetir.value = ''
     ver.value = false
@@ -34,12 +41,17 @@ const errorNueva = computed(() => {
   if (nueva.value.length > CONTRASENA_MAX) return `Máximo ${CONTRASENA_MAX} caracteres.`
   return ''
 })
+const errorActual = computed(() => (tocado.value && !actual.value ? 'Escribe la contraseña anterior del usuario.' : ''))
 const errorRepetir = computed(() => (tocado.value && !errorNueva.value && repetir.value !== nueva.value ? 'Las contraseñas no coinciden.' : ''))
 
 async function guardar() {
   const u = props.usuario
   if (enCurso.value || !u) return
   tocado.value = true
+  if (!actual.value) {
+    document.getElementById('pw-actual')?.focus()
+    return
+  }
   if (nueva.value.length < CONTRASENA_MIN || nueva.value.length > CONTRASENA_MAX) {
     document.getElementById('pw-nueva')?.focus()
     return
@@ -51,7 +63,7 @@ async function guardar() {
   errorServidor.value = ''
   enCurso.value = true
   try {
-    await servicios.usuarios.cambiarContrasena(u.idUsuario, nueva.value)
+    await servicios.usuarios.cambiarContrasena(u.idUsuario, nueva.value, actual.value)
     emit('cambiada', u)
   } catch (e) {
     errorServidor.value = e instanceof ErrorServicio ? e.message : 'Ocurrió un error inesperado.'
@@ -65,7 +77,14 @@ async function guardar() {
   <DialogoModal :abierto="abierto" etiqueta-id="pw-titulo" variante="centro" :cerrable="!enCurso" :origen-foco="origenFoco ?? null" @cerrar="emit('cerrar')">
     <form v-if="usuario" class="form" novalidate @submit.prevent="guardar">
       <h2 id="pw-titulo">Cambiar contraseña de {{ usuario.nombre }}</h2>
-      <p class="form__texto">Usuario: <strong>{{ usuario.nombreUsuario }}</strong>. La contraseña anterior deja de funcionar de inmediato.</p>
+      <p class="form__texto">Usuario: <strong>{{ usuario.nombreUsuario }}</strong>. La persona debe proporcionar su contraseña anterior. La anterior deja de funcionar al guardar el cambio.</p>
+
+      <div class="campo">
+        <label for="pw-actual">Contraseña anterior del usuario</label>
+        <input id="pw-actual" v-model="actual" type="password" autocomplete="current-password"
+          :aria-invalid="errorActual ? 'true' : undefined" :aria-describedby="errorActual ? 'pw-actual-e' : undefined" />
+        <p v-if="errorActual" id="pw-actual-e" class="texto-error form__error">{{ errorActual }}</p>
+      </div>
 
       <div class="campo">
         <label for="pw-nueva">Nueva contraseña</label>

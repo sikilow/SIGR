@@ -161,6 +161,15 @@ watch(idPedido, async (nuevo, anterior) => {
 })
 watch(detalle, intentarEnfocarDetalle)
 
+// Con dos paneles, el detalle conserva su scroll al cambiar de pedido: el nuevo se abriría a la mitad (sin su
+// encabezado ni su estado). Se vuelve arriba en cada cambio (misma corrección que en la pantalla del gerente).
+const panelDetalle = ref<HTMLElement | null>(null)
+watch(idPedido, async () => {
+  if (compacto.value) return
+  await nextTick()
+  panelDetalle.value?.scrollTo({ top: 0 })
+})
+
 const enlaceVolver = computed(() => ({ name: 'mesero-pedidos' as const, query: route.query }))
 
 function enlaceAPedido(idPedido: number) {
@@ -282,7 +291,7 @@ onMounted(() => {
       </section>
 
       <!-- ============ Detalle ============ -->
-      <section v-if="mostrarDetalle" class="detalle-panel" aria-label="Detalle del pedido">
+      <section v-if="mostrarDetalle" ref="panelDetalle" class="detalle-panel" aria-label="Detalle del pedido">
         <RouterLink v-if="compacto" class="enlace-volver" :to="enlaceVolver">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="m15 6-6 6 6 6" />

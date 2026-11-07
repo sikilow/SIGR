@@ -59,6 +59,7 @@ export const ETIQUETA_ESTADO_RESERVACION: Record<EstadoReservacion, string> = {
   confirmada: 'Confirmada',
   llego: 'Llegó',
   cancelada: 'Cancelada',
+  vencida: 'Vencida',
   desconocido: ETIQUETA_ESTADO_DESCONOCIDO,
 }
 

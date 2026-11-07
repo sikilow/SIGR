@@ -5,11 +5,14 @@ interface ProductoMenu {
   id_producto: number;
   id_categoria: number;
   nombre: string;
+  presentacion: string;
   descripcion: string;
   precio: number;
   disponible: boolean;
   /** Unidades en inventario; `null` = no controla existencia (se prepara al momento, sin tope). */
   existencia: number | null;
+  /** Umbral de stock bajo de `disponibilidadProducto`; `null` cuando el producto no controla existencia. */
+  stock_minimo: number | null;
 }
 
 /**
@@ -20,8 +23,10 @@ export const obtenerMenu = async (_req: Request, res: Response) => {
   const rows = await filas(
     pool,
     `SELECT cm.id_categoria, cm.nombre AS categoria,
-            p.id_producto, p.nombre, COALESCE(p.descripcion, '') AS descripcion, p.precio,
+            p.id_producto, p.nombre, COALESCE(p.presentacion, '') AS presentacion,
+            COALESCE(p.descripcion, '') AS descripcion, p.precio,
             p.controla_existencia AS controla, COALESCE(i.existencia, 0) AS existencia,
+            COALESCE(i.stock_minimo, 0) AS stock_minimo,
             (p.disponible AND (p.controla_existencia = 0 OR COALESCE(i.existencia, 0) > 0)) AS disponible
        FROM categoria_menu cm
        JOIN producto p ON p.id_categoria = cm.id_categoria
@@ -41,10 +46,12 @@ export const obtenerMenu = async (_req: Request, res: Response) => {
       id_producto: r.id_producto as number,
       id_categoria: id,
       nombre: r.nombre as string,
+      presentacion: r.presentacion as string,
       descripcion: r.descripcion as string,
       precio: Number(r.precio),
       disponible: Boolean(r.disponible),
       existencia: r.controla ? Number(r.existencia) : null,
+      stock_minimo: r.controla ? Number(r.stock_minimo) : null,
     });
   }
   res.json([...categorias.values()]);

@@ -41,10 +41,12 @@ SELECT id_usuario FROM usuario WHERE correo = 'mesero2@sigr.com';
 -- 2. MESAS: init.sql crea 1-6; aquí 7-12 y se reparten los estados.
 --    libre: 1,2,4,7,10 · ocupada: 3,5,6,8,12 · reservada: 9,11
 -- ---------------------------------------------------------------------
-INSERT INTO mesa (numero, capacidad) VALUES (7,2),(8,4),(9,4),(10,6),(11,2),(12,8);
+INSERT INTO mesa (numero, capacidad, zona) VALUES
+  (7,2,'Salón'),(8,4,'Salón'),(9,4,'Terraza'),(10,6,'Terraza'),(11,2,'Terraza'),(12,8,'Terraza');
 
 -- Mesas nuevas: mismas capacidades del conjunto inicial, listas para asignar.
-INSERT INTO mesa (numero, capacidad) VALUES (13,2),(14,2),(15,4),(16,4),(17,6),(18,8);
+INSERT INTO mesa (numero, capacidad, zona) VALUES
+  (13,2,'Terraza'),(14,2,'Terraza'),(15,4,'Barra'),(16,4,'Barra'),(17,6,'Barra'),(18,8,'General');
 
 UPDATE mesa SET estado = 'ocupada'   WHERE numero IN (3, 5, 6, 8, 12);
 UPDATE mesa SET estado = 'reservada' WHERE numero IN (9, 11);

@@ -2,7 +2,7 @@
 
 > Archivo pensado para pegarse (o adjuntarse) al inicio de una conversación con una IA.
 > Resume qué es el proyecto, qué se decidió, qué ya existe en el código y qué falta.
-> Última revisión: octubre de 2026. Si algo de aquí contradice el código, **gana el código**; avísalo y corrige este archivo.
+> Última revisión: 31 de octubre de 2026. Si algo de aquí contradice el código, **gana el código**; avísalo y corrige este archivo.
 
 ## 0. Instrucciones para la IA
 
@@ -104,11 +104,12 @@ SIGR/
 │   │   ├── controllers/        auth, catalogo, cuentas, hostess (clientes + reservaciones + lista de
 │   │   │                       espera), menu, mesas, pedidos, productos, usuarios (la lógica)
 │   │   ├── models/dominio.ts   DTOs, consultas compartidas, estados del pedido, reglas de existencia, validar()
-│   │   ├── services/           db.ts (pool y transacciones) e idempotencia.ts (Idempotency-Key)
+│   │   ├── services/           db.ts, idempotencia.ts, correo.ts (Resend/SMTP), plantillasCorreo.ts (HTML y texto),
+│   │   │                       notificacionesReservacion.ts (cola común)
 │   │   ├── mocks/              clientes.mock.ts y productos.mock.ts
 │   │   └── utils/              config.ts (JWT_SECRET, PUERTO, CORS), errores.ts (ErrorApi),
 │   │                           auth.ts (requiereAuth(...roles)) y seed.ts (usuarios de prueba)
-│   ├── tests/                  dominio.test.ts, mocks.test.ts y caja.test.ts (31 pruebas, Vitest)
+│   ├── tests/                  dominio, mocks, caja, correo, plantillas, cola y hostess (Vitest)
 │   ├── .env.example, package.json, tsconfig.json
 ├── frontend/
 │   ├── index.html, main.ts, vite.config.ts
@@ -123,9 +124,9 @@ SIGR/
 │       ├── utils/              carrito, reglas de negocio, formato, contraste
 │       ├── assets/             vacía por ahora (.gitkeep)
 │       └── types/, layouts/, composables/, styles/   (adicionales: el código depende de ellas)
-├── database/                   init.sql, docker-compose.yml, seed_demo.sql (opcional) y migrations/001 a 005
-├── docs/                       arquitectura.md, contratos de API, equivalencias-bd.md, PENDIENTES_Y_FALTANTES.md,
-│                               guia-codigo/ y capturas/
+├── database/                   init.sql, docker-compose.yml, seed_demo.sql (opcional) y migrations/001 a 013
+├── docs/                       arquitectura.md, contratos, equivalencias, incrementos, integración,
+│                               pantallas, actualización de BD, Resend, pendientes, guía de código y capturas
 ├── CONTEXTO_IA.md              este archivo
 └── README.md
 ```
@@ -136,7 +137,7 @@ Diferencias menores respecto al modelo: `frontend/` tiene las carpetas adicional
 
 | Rol (`rol.nombre`) | Qué hace | Pantallas (ruta) | Usuario de prueba |
 | --- | --- | --- | --- |
-| gerente | Administra usuarios, menú e inventario y mesas; supervisa; cancela excepciones | `/gerente/usuarios`, `/gerente/productos`, `/gerente/mesas` | `gerente` |
+| gerente | Administra usuarios, catálogo e inventario, mesas/secciones y configuración de reservaciones; supervisa pedidos y cancela excepciones (incluso en preparación) | `/gerente/usuarios`, `/gerente/productos`, `/gerente/mesas`, `/gerente/reservaciones`, `/gerente/pedidos/:id?` | `gerente` |
 | mesero | Pedidos, cuentas de mesa, enviar a cocina, entregar | `/mesero/mesas`, `/mesero/mesas/:id/pedido`, `/mesero/mesas/:id/cuenta`, `/mesero/pedidos/:id?` | `mesero`, `mesero2` |
 | cocinero | Ver la cola de pedidos y cambiar su estado | `/cocinero/cocina` | `cocinero` |
 | cajero | Cobrar cuentas solicitadas, imprimir ticket y hacer corte de caja | `/cajero/caja` | `cajero` |
@@ -148,7 +149,7 @@ Contraseña de todos los usuarios de prueba: `1234` (solo desarrollo). El gerent
 
 Fuente: documento ERS (RP33) y modelo de requisitos (RP41). Estado según lectura del código: IMPLEMENTADO, PARCIAL (incompleto o distinto al ERS) o PENDIENTE.
 
-Avance de los 22 requisitos funcionales del ERS: 14 implementados, 2 parciales, 6 pendientes.
+Avance de los 22 requisitos funcionales del ERS: 14 implementados, 3 parciales, 5 pendientes.
 
 ### 5.1 Requisitos funcionales del ERS
 
@@ -168,9 +169,9 @@ Avance de los 22 requisitos funcionales del ERS: 14 implementados, 2 parciales, 
 | --- | --- | --- | --- | --- |
 | RF-PED-001 | Registrar pedido | Mesero | IMPLEMENTADO | `POST /api/pedidos` · Pedido de mesa |
 | RF-PED-002 | Cancelar pedido | Mesero, Gerente | IMPLEMENTADO | `POST /api/pedidos/:id/cancelar` (con motivo) · Mis pedidos |
-| RF-PED-003 | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | PARCIAL | Mesero: pedidos de todo el salón; cocinero: cola operativa (enviados y en preparación). Historial para cajero y gerente pendiente |
+| RF-PED-003 | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | PARCIAL | Mesero: pedidos de todo el salón; cocinero: cola operativa (enviados y en preparación); gerente: `/gerente/pedidos` (todos los pedidos, con detalle y cuenta). Falta el cajero |
 | RF-PED-004 | Cambiar estado del pedido | Cocinero, Mesero | IMPLEMENTADO | Mesero envía y entrega; cocina avanza `Pendiente` → `En preparacion` → `Listo` en `/cocinero/cocina` |
-| RF-PED-005 | Consultar historial de pedidos | Gerente, Cajero | PENDIENTE | Sin pantalla ni endpoint propio |
+| RF-PED-005 | Consultar historial de pedidos | Gerente, Cajero | PARCIAL | Gerente: `/gerente/pedidos` con «Todos los días» y filtros por día, estado, mesa, mesero y número, aplicados en el cliente (`GET /api/pedidos` no pagina ni filtra por fecha; propuesta RF-PED-007 / P-11 en `docs/contrato-api-gerente.md`). Falta el cajero |
 
 **Gestión de ventas**
 
@@ -205,25 +206,30 @@ Falta aprobarlos con el equipo y agregarlos al ERS.
 
 | Código | Requisito | Actor | Dónde está |
 | --- | --- | --- | --- |
-| RF-PRO-001 | Registrar producto (nombre, descripción, categoría, precio, existencia y stock mínimo) | Gerente | `POST /api/catalogo/productos` |
-| RF-PRO-002 | Actualizar producto (precio, categoría, existencia, stock mínimo) | Gerente | `PATCH /api/catalogo/productos/:id` |
-| RF-PRO-003 | Activar o desactivar un producto (no se borra, hay pedidos que lo usan; el mesero lo ve como agotado) | Gerente | `PATCH /api/catalogo/productos/:id` |
-| RF-PRO-004 | Consultar productos e inventario con filtros por estado, categoría, poco stock y búsqueda | Gerente | `GET /api/catalogo/productos` |
+| RF-PRO-001 | Registrar producto con nombre, descripción obligatoria, categoría, presentación/variante solo para Bebidas y Postres, precio, existencia y stock mínimo | Gerente | `POST /api/catalogo/productos` |
+| RF-PRO-002 | Actualizar producto e inventario; editar es la única forma de cambiar existencias de un producto ya registrado | Gerente | `PATCH /api/catalogo/productos/:id` |
+| RF-PRO-003 | Activar o desactivar un producto (no se borra; estar desactivado es distinto de tener inventario agotado) | Gerente | `PATCH /api/catalogo/productos/:id` |
+| RF-PRO-004 | Consultar productos e inventario con filtros por estado, categoría, poco stock y búsqueda; distinguir Disponible, Stock bajo y Agotado | Gerente | `GET /api/catalogo/productos` |
 | RF-PRO-005 | Gestionar categorías del menú (crear, renombrar, borrar) | Gerente | `/api/catalogo/categorias` |
 | RF-PRO-006 | Existencia opcional por producto: se descuenta al enviar el pedido a cocina y se bloquea el envío si no alcanza | Sistema | `POST /api/pedidos/:id/enviar`, `POST /api/productos/disponibilidad` |
-| RF-MES-002 | Registrar mesa: número, cantidad de personas, sección (opcional) y disponibilidad | Gerente | `POST /api/catalogo/mesas` · Mesas → Nueva mesa |
+| RF-MES-002 | Registrar mesa: número, capacidad, sección obligatoria y disponibilidad | Gerente | `POST /api/catalogo/mesas` · Mesas → Nueva mesa |
 | RF-MES-003 | Actualizar mesa (número, cantidad de personas, sección) | Gerente | `PATCH /api/catalogo/mesas/:id` · Mesas → Editar |
 | RF-MES-004 | Marcar una mesa como disponible o no disponible (no se borra). Una mesa no disponible no aparece para la hostess ni para el mesero y no se puede sentar, reservar ni cambiar de estado. No se puede desactivar si está ocupada, reservada, con cuenta abierta o con reservaciones vigentes | Gerente | `PATCH /api/catalogo/mesas/:id` · Mesas → No disponible / Disponible |
 | RF-MES-005 | Consultar las mesas como gerente, incluidas las no disponibles, con filtros por disponibilidad, sección y búsqueda | Gerente | `GET /api/catalogo/mesas` · Mesas |
-| RF-MES-006 | Sección de la mesa (`mesa.zona`, texto libre): se guarda, se edita y se filtra en la pantalla del gerente. El Salón y el Panel aún no la muestran (ver RF-MES-007) | Gerente | `mesa.zona` |
+| RF-MES-006 | Administrar el catálogo de secciones (crear, renombrar, inhabilitar/habilitar y borrar); las mesas pertenecen a una sección activa | Gerente | `GET/POST /api/catalogo/secciones`, `PATCH/DELETE /api/catalogo/secciones/:nombre` |
+| RF-MES-007 | Mostrar y agrupar las mesas por sección en el Panel del mesero y el Salón de la hostess: un grupo por sección (alfabético, «Sin sección» al final, mesas por número) con «N libres de M mesas»; select «Sección» combinable con el filtro de estado y en la URL (`?seccion=`, `sin-seccion` para las mesas sin sección); la sección en la tarjeta y en la hoja de acciones. Con una sola sección (o ninguna) la pantalla queda como antes | Mesero, Hostess | `utils/secciones.ts`, `components/GruposMesas.vue` y `FiltroSeccion.vue`, `stores/mesas.ts` y `salon.ts` · `/mesero/mesas`, `/hostess/salon` |
 | RF-USR-006 | Cambiar la contraseña de un usuario | Gerente | `POST /api/usuarios/:id/contrasena` |
 | RF-USR-007 | Desactivar y reactivar usuarios (sustituye al borrado de RF-USR-003) | Gerente | `PATCH /api/usuarios/:id` |
 | RF-CUE-001 | Solicitar la cuenta de una mesa y elegir pago en caja o digital (la cuenta pasa a `por_pagar`) | Mesero, Gerente | `POST /api/cuentas/:id/solicitar-pago` |
 | RF-CUE-002 | Cerrar cuenta únicamente al registrar su pago | Cajero | `POST /api/caja/cuentas/:id/cobrar` |
 | RF-MES-001 | Asignar mesa a un grupo y cambiar el estado de la mesa (`libre`, `ocupada`, `reservada`) | Hostess, Gerente | `POST /api/mesas/:id/asignar`, `PATCH /api/mesas/:id/estado` |
 | RF-RES-006 | Registrar la llegada de un cliente con reservación | Hostess | `POST /api/reservaciones/:id/llegada` |
+| RF-RES-007 | Configurar tolerancia de llegada y anticipación de recordatorios; vencer reservaciones sin llegada, liberar su mesa y enviar avisos | Gerente, Sistema | `GET/PATCH /api/catalogo/configuracion-reservacion`, cola de notificaciones y migraciones 010–012 |
+| RF-COR-001 | Encolar correos de confirmación y cancelación de reservaciones dentro de la transacción; el correo no bloquea ni revierte la operación y se envía con HTML y texto alternativo | Sistema | `notificacion_reservacion`, `backend/src/services/correo.ts`, `backend/src/services/plantillasCorreo.ts` y `backend/src/controllers/hostess.ts` |
 | RF-ESP-001 | Gestionar la lista de espera: agregar grupos, consultar por orden de llegada y sentarlos; la edición (`PATCH`) sigue pendiente | Hostess | `GET` y `POST /api/lista-espera` |
 | RNF-030 | Las acciones críticas (crear, enviar, cancelar, entregar pedidos, solicitar pago, asignar mesa y cobrar) no deben duplicarse si el cliente reintenta (`Idempotency-Key`) | Sistema | `backend/src/services/idempotencia.ts`, tabla `idempotencia` |
+
+Reglas de catálogo aplicadas: la combinación categoría + nombre + presentación identifica la variante; un alta duplicada se rechaza sin sumar ni reemplazar existencias, y se pide editar el producto existente. La descripción es obligatoria. La lista muestra Disponible, Stock bajo y Agotado como estados diferentes de la activación del producto.
 
 ### 5.3 Diferencias entre el ERS y el código
 
@@ -234,7 +240,7 @@ Falta aprobarlos con el equipo y agregarlos al ERS.
 | Estados de pedido | El ERS: pendiente, en preparación, listo, entregado | La BD agrega `Registrado`, `Cancelado` y `Pagado`; `Pendiente` se usa como «enviado a cocina» |
 | RNF-011 | Expiración a los 15 min de inactividad | El JWT dura 8 horas |
 | RNF-025 | Actualización en < 2 s | Consulta periódica cada 10 s |
-| Hostess | El README decía que su API estaba propuesta | Ya existen casi todas sus rutas en `backend/`; solo falta `PATCH /api/lista-espera/:id` |
+| Hostess | — | Las rutas de Salón, Reservaciones, clientes y asignación de mesas están implementadas; solo falta `PATCH /api/lista-espera/:id` para editar/quitar un grupo |
 
 ### 5.4 Requisitos no funcionales (aplican a todo el sistema)
 
@@ -311,7 +317,7 @@ Requisitos futuros (fuera del alcance actual):
 - Reportes avanzados de ventas, desempeño y análisis de datos
 - Aplicación móvil para el personal
 - Integración con servicios de entrega a domicilio
-- Notificaciones automáticas a clientes (confirmación de reservas, recordatorios)
+- Notificaciones automáticas a clientes (recordatorios y otros avisos)
 - Sistema de fidelización (puntos, promociones o descuentos)
 - Facturación electrónica
 - Control de inventario de ingredientes o insumos
@@ -326,17 +332,23 @@ Cuando aparezca algo que no está arriba, agrégalo aquí y también en la tabla
 | Código propuesto | Requerimiento | Actor | Origen (quién lo pidió o dónde apareció) | Estado | Fecha |
 | --- | --- | --- | --- | --- | --- |
 
-| RF-MES-007 | Mostrar o agrupar por sección en el Salón de la hostess y en el Panel de mesas (el backend ya envía `zona`) | Hostess, Mesero | Detalle pendiente de RF-MES-006 | PROPUESTO (sin construir) | oct. 2026 |
-| RF-AUD-001 | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo | PROPUESTO (sin construir) | oct. 2026 |
-| RF-AUD-002 | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
-| RF-USR-008 | Que cada usuario cambie su propia contraseña | Todos los roles | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
-| RF-PED-006 | Registrar quién canceló un pedido y cuándo | Sistema | Hallazgo de la revisión | PROPUESTO (sin construir) | oct. 2026 |
+| RF-MES-007 | Mostrar y agrupar por sección en el Salón de la hostess y en el Panel de mesas, con filtro por sección (el backend ya envía `zona`) | Hostess, Mesero | Detalle pendiente de RF-MES-006 | IMPLEMENTADO (frontend; falta aprobarlo en el ERS, ver 5.2) | 2026-10-21 |
+| RF-RES-007 | Configurar tolerancia y recordatorio; vencer reservaciones, liberar mesa y notificar | Gerente, Sistema | Revisión del incremento de reservaciones | IMPLEMENTADO (falta aprobarlo en el ERS, ver 5.2) | 2026-10-23 |
+| RF-COR-001 | Enviar a la dirección del cliente las confirmaciones creadas al registrar y confirmar, y la cancelación al cancelar una reservación vigente, con transporte Resend o SMTP, reintentos en cola y correo HTML con texto alternativo | Sistema | Solicitud de correo transaccional | IMPLEMENTADO (falta aprobarlo en el ERS) | 2026-10-31 |
+| RF-AUD-001 | Registrar quién cambia una contraseña, a quién y cuándo (sin guardar la contraseña ni su hash) | Sistema | Pedido del equipo | IMPLEMENTADO en migración 013; pendiente de aplicación en cada base | oct. 2026 |
+| RF-AUD-002 | Bitácora general de eventos (amplía RNF-017 y RNF-026) | Sistema, Gerente | Hallazgo de la revisión | IMPLEMENTADO en migración 013; pendiente de aplicación en cada base | oct. 2026 |
+| RF-USR-008 | Que Gerencia cambie la contraseña de un usuario validando la contraseña anterior de este | Gerente | Solicitud del equipo | IMPLEMENTADO en API, frontend y mock | oct. 2026 |
+| RF-USR-009 | Proteger al primer gerente contra desactivación, cambio de rol o eliminación | Sistema, Gerente | Solicitud del equipo | IMPLEMENTADO en API y migración 013; pendiente de aplicación en cada base | oct. 2026 |
+| RF-PED-006 | Registrar quién canceló un pedido y cuándo | Sistema | Hallazgo de la revisión | Cubierto por auditoría general en migración 013; pendiente de aplicación en cada base | oct. 2026 |
+| RF-PED-007 | Historial de pedidos paginado y por fechas en la API: `GET /api/pedidos?desde=&hasta=&limite=&pagina=` con total en `X-Total-Count` (P-11) | Gerente, Cajero | Pantalla Pedidos del gerente (`docs/contrato-api-gerente.md`, sección 3) | PROPUESTO (sin construir) | 2026-10-21 |
+| RF-PED-008 | Enviar la observación general del pedido (`pedido.observaciones`, ya es columna) en las respuestas de pedidos | Gerente, Mesero, Cocinero | Pantalla Pedidos del gerente (`docs/contrato-api-gerente.md`, sección 1) | PROPUESTO (sin construir) | 2026-10-21 |
+| RF-CUE-003 | Consultar una cuenta por su id aunque ya esté cerrada (`GET /api/cuentas/:id`, gerente y cajero) | Gerente, Cajero | Pantalla Pedidos del gerente (`docs/contrato-api-gerente.md`, sección 5) | PROPUESTO (sin construir) | 2026-10-21 |
 
 Detalle, decisiones pendientes (D-1 a D-5) y hallazgos P-01 a P-16: `docs/PENDIENTES_Y_FALTANTES.md`.
 
 ## 6. Modelo de datos (MySQL, base `SIGR`)
 
-Notación: `*` clave primaria, `→tabla` clave foránea. El esquema completo está en `database/init.sql` (23 tablas, más catálogos y datos base). Las migraciones (`database/migrations/`): `001_ajustes_front` (ajustes para conectar el frontend del mesero), `002_api_idempotencia` (motivo libre de cancelación e idempotencia), `003_existencia_producto` (existencia opcional por producto, `producto.controla_existencia`), `004_mesas_13_a_18`, `005_mesas_zona_activa` (sección y disponibilidad de mesas) y `006_caja` (efectivo recibido y cambio). Si la base ya existe, no la recrees: corre en orden las migraciones que falten.
+Notación: `*` clave primaria, `→tabla` clave foránea. El esquema actualizado está en `database/init.sql`. Las migraciones `001`–`013` incluyen, además del esquema inicial, control de existencia, caja, descripciones y presentación de productos, catálogo de secciones (`seccion`), características de acceso de mesas, configuración de reservaciones, cola unificada de correo (`notificacion_reservacion`) y auditoría/protección del gerente inicial. La migración `011` agrega `evento` y el índice único compuesto para confirmaciones; la `012` habilita el tipo `cancelacion`; la `013` crea triggers de auditoría y protege al gerente inicial. Revisa cuáles ya se aplicaron y sigue [`docs/actualizar-base-datos.md`](docs/actualizar-base-datos.md). No ejecutes `init.sql` sobre una base existente.
 
 ```
 
@@ -347,9 +359,12 @@ perfil_usuario: id_usuario*→usuario, telefono, direccion
 cliente: id_cliente*, nombre, telefono, correo
 mesa: id_mesa*, numero, capacidad, zona, activa, estado
 categoria_menu: id_categoria*, nombre
-producto: id_producto*, id_categoria→categoria_menu, nombre, descripcion, precio, disponible, controla_existencia
+producto: id_producto*, id_categoria→categoria_menu, nombre, presentacion, descripcion, precio, disponible, controla_existencia
 disponibilidadProducto: id_inventario*, id_producto→producto, existencia, stock_minimo
+seccion: nombre*, activa
 reservacion: id_reservacion*, id_cliente→cliente, id_mesa→mesa, fecha_hora, personas, estado, llegada_en
+configuracion_reservacion: tolerancia_minutos, recordatorio_minutos
+notificacion_reservacion: id_notificacion*, id_reservacion→reservacion, tipo (`recordatorio`, `vencida`, `confirmacion`, `cancelacion`), evento (vacío en recordatorio/vencida/cancelación; `creada` o `confirmada` en confirmación), destinatario, estado, intentos, ultimo_error
 lista_espera: id_espera*, id_cliente→cliente, personas, registrado_en, estado
 cuenta: id_cuenta*, id_mesa→mesa, abierta_en, cerrada_en, estado, tipo_pago_solicitado
 estado_pedido: id_estado*, nombre
@@ -373,7 +388,7 @@ idempotencia: clave, id_usuario, ruta, estado_http, respuesta, creado_en
 | `cuenta.estado` | `abierta`, `por_pagar`, `cerrada` |
 | `cuenta.tipo_pago_solicitado` | `fisico`, `digital`, o nulo |
 | `estado_pedido.nombre` | `Registrado`, `Pendiente` (usado como «enviado a cocina»), `En preparacion`, `Listo`, `Entregado`, `Cancelado`, `Pagado` |
-| `reservacion.estado` | `pendiente` (por defecto), `confirmada`, `cancelada`, `llego` (al registrar la llegada). Es `VARCHAR` sin `CHECK` |
+| `reservacion.estado` | `pendiente`, `confirmada`, `cancelada`, `llego`, `vencida` (el servicio la asigna al superar la tolerancia). Es `VARCHAR` |
 | `lista_espera.estado` | `esperando` (por defecto), `asignada`, `cancelada`. Es `VARCHAR` sin `CHECK` |
 | `mesa.activa` | `TRUE` (disponible) o `FALSE` (no disponible: no aparece para la hostess ni para el mesero; no se borra) |
 | `rol.nombre` | `gerente`, `mesero`, `cocinero`, `cajero`, `hostess` |
@@ -406,16 +421,21 @@ Formato de error: `{ "codigo", "mensaje" }`. Códigos: `no_autenticado`, `creden
 | `POST /caja/cortes`, `POST /caja/cortes/cerrar` | cajero | Abre el corte y guarda el total de ventas reportado al cerrarlo |
 | `POST /caja/cuentas/:id/cobrar` | cajero | Registra pago exacto o dividido, genera el ticket y cierra cuenta/mesa |
 | `GET /clientes`, `POST /clientes` | hostess, gerente | Buscar y registrar clientes (teléfono único) |
+| `PATCH /clientes/:id` | hostess, gerente | Completar o corregir el correo de un cliente para una reservación |
 | `GET /reservaciones?fecha=` | hostess, gerente | Reservaciones del día |
-| `POST /reservaciones` | hostess, gerente | Crea una reservación |
+| `POST /reservaciones` | hostess, gerente | Crea una reservación; el correo del cliente es opcional y, si existe, se encola su confirmación |
 | `PATCH /reservaciones/:id` | hostess, gerente | Confirma, cancela o cambia fecha, personas o mesa |
 | `POST /reservaciones/:id/llegada` | hostess, gerente | Registra la llegada |
 | `GET /lista-espera?estado=`, `POST /lista-espera` | hostess, gerente | Consulta y agrega grupos |
 | `PATCH /lista-espera/:id` | hostess, gerente | **PROPUESTO, no implementado** |
+| `GET/PATCH /catalogo/configuracion-reservacion` | gerente | Consulta y edición de tolerancia (5–180 min; default 15) y recordatorio (1–30 min; default 5) |
+| `GET/POST /catalogo/secciones`, `PATCH/DELETE /catalogo/secciones/:nombre` | gerente | Administrar secciones; no se borra una sección con mesas asociadas |
 | `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/:id`, `POST /usuarios/:id/contrasena` | gerente | Administración de usuarios |
 | `GET/POST /catalogo/categorias`, `PATCH/DELETE /catalogo/categorias/:id` | gerente | Categorías del menú |
 | `GET/POST /catalogo/productos`, `PATCH /catalogo/productos/:id` | gerente | Productos e inventario |
 | `GET/POST /catalogo/mesas`, `PATCH /catalogo/mesas/:id` | gerente | Administración de mesas: registrar, editar y marcar como disponible o no disponible (no se borran) |
+
+Los correos de reservación se envían con `asunto`, `texto` y `html`. Las plantillas de `backend/src/services/plantillasCorreo.ts` generan una tarjeta editorial de hasta 600 px con tablas y estilos en línea, sin imágenes; el texto plano se conserva como alternativa. El diseño no cambia la cola, los estados ni los reintentos.
 
 Las rutas de crear, enviar, cancelar, entregar, solicitar pago, asignar mesa y reservaciones aceptan la cabecera `Idempotency-Key`: una clave es una intención del usuario; si se reintenta con la misma clave, el servidor devuelve la respuesta guardada sin repetir la acción (usa un candado `GET_LOCK` de MySQL).
 
@@ -452,7 +472,9 @@ Copy-Item .env.example .env.local   # pon VITE_USE_MOCK=false para usar el backe
 npm run dev
 ```
 
-Variables: `backend/.env` con `PORT`, `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET` y opcional `CORS_ORIGIN`; `frontend/.env.local` con `VITE_USE_MOCK` y `VITE_API_URL=http://localhost:3000/api`.
+Variables: `backend/.env` con `PORT`, `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, opcional `CORS_ORIGIN` y configuración de correo (`CORREO_PROVEEDOR`, `CORREO_REMITENTE`, `RESEND_API_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`); `frontend/.env.local` con `VITE_USE_MOCK` y `VITE_API_URL=http://localhost:3000/api`. Si no se especifica proveedor, se prefiere Resend cuando hay API key; si no, SMTP cuando hay usuario y contraseña; sin credenciales el correo queda desactivado. Gmail requiere contraseña de aplicación de 16 caracteres, usa `smtp.gmail.com:465`, sustituye el remitente por la cuenta autenticada y limita aproximadamente a 500 mensajes/día y 100 destinatarios/mensaje; el error `550 5.4.5` espera seis horas antes del reintento.
+
+El diseño y la composición HTML de los avisos se detallan en [`docs/resend-reservaciones.md`](docs/resend-reservaciones.md); las plantillas se prueban en `backend/tests/plantillasCorreo.test.ts`.
 
 Antes de entregar: `npm run build` y `npm test` en `backend/`, y `npm run check` en `frontend/` (tipos, pruebas y build).
 
@@ -463,15 +485,15 @@ Antes de entregar: `npm run build` y `npm test` en `backend/`, y `npm run check`
 ## 11. Pendientes (en el orden más útil)
 
 1. **Facturación** (RF-VEN-002): el esquema existe, pero falta definir integración fiscal, API y pantalla. Caja no integra proveedores ni timbrado.
-2. **Historial de ventas** (RF-VEN-003), **reportes** (RF-VEN-004) e historial de pedidos (RF-PED-005).
+2. **Historial de ventas** (RF-VEN-003), **reportes** (RF-VEN-004) e historial de pedidos (RF-PED-005): el gerente ya tiene la pantalla `/gerente/pedidos` (filtra en el cliente); falta la paginación y el filtro por fechas en la API (RF-PED-007, P-11) y la vista del cajero.
 3. **Actualizar o eliminar clientes** (RF-CLI-002 y 003) y `PATCH /api/lista-espera/:id` para quitar o editar grupos en espera.
 4. **Seguridad del ERS sin cubrir:** bloqueo tras 5 intentos (RNF-009), expiración por inactividad (RNF-011), invalidar la sesión al salir (RNF-012), registro de accesos no autorizados (RNF-017) y bitácora de eventos (RNF-026).
 5. Medir los tiempos de respuesta (RNF-001) y decidir si hace falta tiempo real (RNF-025).
 6. Decidir qué pasa con el borrado de clientes y actualizar el ERS con los requisitos de la sección 5.2.
-7. **Sección de la mesa en el Salón y el Panel** (RF-MES-007): hoy la sección solo se ve y se filtra en la pantalla del gerente; falta mostrarla o agrupar por sección para la hostess y el mesero (el backend ya envía `zona` en `GET /api/mesas`).
+7. ~~Sección de la mesa en el Salón y el Panel~~ (RF-MES-007): implementado. La administración del catálogo también está en Gerente → Mesas. Queda por hacer una prueba operativa en el entorno MySQL compartido y confirmar si las secciones se consideran sensibles a mayúsculas.
 8. **Auditoría** (RF-AUD-001 y 002): quién cambia una contraseña, a quién y cuándo. Un trigger de MySQL no conoce al usuario del sistema; la API tendría que pasarle su id. Opciones y recomendación en `docs/PENDIENTES_Y_FALTANTES.md`.
-9. Cambio de contraseña propio (RF-USR-008), quién canceló un pedido (RF-PED-006) y las reglas del dominio sin aplicar (tolerancia de reservas, capacidad, regla 11).
-10. Pruebas de rutas del backend contra una base de datos (31 pruebas actuales: funciones del dominio, mocks y validación de importes; no cubren rutas con MySQL) y protecciones básicas de la API (límite de intentos, cabeceras de seguridad).
+9. Aplicar la migración 013 en cada base y probar la auditoría con MySQL. RF-USR-008 ya está implementado: solo Gerencia inicia el cambio y el usuario afectado proporciona su contraseña anterior. RF-PED-006 queda consultable en auditoría, pero no como campos en la respuesta del pedido (ver `docs/contrato-api-gerente.md`, sección 4). Siguen pendientes las reglas del dominio sin aplicar (validación de capacidad y regla 11). La tolerancia de reservaciones ya es configurable.
+10. Pruebas de rutas del backend contra una base de datos (las pruebas Vitest actuales simulan servicios y no cubren rutas con MySQL) y protecciones básicas de la API (límite de intentos, cabeceras de seguridad).
 
 ## 12. Glosario
 
@@ -502,7 +524,7 @@ Esta sección existe para que una IA (o una persona nueva) pueda explicar y repe
 | Una ruta nueva de la API | `backend/src/routes/<recurso>.ts` (solo la ruta, el permiso y el controlador) y se monta en `backend/src/index.ts` |
 | La lógica de esa ruta (validar, reglas, SQL, respuesta) | `backend/src/controllers/<recurso>.ts` |
 | Una consulta o regla que usan varios controladores | `backend/src/models/dominio.ts` |
-| Algo de conexión, transacciones o idempotencia | `backend/src/services/` |
+| Algo de conexión, transacciones, idempotencia o correo saliente | `backend/src/services/` |
 | Configuración, errores, permisos o un script auxiliar | `backend/src/utils/` |
 | Datos falsos para probar la API | `backend/src/mocks/<recurso>.mock.ts` |
 | Una prueba del backend | `backend/tests/<tema>.test.ts` |
@@ -1150,7 +1172,39 @@ Ejemplo real: la administración de mesas del gerente (RF-MES-002 a 006; ver la 
 10. **Documentación:** contratos en `docs/`, `docs/equivalencias-bd.md`, el README y este archivo (secciones 5, 7 y 16).
 11. **Verificar:** `npm run build` y `npm test` en `backend/`; `npm run check` en `frontend/`.
 
-### 14.14 Comandos de verificación
+### 14.14 Correo de reservación: plantilla HTML y texto
+
+La plantilla no consulta la base ni conoce el proveedor: recibe los datos de la reservación y devuelve el asunto, el texto y el HTML. El procesador elige la plantilla y `enviarCorreo` entrega las tres piezas (`backend/src/services/plantillasCorreo.ts` y `backend/src/services/notificacionesReservacion.ts`):
+
+```ts
+export interface CorreoReservacion {
+  asunto: string;
+  texto: string;
+  html: string;
+}
+
+const correo = plantillaRecordatorio(datos);
+
+await enviarCorreo({
+  para: aviso.destinatario,
+  asunto: correo.asunto,
+  texto: correo.texto,
+  html: correo.html,
+  idempotencyKey,
+});
+```
+
+Reglas que hay que conservar al editar una plantilla:
+
+- Usa tablas y estilos en línea; Gmail y Outlook ignoran muchas hojas de estilo modernas. El ancho máximo es de 600 px y el ajuste móvil empieza en 480 px.
+- No agregues imágenes, fuentes remotas ni JavaScript. Las tipografías son Georgia para títulos y hora, y Arial/Helvetica para el cuerpo.
+- Mantén un acento por aviso: confirmación terracota `#a63a1f`, recordatorio `#8a5a12`, vencida `#7a1818` y cancelación `#5f6258`.
+- Escapa con `escaparHtml` cualquier dato del cliente o de la reservación antes de insertarlo.
+- No elimines `texto`: se envía junto con `html` para clientes que bloquean el formato o usan lectores de pantalla.
+- No cambies asuntos, estados, destinatarios ni la cola desde una plantilla; esas reglas viven en `notificacionesReservacion.ts`.
+- Las pruebas de `backend/tests/plantillasCorreo.test.ts` cubren composición, acentos, escape y fecha; las de `notificacionesReservacion.test.ts` verifican que el HTML llegue al transporte.
+
+### 14.15 Comandos de verificación
 
 ```powershell
 cd backend;  npm run build; npm test
@@ -1196,6 +1250,45 @@ Al terminar, dame el BLOQUE DE ACTUALIZACIÓN de la sección 15.
 
 Más reciente primero. Cada IA agrega aquí su bloque de actualización.
 
+### 2026-10-31 · Cola unificada de correo, diseño HTML, Gmail SMTP y cancelaciones (RF-COR-001)
+- Qué se hizo: las confirmaciones `creada`/`confirmada`, recordatorios, vencimientos y cancelaciones comparten `notificacion_reservacion` y el servicio `enviarCorreo` con transporte Resend o Gmail SMTP. La confirmación y la cancelación se insertan dentro de la transacción y el ciclo se dispara tras el commit sin esperar el envío; el correo del cliente es opcional para guardar la reservación. Las cuatro plantillas se rediseñaron como una tarjeta editorial: papel cálido, marco agave, filete dorado y un acento distinto por aviso; el texto plano se conserva como alternativa.
+- Archivos nuevos o cambiados: `backend/src/services/correo.ts`, `backend/src/services/notificacionesReservacion.ts`, `backend/src/services/plantillasCorreo.ts`, `backend/src/controllers/hostess.ts`, `backend/src/utils/config.ts`, `backend/.env.example`, `backend/package.json`, `backend/package-lock.json`, pruebas `backend/tests/correo.test.ts`, `backend/tests/configCorreo.test.ts`, `backend/tests/hostessReservaciones.test.ts`, `backend/tests/notificacionesReservacion.test.ts`, `backend/tests/plantillasCorreo.test.ts` y `backend/tests/resend.test.ts`; `database/init.sql`, nuevas `database/migrations/011_cola_unificada_resend.sql` y `database/migrations/012_correo_cancelacion.sql`; `README.md`, `CONTEXTO_IA.md`, `docs/arquitectura.md`, `docs/resend-reservaciones.md`, `docs/actualizar-base-datos.md`, `docs/integracion-api.md`, `docs/pantallas-hostess.md`, `docs/pantallas-gerente.md`, `docs/incrementos.md` y `docs/PENDIENTES_Y_FALTANTES.md`.
+- Decisiones tomadas: `CORREO_REMITENTE` es el remitente único; el proveedor se autodetecta (Resend, luego SMTP, o correo desactivado). Gmail usa contraseña de aplicación, quita espacios de `SMTP_PASS`, limita aproximadamente a 500 mensajes/día y 100 destinatarios/mensaje, y `550 5.4.5` espera seis horas. El índice único `(id_reservacion, tipo, evento)` deduplica cada evento y las migraciones no crean avisos retroactivos. La cancelación solo se encola si la reservación estaba `pendiente` o `confirmada` y el cliente tiene un correo válido. El HTML usa tablas, estilos en línea, 600 px máximo, ajuste a 480 px y ningún recurso externo; viaja junto con el texto plano y no altera asuntos, estados ni reintentos.
+- Requerimientos nuevos o cambiados: RF-COR-001 pasa a confirmaciones y cancelaciones encoladas con reintentos y correo HTML con alternativa de texto; reservar sin correo es permitido. Se conserva la tolerancia, revalidación bajo bloqueo, estados permitidos, liberación de mesa y deduplicación de vencidas.
+- Verificación: backend `npm run build` aprobado y `npm test` con 64 pruebas en 9 archivos; frontend `npm run check` con 555 pruebas y build correcto. La migración 012 se aplicó a la base local `SIGR` después de un respaldo y los CHECK aceptan `cancelacion`. Se revisaron vistas previas de las cuatro plantillas a 600 px y 390 px; no se envió un correo real.
+- Pendiente o por verificar: aplicar 011 y 012 en las demás bases de desarrollo con respaldo previo; completar la prueba manual con dos correos bajo SMTP o Resend configurado y revisar el HTML en Gmail y Outlook reales.
+- Secciones de este archivo que hay que actualizar: 3, 5, 7, 9, 14 y 16.
+
+### 2026-10-24 · Confirmaciones de reservación con Resend (RF-COR-001; histórico, supersedido el 2026-10-31)
+- En esa fecha se añadió el transporte Resend y el envío directo de confirmaciones después del commit. Esa implementación y el remitente separado quedaron reemplazados por la cola y el transporte común registrados arriba.
+- El estado actual usa `CORREO_REMITENTE` como remitente único; `RESEND_FROM` fue retirado. La migración 011 y las variables SMTP se documentan en la entrada del 2026-10-31.
+- La verificación registrada en esa entrega fue de 39 pruebas y build; no se había probado envío real.
+
+### 2026-10-23 · Catálogo, secciones, reservaciones y Resend (histórico)
+- Qué se consolidó entonces: Incremento 1 del catálogo exige descripción, distingue Disponible/Stock bajo/Agotado, permite presentación únicamente para Bebidas y Postres y rechaza una variante duplicada sin alterar existencias; el inventario se ajusta editando el producto. Gerencia administra secciones (crear, renombrar, habilitar/inhabilitar y borrar) y las mesas requieren una sección activa. Reservaciones incorporaba correo obligatorio (decisión supersedida el 2026-10-31: ahora es opcional), actualización del correo de clientes existentes, preferencias de sección y accesibilidad, sugerencias de mesas y filtro Vencida. Gerencia configura tolerancia (15 min predeterminados, 5–180) y recordatorio (5 min, 1–30); el backend vence reservaciones, libera mesas y procesa correo mediante Resend con cola y reintentos.
+- Acceso del gerente: la pantalla de configuración está en `/gerente/reservaciones`. Se corrigió una ruta que había quedado bajo el grupo de Mesero y provocaba «Tu rol no tiene acceso a esa pantalla». La prueba `frontend/src/router/index.test.ts` comprueba la ruta y el rol requerido.
+- Persistencia y configuración en ese corte: migraciones 007–010 y `database/init.sql`; la configuración vigente de correo y las migraciones 011 y 012 se registran en la entrada del 2026-10-31.
+- Documentación sincronizada: `README.md`, este contexto, `docs/incrementos.md`, `docs/pantallas-gerente.md`, `docs/pantallas-hostess.md`, `docs/equivalencias-bd.md`, `docs/contrato-api-hostess.md`, `docs/integracion-api.md`, `docs/actualizar-base-datos.md`, `docs/resend-reservaciones.md` y `docs/PENDIENTES_Y_FALTANTES.md`.
+- Verificación registrada: backend `npm run build` y 34 pruebas aprobadas, `npm audit` con cero vulnerabilidades; frontend: prueba específica de ruta aprobada y `npm run build` correcto; `git diff --check` sin errores. No se aplicaron migraciones a una base real ni se envió correo real.
+- Pendiente de operación: revocar la key compartida en Resend, emitir una nueva y colocarla solo en el gestor de secretos o `backend/.env`, verificar el dominio emisor y probar en una base aislada. Aplicar 007–010 a bases existentes solo si aún no se ejecutaron.
+
+### 2026-10-21 · Secciones en el Panel del mesero y el Salón de la hostess (RF-MES-007)
+- Qué se hizo: el Panel (`/mesero/mesas`) y el Salón (`/hostess/salon`) agrupan las mesas por sección (encabezado h3 con «N libres de M mesas», región con `aria-labelledby`), tienen un select «Sección» combinable con los chips de estado y reflejado en la URL (`?seccion=`), anuncian el resultado del filtro con `aria-live` y muestran la sección en la tarjeta y en la hoja de acciones. Con una sola sección (o ninguna) se ven como antes. Además: en «Pedidos del salón» del mesero el detalle vuelve arriba al cambiar de pedido (misma corrección que el gerente) y el ícono del calendario de los campos de fecha tiene el anillo de foco de la app.
+- Archivos nuevos o cambiados: nuevos `frontend/src/utils/secciones.ts` (+ `.test.ts`), `components/GruposMesas.vue`, `components/FiltroSeccion.vue`, `stores/secciones.test.ts`, capturas `docs/capturas/14` a `21` y `h1-07` a `h1-11`; cambiados `types/mesa.ts` (`zona`), `types/hostess.ts` (`MesaSalon` con `zona`), `services/api/conversion.ts` (`aZona`), `services/api/mappers.ts`, `services/hostess/mappers.ts`, `services/hostess/mock.ts`, `services/mock/mesasMock.ts`, `services/mock/baseDatos.ts` (secciones de ejemplo), `stores/mesas.ts`, `stores/salon.ts`, `components/MesaCard.vue`, `hostess/MesaSalonCard.vue`, `HojaAccionesMesa.vue`, `hostess/HojaAccionesSalon.vue`, `views/mesero/MesasView.vue`, `views/hostess/SalonView.vue`, `views/mesero/PedidosView.vue`, `styles/base.css`; pruebas ajustadas (`mappers.test.ts`, `conversion.test.ts`, hostess `mappers.test.ts` y `mock.test.ts`, `mock.test.ts`, `asignacion.test.ts`, `espera.test.ts`, `reservaciones.test.ts`); `docs/pantallas-mesero.md` y `docs/pantallas-hostess.md`. Sin cambios en backend/ ni database/ ni en contratos JSON.
+- Decisiones tomadas: hallazgo: antes `zona` NO llegaba al Panel ni al Salón (el mock la quitaba y los mappers de `Mesa`/`MesaSalon` no la leían); ahora `aZona` la recorta y vacía, solo espacios, `null` o ausente = «Sin sección». Encabezados de grupo en **h3** (no h2) porque el título de cada pantalla ya es h2 y `base.css` fija h2 = pantalla/diálogo, h3 = bloque. Las secciones se comparan por texto exacto tras recortar (como el gerente); el orden ignora mayúsculas y acentos. Los conteos del encabezado son de toda la sección aunque haya filtro de estado; los del resumen, del total. Una `?seccion=` que ya no existe se ignora. La sección en la tarjeta solo aparece con varias secciones; en la hoja, siempre que la mesa tenga una. `POST /api/mesas/:id/asignar` no devuelve `zona` (el DTO la trata como opcional); el Salón recarga las mesas tras asignar, así que no se pierde. Mock: Salón 1–8, Terraza 9–14, Barra 15–17, la 18 sin sección.
+- Requerimientos nuevos o cambiados: RF-MES-007 pasa a IMPLEMENTADO (5.2 y 5.7); RF-MES-006 queda completo (se ve en el Salón y el Panel).
+- Verificación: `npm run check` en frontend/ (vue-tsc, 527 pruebas, build). En el navegador (modo demo, Chrome headless): sin scroll horizontal a 1024×768, 768×1024 y zoom 200 %; todos los controles de las dos pantallas ≥ 48 px; cada región de grupo tiene su h3; orden de Tab Actualizar → chips → Sección → tarjetas; anuncio «Filtro: libres, sección Terraza. 3 mesas.»; con una sola sección no hay encabezados ni select; el detalle de Pedidos del salón pasó de 46 px de desplazamiento a 0 al cambiar de pedido. Chrome acepta las reglas de `::-webkit-calendar-picker-indicator:focus-visible`.
+- Pendiente o por verificar: probar en modo API contra MySQL con secciones reales; ver el foco del ícono de calendario en un Chrome con teclado real (en headless el Tab sintético no recorre los segmentos del campo); revisar con lector de pantalla real; decidir si las secciones deben ignorar mayúsculas («Terraza» = «terraza»).
+- Secciones de este archivo actualizadas: 5.2, 5.7, 11 y 16.
+
+### 2026-10-21 · Pantalla Pedidos del gerente
+- Qué se hizo: pantalla /gerente/pedidos (cuarta pestaña) para supervisar todos los pedidos del salón, consultar el historial (filtro por día con «Todos los días», estado con conteo, mesa, mesero y número) y cancelar como excepción, incluso en preparación. El detalle reutiliza PedidoDetalle (modo gerente) y CancelarPedidoDialog; muestra la cuenta activa de la mesa.
+- Archivos nuevos o cambiados: nuevos frontend/src/views/gerente/PedidosView.vue, stores/pedidosGerente.ts, utils/reglasGerente.ts (+ .test.ts), docs/pantallas-gerente.md, docs/contrato-api-gerente.md, docs/capturas/g4-01 a g4-08; cambiados components/PedidoDetalle.vue (prop modo), components/hostess/SelectorDia.vue (prop etiqueta), layouts/GerenteLayout.vue, router/index.ts, stores/invalidar.ts, utils/formato.ts (+ test), services/mock/baseDatos.ts, pedidosMock.ts y mock.test.ts. Sin cambios en backend/ ni database/.
+- Decisiones tomadas: filtros en el cliente porque GET /api/pedidos no pagina ni filtra por fecha (50 filas por bloque y «Mostrando N de M»); estado como select con conteo para no ocupar la pantalla de 1024×768; el botón Cancelar nunca se oculta al gerente (aria-disabled + motivo); motivo de 5 a 200 caracteres como el resto de la app; el mock ahora valida el rol al cancelar (en preparación solo el gerente), como la API; mock con segunda mesera (Rosa, mesero2, mesa 12) e historial de días anteriores.
+- Requerimientos nuevos o cambiados: RF-PED-002 completo para el gerente (pantalla); RF-PED-003 cubre al gerente (falta el cajero); RF-PED-005 PARCIAL (historial filtrado en el cliente; propuesta de paginación P-11 en docs/contrato-api-gerente.md). RF-PED-006 sigue PROPUESTO (sin columna). Propuestos sin código: RF-PED-007 (paginación y filtro por fechas en GET /api/pedidos, P-11), RF-PED-008 (enviar pedido.observaciones en la API) y RF-CUE-003 (GET /api/cuentas/:id para cuentas cerradas).
+- Pendiente o por verificar: probar en modo API contra MySQL (cancelar en preparación como gerente); revisar con lector de pantalla real; documentar Usuarios, Productos y Mesas en pantallas-gerente.md; probable desplazamiento conservado en el detalle de «Pedidos del salón» del mesero.
+- Secciones de este archivo que hay que actualizar: 4 (pantallas del gerente), 5.1 (RF-PED-003 y 005), 5.7 (propuestas), 11 (pendientes 2 y 9) y 16.
+
 ### 2026-10-21 · Cocina y visibilidad de pedidos para meseros
 - Qué se hizo: se agregó la pantalla `/cocinero/cocina` con cola de pedidos enviados y en preparación, ordenada por antigüedad; el cocinero puede iniciar la preparación y marcar como listos. La cola se actualiza periódicamente y usa la transición ya protegida por rol y transacción en la API.
 - Archivos nuevos o cambiados: `frontend/src/layouts/CocinaLayout.vue`, `frontend/src/views/cocinero/CocinaView.vue`, `frontend/src/stores/cocina.ts`, `frontend/src/router/index.ts`, `frontend/src/services/interfaces.ts`, `frontend/src/services/api/index.ts`, `frontend/src/services/mock/pedidosMock.ts`, `frontend/src/types/usuario.ts`, pruebas de cocina; comentario obsoleto actualizado en `backend/src/controllers/pedidos.ts`; `README.md`, `docs/contrato-api-mesero.md`, `docs/PENDIENTES_Y_FALTANTES.md` y este contexto.
@@ -1216,12 +1309,12 @@ Más reciente primero. Cada IA agrega aquí su bloque de actualización.
 - Secciones de este archivo actualizadas: 3, 4, 5, 6, 7, 11 y 16.
 
 ### 2026-10 · Administración de mesas por el gerente
-- Qué se hizo: el gerente puede registrar mesas (número, cantidad de personas, sección y disponibilidad), editarlas y marcarlas como disponibles o no disponibles desde la pantalla **Mesas** (`/gerente/mesas`, tercera pestaña). Una mesa no disponible **no aparece** para la hostess ni para el mesero (`GET /api/mesas` solo trae las activas) y no se puede sentar, reservar ni cambiar de estado (`409 mesa_no_disponible`).
-- Archivos nuevos o cambiados: `database/migrations/005_mesas_zona_activa.sql` e `init.sql` (columnas `mesa.zona` y `mesa.activa`); `backend/src/controllers/catalogo.ts` y `routes/catalogo.ts` (`/api/catalogo/mesas`); `controllers/mesas.ts` y `controllers/hostess.ts` (ocultar y rechazar mesas no disponibles); frontend: `views/gerente/MesasView.vue`, `components/FormularioMesaDialog.vue`, `layouts/GerenteLayout.vue`, `router/index.ts`, `types/gerente.ts`, `services/interfaces.ts`, `services/api/` y `services/mock/` más `services/hostess/mock.ts`.
-- Decisiones tomadas: la sección es texto libre con sugerencias de las ya existentes (sin catálogo); las mesas no se borran; no se puede desactivar una mesa ocupada, reservada, con cuenta abierta o con reservaciones vigentes; el número de mesa sigue siendo único; cambiar la capacidad no revisa reservaciones ya hechas.
-- Requerimientos nuevos o cambiados: RF-MES-002 a 006 construidos; RF-MES-007 propuesto (mostrar o agrupar por sección en el Salón y el Panel).
+- Qué se hizo: el gerente puede registrar mesas (número, capacidad, sección y disponibilidad), editarlas y marcarlas como disponibles o no disponibles desde la pantalla **Mesas** (`/gerente/mesas`). Una mesa no disponible o perteneciente a una sección inhabilitada **no aparece** para la hostess ni para el mesero y no se puede asignar.
+- Archivos nuevos o cambiados: migraciones `005_mesas_zona_activa.sql` y `009_secciones_mesas.sql`, `init.sql`, controladores de catálogo/mesas/hostess y frontend `views/gerente/MesasView.vue`, `components/SeccionesDialog.vue`, `components/FormularioMesaDialog.vue`, layouts, router, tipos y servicios.
+- Decisiones: la decisión inicial de permitir texto libre en `mesa.zona` quedó **supersedida** por la migración 009 y el catálogo `seccion`. Actualmente cada mesa debe tener una sección activa; el gerente puede crear, renombrar, inhabilitar/habilitar y borrar secciones. Se mantienen las demás reglas: las mesas no se borran, no se desactiva una mesa ocupada/reservada/con cuenta o reservación vigente, el número sigue siendo único y cambiar capacidad no revisa reservaciones existentes.
+- Requerimientos nuevos o cambiados: RF-MES-002 a 006 construidos; RF-MES-007 se implementó después para agrupar y filtrar las mesas por sección en el Salón y el Panel.
 - Verificación: 54 pruebas de la API contra MySQL 8 real (mesas, pedidos, usuarios, catálogo, idempotencia) y la migración 005 sobre una base con el esquema anterior; frontend 453 pruebas y build.
-- Pendiente o por verificar: mostrar la sección en el Salón y el Panel; bitácora de quién crea o desactiva una mesa; las mesas con cuenta abierta no se pueden desactivar hasta que exista cerrar cuenta.
+- Pendiente o por verificar entonces: mostrar la sección en el Salón y el Panel (resuelto posteriormente); bitácora de quién crea o desactiva una mesa; las mesas con cuenta abierta no se pueden desactivar hasta que exista cerrar cuenta.
 - Secciones de este archivo actualizadas: 4, 5, 6, 7, 11 y 16.
 
 ### 2026-10 · Reorganización a la estructura acordada

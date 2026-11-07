@@ -1,5 +1,6 @@
 import { DESCRIPCION_MOTIVO_MAX, DESCRIPCION_MOTIVO_MIN, type DetallePedido, type DisponibilidadProducto, type LineaNuevoPedido, type Pedido } from '../../types'
 import { cancelacionRequiereGerente, meseroPuedeCancelar, puedeEditarOEnviar } from '../../utils/reglas'
+import { gerentePuedeCancelarEstado } from '../../utils/reglasGerente'
 import { ErrorServicio } from '../errores'
 import type { PedidosService } from '../interfaces'
 import { usuarioActual } from './authMock'
@@ -174,10 +175,12 @@ export function crearPedidosMock(): PedidosService {
             422,
           )
         }
-        if (cancelacionRequiereGerente(pedido.estado)) {
+        // Mismo orden que la API (cancelarPedido): en preparación solo el gerente; después, el estado.
+        const esGerente = usuarioActual()?.rol === 'gerente'
+        if (cancelacionRequiereGerente(pedido.estado) && !esGerente) {
           throw new ErrorServicio('requiere_gerente', 'El pedido está en preparación: solo el gerente puede cancelarlo.', 403)
         }
-        if (!meseroPuedeCancelar(pedido.estado)) {
+        if (!(esGerente ? gerentePuedeCancelarEstado(pedido.estado) : meseroPuedeCancelar(pedido.estado))) {
           throw new ErrorServicio('estado_invalido', 'Este pedido ya no se puede cancelar.', 409)
         }
         // SUPOSICIÓN (pregunta abierta c): con la cuenta ya solicitada no se cancelan pedidos.

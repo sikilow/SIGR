@@ -15,19 +15,22 @@ Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×
 | 3 | Asignar mesa | _(segundo paso del mismo diálogo)_ | Elegir el grupo (reservación, lista de espera o grupo sin registro), aviso de capacidad que no bloquea y confirmar | [h1-03-asignar-mesa-1024x768](capturas/h1-03-asignar-mesa-1024x768.png) |
 | 4 | Mesa asignada | `/hostess/salon` | Resultado: la mesa pasa a Ocupada, el grupo sale de las listas y se anuncia «Mesa 4 asignada a Familia González» | [h1-04-mesa-asignada-1024x768](capturas/h1-04-mesa-asignada-1024x768.png) |
 | 5 | Salón (768×1024) | `/hostess/salon` | Igual que la 1, con las reservaciones y la espera **debajo** de las mesas | [h1-05-salon-768x1024](capturas/h1-05-salon-768x1024.png) · [panel inferior](capturas/h1-06-panel-inferior-768x1024.png) |
+| 5a | Salón agrupado por sección | `/hostess/salon` | **RF-MES-007**: un grupo por sección con encabezado «Barra · 3 libres de 3 mesas» y la sección en cada tarjeta | [h1-07-salon-secciones-1024x768](capturas/h1-07-salon-secciones-1024x768.png) · [768×1024](capturas/h1-10-salon-secciones-768x1024.png) · [zoom 200 %](capturas/h1-11-salon-zoom-200.png) |
+| 5b | Salón filtrado por sección | `/hostess/salon?seccion=Barra` | Select «Sección» combinable con los chips de estado; el resumen sigue contando todas las mesas | [h1-08-salon-filtro-barra-1024x768](capturas/h1-08-salon-filtro-barra-1024x768.png) |
+| 5c | Hoja de acciones con sección | _(diálogo del Salón)_ | «Sección: Terraza» bajo el título de la mesa | [h1-09-hoja-acciones-seccion-1024x768](capturas/h1-09-hoja-acciones-seccion-1024x768.png) |
 
 ### Reservaciones (H2)
 
 | # | Pantalla | Ruta | Qué cubre | Captura |
 |---|---|---|---|---|
-| 6 | Reservaciones (1024×768) | `/hostess/reservaciones` | Lista del día (hoy por defecto, con selector de día), filtros por estado con su cantidad y búsqueda por nombre o teléfono. Cada reservación: hora, cliente, teléfono, personas, mesa o «Sin mesa» y estado (ícono + texto) | [h2-01-reservaciones-1024x768](capturas/h2-01-reservaciones-1024x768.png) |
+| 6 | Reservaciones (1024×768) | `/hostess/reservaciones` | Lista del día (hoy por defecto, con selector de día), filtros por estado —incluida Vencida— con su cantidad y búsqueda por nombre o teléfono. Cada reservación: hora, cliente, teléfono, personas, mesa o «Sin mesa» y estado (ícono + texto) | [h2-01-reservaciones-1024x768](capturas/h2-01-reservaciones-1024x768.png) |
 | 7 | Hoja de una reservación | _(diálogo de Reservaciones)_ | Datos y acciones según el estado: Registrar llegada, Confirmar, Editar y Cancelar (los estados finales solo se pueden cerrar) | [h2-02-hoja-reservacion-1024x768](capturas/h2-02-hoja-reservacion-1024x768.png) |
 | 8 | Nueva reservación con errores | _(diálogo de Reservaciones)_ | Validación: resumen de errores enfocable con enlaces a cada campo y un error bajo cada campo | [h2-03-nueva-reservacion-errores-1024x768](capturas/h2-03-nueva-reservacion-errores-1024x768.png) |
 | 9 | Nueva reservación: cliente existente | _(mismo diálogo)_ | Búsqueda de cliente por nombre o teléfono y cliente ya elegido | [h2-04-nueva-reservacion-cliente-elegido-1024x768](capturas/h2-04-nueva-reservacion-cliente-elegido-1024x768.png) |
 | 10 | Registrar llegada | _(mismo diálogo)_ | Si la reservación no tiene mesa, se elige entre las libres (con aviso de capacidad que no bloquea) | [h2-05-registrar-llegada-1024x768](capturas/h2-05-registrar-llegada-1024x768.png) |
 | 11 | Cancelar reservación | _(mismo diálogo)_ | Confirmación de una acción destructiva; avisa que la mesa se libera | [h2-06-cancelar-reservacion-1024x768](capturas/h2-06-cancelar-reservacion-1024x768.png) |
 | 12 | Reservaciones (768×1024) | `/hostess/reservaciones` | Igual que la 6, con el estado debajo del nombre | [h2-07-reservaciones-768x1024](capturas/h2-07-reservaciones-768x1024.png) |
-| 13 | Cliente nuevo con errores (768×1024) | _(diálogo de Reservaciones)_ | Alta de cliente (nombre, teléfono, correo opcional) con varios errores a la vez | [h2-08-cliente-nuevo-errores-768x1024](capturas/h2-08-cliente-nuevo-errores-768x1024.png) |
+| 13 | Cliente nuevo con errores (768×1024) | _(diálogo de Reservaciones)_ | Alta de cliente (nombre, teléfono y correo opcional) con varios errores a la vez | [h2-08-cliente-nuevo-errores-768x1024](capturas/h2-08-cliente-nuevo-errores-768x1024.png) |
 
 ### Lista de espera (H3)
 
@@ -58,6 +61,23 @@ Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×
 |---|---|
 | ![Espera](capturas/h3-01-espera-1024x768.png) | ![Asignar mesa](capturas/h3-03-asignar-mesa-1024x768.png) |
 
+| Salón por sección | Filtro por sección |
+|---|---|
+| ![Salón por sección](capturas/h1-07-salon-secciones-1024x768.png) | ![Filtro Barra](capturas/h1-08-salon-filtro-barra-1024x768.png) |
+
+## Secciones del salón (RF-MES-007)
+
+Mismo comportamiento que el Panel del mesero (ver [`pantallas-mesero.md`](pantallas-mesero.md)):
+
+1. Se agrupa solo si hay **más de una sección** (contando «Sin sección»); con una sola o ninguna, el Salón se ve como antes.
+2. Secciones en orden alfabético, «Sin sección» al final y mesas por número. Encabezado `h3` por grupo con
+   «N libres de M mesas» (de toda la sección, aunque haya filtro de estado); cada grupo es una región con `aria-labelledby`.
+3. Select «Sección» junto a los chips (con 1024×768 baja a su propia línea porque el panel lateral ocupa espacio), en la
+   URL como `?seccion=Barra` o `?seccion=sin-seccion`. Al cambiar un filtro se anuncia el resultado (`aria-live`).
+4. La tarjeta muestra la sección en texto pequeño; la hoja de acciones, «Sección: …».
+5. La sección sale de `GET /api/mesas` (`zona`). La respuesta de «Asignar mesa» no la trae, pero el Salón recarga todas
+   las mesas después de asignar, así que no se pierde.
+
 ## Cómo funciona la lista de espera
 
 1. **Lista:** `/hostess/espera` muestra por defecto a quienes **esperan**, el que lleva más tiempo, arriba. El filtro
@@ -76,17 +96,28 @@ Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×
 
 1. **Lista:** `/hostess/reservaciones` muestra hoy; las flechas, el campo de fecha y «Hoy» cambian de día. La lista se
    actualiza sola cada pocos segundos. El filtro (`?estado=`) y la búsqueda no cambian el día.
-2. **Nueva reservación:** cliente (buscar uno existente por nombre o teléfono, o crear uno con nombre y teléfono de
-   10 dígitos y correo opcional), fecha y hora (no pasadas), personas (1 a 20) y mesa opcional. La mesa solo se ofrece
-   para reservaciones **de hoy** y solo entre las **libres**; si las personas no caben se avisa, sin bloquear. Al guardar
-   la lista va al día de la reservación y la resalta.
+2. **Nueva reservación:** cliente (buscar uno existente por nombre o teléfono, o crear uno con nombre, teléfono de
+   10 dígitos y correo opcional), fecha y hora (no pasadas), personas (1 a 20), preferencias opcionales de sección y
+   accesibilidad, y mesa opcional. Si el cliente ya existe sin correo válido, se puede completar o corregir el correo
+   desde el selector para recibir notificaciones; no es requisito para guardar la reservación. La mesa solo se ofrece
+   para reservaciones **de hoy** y solo entre las **libres**; las sugerencias
+   priorizan sección, planta baja, espacio para carriola, acceso sin escaleras y capacidad. Si las personas no caben se
+   avisa, sin bloquear. Al guardar la lista va al día de la reservación y la resalta.
 3. **Editar:** solo `pendiente` o `confirmada`; el cliente no cambia. Se puede cambiar fecha, hora, personas y mesa.
 4. **Confirmar:** `pendiente → confirmada`.
 5. **Cancelar:** pide confirmación. La reservación pierde su mesa y, si nadie más la necesita, la mesa vuelve a **libre**.
+   Si la reservación permanece pendiente o confirmada más allá de la tolerancia configurada por Gerencia, pasa a
+   **Vencida**, la mesa se libera y se encola un aviso por correo.
 6. **Registrar llegada:** la reservación pasa a `llego` (con `llegada_en`) y la mesa queda **ocupada**. Si no tiene mesa
    (o la suya ya no está disponible) se elige una. Es el mismo efecto que «Asignar mesa» del Salón.
 7. El **Salón** refleja todo: mesas reservadas con hora y nombre, mesas liberadas o llenas y la lista de próximas
    reservaciones.
+
+La tolerancia de llegada y la anticipación de los recordatorios se configuran desde **Gerente → Reservas**. El backend
+envía confirmaciones, recordatorios, vencimientos y cancelaciones por una cola común con Resend o SMTP; los avisos usan
+una tarjeta editorial en HTML con texto plano alternativo y los fallos quedan registrados para reintento. La base requiere
+las migraciones `010_reservaciones_y_caracteristicas.sql`, `011_cola_unificada_resend.sql` y
+`012_correo_cancelacion.sql`. Consulta [resend-reservaciones.md](resend-reservaciones.md).
 
 ## Cómo funciona «Asignar mesa»
 
@@ -110,4 +141,6 @@ Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×
 - **Teclado completo**: los grupos son un grupo de radios nativo (flechas), «Volver» y «Asignar mesa» son botones.
 - `prefers-reduced-motion`: sin animaciones ni transiciones (reglas globales de `base.css` y locales).
 - Sin scroll horizontal en 1024×768 ni en 768×1024; los botones de la hoja quedan fijos al pie para que «Asignar mesa»
-  siempre esté a la vista.
+  siempre esté a la vista. Con secciones también se revisó con zoom de 200 % (sin scroll horizontal).
+- **Campos de fecha:** el ícono del calendario nativo (Chrome y Edge) lleva el mismo anillo de foco que el resto de la app
+  (`::-webkit-calendar-picker-indicator:focus-visible` en `base.css`).

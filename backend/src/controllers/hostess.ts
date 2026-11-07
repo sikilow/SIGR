@@ -4,6 +4,9 @@ import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/d
 import { idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 import { conIdempotencia } from "../services/idempotencia";
+import { esCorreoValido } from "../services/correo";
+import { solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
+import type { RowDataPacket } from "mysql2/promise";
 
 const FiltroReservaciones = z.object({ fecha: z.string().optional() });
 const FiltroEspera = z.object({ estado: z.enum(["esperando", "asignada", "cancelada"]).optional() });
@@ -63,7 +66,7 @@ async function cargarReservacion(ex: Ejecutor, id: number) {
   const [reservacion] = await filas(
     ex,
     `SELECT r.id_reservacion, r.id_cliente, r.id_mesa, r.fecha_hora, r.personas, r.estado, r.llegada_en,
-            c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, m.numero AS mesa_numero
+            c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.correo AS cliente_correo, m.numero AS mesa_numero
        FROM reservacion r
        JOIN cliente c ON c.id_cliente = r.id_cliente
        LEFT JOIN mesa m ON m.id_mesa = r.id_mesa
@@ -89,6 +92,30 @@ async function cargarEspera(ex: Ejecutor, id: number) {
 function exigirRegistro<T>(registro: T | null, nombre: string): T {
   if (!registro) throw new ErrorApi(500, "desconocido", `No se pudo recuperar el registro recién creado (${nombre}).`);
   return registro;
+}
+
+async function encolarNotificacionReservacion(
+  cx: Ejecutor,
+  reservacion: RowDataPacket,
+  tipo: "confirmacion" | "cancelacion",
+  evento: "creada" | "confirmada" | "",
+): Promise<void> {
+  if (typeof reservacion.cliente_correo !== "string" || !esCorreoValido(reservacion.cliente_correo)) {
+    return;
+  }
+  // `tipo` sale de una unión cerrada (no de la petición), por eso puede ir literal en el SQL.
+  await ejecutar(
+    cx,
+    `INSERT INTO notificacion_reservacion (id_reservacion, tipo, evento, destinatario)
+     SELECT r.id_reservacion, '${tipo}', ?, c.correo
+       FROM reservacion r
+       JOIN cliente c ON c.id_cliente = r.id_cliente
+      WHERE r.id_reservacion = ?
+        AND c.correo IS NOT NULL
+        AND TRIM(c.correo) <> ''
+     ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion`,
+    [evento, reservacion.id_reservacion],
+  );
 }
 
 function esFechaISOValida(fecha: string): boolean {
@@ -170,6 +197,22 @@ export const registrarCliente = async (req: Request, res: Response) => {
   });
 };
 
+const CorreoCliente = z.object({ correo: z.string().trim().email().max(120) }).strict();
+
+/** PATCH /api/clientes/:id: agrega o corrige el correo de un cliente para permitir reservaciones. */
+export const actualizarCorreoCliente = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const { correo } = validar(CorreoCliente, req.body);
+  const cliente = await transaccion(async (cx) => {
+    const [existente] = await filas(cx, "SELECT id_cliente FROM cliente WHERE id_cliente = ? FOR UPDATE", [id]);
+    if (!existente) throw new ErrorApi(404, "no_encontrado", "El cliente no existe.");
+    await ejecutar(cx, "UPDATE cliente SET correo = ? WHERE id_cliente = ?", [correo, id]);
+    const [actualizado] = await filas(cx, "SELECT id_cliente, nombre, telefono, correo FROM cliente WHERE id_cliente = ?", [id]);
+    return actualizado ?? null;
+  });
+  res.json(exigirRegistro(cliente, "cliente"));
+};
+
 /** GET /api/reservaciones?fecha=AAAA-MM-DD: reservaciones del día, de cualquier estado. */
 export const listarReservaciones = async (req: Request, res: Response) => {
   const { fecha } = validar(FiltroReservaciones, req.query);
@@ -192,7 +235,7 @@ export const listarReservaciones = async (req: Request, res: Response) => {
   const rows = await filas(
     pool,
     `SELECT r.id_reservacion, r.id_cliente, r.id_mesa, r.fecha_hora, r.personas, r.estado, r.llegada_en,
-            c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, m.numero AS mesa_numero
+            c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.correo AS cliente_correo, m.numero AS mesa_numero
        FROM reservacion r
        JOIN cliente c ON c.id_cliente = r.id_cliente
        LEFT JOIN mesa m ON m.id_mesa = r.id_mesa
@@ -228,13 +271,19 @@ export const crearReservacion = async (req: Request, res: Response) => {
         throw new ErrorApi(422, "estado_invalido", "Solo se puede asignar una mesa a una reservación de hoy.");
       }
 
-      const [cliente] = await filas(cx, "SELECT id_cliente FROM cliente WHERE id_cliente = ?", [datos.id_cliente]);
+      const [cliente] = await filas(cx, "SELECT id_cliente, correo FROM cliente WHERE id_cliente = ?", [datos.id_cliente]);
       if (!cliente) throw new ErrorApi(404, "no_encontrado", "El cliente no existe.");
 
       if (datos.id_mesa !== undefined && datos.id_mesa !== null) {
-        const [mesa] = await filas(cx, "SELECT numero, estado, activa FROM mesa WHERE id_mesa = ? FOR UPDATE", [datos.id_mesa]);
+        const [mesa] = await filas(
+          cx,
+          `SELECT m.numero, m.estado, m.activa, s.activa AS seccion_activa
+             FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
+            WHERE m.id_mesa = ? FOR UPDATE`,
+          [datos.id_mesa],
+        );
         if (!mesa) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
-        if (!mesa.activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está disponible.`);
+        if (!mesa.activa || !mesa.seccion_activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está disponible.`);
         if (mesa.estado !== "libre") {
           throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} ya no está libre.`);
         }
@@ -246,7 +295,12 @@ export const crearReservacion = async (req: Request, res: Response) => {
         "INSERT INTO reservacion (id_cliente, id_mesa, fecha_hora, personas) VALUES (?, ?, ?, ?)",
         [datos.id_cliente, datos.id_mesa ?? null, datos.fecha_hora, datos.personas],
       );
-      return exigirRegistro(await cargarReservacion(cx, insertado.insertId), "reservación");
+      const reservacion = exigirRegistro(await cargarReservacion(cx, insertado.insertId), "reservación");
+      await encolarNotificacionReservacion(cx, reservacion, "confirmacion", "creada");
+      return reservacion;
+    }).then((reservacion) => {
+      solicitarProcesamientoReservaciones();
+      return reservacion;
     }),
   );
 };
@@ -316,9 +370,15 @@ export const editarReservacion = async (req: Request, res: Response) => {
         }
 
         if (mesaFinal !== null && mesaFinal !== mesaAnterior) {
-          const [mesa] = await filas(cx, "SELECT numero, estado, activa FROM mesa WHERE id_mesa = ? FOR UPDATE", [mesaFinal]);
+          const [mesa] = await filas(
+            cx,
+            `SELECT m.numero, m.estado, m.activa, s.activa AS seccion_activa
+               FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
+              WHERE m.id_mesa = ? FOR UPDATE`,
+            [mesaFinal],
+          );
           if (!mesa) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
-          if (!mesa.activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está disponible.`);
+          if (!mesa.activa || !mesa.seccion_activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está disponible.`);
           if (mesa.estado !== "libre") {
             throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} ya no está libre.`);
           }
@@ -343,7 +403,18 @@ export const editarReservacion = async (req: Request, res: Response) => {
         if (mesaFinal !== mesaAnterior) await liberarMesaSiCorresponde(cx, mesaAnterior, id);
       }
 
-      return exigirRegistro(await cargarReservacion(cx, id), "reservación");
+      const reservacionActualizada = exigirRegistro(await cargarReservacion(cx, id), "reservación");
+      if (cambio.estado === "confirmada") {
+        await encolarNotificacionReservacion(cx, reservacionActualizada, "confirmacion", "confirmada");
+      } else if (cambio.estado === "cancelada") {
+        await encolarNotificacionReservacion(cx, reservacionActualizada, "cancelacion", "");
+      }
+      return reservacionActualizada;
+    }).then((reservacion) => {
+      if (cambio.estado === "confirmada" || cambio.estado === "cancelada") {
+        solicitarProcesamientoReservaciones();
+      }
+      return reservacion;
     }),
   );
 };
@@ -372,11 +443,13 @@ export const registrarLlegada = async (req: Request, res: Response) => {
       }
       const [mesa] = await filas(
         cx,
-        "SELECT id_mesa, numero, capacidad, estado, activa FROM mesa WHERE id_mesa = ? FOR UPDATE",
+        `SELECT m.id_mesa, m.numero, m.capacidad, m.estado, m.activa, s.activa AS seccion_activa
+           FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
+          WHERE m.id_mesa = ? FOR UPDATE`,
         [mesaId],
       );
       if (!mesa) throw new ErrorApi(404, "no_encontrado", `La mesa ${mesaId} no existe.`);
-      if (!mesa.activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está disponible.`);
+      if (!mesa.activa || !mesa.seccion_activa) throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} no está disponible.`);
       if (!["libre", "reservada"].includes(mesa.estado)) {
         throw new ErrorApi(409, "mesa_no_disponible", `La mesa ${mesa.numero} ya está ocupada.`);
       }
@@ -404,7 +477,7 @@ export const registrarLlegada = async (req: Request, res: Response) => {
 
       const [mesaActualizada] = await filas(
         cx,
-        "SELECT id_mesa, numero, capacidad, estado FROM mesa WHERE id_mesa = ?",
+        "SELECT id_mesa, numero, capacidad, zona, planta_baja, espacio_carriola, sin_escaleras, estado FROM mesa WHERE id_mesa = ?",
         [mesaId],
       );
       return {

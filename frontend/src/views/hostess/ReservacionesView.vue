@@ -41,6 +41,7 @@ const MENSAJE_VACIO: Record<FiltroReservaciones, string> = {
   confirmada: 'No hay reservaciones confirmadas',
   llego: 'Todavía no llega ninguna reservación',
   cancelada: 'No hay reservaciones canceladas',
+  vencida: 'No hay reservaciones vencidas',
 }
 
 // ---------- Actualización automática ----------
@@ -128,6 +129,11 @@ onBeforeUnmount(() => {
     </div>
 
     <p class="pantalla__dia">{{ tituloDia }}</p>
+
+    <div v-if="store.contadores.vencida > 0" class="aviso" role="status">
+      <p>Hay {{ store.contadores.vencida }} reservación(es) vencida(s); se liberó su mesa cuando tenía una asignada.</p>
+      <button type="button" class="btn btn--secundario" @click="cambiarFiltro('vencida')">Ver vencidas</button>
+    </div>
 
     <!-- Error con datos previos: se conservan las reservaciones y se ofrece reintentar -->
     <div v-if="store.error && store.reservaciones.length > 0" class="aviso aviso--error" role="alert">

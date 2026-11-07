@@ -8,6 +8,8 @@ import { solicitar } from './cliente'
 import { guardarToken, leerToken, limpiarToken } from './token'
 import {
   aCategoriaAdmin,
+  aConfiguracionReservacion,
+  aSeccionAdmin,
   aCategoriaMenu,
   aCuenta,
   aDisponibilidad,
@@ -30,6 +32,8 @@ import {
   deNuevoUsuario,
   deSolicitudPago,
   type CategoriaAdminDto,
+  type ConfiguracionReservacionDto,
+  type SeccionAdminDto,
   type CategoriaMenuDto,
   type CuentaDto,
   type DisponibilidadDto,
@@ -69,6 +73,7 @@ export function crearServiciosApi(): Servicios {
           throw error
         }
       },
+
     },
 
     mesas: {
@@ -166,8 +171,10 @@ export function crearServiciosApi(): Servicios {
         return aUsuarioAdmin(await solicitar<UsuarioAdminDto>('PATCH', `/usuarios/${id}`, { cuerpo }))
       },
 
-      async cambiarContrasena(id, contrasena) {
-        await solicitar<{ ok: boolean }>('POST', `/usuarios/${id}/contrasena`, { cuerpo: { contrasena } })
+      async cambiarContrasena(id, contrasena, contrasenaActual) {
+        await solicitar<{ ok: boolean }>('POST', `/usuarios/${id}/contrasena`, {
+          cuerpo: { contrasena, contrasena_actual: contrasenaActual },
+        })
       },
     },
 
@@ -189,6 +196,40 @@ export function crearServiciosApi(): Servicios {
 
       async eliminarCategoria(id) {
         await solicitar<{ ok: boolean }>('DELETE', `/catalogo/categorias/${id}`)
+      },
+
+      async listarSecciones() {
+        return (await solicitar<SeccionAdminDto[]>('GET', '/catalogo/secciones')).map(aSeccionAdmin)
+      },
+
+      async obtenerConfiguracionReservacion() {
+        return aConfiguracionReservacion(
+          await solicitar<ConfiguracionReservacionDto>('GET', '/catalogo/configuracion-reservacion'),
+        )
+      },
+
+      async actualizarConfiguracionReservacion(cambio) {
+        return aConfiguracionReservacion(
+          await solicitar<ConfiguracionReservacionDto>('PATCH', '/catalogo/configuracion-reservacion', {
+            cuerpo: { tolerancia_minutos: cambio.toleranciaMinutos, recordatorio_minutos: cambio.recordatorioMinutos },
+          }),
+        )
+      },
+
+      async crearSeccion(nombre) {
+        return aSeccionAdmin(await solicitar<SeccionAdminDto>('POST', '/catalogo/secciones', { cuerpo: { nombre: nombre.trim() } }))
+      },
+
+      async renombrarSeccion(nombre, nuevoNombre) {
+        return aSeccionAdmin(await solicitar<SeccionAdminDto>('PATCH', `/catalogo/secciones/${encodeURIComponent(nombre)}`, { cuerpo: { nombre: nuevoNombre.trim() } }))
+      },
+
+      async actualizarSeccion(nombre, cambio) {
+        return aSeccionAdmin(await solicitar<SeccionAdminDto>('PATCH', `/catalogo/secciones/${encodeURIComponent(nombre)}`, { cuerpo: cambio }))
+      },
+
+      async eliminarSeccion(nombre) {
+        await solicitar<{ ok: boolean }>('DELETE', `/catalogo/secciones/${encodeURIComponent(nombre)}`)
       },
 
       async listarProductos() {

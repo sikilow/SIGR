@@ -36,7 +36,7 @@ del catálogo (`"En preparacion"`) o ya el código (`"en_preparacion"`).
 |---|---|---|
 | `mesa.estado` | `libre`, `ocupada`, `reservada` | `CHECK` en la BD; `libre` es el valor por defecto. **La interfaz usa el mismo código y muestra «Libre»** (mesero y hostess). El normalizador sigue entendiendo `disponible` como `libre` por tolerancia. |
 | `cuenta.estado` | `abierta`, `por_pagar`, `cerrada` | `CHECK` en la BD; `abierta` es el valor por defecto. |
-| `reservacion.estado` | `pendiente`, `confirmada`, `llego`, `cancelada` | **Texto libre**, sin `CHECK` (`VARCHAR(25)`, default `pendiente`). Solo lo usa la hostess; los valores son **suposiciones sin confirmar** salvo el default (ver [`contrato-api-hostess.md`](contrato-api-hostess.md)). |
+| `reservacion.estado` | `pendiente`, `confirmada`, `llego`, `cancelada`, `vencida` | **Texto libre**, sin `CHECK` (`VARCHAR(25)`, default `pendiente`). Solo lo usa la hostess; `vencida` lo asigna el proceso del backend al superar la tolerancia (ver [`contrato-api-hostess.md`](contrato-api-hostess.md)). |
 | `lista_espera.estado` | `esperando`, `asignada`, `cancelada` | **Texto libre**, sin `CHECK` (`VARCHAR(25)`, default `esperando`). Solo lo usa la hostess; `cancelada` es un **supuesto del frontend**. |
 | `estado_pedido.nombre` | `Registrado`, `Pendiente`, `En preparacion`, `Listo`, `Entregado`, `Cancelado`, `Pagado` | Catálogo de la BD (`Registrado` y `Pagado` vienen en `init.sql`). |
 | `rol.nombre` | `Gerente`, `Mesero`, `Cocinero`, `Cajero`, `Hostess` | Catálogo de la BD. |

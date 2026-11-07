@@ -215,4 +215,28 @@ const hace = computed(() => textoHaceCuanto(props.espera.registradoEn, fechaAhor
     transform: none;
   }
 }
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.espera:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--sombra-alta);
+}
+
+.espera:active {
+  transform: scale(0.99);
+  box-shadow: none;
+}
+
+.espera__cantidad {
+  font-family: var(--fuente-titulo);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .espera:hover,
+  .espera:active {
+    transform: none;
+  }
+}
 </style>

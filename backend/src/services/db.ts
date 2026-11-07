@@ -1,6 +1,7 @@
 import "dotenv/config";
 import mysql from "mysql2/promise";
 import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import { actorAuditoriaActual } from "./contextoAuditoria";
 
 export const pool = mysql.createPool({
   host: process.env.DB_HOST ?? "localhost",
@@ -19,34 +20,61 @@ export const pool = mysql.createPool({
 /** Algo con lo que se puede consultar: el pool, o una conexión dentro de una transacción. */
 export type Ejecutor = Pool | PoolConnection;
 
+async function conConexion<T>(ex: Ejecutor, ejecutarConsulta: (cx: PoolConnection) => Promise<T>): Promise<T> {
+  const esPool = ex === pool;
+  const cx = esPool ? await pool.getConnection() : (ex as PoolConnection);
+  try {
+    await cx.query("SET @sigr_actor_id = ?", [actorAuditoriaActual()]);
+    return await ejecutarConsulta(cx);
+  } finally {
+    if (esPool) cx.release();
+  }
+}
+
 /** SELECT: devuelve las filas. */
 export async function filas<T extends RowDataPacket = RowDataPacket>(
   ex: Ejecutor,
   sql: string,
   params: unknown[] = [],
 ): Promise<T[]> {
-  const [rows] = await (ex as Pool).query<T[]>(sql, params);
-  return rows;
+  return conConexion(ex, async (cx) => {
+    const [rows] = await cx.query<T[]>(sql, params);
+    return rows;
+  });
 }
 
 /** INSERT / UPDATE / DELETE: devuelve insertId, affectedRows, etc. */
 export async function ejecutar(ex: Ejecutor, sql: string, params: unknown[] = []): Promise<ResultSetHeader> {
-  const [res] = await (ex as Pool).query<ResultSetHeader>(sql, params);
-  return res;
+  return conConexion(ex, async (cx) => {
+    const [res] = await cx.query<ResultSetHeader>(sql, params);
+    return res;
+  });
 }
 
 /** Corre `fn` dentro de una transacción: si lanza un error, se deshace todo (ROLLBACK). */
 export async function transaccion<T>(fn: (cx: PoolConnection) => Promise<T>): Promise<T> {
   const cx = await pool.getConnection();
+  let actorRestablecido = false;
   try {
     await cx.beginTransaction();
+    await cx.query("SET @sigr_actor_id = ?", [actorAuditoriaActual()]);
     const resultado = await fn(cx);
+    await cx.query("SET @sigr_actor_id = NULL");
+    actorRestablecido = true;
     await cx.commit();
     return resultado;
   } catch (error) {
     await cx.rollback();
     throw error;
   } finally {
+    if (!actorRestablecido) {
+      try {
+        await cx.query("SET @sigr_actor_id = NULL");
+      } catch (error) {
+        cx.destroy();
+        throw error;
+      }
+    }
     cx.release();
   }
 }

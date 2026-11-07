@@ -3,6 +3,7 @@
 // correo opcional). Los errores se enlazan a su campo con aria-describedby; la búsqueda anuncia cuántos resultados hay
 // en una región aria-live sin mover el foco.
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { ErrorServicio, servicios } from '../../services'
 import type { Cliente } from '../../types'
 import { type ClienteForm, type ErroresCliente, normalizarTelefono } from '../../utils/reservaciones'
 
@@ -28,6 +29,9 @@ const buscando = ref(false)
 /** `true` cuando ya hay una búsqueda terminada para el texto actual (para decir «no se encontró»). */
 const buscado = ref(false)
 const errorBusqueda = ref('')
+const correoEditado = ref('')
+const guardandoCorreo = ref(false)
+const errorCorreo = ref('')
 let temporizador: ReturnType<typeof setTimeout> | undefined
 /** Número de la última búsqueda lanzada: una respuesta tardía de una anterior se descarta. */
 let consecutivo = 0
@@ -79,9 +83,32 @@ const botonCambiar = ref<HTMLButtonElement | null>(null)
 
 // Al elegir (o soltar) al cliente la lista desaparece: el foco pasa al control que sigue, para no perderlo.
 async function elegir(cliente: Cliente) {
+  correoEditado.value = cliente.correo ?? ''
+  errorCorreo.value = ''
   cambiar({ seleccionado: cliente })
   await nextTick()
   botonCambiar.value?.focus()
+}
+
+async function guardarCorreo() {
+  const cliente = props.modelValue.seleccionado
+  const correo = correoEditado.value.trim()
+  if (!cliente || guardandoCorreo.value) return
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo) || correo.length > 120) {
+    errorCorreo.value = 'Escribe un correo válido de hasta 120 caracteres.'
+    return
+  }
+  guardandoCorreo.value = true
+  errorCorreo.value = ''
+  try {
+    const actualizado = await servicios.hostess.actualizarCorreoCliente(cliente.idCliente, correo)
+    correoEditado.value = actualizado.correo ?? ''
+    cambiar({ seleccionado: actualizado })
+  } catch (error) {
+    errorCorreo.value = error instanceof ErrorServicio ? error.message : 'No se pudo guardar el correo.'
+  } finally {
+    guardandoCorreo.value = false
+  }
 }
 
 async function cambiarCliente() {
@@ -129,6 +156,19 @@ const descripcionBusqueda = computed(() => ['ayuda-busqueda', props.errores.clie
         <span>{{ modelValue.seleccionado.telefono ?? 'Sin teléfono' }}</span>
       </p>
       <button ref="botonCambiar" type="button" class="btn btn--secundario" @click="cambiarCliente">Cambiar cliente</button>
+      <div class="campo elegido__correo">
+        <label for="cliente-correo">Correo para la reservación</label>
+        <div class="elegido__correo-fila">
+          <input id="cliente-correo" v-model="correoEditado" type="email" inputmode="email" autocomplete="email" maxlength="120" @input="errorCorreo = ''"
+            :aria-invalid="errores.correo || errorCorreo ? 'true' : undefined"
+            :aria-describedby="errores.correo ? 'error-cliente-correo' : errorCorreo ? 'error-cliente-correo-servidor' : undefined" />
+          <button type="button" class="btn btn--secundario" :disabled="guardandoCorreo || correoEditado.trim() === (modelValue.seleccionado.correo ?? '')" @click="guardarCorreo">
+            {{ guardandoCorreo ? 'Guardando…' : 'Guardar correo' }}
+          </button>
+        </div>
+        <p v-if="errores.correo" id="error-cliente-correo" class="texto-error">{{ errores.correo }}</p>
+        <p v-if="errorCorreo" id="error-cliente-correo-servidor" class="texto-error" role="alert">{{ errorCorreo }}</p>
+      </div>
     </div>
 
     <template v-else>
@@ -215,7 +255,7 @@ const descripcionBusqueda = computed(() => ['ayuda-busqueda', props.errores.clie
         </div>
 
         <div class="campo">
-          <label for="cliente-correo">Correo (opcional)</label>
+          <label for="cliente-correo">Correo para la reservación <span aria-hidden="true">*</span></label>
           <input
             id="cliente-correo"
             :value="modelValue.correo"

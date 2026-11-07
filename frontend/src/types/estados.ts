@@ -51,10 +51,10 @@ export function estadoParaReglas(estado: EstadoPedido): EstadoPedido {
 
 // ---------- Reservación: reservacion.estado (VARCHAR(25), texto libre, default 'pendiente') ----------
 
-export const ESTADOS_RESERVACION = ['pendiente', 'confirmada', 'llego', 'cancelada'] as const
+export const ESTADOS_RESERVACION = ['pendiente', 'confirmada', 'llego', 'cancelada', 'vencida'] as const
 export type EstadoReservacion = (typeof ESTADOS_RESERVACION)[number] | typeof ESTADO_DESCONOCIDO
 /** SIN CONFIRMAR en la BD: solo `pendiente` es el valor por defecto; el resto sale de los datos de ejemplo. */
-export const ESTADOS_RESERVACION_SIN_CONFIRMAR: readonly EstadoReservacion[] = ['confirmada', 'llego', 'cancelada']
+export const ESTADOS_RESERVACION_SIN_CONFIRMAR: readonly EstadoReservacion[] = ['confirmada', 'llego', 'cancelada', 'vencida']
 
 // ---------- Lista de espera: lista_espera.estado (VARCHAR(25), texto libre, default 'esperando') ----------
 

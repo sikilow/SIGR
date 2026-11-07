@@ -67,9 +67,23 @@ describe('aMesa', () => {
       estado_cuenta: 'abierta', pedidos_activos: 2, total_cuenta: 470, pedidos_listos: 1,
     }
     expect(aMesa(dto)).toEqual({
-      idMesa: 3, numero: 3, capacidad: 4, estado: 'ocupada',
+      idMesa: 3, numero: 3, capacidad: 4, estado: 'ocupada', zona: null,
+      plantaBaja: false, espacioCarriola: false, sinEscaleras: false,
       estadoCuenta: 'abierta', pedidosActivos: 2, totalCuenta: 470, pedidosListos: 1, tipoPagoSolicitado: null,
     })
+  })
+
+  it('la sección (mesa.zona) llega recortada; vacía, solo espacios, null o ausente = sin sección (null)', () => {
+    const base: MesaDto = {
+      id_mesa: 1, numero: 1, capacidad: 2, estado: 'libre',
+      estado_cuenta: null, pedidos_activos: 0, total_cuenta: 0, pedidos_listos: 0,
+    }
+    expect(aMesa({ ...base, zona: 'Terraza' }).zona).toBe('Terraza')
+    expect(aMesa({ ...base, zona: '  Barra  ' }).zona).toBe('Barra')
+    expect(aMesa({ ...base, zona: '' }).zona).toBeNull()
+    expect(aMesa({ ...base, zona: '   ' }).zona).toBeNull()
+    expect(aMesa({ ...base, zona: null }).zona).toBeNull()
+    expect(aMesa(base).zona).toBeNull()
   })
 
   it('una mesa libre sin cuenta conserva null y los contadores en 0 (también si PDO manda NULL)', () => {
@@ -202,13 +216,13 @@ describe('menú y disponibilidad', () => {
       id_categoria: '1',
       nombre: 'Entradas',
       productos: [
-        { id_producto: '1', id_categoria: '1', nombre: 'Guacamole', descripcion: 'Aguacate', precio: '95.00', disponible: '1' },
+        { id_producto: '1', id_categoria: '1', nombre: 'Guacamole', presentacion: 'Porción individual', descripcion: 'Aguacate', precio: '95.00', disponible: '1' },
         { id_producto: 4, id_categoria: 1, nombre: 'Ceviche', descripcion: null, precio: 140, disponible: 0 },
       ],
     })
     expect(categoria.idCategoria).toBe(1)
     expect(categoria.nombre).toBe('Entradas')
-    expect(categoria.productos[0]).toEqual({ idProducto: 1, idCategoria: 1, nombre: 'Guacamole', descripcion: 'Aguacate', precio: 95, disponible: true })
+    expect(categoria.productos[0]).toEqual({ idProducto: 1, idCategoria: 1, nombre: 'Guacamole', presentacion: 'Porción individual', descripcion: 'Aguacate', precio: 95, disponible: true })
     expect(categoria.productos[1]).toMatchObject({ descripcion: '', disponible: false })
   })
 
@@ -292,9 +306,11 @@ describe('existencia: productos que la controlan y productos que se preparan al 
   })
 
   it('el alta envía controla_existencia y el PATCH solo lo manda si cambió', () => {
-    const nuevo = { idCategoria: 1, nombre: ' Tacos ', descripcion: '', precio: 90, activo: true, controlaExistencia: false, existencia: 0, stockMinimo: 0 }
+    const nuevo = { idCategoria: 1, nombre: ' Tacos ', presentacion: 'Orden individual', descripcion: 'Con guarnición', precio: 90, activo: true, controlaExistencia: false, existencia: 0, stockMinimo: 0 }
     expect(deNuevoProducto(nuevo).controla_existencia).toBe(false)
+    expect(deNuevoProducto(nuevo).presentacion).toBe('Orden individual')
     expect(deCambioProducto({ precio: 95 })).toEqual({ precio: 95 })
     expect(deCambioProducto({ controlaExistencia: true })).toEqual({ controla_existencia: true })
+    expect(deCambioProducto({ presentacion: 'Botella de 1 litro' })).toEqual({ presentacion: 'Botella de 1 litro' })
   })
 })

@@ -2,6 +2,14 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { servicios } from '../services'
 import type { EstadoMesa, GrupoAsignacion, ListaEspera, MesaSalon, Reservacion, ResultadoAsignacion } from '../types'
+import {
+  TODAS_LAS_SECCIONES,
+  agruparPorSeccion,
+  filtrarPorSeccion,
+  hayVariasSecciones,
+  seccionEfectiva,
+  seccionesDe,
+} from '../utils/secciones'
 
 /** Filtros del Salón. La hostess NO tiene «Pedido listo»: no ve pedidos. */
 export type FiltroSalon = 'todas' | Exclude<EstadoMesa, 'desconocido'>
@@ -42,9 +50,24 @@ export const useSalonStore = defineStore('salon', () => {
     reservada: mesas.value.filter((m) => m.estado === 'reservada').length,
   }))
 
+  // ---------- Secciones (RF-MES-007) ----------
+  /** Filtro de sección pedido (?seccion=); `seccionActiva` es el que de verdad se aplica. */
+  const seccion = ref<string>(TODAS_LAS_SECCIONES)
+  const secciones = computed(() => seccionesDe(mesas.value))
+  /** Con una sola sección (o ninguna) no hay encabezados ni select: la pantalla queda como antes. */
+  const variasSecciones = computed(() => hayVariasSecciones(mesas.value))
+  const seccionActiva = computed(() => seccionEfectiva(seccion.value, mesas.value))
+
+  /** Filtro de estado y de sección combinados. Los contadores del resumen siguen siendo del total. */
   const mesasFiltradas = computed(() =>
-    filtro.value === 'todas' ? mesas.value : mesas.value.filter((m) => m.estado === filtro.value),
+    filtrarPorSeccion(
+      filtro.value === 'todas' ? mesas.value : mesas.value.filter((m) => m.estado === filtro.value),
+      seccionActiva.value,
+    ),
   )
+
+  /** Mesas visibles agrupadas por sección (alfabético, «Sin sección» al final; por número dentro de cada grupo). */
+  const grupos = computed(() => agruparPorSeccion(mesasFiltradas.value, mesas.value))
 
   /** «Próximas reservaciones»: las que aún no llegan ni se cancelaron, por hora. */
   const proximasReservaciones = computed(() =>
@@ -127,7 +150,12 @@ export const useSalonStore = defineStore('salon', () => {
     ultimaActualizacion,
     filtro,
     contadores,
+    seccion,
+    secciones,
+    variasSecciones,
+    seccionActiva,
     mesasFiltradas,
+    grupos,
     proximasReservaciones,
     enEspera,
     cargar,

@@ -14,6 +14,8 @@ import { pedidosRouter } from "./routes/pedidos";
 import { productosRouter } from "./routes/productos";
 import { reservacionesRouter } from "./routes/reservaciones";
 import { usuariosRouter } from "./routes/usuarios";
+import { iniciarProcesadorReservaciones } from "./services/notificacionesReservacion";
+import { filas, pool } from "./services/db";
 
 const app = express();
 app.use(cors({ origin: ORIGENES_PERMITIDOS }));
@@ -43,4 +45,39 @@ app.use("/api", () => {
 
 app.use(manejarErrores);
 
-app.listen(PUERTO, () => console.log(`API en http://localhost:${PUERTO}`));
+async function iniciarAPI(): Promise<void> {
+  try {
+    const [configuracion] = await filas(pool, "SELECT id FROM configuracion_seguridad WHERE id = 1");
+    if (!configuracion) {
+      throw new Error("Falta completar la configuración creada por la migración 013 en la base SIGR.");
+    }
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ER_NO_SUCH_TABLE"
+    ) {
+      throw new Error(
+        "Falta aplicar database/migrations/013_auditoria_seguridad.sql a la base SIGR. " +
+          "Consulta docs/actualizar-base-datos.md y vuelve a iniciar la API.",
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+
+  app.listen(PUERTO, () => console.log(`API en http://localhost:${PUERTO}`));
+  iniciarProcesadorReservaciones();
+}
+
+void iniciarAPI().catch((error: unknown) => {
+  console.error("No se pudo iniciar la API:", error);
+  void pool.end()
+    .catch((shutdownError: unknown) => {
+      console.error("No se pudo cerrar el pool de MySQL:", shutdownError);
+    })
+    .finally(() => {
+      process.exitCode = 1;
+    });
+});

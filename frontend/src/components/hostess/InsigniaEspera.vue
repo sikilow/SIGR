@@ -75,17 +75,17 @@ const texto = computed(() => ETIQUETA_ESTADO_ESPERA[props.estado])
 }
 
 .insignia--esperando {
-  --tono: var(--color-listo);
-  --tono-texto: var(--color-listo-texto);
+  --tono: var(--color-espera-esperando);
+  --tono-texto: var(--color-espera-esperando-texto);
 }
 
 .insignia--asignada {
-  --tono: var(--color-libre);
-  --tono-texto: var(--color-libre-texto);
+  --tono: var(--color-espera-asignada);
+  --tono-texto: var(--color-espera-asignada-texto);
 }
 
 .insignia--cancelada {
-  --tono: var(--color-peligro);
-  --tono-texto: var(--color-peligro-texto);
+  --tono: var(--color-espera-cancelada);
+  --tono-texto: var(--color-espera-cancelada-texto);
 }
 </style>

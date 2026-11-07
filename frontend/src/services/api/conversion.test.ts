@@ -7,6 +7,7 @@ import {
   aNumero,
   aNumeroONulo,
   aRol,
+  aZona,
   normalizarCodigo,
   parseFechaMySQL,
   parseFechaMySQLONula,
@@ -41,6 +42,17 @@ describe('aNumero (INT y DECIMAL de PDO)', () => {
     expect(aNumeroONulo(undefined)).toBeNull()
     expect(aNumeroONulo('3')).toBe(3)
     expect(() => aNumeroONulo('x')).toThrow()
+  })
+})
+
+describe('aZona (mesa.zona, «sección»)', () => {
+  it('recorta el texto', () => {
+    expect(aZona('Terraza')).toBe('Terraza')
+    expect(aZona('  Salón principal ')).toBe('Salón principal')
+  })
+
+  it.each(['', '   ', '\t', null, undefined])('%j es «sin sección» (null)', (valor) => {
+    expect(aZona(valor)).toBeNull()
   })
 })
 

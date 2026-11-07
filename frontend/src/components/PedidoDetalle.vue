@@ -1,29 +1,40 @@
 <script setup lang="ts">
-// Detalle de un pedido de "Mis pedidos": avance, líneas, total y las acciones que permite su estado.
+// Detalle de un pedido: avance, líneas, total y las acciones que permite su estado.
+// Modo `mesero` (Pedidos del salón y Cuenta de mesa, por defecto):
 //  - registrado: Editar, Enviar a cocina (confirmación breve) y Cancelar pedido.
 //  - enviado: Cancelar pedido.
 //  - en_preparacion: Cancelar bloqueado ("Requiere autorización del gerente").
 //  - listo: Marcar como entregado (confirmación breve).
 //  - entregado, pagado, cancelado: solo lectura.
+// Modo `gerente` (/gerente/pedidos): solo «Cancelar pedido», como excepción. Se puede en registrado, enviado y
+// en preparación; en los demás estados el botón sigue visible con aria-disabled y su motivo (utils/reglasGerente.ts).
 // Si una acción falla porque el estado cambió, se explica el estado actual y se recarga todo.
 import { computed, ref } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import { useAnunciosStore } from '../stores/anuncios'
 import { invalidarDatos } from '../stores/invalidar'
 import { estadoParaReglas, ETIQUETA_ESTADO_PEDIDO, type Pedido } from '../types'
-import { formatearHora, formatearMoneda } from '../utils/formato'
+import { formatearFechaHoraCorta, formatearMoneda } from '../utils/formato'
 import { crearClaveIdempotencia, esFalloReintentable } from '../utils/idempotencia'
 import { accionesDePedido, PASOS_AVANCE, textoCancelarBloqueado } from '../utils/reglas'
+import { avisoCancelacionGerente, motivoNoCancelableGerente } from '../utils/reglasGerente'
 import CancelarPedidoDialog from './CancelarPedidoDialog.vue'
 import ConfirmarAccionDialog from './ConfirmarAccionDialog.vue'
 import IconoEstado from './IconoEstado.vue'
 import InsigniaEstado from './InsigniaEstado.vue'
 
-const props = defineProps<{
-  pedido: Pedido
-  /** La cuenta de la mesa ya se solicitó: no se edita ni se cancela (suposición, ver contrato). */
-  cuentaPorPagar: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    pedido: Pedido
+    /** La cuenta de la mesa ya se solicitó: no se edita ni se cancela (suposición, ver contrato). */
+    cuentaPorPagar: boolean
+    /** Quién mira el pedido: cambia las acciones disponibles (ver el comentario de arriba). */
+    modo?: 'mesero' | 'gerente'
+  }>(),
+  { modo: 'mesero' },
+)
+
+const esGerente = computed(() => props.modo === 'gerente')
 
 const anuncios = useAnunciosStore()
 const claves = crearClaveIdempotencia()
@@ -67,13 +78,25 @@ const TEXTO_FASE: Record<FasePaso, string> = { hecho: 'completado', actual: 'pas
 
 // ---------- Qué acciones corresponden ----------
 const acciones = computed(() => accionesDePedido(props.pedido.estado, props.cuentaPorPagar))
-const puedeEditar = computed(() => acciones.value.editar !== 'no_aplica')
-const puedeEnviar = computed(() => acciones.value.enviar)
-const puedeEntregarAhora = computed(() => acciones.value.entregar)
-/** Hay botón "Cancelar pedido" (activo o bloqueado) solo mientras tenga sentido mostrarlo. */
-const muestraCancelar = computed(() => acciones.value.cancelar !== 'no_aplica')
+// Editar, enviar y entregar son acciones del mesero: el gerente solo supervisa y cancela como excepción.
+const puedeEditar = computed(() => !esGerente.value && acciones.value.editar !== 'no_aplica')
+const puedeEnviar = computed(() => !esGerente.value && acciones.value.enviar)
+const puedeEntregarAhora = computed(() => !esGerente.value && acciones.value.entregar)
+/**
+ * Hay botón "Cancelar pedido" (activo o bloqueado). Al mesero se le oculta cuando no tiene sentido; al gerente se le
+ * muestra SIEMPRE, bloqueado con su motivo, para que sepa por qué no puede (no desaparece sin explicación).
+ */
+const muestraCancelar = computed(() => esGerente.value || acciones.value.cancelar !== 'no_aplica')
 /** Motivo visible por el que "Cancelar pedido" está bloqueado; `null` si se puede usar. */
-const motivoCancelarBloqueado = computed(() => textoCancelarBloqueado(acciones.value.cancelar))
+const motivoCancelarBloqueado = computed(() =>
+  esGerente.value
+    ? motivoNoCancelableGerente(props.pedido.estado, props.cuentaPorPagar)
+    : textoCancelarBloqueado(acciones.value.cancelar),
+)
+/** Al gerente: aviso de que cancela algo que cocina ya empezó (solo si la cancelación está permitida). */
+const avisoCancelar = computed(() =>
+  esGerente.value && !motivoCancelarBloqueado.value ? avisoCancelacionGerente(props.pedido.estado) : null,
+)
 const motivoEditarBloqueado = computed<string | null>(() =>
   acciones.value.editar === 'cuenta_por_pagar' ? 'La cuenta ya fue solicitada: no se puede editar.' : null,
 )
@@ -174,7 +197,7 @@ const cancelando = ref(false)
     <header class="detalle__cabecera">
       <div>
         <h2 id="detalle-titulo" ref="titulo" tabindex="-1">Pedido #{{ pedido.idPedido }}</h2>
-        <p class="detalle__meta">Mesa {{ pedido.mesaNumero }} · {{ formatearHora(pedido.fechaHora) }} · Mesero: {{ pedido.nombreMesero }}</p>
+        <p class="detalle__meta">Mesa {{ pedido.mesaNumero }} · {{ formatearFechaHoraCorta(pedido.fechaHora) }} · Mesero: {{ pedido.nombreMesero }}</p>
       </div>
       <InsigniaEstado :tono="pedido.estado" :texto="ETIQUETA_ESTADO_PEDIDO[pedido.estado]" />
     </header>
@@ -287,7 +310,7 @@ const cancelando = ref(false)
             type="button"
             class="btn btn--peligro-suave"
             :aria-disabled="motivoCancelarBloqueado ? 'true' : undefined"
-            :aria-describedby="motivoCancelarBloqueado ? 'cancelar-bloqueo' : undefined"
+            :aria-describedby="motivoCancelarBloqueado ? 'cancelar-bloqueo' : avisoCancelar ? 'cancelar-aviso' : undefined"
             aria-haspopup="dialog"
             @click="!motivoCancelarBloqueado && (cancelando = true)"
           >
@@ -303,6 +326,13 @@ const cancelando = ref(false)
               <path d="M8 11V8a4 4 0 0 1 8 0v3" />
             </svg>
             {{ motivoCancelarBloqueado }}
+          </p>
+          <p v-else-if="avisoCancelar" id="cancelar-aviso" class="bloqueo bloqueo--aviso">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3 2 20h20z" />
+              <path d="M12 10v5M12 17.5v.01" />
+            </svg>
+            {{ avisoCancelar }}
           </p>
         </div>
       </template>
@@ -558,5 +588,10 @@ const cancelando = ref(false)
 
 .bloqueo svg {
   flex: none;
+}
+
+/* Aviso al gerente (cancelación permitida pero con consecuencias): ícono de advertencia + texto */
+.bloqueo--aviso {
+  color: var(--color-peligro-texto);
 }
 </style>

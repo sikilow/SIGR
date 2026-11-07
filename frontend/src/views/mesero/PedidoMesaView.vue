@@ -203,6 +203,12 @@ function quitar(idProducto: number) {
   anunciar(`${nombre} quitado. ${textoTotal(nuevas)}`)
 }
 
+/** Botón − de la tarjeta del menú: baja una unidad; si era la última, quita el producto. */
+function quitarDesdeMenu(producto: Producto) {
+  if (cantidadDe(lineas.value, producto.idProducto) <= 1) quitar(producto.idProducto)
+  else cambiarCantidadLinea(producto.idProducto, -1)
+}
+
 function cambiarIndicaciones(idProducto: number, texto: string) {
   establecer(establecerIndicaciones(lineas.value, idProducto, texto))
 }
@@ -319,7 +325,7 @@ onBeforeRouteUpdate((a, b) =>
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6" /></svg>
           Panel de mesas
         </RouterLink>
-        <MenuProductos :categorias="categorias" :cantidades="cantidades" @agregar="agregar" />
+        <MenuProductos :categorias="categorias" :cantidades="cantidades" @agregar="agregar" @quitar="quitarDesdeMenu" />
       </div>
 
       <!-- Tablet horizontal: pedido en columna fija -->

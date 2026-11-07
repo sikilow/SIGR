@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { formatearEspera, formatearHora, formatearMoneda, formatearPedidos, formatearProductos } from './formato'
+import { formatearEspera, formatearFechaHoraCorta, formatearHora, formatearMoneda, formatearPedidos, formatearProductos } from './formato'
+
+describe('formatearFechaHoraCorta (historial de pedidos)', () => {
+  const ahora = new Date(2026, 9, 21, 15, 0)
+
+  it('hoy solo muestra la hora', () => {
+    expect(formatearFechaHoraCorta(new Date(2026, 9, 21, 9, 5), ahora)).toBe('09:05')
+  })
+
+  it('otro día agrega día y mes; otro año, también el año', () => {
+    expect(formatearFechaHoraCorta(new Date(2026, 9, 20, 21, 30), ahora)).toBe('20 oct · 21:30')
+    expect(formatearFechaHoraCorta(new Date(2025, 11, 31, 23, 59), ahora)).toBe('31 dic 2025 · 23:59')
+  })
+
+  it('una fecha inválida da texto vacío', () => {
+    expect(formatearFechaHoraCorta(new Date('no'), ahora)).toBe('')
+  })
+})
 
 describe('formato', () => {
   it('moneda: $1,250.00 MXN', () => {

@@ -20,6 +20,8 @@ const props = defineProps<{
   usuario: UsuarioAdmin | null
   /** Es el propio gerente en sesión: no puede cambiarse el rol (el servidor también lo impide). */
   esYo?: boolean
+  /** El gerente inicial no puede perder su rol de gerente. */
+  esPrimerGerente?: boolean
   origenFoco?: HTMLElement | null
 }>()
 
@@ -170,10 +172,11 @@ async function guardar() {
 
         <div class="campo">
           <label for="usr-rol">Rol</label>
-          <select id="usr-rol" v-model="rol" :disabled="esYo" :aria-describedby="esYo ? 'usr-rol-ayuda' : undefined">
+          <select id="usr-rol" v-model="rol" :disabled="esYo || esPrimerGerente" :aria-describedby="esYo || esPrimerGerente ? 'usr-rol-ayuda' : undefined">
             <option v-for="r in ROLES_ASIGNABLES" :key="r" :value="r">{{ ETIQUETA_ROL[r] }}</option>
           </select>
-          <p v-if="esYo" id="usr-rol-ayuda" class="form__ayuda">No puedes cambiar tu propio rol.</p>
+          <p v-if="esPrimerGerente" id="usr-rol-ayuda" class="form__ayuda">El primer gerente debe conservar su rol de gerente.</p>
+          <p v-else-if="esYo" id="usr-rol-ayuda" class="form__ayuda">No puedes cambiar tu propio rol.</p>
         </div>
       </div>
 
@@ -246,7 +249,7 @@ async function guardar() {
 .campo select {
   min-height: var(--tactil-min);
   padding: 0 var(--espacio-4);
-  border: 2px solid var(--color-muted);
+  border: 1.5px solid var(--color-borde-control);
   border-radius: var(--radio-sm);
   background: var(--color-surface);
   font-weight: 400;

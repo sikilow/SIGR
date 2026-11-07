@@ -6,14 +6,16 @@
 //  - tocar el fondo oscuro cierra (si `cerrable`).
 // El contenido del slot solo existe mientras el diálogo está abierto. Para que el foco inicial
 // caiga en una acción concreta, ponle `autofocus` a ese elemento.
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { useCompacto } from '../composables/useCompacto'
 
 const props = withDefaults(
   defineProps<{
     abierto: boolean
     /** id del encabezado que da nombre al diálogo (aria-labelledby). */
     etiquetaId: string
-    variante?: 'hoja' | 'centro'
+    /** `auto`: hoja en teléfono/tablet vertical y centro en tablet horizontal/escritorio. */
+    variante?: 'auto' | 'hoja' | 'centro'
     /** `false` mientras hay una operación en curso: Escape y el fondo no cierran. */
     cerrable?: boolean
     /** Elemento al que se devuelve el foco; por defecto, el que lo tenía al abrir. */
@@ -21,7 +23,12 @@ const props = withDefaults(
     /** Si el origen ya no existe al cerrar (p. ej. su botón desapareció), el foco va aquí. */
     focoAlternativo?: HTMLElement | null
   }>(),
-  { variante: 'centro', cerrable: true, origenFoco: null, focoAlternativo: null },
+  { variante: 'auto', cerrable: true, origenFoco: null, focoAlternativo: null },
+)
+
+const compacto = useCompacto()
+const varianteEfectiva = computed(() =>
+  props.variante === 'auto' ? (compacto.value ? 'hoja' : 'centro') : props.variante,
 )
 
 const emit = defineEmits<{ cerrar: [] }>()
@@ -92,7 +99,7 @@ defineExpose({ cerrar: () => dialogo.value?.close() })
   <dialog
     ref="dialogo"
     class="dialogo"
-    :class="`dialogo--${variante}`"
+    :class="`dialogo--${varianteEfectiva}`"
     :aria-labelledby="etiquetaId"
     @close="alCerrar"
     @cancel="alCancelar"
@@ -146,5 +153,32 @@ defineExpose({ cerrar: () => dialogo.value?.close() })
     transform: translateY(32px);
     opacity: 0;
   }
+}
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.dialogo::backdrop {
+  background: rgb(38 28 22 / 56%);
+  backdrop-filter: blur(3px);
+}
+
+.dialogo--hoja {
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -10px 34px rgb(38 28 22 / 28%);
+}
+
+/* Asa de la hoja inferior: indica que se puede cerrar y que viene de abajo */
+.dialogo--hoja::before {
+  content: '';
+  display: block;
+  width: 44px;
+  height: 5px;
+  margin: calc(var(--espacio-2) * -1) auto var(--espacio-3);
+  border-radius: var(--radio-pill);
+  background: var(--color-border);
+}
+
+.dialogo--centro {
+  border-radius: 24px;
+  box-shadow: var(--sombra-alta);
 }
 </style>

@@ -7,6 +7,7 @@ import { ejecutar, filas, pool } from "../services/db";
 import { validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 import { type Rol } from "../utils/auth";
+import { conActorAuditoria } from "../services/contextoAuditoria";
 
 // El front manda { nombre_usuario, contrasena } (credenciales.nombre_usuario). La contraseña se compara con
 // credenciales.password_hash; también se acepta `password` para probar con Invoke-RestMethod.
@@ -53,7 +54,9 @@ export const iniciarSesion = async (req: Request, res: Response) => {
     throw new ErrorApi(401, "credenciales_invalidas", "Usuario o contraseña incorrectos.");
   }
 
-  await ejecutar(pool, "UPDATE credenciales SET ultimo_acceso = NOW() WHERE id_usuario = ?", [fila.id_usuario]);
+  await conActorAuditoria(fila.id_usuario as number, () =>
+    ejecutar(pool, "UPDATE credenciales SET ultimo_acceso = NOW() WHERE id_usuario = ?", [fila.id_usuario]),
+  );
 
   // En la BD el rol es "Mesero"; dentro del token (uso interno de la API) se guarda en minúsculas.
   const rol = (fila.rol as string).toLowerCase() as Rol;

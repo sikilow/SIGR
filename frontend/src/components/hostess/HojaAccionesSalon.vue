@@ -88,6 +88,7 @@ function alAsignar() {
 
       <!-- Paso 1: estado de la mesa y acción -->
       <template v-if="paso === 'acciones'">
+        <p v-if="mesa.zona" class="hoja__seccion">Sección: <strong>{{ mesa.zona }}</strong></p>
         <p class="hoja__resumen">{{ formatearCapacidad(mesa.capacidad) }}</p>
 
         <ul v-if="mesa.estado === 'reservada' && reservacionesDeLaMesa.length > 0" class="hoja__reservas" aria-label="Reservaciones de la mesa">
@@ -159,6 +160,12 @@ function alAsignar() {
 
 .hoja__resumen {
   margin: 0;
+}
+
+/* Sección de la mesa (RF-MES-007): pegada al encabezado, antes del resumen */
+.hoja__seccion {
+  margin: calc(var(--espacio-2) * -1) 0 0;
+  overflow-wrap: anywhere;
 }
 
 .hoja__reservas {

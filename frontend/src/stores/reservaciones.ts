@@ -15,7 +15,7 @@ import { useSalonStore } from './salon'
 
 /** Convierte un valor de la URL (?estado=) en un filtro válido; si no lo es, `todas`. */
 export function filtroReservacionesDesdeConsulta(valor: unknown): FiltroReservaciones {
-  const validos: readonly string[] = ['pendiente', 'confirmada', 'llego', 'cancelada']
+  const validos: readonly string[] = ['pendiente', 'confirmada', 'llego', 'cancelada', 'vencida']
   return typeof valor === 'string' && validos.includes(valor) ? (valor as FiltroReservaciones) : 'todas'
 }
 
@@ -46,6 +46,7 @@ export const useReservacionesStore = defineStore('reservaciones', () => {
       confirmada: por('confirmada'),
       llego: por('llego'),
       cancelada: por('cancelada'),
+      vencida: por('vencida'),
     }
   })
 

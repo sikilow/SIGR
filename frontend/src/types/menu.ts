@@ -8,6 +8,8 @@ export interface Producto {
   /** producto.id_categoria */
   idCategoria: number
   nombre: string
+  /** Presentación o variante comercial (p. ej. lata de 355 ml); vacía si no aplica. */
+  presentacion?: string
   descripcion: string
   /** producto.precio (DECIMAL(10,2), mayor o igual que 0), en pesos mexicanos (MXN). */
   precio: number
@@ -15,6 +17,8 @@ export interface Producto {
   disponible: boolean
   /** Unidades que quedan. Ausente = no controla existencia (se prepara al momento): sin tope por existencia. */
   existencia?: number
+  /** disponibilidadProducto.stock_minimo: por debajo de este número se avisa "stock bajo". */
+  stockMinimo?: number
 }
 
 export interface CategoriaMenu {

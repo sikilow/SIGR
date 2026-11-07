@@ -19,6 +19,7 @@ interface EstadoDto {
   cuentas: Array<{
     cuenta: CuentaDto
     mesa_numero: number | string
+    mesero_nombre?: string | null
     pedidos_sin_entregar: Array<{ id_pedido: number | string; estado: string }>
   }>
   metodos_pago: Array<{ id_metodo: number | string; nombre: string }>
@@ -76,6 +77,7 @@ export function crearCajaApi(): CajaService {
         cuentas: dto.cuentas.map((item) => ({
           cuenta: aCuenta(item.cuenta),
           mesaNumero: Number(item.mesa_numero),
+          meseroNombre: item.mesero_nombre ?? '',
           pedidosSinEntregar: item.pedidos_sin_entregar.map((pedido) => ({
             idPedido: Number(pedido.id_pedido),
             estado: pedido.estado,

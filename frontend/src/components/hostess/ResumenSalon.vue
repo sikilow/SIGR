@@ -83,4 +83,15 @@ const contadores = (): Contador[] => [
   font-size: var(--texto-sm);
   line-height: 1.2;
 }
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.resumen__item {
+  box-shadow: var(--sombra);
+}
+
+.resumen__numero {
+  font-family: var(--fuente-titulo);
+  font-size: 2rem;
+  font-weight: 700;
+}
 </style>

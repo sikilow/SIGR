@@ -61,6 +61,11 @@ export function crearHostessApi(): HostessService {
       return aCliente(r)
     },
 
+    async actualizarCorreoCliente(id, correo) {
+      const r = await solicitar<ClienteDto>('PATCH', `/clientes/${id}`, { cuerpo: { correo: correo.trim() } })
+      return aCliente(r)
+    },
+
     async crearReservacion(reservacion, claveIdempotencia) {
       const r = await solicitar<ReservacionDto>('POST', '/reservaciones', {
         cuerpo: deNuevaReservacion(reservacion),

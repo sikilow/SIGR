@@ -2,6 +2,7 @@ import type { RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "./config";
 import { ErrorApi } from "./errores";
+import { conActorAuditoria } from "../services/contextoAuditoria";
 
 export type Rol = "gerente" | "mesero" | "cocinero" | "cajero" | "hostess";
 
@@ -45,6 +46,6 @@ export function requiereAuth(...roles: Rol[]): RequestHandler {
       throw new ErrorApi(403, "sin_permiso", "Tu rol no tiene permiso para esta acción.");
     }
     req.usuario = { id: payload.id, rol };
-    next();
+    conActorAuditoria(payload.id, next);
   };
 }

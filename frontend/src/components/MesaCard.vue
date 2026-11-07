@@ -5,12 +5,15 @@
 import { computed } from 'vue'
 import { ETIQUETA_ESTADO_MESA, ETIQUETA_TIPO_PAGO, type Mesa } from '../types'
 import { formatearCapacidad, formatearMoneda, formatearPedidosActivos } from '../utils/formato'
+import { ETIQUETA_SIN_SECCION } from '../utils/secciones'
 import InsigniaEstado from './InsigniaEstado.vue'
 
 const props = defineProps<{
   mesa: Mesa
   /** Resalta la tarjeta (mesa que acaba de pasar a "pedido listo"). */
   resaltada?: boolean
+  /** Muestra la sección (solo cuando el salón tiene varias; con una sola, la tarjeta queda como antes). */
+  mostrarSeccion?: boolean
 }>()
 
 defineEmits<{ seleccionar: [mesa: Mesa] }>()
@@ -40,6 +43,11 @@ const textoCuenta = computed(() =>
         <span class="mesa__numero">{{ mesa.numero }}</span>
       </span>
       <span class="mesa__capacidad">{{ formatearCapacidad(mesa.capacidad) }}</span>
+    </span>
+
+    <span v-if="mostrarSeccion" class="mesa__seccion">
+      <span v-if="mesa.zona" class="solo-lectores">Sección:</span>
+      {{ mesa.zona ?? ETIQUETA_SIN_SECCION }}
     </span>
 
     <InsigniaEstado :tono="mesa.estado" :texto="ETIQUETA_ESTADO_MESA[mesa.estado]" />
@@ -142,6 +150,16 @@ const textoCuenta = computed(() =>
   font-size: var(--texto-sm);
 }
 
+/* Sección: texto pequeño bajo el número; un nombre largo (hasta 40 caracteres) se parte sin ensanchar la tarjeta */
+.mesa__seccion {
+  max-width: 100%;
+  margin-top: calc(var(--espacio-2) * -1);
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .mesa__datos {
   display: flex;
   flex-direction: column;
@@ -183,6 +201,89 @@ const textoCuenta = computed(() =>
 
   100% {
     box-shadow: 0 0 0 16px rgb(217 119 6 / 0%);
+  }
+}
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.mesa {
+  --estado-texto: var(--color-muted);
+
+  position: relative;
+  overflow: hidden;
+  padding: var(--espacio-4) var(--espacio-4) var(--espacio-4) var(--espacio-5);
+  border-top: 1px solid var(--color-border);
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    var(--color-surface);
+  box-shadow: var(--sombra);
+}
+
+.mesa--libre {
+  --estado-texto: var(--color-libre-texto);
+
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    var(--color-surface);
+  box-shadow: var(--sombra);
+}
+
+.mesa--ocupada {
+  --estado-texto: var(--color-ocupada-texto);
+
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    #fff4f1;
+}
+
+.mesa--reservada {
+  --estado-texto: var(--color-reservada-texto);
+
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    #f3f6ff;
+  box-shadow: var(--sombra);
+}
+
+.mesa:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sombra-alta);
+}
+
+.mesa:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+.mesa__numero,
+.mesa--libre .mesa__numero,
+.mesa--reservada .mesa__numero {
+  color: var(--estado-texto);
+  font-family: var(--fuente-titulo);
+  font-size: 2.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.mesa__etiqueta {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mesa__cabecera {
+  flex-wrap: wrap;
+  column-gap: var(--espacio-2);
+}
+
+.mesa__capacidad {
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mesa:hover,
+  .mesa:active {
+    transform: none;
   }
 }
 </style>

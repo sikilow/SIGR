@@ -50,6 +50,7 @@ export const estadoCaja = async (req: Request, res: Response) => {
       return {
         cuenta,
         mesa_numero: Number(fila.mesa_numero),
+        mesero_nombre: [...new Set(cuenta.pedidos.map((pedido) => pedido.nombre_mesero))].join(" · "),
         pedidos_sin_entregar: cuenta.pedidos
           .filter((pedido) => !["Entregado", "Cancelado"].includes(pedido.estado))
           .map((pedido) => ({ id_pedido: pedido.id_pedido, estado: pedido.estado })),

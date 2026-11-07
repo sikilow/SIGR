@@ -15,6 +15,10 @@ const mesa = (sobrescribir: Partial<MesaSalon> = {}): MesaSalon => ({
   numero: 4,
   capacidad: 4,
   estado: 'libre',
+  zona: null,
+  plantaBaja: false,
+  espacioCarriola: false,
+  sinEscaleras: false,
   ...sobrescribir,
 })
 
@@ -28,6 +32,7 @@ const reservacion = (sobrescribir: Partial<Reservacion> = {}): Reservacion => ({
   llegadaEn: null,
   clienteNombre: 'Carlos Medina',
   clienteTelefono: null,
+  clienteCorreo: null,
   mesaNumero: null,
   ...sobrescribir,
 })

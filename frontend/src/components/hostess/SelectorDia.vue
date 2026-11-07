@@ -4,7 +4,8 @@
 import { computed } from 'vue'
 import { aDiaISO, combinarFechaHora, sumarDias } from '../../utils/reservaciones'
 
-const props = defineProps<{ modelValue: string }>()
+// `etiqueta`: nombre accesible del grupo (también lo usa la pantalla Pedidos del gerente).
+const props = withDefaults(defineProps<{ modelValue: string; etiqueta?: string }>(), { etiqueta: 'Día de las reservaciones' })
 const emit = defineEmits<{ 'update:modelValue': [dia: string] }>()
 
 const hoy = computed(() => aDiaISO(new Date()))
@@ -18,7 +19,7 @@ function alCambiarCampo(evento: Event) {
 </script>
 
 <template>
-  <div class="dia" role="group" aria-label="Día de las reservaciones">
+  <div class="dia" role="group" :aria-label="etiqueta">
     <button type="button" class="btn btn--secundario dia__paso" aria-label="Día anterior" @click="emit('update:modelValue', sumarDias(modelValue, -1))">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7" /></svg>
     </button>
@@ -56,9 +57,8 @@ function alCambiarCampo(evento: Event) {
 .dia__input {
   min-height: var(--tactil-min);
   padding: 0 var(--espacio-3);
-  border: 2px solid var(--color-muted);
+  border: 1.5px solid var(--color-borde-control);
   border-radius: var(--radio-sm);
   background: var(--color-surface);
   font-weight: 600;
-}
-</style>
+}</style>

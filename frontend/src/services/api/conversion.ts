@@ -55,6 +55,15 @@ export function aTexto(valor: unknown): string {
   return valor === null || valor === undefined ? '' : String(valor)
 }
 
+/**
+ * mesa.zona («sección» del salón, texto libre) → texto recortado o `null`. Vacía, solo espacios, `null` o ausente
+ * (p. ej. la respuesta de asignar mesa no la envía) cuentan como «sin sección».
+ */
+export function aZona(valor: unknown): string | null {
+  const texto = aTexto(valor).trim()
+  return texto === '' ? null : texto
+}
+
 const FECHA_MYSQL = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?$/
 
 /**

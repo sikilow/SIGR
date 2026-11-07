@@ -5,6 +5,7 @@
 import { computed } from 'vue'
 import { ETIQUETA_ESTADO_MESA, type MesaSalon, type Reservacion } from '../../types'
 import { formatearCapacidad, formatearHora } from '../../utils/formato'
+import { ETIQUETA_SIN_SECCION } from '../../utils/secciones'
 import InsigniaEstado from '../InsigniaEstado.vue'
 
 const props = defineProps<{
@@ -13,6 +14,8 @@ const props = defineProps<{
   reservacion?: Reservacion | null
   /** Resalta la tarjeta (mesa cuyo estado cambió hace un momento). */
   resaltada?: boolean
+  /** Muestra la sección (solo cuando el salón tiene varias; con una sola, la tarjeta queda como antes). */
+  mostrarSeccion?: boolean
 }>()
 
 defineEmits<{ seleccionar: [mesa: MesaSalon] }>()
@@ -37,12 +40,29 @@ const textoReservacion = computed(() =>
         <span class="mesa__etiqueta">Mesa</span>
         <span class="mesa__numero">{{ mesa.numero }}</span>
       </span>
-      <span class="mesa__capacidad">{{ formatearCapacidad(mesa.capacidad) }}</span>
+      <span class="mesa__capacidad">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="8" r="3" />
+          <path d="M3 19c0-3.1 2.7-5.5 6-5.5s6 2.4 6 5.5M16 5.5a3 3 0 0 1 0 5M18 14.2c1.7.7 3 2.4 3 4.8" />
+        </svg>
+        {{ formatearCapacidad(mesa.capacidad) }}
+      </span>
+    </span>
+
+    <span v-if="mostrarSeccion" class="mesa__seccion">
+      <span v-if="mesa.zona" class="solo-lectores">Sección:</span>
+      {{ mesa.zona ?? ETIQUETA_SIN_SECCION }}
     </span>
 
     <InsigniaEstado :tono="mesa.estado" :texto="ETIQUETA_ESTADO_MESA[mesa.estado]" />
 
-    <span v-if="textoReservacion" class="mesa__reservacion">{{ textoReservacion }}</span>
+    <span v-if="textoReservacion" class="mesa__reservacion">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </svg>
+      {{ textoReservacion }}
+    </span>
   </button>
 </template>
 
@@ -127,15 +147,40 @@ const textoReservacion = computed(() =>
 }
 
 .mesa__capacidad {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-1);
   color: var(--color-muted);
   font-size: var(--texto-sm);
 }
 
+.mesa__capacidad svg {
+  flex: none;
+}
+
+/* Sección: texto pequeño bajo el número; un nombre largo (hasta 40 caracteres) se parte sin ensanchar la tarjeta */
+.mesa__seccion {
+  max-width: 100%;
+  margin-top: calc(var(--espacio-2) * -1);
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .mesa__reservacion {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-1);
   max-width: 100%;
   overflow-wrap: anywhere;
   font-size: var(--texto-sm);
   font-weight: 600;
+}
+
+.mesa__reservacion svg {
+  flex: none;
+  color: var(--color-reservada);
 }
 
 /* Resaltado de cambio reciente: anillo fijo (sin movimiento) + pulso solo si se permite animar */
@@ -145,6 +190,89 @@ const textoReservacion = computed(() =>
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .mesa:active {
+    transform: none;
+  }
+}
+
+/* ───────── Rediseño v2 «Madalena» ───────── */
+.mesa {
+  --estado-texto: var(--color-muted);
+
+  position: relative;
+  overflow: hidden;
+  padding: var(--espacio-4) var(--espacio-4) var(--espacio-4) var(--espacio-5);
+  border-top: 1px solid var(--color-border);
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    var(--color-surface);
+  box-shadow: var(--sombra);
+}
+
+.mesa--libre {
+  --estado-texto: var(--color-libre-texto);
+
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    var(--color-surface);
+  box-shadow: var(--sombra);
+}
+
+.mesa--ocupada {
+  --estado-texto: var(--color-ocupada-texto);
+
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    #fff4f1;
+}
+
+.mesa--reservada {
+  --estado-texto: var(--color-reservada-texto);
+
+  background:
+    linear-gradient(var(--estado), var(--estado)) left center / 6px 100% no-repeat,
+    #f3f6ff;
+  box-shadow: var(--sombra);
+}
+
+.mesa:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sombra-alta);
+}
+
+.mesa:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+.mesa__numero,
+.mesa--libre .mesa__numero,
+.mesa--reservada .mesa__numero {
+  color: var(--estado-texto);
+  font-family: var(--fuente-titulo);
+  font-size: 2.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.mesa__etiqueta {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mesa__cabecera {
+  flex-wrap: wrap;
+  column-gap: var(--espacio-2);
+}
+
+.mesa__capacidad {
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mesa:hover,
   .mesa:active {
     transform: none;
   }
