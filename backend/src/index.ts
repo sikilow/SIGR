@@ -3,6 +3,7 @@ import express from "express";
 import { ORIGENES_PERMITIDOS, PUERTO } from "./utils/config";
 import { ErrorApi, manejarErrores } from "./utils/errores";
 import { authRouter } from "./routes/auth";
+import { authClientesRouter } from "./routes/authClientes";
 import { catalogoRouter } from "./routes/catalogo";
 import { clientesRouter } from "./routes/clientes";
 import { cuentasRouter } from "./routes/cuentas";
@@ -13,6 +14,7 @@ import { mesasRouter } from "./routes/mesas";
 import { pedidosRouter } from "./routes/pedidos";
 import { productosRouter } from "./routes/productos";
 import { reservacionesRouter } from "./routes/reservaciones";
+import { reservacionesClientesRouter } from "./routes/reservacionesClientes";
 import { usuariosRouter } from "./routes/usuarios";
 import { iniciarProcesadorReservaciones } from "./services/notificacionesReservacion";
 import { filas, pool } from "./services/db";
@@ -26,8 +28,10 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/auth-clientes", authClientesRouter);
 app.use("/api/clientes", clientesRouter);
 app.use("/api/reservaciones", reservacionesRouter);
+app.use("/api/reservaciones-clientes", reservacionesClientesRouter);
 app.use("/api/lista-espera", listaEsperaRouter);
 app.use("/api/mesas", mesasRouter);
 app.use("/api/menu", menuRouter);

@@ -41,11 +41,47 @@ export function requiereAuth(...roles: Rol[]): RequestHandler {
       throw new ErrorApi(401, "no_autenticado", "La sesión no es válida.");
     }
 
-    const rol = payload.rol as Rol;
-    if (roles.length > 0 && !roles.includes(rol)) {
-      throw new ErrorApi(403, "sin_permiso", "Tu rol no tiene permiso para esta acción.");
+    
+    // Solo se permiten roles de empleados.
+    // Un cliente nunca puede autenticarse como empleado.
+    const rolesEmpleados: Rol[] = [
+      "gerente",
+      "mesero",
+      "cocinero",
+      "cajero",
+      "hostess",
+    ];
+
+    if (!rolesEmpleados.includes(payload.rol as Rol)) {
+      throw new ErrorApi(
+        403,
+        "sin_permiso",
+        "Esta ruta es exclusiva para empleados."
+      );
     }
+
+    // Los tokens de clientes tendrán tipo "cliente".
+    // Nunca deben funcionar como sesiones de empleados.
+    if (payload.tipo === "cliente") {
+      throw new ErrorApi(
+        403,
+        "sin_permiso",
+        "Esta ruta es exclusiva para empleados."
+      );
+    }
+
+    const rol = payload.rol as Rol;
+
+    if (roles.length > 0 && !roles.includes(rol)) {
+      throw new ErrorApi(
+        403,
+        "sin_permiso",
+        "Tu rol no tiene permiso para esta acción."
+      );
+    }
+
     req.usuario = { id: payload.id, rol };
     conActorAuditoria(payload.id, next);
+
   };
 }

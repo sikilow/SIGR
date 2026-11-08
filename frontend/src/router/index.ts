@@ -150,12 +150,96 @@ export const router = createRouter({
         },
       ],
     },
+
+      // ====================================
+    // PAGINA WEB PARA CLIENTES DE SIGR
+    // ====================================
+
+    // Pagina principal del restaurante
+    {
+      path: '/cliente',
+      name: 'cliente-inicio',
+      component: () => import('../views/cliente/InicioView.vue'),
+    },
+
+    // Registro de clientes
+    {
+      path: '/cliente/registro',
+      name: 'cliente-registro',
+      component: () => import('../views/cliente/RegistroView.vue'),
+    },
+
+    // Inicio de sesion del cliente
+    {
+      path: '/cliente/login',
+      name: 'cliente-login',
+      component: () => import('../views/cliente/LoginClienteView.vue'),
+    },
+
+    // Realizar reservaciones
+    {
+      path: '/cliente/reservar',
+      name: 'cliente-reservar',
+      component: () => import('../views/cliente/ReservacionView.vue'),
+    },
+
+    // Consultar reservaciones
+    {
+      path: '/cliente/mis-reservaciones',
+      name: 'cliente-mis-reservaciones',
+      component: () => import('../views/cliente/MisReservacionesView.vue'),
+    },
+
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 
 // Guardia: sin sesión o con un rol que no corresponde, se redirige a /login.
 router.beforeEach(async (to) => {
+
+  // Proteccion temporal de reservaciones de clientes.
+  // Hasta implementar la autenticacion real,
+  // ningun visitante puede entrar a estas paginas.
+ 
+  // Verificar la sesion para las paginas de reservaciones.
+  if (
+    to.name === 'cliente-reservar' ||
+    to.name === 'cliente-mis-reservaciones'
+  ) {
+    const token = sessionStorage.getItem('cliente_token')
+
+    if (!token) {
+      return {
+        name: 'cliente-login',
+        query: { redirigir: to.fullPath },
+      }
+    }
+
+    try {
+      const respuesta = await fetch(
+        '/api/reservaciones-clientes/mis-reservaciones',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (!respuesta.ok) {
+        throw new Error('Sesion no valida')
+      }
+    } catch {
+      sessionStorage.removeItem('cliente_token')
+      sessionStorage.removeItem('cliente_datos')
+
+      return {
+        name: 'cliente-login',
+        query: { redirigir: to.fullPath },
+      }
+    }
+  }
+
+  
   if (to.name === 'inicio') {
     const sesion = useSesionStore()
     if (!sesion.restaurada) await sesion.restaurar()
