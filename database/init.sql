@@ -195,8 +195,13 @@ CREATE TABLE corte_caja (
   id_corte INT AUTO_INCREMENT PRIMARY KEY,
   id_cajero INT NOT NULL,
   inicio DATETIME NOT NULL,
+  efectivo_inicial DECIMAL(12,2) NOT NULL DEFAULT 0,
   fin DATETIME NULL,
   total_reportado DECIMAL(12,2) NULL CHECK (total_reportado >= 0),
+  efectivo_contado DECIMAL(12,2) NULL,
+  tipo_cierre ENUM('parcial','final') NULL,
+  CONSTRAINT chk_corte_efectivo_inicial CHECK (efectivo_inicial >= 0),
+  CONSTRAINT chk_corte_efectivo_contado CHECK (efectivo_contado IS NULL OR efectivo_contado >= 0),
   CONSTRAINT fk_corte_caja_id_cajero FOREIGN KEY (id_cajero) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -214,7 +219,8 @@ CREATE TABLE venta (
 
 CREATE TABLE metodo_pago (
   id_metodo INT AUTO_INCREMENT PRIMARY KEY,
-  nombre VARCHAR(40) NOT NULL UNIQUE
+  nombre VARCHAR(40) NOT NULL UNIQUE,
+  activo BOOLEAN NOT NULL DEFAULT TRUE
 ) ENGINE=InnoDB;
 
 CREATE TABLE pago (

@@ -19,27 +19,28 @@ Guía para poner una base MySQL existente al día con el esquema del proyecto si
 
 ## 2. Aplicar solo las migraciones pendientes
 
-Si ya aplicaste 007–012, ejecuta únicamente **013**:
+Si ya aplicaste 007–013, ejecuta únicamente **014**:
 
 ```powershell
-Get-Content -Raw "..\database\migrations\013_auditoria_seguridad.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+Get-Content -Raw "..\database\migrations\014_caja_inicio_y_cortes_parciales.sql" | mysql -h localhost -P 3306 -u root -p SIGR
 ```
 
-Ese comando es para PowerShell abierto en `backend\`. Si estás en la raíz del repositorio, usa la ruta `.\database\migrations\013_auditoria_seguridad.sql`. Ejecuta el comando como una línea completa; no pegues varias instrucciones de PowerShell juntas en una sola línea sin separadores.
+Ese comando es para PowerShell abierto en `backend\`. Si estás en la raíz del repositorio, usa la ruta `.\database\migrations\014_caja_inicio_y_cortes_parciales.sql`. Ejecuta el comando como una línea completa; no pegues varias instrucciones de PowerShell juntas en una sola línea sin separadores.
 
-La migración 013 puede volver a ejecutarse para completar una ejecución interrumpida: conserva las tablas existentes y reemplaza los triggers y el procedimiento de auditoría. Si MySQL informa un error, corrige la causa y vuelve a ejecutar el comando completo; no hace falta borrar manualmente tablas ni triggers.
+La migración 014 agrega el fondo inicial, el efectivo contado y el tipo de corte; agrega `metodo_pago.activo` y actualiza los triggers de auditoría de `corte_caja` y `metodo_pago`. Detecta columnas y restricciones existentes, por lo que también se puede ejecutar después de crear la base con `init.sql`; recrea los triggers de forma segura. Si MySQL informa un error, detén la API y revisa el estado de la base con quien la administra antes de continuar.
 
-Si ya aplicaste 007–010, ejecuta **011**, **012** y **013** en ese orden:
+Si ya aplicaste 007–010, ejecuta **011**, **012**, **013** y **014** en ese orden:
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_cancelacion.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/013_auditoria_seguridad.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/014_caja_inicio_y_cortes_parciales.sql"
 ```
 
-Si ya aplicaste 007–009, ejecuta 010, 011, 012 y 013 en ese orden. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
+Si ya aplicaste 007–009, ejecuta 010, 011, 012, 013 y 014 en ese orden. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
 
-Si las migraciones 007–013 siguen pendientes, aplícalas en orden (una sola vez cada una):
+Si las migraciones 007–014 siguen pendientes, aplícalas en orden (una sola vez cada una):
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/007_catalogo_descripciones_obligatorias.sql"
@@ -49,16 +50,17 @@ mysql -h localhost -P 3306 -u root -p -e "source database/migrations/010_reserva
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_cancelacion.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/013_auditoria_seguridad.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/014_caja_inicio_y_cortes_parciales.sql"
 ```
 
 Escribe la contraseña de MySQL cuando la solicite. Asegúrate de conectarte al mismo servidor y usuario configurados en `backend/.env`.
 
-La migración **007** convierte las descripciones vacías o `NULL` a «Detalle pendiente de completar» y luego las vuelve obligatorias. La migración **008** agrega la columna `presentacion` y un índice para buscar productos por categoría, nombre y presentación. La migración **009** crea el catálogo de secciones, registra las secciones ya usadas, asigna «General» a mesas sin sección y hace obligatoria `mesa.zona`. La migración **010** agrega características de acceso de mesas, configuración de tolerancia y recordatorio, y la cola de notificaciones por correo. La migración **011** agrega `evento` a la cola, permite confirmaciones y cambia la deduplicación por `(id_reservacion, tipo, evento)`. La migración **012** permite el tipo `cancelacion` en esa misma cola. La **013** protege al gerente inicial y audita INSERT/UPDATE/DELETE en las 26 tablas de negocio y en la tabla de configuración de seguridad mediante triggers; también crea `sp_consultar_auditoria`. Requiere privilegios MySQL para crear tablas, triggers y procedimientos. Las descripciones de relleno deben sustituirse después desde **Gerente → Productos** por información real.
+La migración **007** convierte las descripciones vacías o `NULL` a «Detalle pendiente de completar» y luego las vuelve obligatorias. La migración **008** agrega la columna `presentacion` y un índice para buscar productos por categoría, nombre y presentación. La migración **009** crea el catálogo de secciones, registra las secciones ya usadas, asigna «General» a mesas sin sección y hace obligatoria `mesa.zona`. La migración **010** agrega características de acceso de mesas, configuración de tolerancia y recordatorio, y la cola de notificaciones por correo. La migración **011** agrega `evento` a la cola, permite confirmaciones y cambia la deduplicación por `(id_reservacion, tipo, evento)`. La migración **012** permite el tipo `cancelacion` en esa misma cola. La **013** protege al gerente inicial y audita INSERT/UPDATE/DELETE en las 26 tablas de negocio y en la tabla de configuración de seguridad mediante triggers; también crea `sp_consultar_auditoria`. La **014** registra efectivo inicial/contado, tipo de corte y estado de los métodos de pago; además amplía la auditoría de `corte_caja` y `metodo_pago`. Requiere privilegios MySQL para crear tablas, triggers y procedimientos. Las descripciones de relleno deben sustituirse después desde **Gerente → Productos** por información real.
 
-No ejecutes de nuevo 007–012 si ya se aplicaron: son cambios de esquema que no están diseñados para repetirse. La 013 puede volver a crear sus triggers y procedimiento; aun así, detén la API y respalda la base antes de reaplicarla. Si no sabes si se ejecutaron, revisa primero el esquema:
+No ejecutes de nuevo 007–012 si ya se aplicaron: son cambios de esquema que no están diseñados para repetirse. La 013 puede volver a crear sus triggers y procedimiento; la 014 detecta columnas existentes y recrea sus triggers. Detén la API y respalda la base antes de repetir 013 o 014. Si no sabes si se ejecutaron, revisa primero el esquema:
 
 ```powershell
-mysql -h localhost -P 3306 -u root -p -e "USE SIGR; SHOW COLUMNS FROM producto LIKE 'descripcion'; SHOW COLUMNS FROM producto LIKE 'presentacion'; SHOW INDEX FROM producto WHERE Key_name = 'idx_producto_variante'; SHOW TABLES LIKE 'seccion'; SHOW COLUMNS FROM mesa LIKE 'zona';"
+mysql -h localhost -P 3306 -u root -p -e "USE SIGR; SHOW COLUMNS FROM producto LIKE 'descripcion'; SHOW COLUMNS FROM producto LIKE 'presentacion'; SHOW INDEX FROM producto WHERE Key_name = 'idx_producto_variante'; SHOW TABLES LIKE 'seccion'; SHOW COLUMNS FROM mesa LIKE 'zona'; SHOW COLUMNS FROM corte_caja; SHOW COLUMNS FROM metodo_pago;"
 ```
 
 Si la columna `presentacion` y el índice ya existen, 008 ya fue aplicada. Si la descripción ya figura como `NOT NULL`, 007 probablemente ya fue aplicada. Si existe la tabla `seccion` y `mesa.zona` es `NOT NULL`, 009 ya fue aplicada. Para 010 confirma que existen `mesa.planta_baja`, `mesa.espacio_carriola`, `mesa.sin_escaleras`, `configuracion_reservacion` y `notificacion_reservacion`. Para 011 confirma que `notificacion_reservacion` tiene la columna `evento` y la clave única `uq_notificacion_reservacion_evento`. Para 012 revisa que los CHECK de `tipo` incluyan `cancelacion`:
@@ -67,7 +69,7 @@ Si la columna `presentacion` y el índice ya existen, 008 ya fue aplicada. Si la
 SHOW CREATE TABLE notificacion_reservacion\G
 ```
 
-Confirma también con quien administra la base antes de repetir una migración.
+Confirma que 014 añadió `corte_caja.efectivo_inicial`, `corte_caja.efectivo_contado`, `corte_caja.tipo_cierre` y `metodo_pago.activo`. Confirma también con quien administra la base antes de repetir una migración.
 
 ### Historial de migraciones
 
@@ -86,6 +88,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `011_cola_unificada_resend.sql` | Evento de confirmación y deduplicación por `(id_reservacion, tipo, evento)` | Una vez, tras 010 |
 | `012_correo_cancelacion.sql` | Tipo `cancelacion` en la cola de correo de reservaciones | Una vez, tras 011 |
 | `013_auditoria_seguridad.sql` | Protege al gerente inicial y audita INSERT/UPDATE/DELETE en las tablas de negocio | Una vez, tras el esquema y usuarios iniciales |
+| `014_caja_inicio_y_cortes_parciales.sql` | Registra fondos/cortes parciales, activa/desactiva métodos de pago y amplía su auditoría | Una vez, tras 013 |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 

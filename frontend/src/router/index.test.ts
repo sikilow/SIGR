@@ -16,4 +16,12 @@ describe('ruta de configuración de reservaciones del gerente', () => {
     expect(ruta.matched.some((registro) => registro.meta.roles?.includes('gerente'))).toBe(true)
     expect(ruta.matched.some((registro) => registro.meta.roles?.includes('mesero'))).toBe(false)
   })
+
+  it('registra métodos de pago bajo la sección protegida de Gerencia', () => {
+    const ruta = router.resolve({ name: 'gerente-metodos-pago' })
+
+    expect(ruta.path).toBe('/gerente/metodos-pago')
+    expect(ruta.matched.some((registro) => registro.meta.roles?.includes('gerente'))).toBe(true)
+    expect(ruta.matched.some((registro) => registro.meta.roles?.includes('cajero'))).toBe(false)
+  })
 })

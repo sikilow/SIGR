@@ -4,6 +4,7 @@ import { ErrorServicio } from '../errores'
 import { crearCajaApi } from './caja'
 import { crearHostessApi } from '../hostess/api'
 import type { Servicios } from '../interfaces'
+import type { MetodoPagoAdmin } from '../../types'
 import { solicitar } from './cliente'
 import { guardarToken, leerToken, limpiarToken } from './token'
 import {
@@ -179,6 +180,36 @@ export function crearServiciosApi(): Servicios {
     },
 
     catalogo: {
+      async listarMetodosPago() {
+        const metodos = await solicitar<Array<{ id_metodo: number | string; nombre: string; activo: boolean | number }>>(
+          'GET',
+          '/catalogo/metodos-pago',
+        )
+        return metodos.map((metodo): MetodoPagoAdmin => ({
+          idMetodo: Number(metodo.id_metodo),
+          nombre: metodo.nombre,
+          activo: Boolean(metodo.activo),
+        }))
+      },
+
+      async crearMetodoPago(nombre) {
+        const metodo = await solicitar<{ id_metodo: number | string; nombre: string; activo: boolean | number }>(
+          'POST',
+          '/catalogo/metodos-pago',
+          { cuerpo: { nombre: nombre.trim() } },
+        )
+        return { idMetodo: Number(metodo.id_metodo), nombre: metodo.nombre, activo: Boolean(metodo.activo) }
+      },
+
+      async actualizarMetodoPago(id, cambio) {
+        const metodo = await solicitar<{ id_metodo: number | string; nombre: string; activo: boolean | number }>(
+          'PATCH',
+          `/catalogo/metodos-pago/${id}`,
+          { cuerpo: cambio },
+        )
+        return { idMetodo: Number(metodo.id_metodo), nombre: metodo.nombre, activo: Boolean(metodo.activo) }
+      },
+
       async listarCategorias() {
         const r = await solicitar<CategoriaAdminDto[]>('GET', '/catalogo/categorias')
         return r.map(aCategoriaAdmin)

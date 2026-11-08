@@ -9,12 +9,13 @@ describe('caja demo', () => {
     expect(cuenta?.cuenta.total).toBe(480)
     expect(cuenta?.pedidosSinEntregar).toEqual([])
 
-    const corte = await caja.abrirCorte()
+    const corte = await caja.abrirCorte(600)
     expect(corte.totalVentas).toBe(0)
+    expect(corte.efectivoEsperado).toBe(600)
 
     const venta = await caja.cobrar(3, [
       { idMetodo: 1, monto: 300, montoRecibido: 320 },
-      { idMetodo: 2, monto: 180, montoRecibido: 180 },
+      { idMetodo: 3, monto: 180, montoRecibido: 180 },
     ])
 
     expect(venta.total).toBe(480)
@@ -22,8 +23,10 @@ describe('caja demo', () => {
     expect(venta.pagos).toHaveLength(2)
     expect((await caja.obtenerEstado()).cuentas.some((item) => item.cuenta.idCuenta === 3)).toBe(false)
     expect((await caja.obtenerEstado()).corte?.totalVentas).toBe(480)
+    expect((await caja.obtenerEstado()).corte?.efectivoEsperado).toBe(900)
 
-    const cierre = await caja.cerrarCorte(480)
-    expect(cierre.diferencia).toBe(0)
+    const cierre = await caja.cerrarCorte(900, 'final')
+    expect(cierre.diferenciaEfectivo).toBe(0)
+    expect(cierre.metodosPago.find((metodo) => metodo.nombre === 'Transferencia')?.monto).toBe(180)
   })
 })

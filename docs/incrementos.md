@@ -8,13 +8,13 @@ Para ubicar los contratos, guías por rol y documentación técnica relacionada,
 
 ## Estado verificado de los requisitos
 
-Revisión del código y la documentación del proyecto realizada el 31 de octubre de 2026. La [transcripción íntegra del audio del Incremento 1](incrementos_audios_transcritos/incremento-1-2026-10-31.md) se generó automáticamente y puede contener errores de reconocimiento; las frases dudosas no se interpretan como reglas definitivas.
+Revisión del código y la documentación del proyecto realizada el 7 de noviembre de 2026. Las transcripciones del [Incremento 1](incrementos_audios_transcritos/incremento-1-2026-10-31.md) y del [Incremento 2](incrementos_audios_transcritos/incremento-2-2026-11-03.md) se generaron automáticamente y pueden contener errores de reconocimiento; las frases dudosas no se interpretan como reglas definitivas.
 
 | Área | Estado | Qué hace el proyecto y qué falta |
 |---|---|---|
 | Categorías y descripción de productos | ✅ Hecho | El catálogo admite categorías y exige una descripción para los productos. |
 | Evitar productos duplicados | ✅ Hecho | El alta y la edición comprueban categoría, nombre y presentación para evitar duplicados. |
-| Variantes en todo el catálogo | 🟡 Parcial | El campo de presentación separado solo se ofrece para Bebidas y Postres. Para platillos como molletes o chile poblano falta poder registrar una variante separada cuando realmente distinga el producto. |
+| Variantes en todo el catálogo | ✅ Hecho en código | El campo de presentación/variante se ofrece para todas las categorías; se puede distinguir sabor, porción, tamaño o número de personas y la identidad del producto incluye la presentación. |
 | Inventario y reposición | 🟡 Parcial | Hay filtros e indicadores de Disponible, Stock bajo y Agotado; stock bajo es mayor que cero y menor o igual al mínimo, y agotado es cero. La identidad adicional de la variante sigue limitada a las categorías que permiten presentación. |
 | Correo de usuarios | ✅ Hecho | El formulario y la API validan el formato; la base de datos impone unicidad. |
 | Teléfono de usuarios de Gerencia | ⬜ Pendiente | Es opcional y solo se limita a 20 caracteres. No se validan dígitos, longitud específica ni unicidad. El audio confirma que es opcional, pero no permite determinar con confianza la longitud requerida; acordar también si debe ser único. No confundirlo con el teléfono de cliente de Hostess, que sí requiere 10 dígitos. |
@@ -23,7 +23,11 @@ Revisión del código y la documentación del proyecto realizada el 31 de octubr
 | Características de mesas para lista de espera | ⬜ Pendiente | La asignación sugiere mesas libres por capacidad, pero solo muestra número y capacidad; faltan la sección y características de acceso para elegir una mesa adecuada al grupo. |
 | Estados y orden de pedidos | ✅ Hecho en código | La interfaz maneja el avance del pedido y distingue «listo» de «entregado»; los listos aparecen primero y, dentro de cada grupo, los más recientes arriba. Falta validar en el entorno real el problema de cancelación desde teléfono descrito en la demostración. |
 | Deshabilitar mesas/secciones | ✅ Hecho en código | Gerencia puede inhabilitar secciones o marcar mesas como no disponibles; no se ofrecen para asignación en los flujos de Hostess/Mesero. La API compartida y la actualización entre dispositivos requieren prueba operativa. |
-| Caja y API compartida (Incremento 2) | 🟡 Parcial | El repositorio incluye Caja y soporte para conectar el frontend a una API real. No se ha confirmado aquí una prueba de extremo a extremo contra la API/base compartida ni que los cambios se reflejen en varios dispositivos. |
+| Caja y API compartida (Incremento 2) | 🟡 Parcial | Implementados fondo inicial, conciliación de efectivo separado de tarjeta/transferencia, cortes parciales/finales por cajero, ticket/Excel por corte, validación Mesero-Cajero y administración de métodos desde Gerencia. La API conectada a la base compartida y la sincronización entre dispositivos siguen sin prueba operativa. |
+| Reportes de ventas | 🟡 Parcial | El cajero puede imprimir/exportar a Excel cada corte con cuentas por usuario, fecha/hora y método; falta una consulta histórica y reportes generales por periodo. |
+| División de cuenta por comensal o producto | 🟡 Por decidir | El cobro admite varios métodos de pago para una cuenta; no divide consumos o importes entre personas/productos. La maestra pidió revisar esa posibilidad, pero no quedó como regla aprobada. |
+| Reservaciones futuras y capacidad | 🟡 Parcial | Se registran reservaciones futuras y se asigna mesa al llegar; falta verificar y proteger la capacidad disponible por horario, evitar traslapes y acordar la anticipación mínima para reservar. |
+| Detalle de productos y alérgenos | 🟡 Parcial | La descripción es obligatoria, pero no se estructura ni valida que incluya ingredientes o información de alérgenos; acordar qué detalle necesita el restaurante. |
 
 ## Avances existentes relacionados
 
@@ -66,13 +70,37 @@ Estos puntos también deben quedar registrados, pero no son hallazgos pendientes
 - **Estados y avance — hecho en código:** la interfaz distingue los estados del pedido y muestra «listo» antes de «entregado»; se mantiene la mesa asociada y la vista se actualiza al recibir cambios. En la lista del mesero los pedidos listos se priorizan y los más recientes aparecen primero dentro de cada grupo de prioridad.
 - **Cancelación desde teléfono — pendiente de verificación operativa:** en la demostración no respondió la acción. Revisar y validar ese flujo en el entorno conectado, incluidos los permisos del gerente y la confirmación del resultado; la revisión del código no demuestra que esa prueba real se haya completado.
 
-## Incremento 2: objetivos mencionados para la siguiente entrega "no hecho, hasta el 2 de noviembre"
+## Incremento 2: objetivos y estado verificado al 3 de noviembre de 2026
+
+La [transcripción íntegra del audio del 3 de noviembre](incrementos_audios_transcritos/incremento-2-2026-11-03.md) registra la demostración y los comentarios de revisión. La transcripción es automática; solo se tratan como requisitos los puntos claros y corroborables, y las propuestas o preguntas se conservan como decisiones por confirmar.
 
 En la presentación, la maestra señaló como siguiente avance:
 
 1. **Agregar Caja.** Completar el flujo de cobro que necesita el restaurante.
 2. **Centralizar los datos y conectar el sistema con la API compartida.** La información no debe depender de una base local distinta por equipo o dispositivo. Los cambios deben llegar a la misma fuente de datos para que se reflejen al consultar desde otros dispositivos.
 3. **Validar la comunicación de extremo a extremo.** Comprobar que las solicitudes del sistema lleguen a la API y que las operaciones de lectura y escritura se reflejen correctamente en la base de datos compartida. La revisión mencionó problemas en los que se enviaban peticiones GET y POST, pero la API no recibía la información.
+
+### Hallazgos de revisión del Incremento 2
+
+| Área | Estado | Qué hace el proyecto y qué falta |
+|---|---|---|
+| Solicitar cuenta sin pedidos | ✅ Hecho en código | La pantalla y la API rechazan cuentas sin pedidos activos o con total cero. |
+| Cobro, ticket y cierre de cuenta | ✅ Hecho en código | El cobro es transaccional, acepta pagos combinados por método, registra venta/pagos, cierra la cuenta y libera la mesa. La API bloquea el cobro mientras haya pedidos sin entregar. |
+| Cuenta solicitada con pedidos sin entregar | 🟡 Decisión pendiente | Se puede solicitar, pero no cobrar hasta entregar o cancelar todos los pedidos. Con la cuenta `por_pagar` no se permite cancelar pedidos. Acordar si se impide solicitarla antes de la entrega o si se habilita una cancelación autorizada posterior; hoy no existe esta última opción. |
+| Forma de pago solicitada | ✅ Hecho en código | Efectivo se preselecciona para solicitud física; para digital Caja exige elegir el método real. Un cobro que no coincide requiere confirmación explícita del cajero y la API la valida. |
+| Fondo inicial de caja | ✅ Hecho en código | Abrir corte registra el efectivo que recibe el cajero. La migración 014 agrega el campo a `corte_caja`. |
+| Conciliación del corte por método | ✅ Hecho en código | Se muestran ventas por método y el efectivo esperado se calcula como fondo inicial más pagos en efectivo. Tarjeta y transferencia no se suman al cajón. El cajero registra el efectivo contado y ve faltante/sobrante. |
+| Catálogo de métodos de pago | ✅ Hecho en código | Gerencia puede agregar y activar/desactivar métodos; Caja solo ofrece los activos y los pagos históricos se conservan. Se requiere aplicar la migración 014 en bases existentes. |
+| Cortes parciales y cierre de turno/día | ✅ Hecho en código | Cada cajero puede registrar un corte parcial o un cierre final. Ambos guardan hora de inicio/cierre, conteo y ventas; el cierre entrega ticket imprimible y Excel por cajero. No hay cierre general a cargo de Gerencia. |
+| Reporte e historial de ventas | 🟡 Parcial | El Excel de cada corte lista cuenta, mesa, fecha/hora, cajero, mesero y totales por método. Aún no hay consulta histórica ni reporte general por periodo; RF-VEN-003 y RF-VEN-004 siguen pendientes. |
+| División entre comensales/productos | 🟡 Por decidir | Se permite dividir el pago entre métodos, no separar una cuenta por persona o por producto. La maestra sugirió revisar esa función; el alcance no quedó aprobado. |
+| Propinas | 🟡 Por definir | No se registran. En el audio se advierte que no deben mezclarse con la venta y que su tratamiento fiscal requiere revisión; acordar si entran al sistema y cómo se separan. |
+| API y base compartida | 🟡 Parcial | El frontend tiene modo API (`VITE_USE_MOCK=false`) y el modo `api` apunta al backend local mediante proxy. La demostración indica que los datos usados eran locales y distintos de la base remota. Falta configurar el servidor/base compartidos y validar operaciones de lectura/escritura desde varios dispositivos; no se comprobó aquí el entorno de entrega. |
+| Reservaciones futuras y capacidad | 🟡 Parcial | Se puede registrar una fecha futura y asignar mesa al llegar, pero la API no comprueba disponibilidad por franja horaria ni evita traslapes de capacidad. Acordar también la anticipación mínima de reserva y el intervalo durante el que una mesa debe protegerse. La tolerancia de llegada y los recordatorios configurables sí están implementados. |
+| Variantes y descripción del catálogo | 🟡 Parcial | El campo de presentación/variante se ofrece en todas las categorías y la descripción obligatoria ahora indica incluir ingredientes y alérgenos. Falta acordar si se requiere validación estructurada de alérgenos; el contenido libre no puede garantizar que se hayan capturado. |
+| Correos y vencimiento de reservaciones | ✅ Hecho en código | La grabación muestra los avisos de registro/cancelación y el vencimiento; la tolerancia y el recordatorio son configurables. La hostess puede asignar mesa al registrar la llegada, por lo que vencer una reservación sin mesa asignada no libera una mesa ajena. |
+
+La revisión del repositorio confirma que el backend tiene pruebas unitarias de importes de Caja, pero no pruebas de rutas contra MySQL ni una prueba integral del flujo en la base compartida. La guía de [integración de API](integracion-api.md) incluye pasos manuales para verificarlo.
 
 La Caja y la integración con API ya cuentan con documentación en el repositorio: [contrato-api-caja.md](contrato-api-caja.md) e [integracion-api.md](integracion-api.md). Esta referencia no sustituye la verificación de que el flujo completo esté conectado y funcione en el entorno de entrega.
 

@@ -5,6 +5,10 @@ export interface MetodoPago {
   nombre: string
 }
 
+export interface MetodoPagoAdmin extends MetodoPago {
+  activo: boolean
+}
+
 export interface PedidoPendienteCaja {
   idPedido: number
   estado: string
@@ -20,12 +24,41 @@ export interface CuentaCaja {
 
 export interface CorteCaja {
   idCorte: number
+  idCajero: number
+  cajeroNombre: string
   inicio: Date
+  efectivoInicial: number
   totalVentas: number
-  fin?: Date
+  efectivoEsperado: number
+  metodosPago: ResumenMetodoCaja[]
+  ventas: VentaCajaReporte[]
+  fin: Date | null
+  tipoCierre: 'parcial' | 'final' | null
+  efectivoContado: number | null
+  diferenciaEfectivo: number | null
   totalReportado?: number
   diferencia?: number
 }
+
+export interface ResumenMetodoCaja {
+  idMetodo: number
+  nombre: string
+  cantidadPagos: number
+  monto: number
+}
+
+export interface VentaCajaReporte {
+  idVenta: number
+  idCuenta: number
+  mesaNumero: number
+  fechaHora: Date
+  total: number
+  cajeroNombre: string
+  meseroNombre: string
+  pagos: PagoCajaTicket[]
+}
+
+export type TipoCierreCaja = 'parcial' | 'final'
 
 export interface PagoCajaEntrada {
   idMetodo: number

@@ -5,6 +5,7 @@ import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CategoriaAdmin
 import { ErrorServicio } from '../errores'
 import type { CatalogoService, UsuariosService } from '../interfaces'
 import { baseDatos, type MesaGuardada } from './baseDatos'
+import { metodosPagoMock } from './metodosPago'
 import { conRetraso } from './utiles'
 
 const duplicado = (campo: string) => new ErrorServicio('estado_invalido', `Ya existe otro usuario con ese ${campo}.`, 409)
@@ -277,6 +278,36 @@ function exigirNumeroLibre(numero: number, exceptoId?: number): void {
 export function crearCatalogoMock(): CatalogoService {
   // Los productos agotados de la demo cuentan como "activos sin existencia" salvo que se indique otra cosa.
   return {
+    listarMetodosPago() {
+      return conRetraso(() => structuredClone(metodosPagoMock))
+    },
+
+    crearMetodoPago(nombre) {
+      return conRetraso(() => {
+        const limpio = nombre.trim()
+        if (!limpio || limpio.length > 40) throw new ErrorServicio('estado_invalido', 'El nombre debe tener entre 1 y 40 caracteres.', 422)
+        if (metodosPagoMock.some((metodo) => metodo.nombre.toLocaleLowerCase() === limpio.toLocaleLowerCase())) {
+          throw new ErrorServicio('estado_invalido', 'Ya existe un método de pago con ese nombre.', 409)
+        }
+        const idMetodo = Math.max(0, ...metodosPagoMock.map((metodo) => metodo.idMetodo)) + 1
+        const metodo = { idMetodo, nombre: limpio, activo: true }
+        metodosPagoMock.push(metodo)
+        return { ...metodo }
+      })
+    },
+
+    actualizarMetodoPago(id, cambio) {
+      return conRetraso(() => {
+        const metodo = metodosPagoMock.find((item) => item.idMetodo === id)
+        if (!metodo) throw noExiste('El método de pago')
+        if (!cambio.activo && metodo.activo && metodosPagoMock.filter((item) => item.activo).length <= 1) {
+          throw new ErrorServicio('estado_invalido', 'Debe quedar al menos un método de pago activo.', 409)
+        }
+        metodo.activo = cambio.activo
+        return { ...metodo }
+      })
+    },
+
     obtenerConfiguracionReservacion() {
       return conRetraso(() => ({ ...baseDatos.configuracionReservacion }))
     },

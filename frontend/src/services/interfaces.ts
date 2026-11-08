@@ -17,6 +17,7 @@ import type {
   LineaNuevoPedido,
   Mesa,
   MesaAdmin,
+  MetodoPagoAdmin,
   NuevaMesa,
   NuevoPedido,
   NuevoProducto,
@@ -101,11 +102,16 @@ export interface CajaService {
   /** GET /caja/estado */
   obtenerEstado(): Promise<EstadoCaja>
   /** POST /caja/cortes */
-  abrirCorte(): Promise<CorteCaja>
+  abrirCorte(efectivoInicial: number): Promise<CorteCaja>
   /** POST /caja/cortes/cerrar */
-  cerrarCorte(totalReportado: number): Promise<CorteCaja>
+  cerrarCorte(efectivoContado: number, tipoCierre: 'parcial' | 'final'): Promise<CorteCaja>
   /** POST /caja/cuentas/{id}/cobrar */
-  cobrar(idCuenta: number, pagos: PagoCajaEntrada[], claveIdempotencia?: string): Promise<VentaCaja>
+  cobrar(
+    idCuenta: number,
+    pagos: PagoCajaEntrada[],
+    claveIdempotencia?: string,
+    confirmarCambioMetodo?: boolean,
+  ): Promise<VentaCaja>
 }
 
 /** Administración de usuarios. Solo el gerente (la API lo valida con 403 `sin_permiso`). */
@@ -122,6 +128,12 @@ export interface UsuariosService {
 
 /** Administración del catálogo: categorías, productos e inventario. Solo el gerente. */
 export interface CatalogoService {
+  /** GET /catalogo/metodos-pago (incluye inactivos) */
+  listarMetodosPago(): Promise<MetodoPagoAdmin[]>
+  /** POST /catalogo/metodos-pago */
+  crearMetodoPago(nombre: string): Promise<MetodoPagoAdmin>
+  /** PATCH /catalogo/metodos-pago/{id}; los pagos históricos se conservan. */
+  actualizarMetodoPago(id: number, cambio: { activo: boolean }): Promise<MetodoPagoAdmin>
   /** GET /catalogo/configuracion-reservacion */
   obtenerConfiguracionReservacion(): Promise<ConfiguracionReservacion>
   /** PATCH /catalogo/configuracion-reservacion */

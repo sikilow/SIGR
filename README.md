@@ -34,9 +34,9 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 | 🧾 **Pedidos** | Crear, editar, enviar a cocina y cancelar con motivo. El total lo calcula siempre el servidor | ✅ |
 | 💳 **Cuenta de mesa** | Consulta de pedidos y total; solicitud de pago en caja o digital | ✅ |
 | 👥 **Usuarios** *(gerente)* | Alta, edición, activación y cambio de contraseña | ✅ |
-| 📦 **Productos e inventario** *(gerente)* | Categorías, descripción obligatoria, presentación opcional para bebidas y postres, prevención de variantes duplicadas y estados Disponible, Stock bajo y Agotado. Las existencias se ajustan al editar el producto | ✅ |
+| 📦 **Productos e inventario** *(gerente)* | Categorías, descripción obligatoria, variantes por categoría, prevención de duplicados y estados Disponible, Stock bajo y Agotado. Las existencias se ajustan al editar el producto | ✅ |
 | 👨‍🍳 **Cocina** | Cola de pedidos enviados y en preparación; iniciar preparación y marcarlos listos. Actualización automática | ✅ |
-| 💵 **Caja** | Apertura/cierre de corte, cobro de cuentas solicitadas, pagos divididos, cambio y ticket imprimible | ✅ |
+| 💵 **Caja** | Fondo inicial, cobro conciliado por efectivo/tarjeta/transferencia, cortes parciales/finales por cajero, resumen por método y ticket/Excel del corte | ✅ |
 | 🪑 **Hostess: Salón** | Estado de las mesas (libres, ocupadas, reservadas), próximas reservaciones y lista de espera; asignar mesa a un grupo. No ve pedidos ni cuentas | ✅ |
 | 📅 **Reservaciones** | Hostess: lista por día, alta y edición con correo opcional, sugerencias de mesa y accesibilidad, confirmar, cancelar y registrar llegada. Gerente: configura la tolerancia y anticipación de recordatorios. Confirmaciones, recordatorios, vencimientos y cancelaciones usan una cola común con reintentos y correos HTML con texto alternativo | ✅ |
 | ⏳ **Hostess: Lista de espera** | Grupos por orden de llegada, tiempo de espera con marca de espera larga, agregar y sentar. Quitar de la lista: pendiente en la API (`PATCH`) | 🟡 |
@@ -48,7 +48,7 @@ SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mes
 
 | Actor | Qué necesita del sistema | Pantallas hoy |
 | --- | --- | --- |
-| 🧑‍💼 **Gerente** | Supervisar la operación: usuarios, menú e inventario, mesas y pedidos del salón; administrar secciones y configurar reservaciones | Usuarios, Productos e inventario, Mesas, Reservas, Pedidos |
+| 🧑‍💼 **Gerente** | Supervisar la operación: usuarios, menú e inventario, mesas y pedidos del salón; administrar secciones, métodos de pago y reservaciones | Usuarios, Productos e inventario, Mesas, Reservas, Pedidos, Métodos de pago |
 | 🍽️ **Mesero** | Capturar pedidos rápido y sin errores, ver su estado, enviarlos a cocina y pedir la cuenta | Mesas, Pedido de mesa, Cuenta, Mis pedidos |
 | 👨‍🍳 **Cocinero** | Recibir pedidos claros y en orden, iniciar preparación y marcarlos listos | Cocina |
 | 💵 **Cajero** | Consultar cuentas solicitadas, cobrar, imprimir ticket y hacer el corte de caja | Caja |

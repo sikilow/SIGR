@@ -3,6 +3,7 @@ import { ErrorApi } from "../utils/errores";
 
 export const Pagos = z
   .object({
+    confirmar_cambio_metodo: z.boolean().optional().default(false),
     pagos: z
       .array(
         z
@@ -19,6 +20,41 @@ export const Pagos = z
   .strict();
 
 export type PagoEntrada = z.infer<typeof Pagos>["pagos"][number];
+
+export function validarMetodoSolicitado(
+  solicitado: "fisico" | "digital" | null,
+  pagos: PagoEntrada[],
+  metodos: Array<{ id_metodo: number; nombre: string }>,
+  confirmarCambio: boolean,
+): void {
+  if (!solicitado) return;
+
+  const nombres = new Map(metodos.map((metodo) => [metodo.id_metodo, metodo.nombre.toLocaleLowerCase()]));
+  const tieneEfectivo = pagos.some((pago) => nombres.get(pago.id_metodo) === "efectivo");
+  const tieneDigital = pagos.some((pago) => {
+    const nombre = nombres.get(pago.id_metodo);
+    return nombre !== undefined && nombre !== "efectivo";
+  });
+  const coincide = solicitado === "fisico" ? tieneEfectivo : tieneDigital;
+
+  if (!coincide && !confirmarCambio) {
+    throw new ErrorApi(
+      422,
+      "estado_invalido",
+      "El método cobrado no coincide con el solicitado por el mesero. Confirma el cambio antes de continuar.",
+    );
+  }
+}
+
+export function calcularEfectivoEsperado(
+  efectivoInicial: number,
+  metodos: Array<{ nombre: string; monto: number }>,
+): number {
+  const efectivoCobrado = metodos
+    .filter((metodo) => metodo.nombre.toLocaleLowerCase() === "efectivo")
+    .reduce((total, metodo) => total + metodo.monto, 0);
+  return Math.round((efectivoInicial + efectivoCobrado) * 100) / 100;
+}
 
 const centavos = (monto: number): number => Math.round(monto * 100);
 

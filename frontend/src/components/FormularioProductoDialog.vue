@@ -5,7 +5,6 @@
 import { computed, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import type { CambioProducto, CategoriaAdmin, ProductoAdmin } from '../types'
-import { categoriaAdmitePresentacion } from '../utils/presentacionProducto'
 import DialogoModal from './DialogoModal.vue'
 
 const props = defineProps<{
@@ -34,14 +33,6 @@ const enCurso = ref(false)
 const errorServidor = ref('')
 
 const editando = computed(() => props.producto !== null)
-const mostrarPresentacion = computed(() => {
-  const categoria = props.categorias.find((c) => c.idCategoria === idCategoria.value)
-  return categoria ? categoriaAdmitePresentacion(categoria.nombre) : false
-})
-
-watch(idCategoria, () => {
-  if (!mostrarPresentacion.value) presentacion.value = ''
-})
 
 watch(
   () => props.abierto,
@@ -71,7 +62,7 @@ const errores = computed(() => {
   const n = nombre.value.trim()
   if (!n) e.nombre = 'Escribe el nombre del producto.'
   else if (n.length > 100) e.nombre = 'Máximo 100 caracteres.'
-  if (mostrarPresentacion.value && presentacion.value.trim().length > 100) e.presentacion = 'Máximo 100 caracteres.'
+  if (presentacion.value.trim().length > 100) e.presentacion = 'Máximo 100 caracteres.'
   if (idCategoria.value === '') e.categoria = 'Elige una categoría.'
   const p = aNumero(precio.value)
   if (Number.isNaN(p)) e.precio = 'Escribe el precio (ejemplo: 85 o 85.50).'
@@ -95,11 +86,8 @@ function cambios(): CambioProducto {
   const p = props.producto
   if (!p) return {}
   const c: CambioProducto = {}
-  const categoriaOriginal = props.categorias.find((categoria) => categoria.idCategoria === p.idCategoria)
-  const presentacionOriginalPermitida = categoriaOriginal ? categoriaAdmitePresentacion(categoriaOriginal.nombre) : false
   if (nombre.value.trim() !== p.nombre) c.nombre = nombre.value
-  if (mostrarPresentacion.value && presentacion.value.trim() !== p.presentacion) c.presentacion = presentacion.value
-  else if (!mostrarPresentacion.value && presentacionOriginalPermitida && p.presentacion) c.presentacion = ''
+  if (presentacion.value.trim() !== p.presentacion) c.presentacion = presentacion.value
   if (descripcion.value.trim() !== p.descripcion) c.descripcion = descripcion.value
   if (idCategoria.value !== '' && idCategoria.value !== p.idCategoria) c.idCategoria = idCategoria.value
   if (aNumero(precio.value) !== p.precio) c.precio = aNumero(precio.value)
@@ -135,7 +123,7 @@ async function guardar() {
       const producto = await servicios.catalogo.crearProducto({
         idCategoria: idCategoria.value as number,
         nombre: nombre.value,
-        presentacion: mostrarPresentacion.value ? presentacion.value : '',
+        presentacion: presentacion.value,
         descripcion: descripcion.value,
         precio: aNumero(precio.value),
         activo: activo.value,
@@ -165,13 +153,13 @@ async function guardar() {
         <p v-if="campoErr('nombre')" id="prod-nombre-e" class="texto-error form__error">{{ campoErr('nombre') }}</p>
       </div>
 
-      <div v-if="mostrarPresentacion" class="campo">
+      <div class="campo">
         <label for="prod-presentacion">Presentación o variante</label>
         <input id="prod-presentacion" v-model="presentacion" type="text" autocomplete="off" maxlength="100"
           placeholder="Ej.: lata de 355 ml, botella de 1 litro, rebanada individual"
           :aria-invalid="campoErr('presentacion') ? 'true' : undefined"
           :aria-describedby="campoErr('presentacion') ? 'prod-presentacion-ayuda prod-presentacion-e' : 'prod-presentacion-ayuda'" />
-        <p id="prod-presentacion-ayuda" class="form__ayuda">Distingue variantes de bebidas, cervezas, postres u otros productos. Si coincide categoría, nombre y presentación, el alta se rechazará como duplicada.</p>
+        <p id="prod-presentacion-ayuda" class="form__ayuda">Distingue sabores, porciones, tamaños o presentaciones cuando importe. Si coincide categoría, nombre y presentación, el alta se rechazará como duplicada.</p>
         <p v-if="campoErr('presentacion')" id="prod-presentacion-e" class="texto-error form__error">{{ campoErr('presentacion') }}</p>
       </div>
 
@@ -181,7 +169,7 @@ async function guardar() {
           placeholder="Ej.: contiene nuez, servido con hielo, acompañado de ensalada"
           :aria-invalid="campoErr('descripcion') ? 'true' : undefined"
           :aria-describedby="campoErr('descripcion') ? 'prod-descripcion-ayuda prod-descripcion-e' : 'prod-descripcion-ayuda'" />
-        <p id="prod-descripcion-ayuda" class="form__ayuda">Agrega detalles relevantes que no correspondan a la presentación (por ejemplo, ingredientes o acompañamientos).</p>
+        <p id="prod-descripcion-ayuda" class="form__ayuda">Agrega ingredientes, alérgenos o acompañamientos que no correspondan a la presentación.</p>
         <p v-if="campoErr('descripcion')" id="prod-descripcion-e" class="texto-error form__error">{{ campoErr('descripcion') }}</p>
       </div>
 

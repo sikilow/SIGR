@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requiereAuth } from "../utils/auth";
-import { actualizarConfiguracionReservacion, obtenerConfiguracionReservacion, listarCategorias, crearCategoria, editarCategoria, borrarCategoria, listarProductos, crearProducto, editarProducto, listarSeccionesAdmin, crearSeccionAdmin, editarSeccionAdmin, borrarSeccionAdmin, listarMesasAdmin, crearMesaAdmin, editarMesaAdmin } from "../controllers/catalogo";
+import { actualizarConfiguracionReservacion, obtenerConfiguracionReservacion, listarCategorias, crearCategoria, editarCategoria, borrarCategoria, listarProductos, crearProducto, editarProducto, listarSeccionesAdmin, crearSeccionAdmin, editarSeccionAdmin, borrarSeccionAdmin, listarMesasAdmin, crearMesaAdmin, editarMesaAdmin, listarMetodosPago, crearMetodoPago, actualizarMetodoPago } from "../controllers/catalogo";
 
 export const catalogoRouter = Router();
 
@@ -22,3 +22,6 @@ catalogoRouter.post("/mesas", crearMesaAdmin);
 catalogoRouter.patch("/mesas/:id", editarMesaAdmin);
 catalogoRouter.get("/configuracion-reservacion", obtenerConfiguracionReservacion);
 catalogoRouter.patch("/configuracion-reservacion", actualizarConfiguracionReservacion);
+catalogoRouter.get("/metodos-pago", listarMetodosPago);
+catalogoRouter.post("/metodos-pago", crearMetodoPago);
+catalogoRouter.patch("/metodos-pago/:id", actualizarMetodoPago);

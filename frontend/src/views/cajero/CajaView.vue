@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import InsigniaEstado from '../../components/InsigniaEstado.vue'
 import { servicios } from '../../services'
+import { descargarCorteExcel } from '../../utils/corteExcel'
 import {
   ETIQUETA_ESTADO_PEDIDO,
   type CuentaCaja,
   type EstadoCaja,
   type PagoCajaEntrada,
+  type TipoCierreCaja,
   type VentaCaja,
 } from '../../types'
 
@@ -19,14 +21,17 @@ interface LineaTicket {
 const estado = ref<EstadoCaja | null>(null)
 const seleccionadaId = ref<number | null>(null)
 const pagos = ref<PagoCajaEntrada[]>([])
-const recibidoReporte = ref<number | null>(null)
+const efectivoInicial = ref<number | null>(null)
+const efectivoContado = ref<number | null>(null)
 const ventaReciente = ref<VentaCaja | null>(null)
+const corteReciente = ref<import('../../types').CorteCaja | null>(null)
 const lineasTicket = ref<LineaTicket[]>([])
 const meseroTicket = ref('')
 const error = ref<string | null>(null)
 const cargando = ref(true)
 const procesando = ref(false)
-const diferenciaCorte = ref<number | null>(null)
+const confirmacionCambioMetodo = ref(false)
+const modoImpresion = ref<'venta' | 'corte' | null>(null)
 
 const cuentaSeleccionada = computed(
   () => estado.value?.cuentas.find((item) => item.cuenta.idCuenta === seleccionadaId.value) ?? null,
@@ -34,6 +39,16 @@ const cuentaSeleccionada = computed(
 const totalAplicado = computed(() => pagos.value.reduce((suma, pago) => suma + pago.monto, 0))
 const faltante = computed(() => Math.round(((cuentaSeleccionada.value?.cuenta.total ?? 0) - totalAplicado.value) * 100) / 100)
 const cambio = computed(() => Math.round(pagos.value.reduce((suma, pago) => suma + Math.max(0, pago.montoRecibido - pago.monto), 0) * 100) / 100)
+const cumpleMetodoSolicitado = computed(() => {
+  const solicitado = cuentaSeleccionada.value?.cuenta.tipoPagoSolicitado
+  if (!solicitado) return true
+  const nombres = pagos.value.map((pago) => nombreMetodo(pago.idMetodo).toLowerCase())
+  return solicitado === 'fisico' ? nombres.includes('efectivo') : nombres.some((nombre) => nombre !== 'efectivo')
+})
+const requiereConfirmacionCambio = computed(() => !!cuentaSeleccionada.value && !cumpleMetodoSolicitado.value)
+const efectivoContadoValido = computed(
+  () => efectivoContado.value !== null && Number.isFinite(efectivoContado.value) && efectivoContado.value >= 0,
+)
 const puedeCobrar = computed(
   () =>
     !!estado.value?.corte &&
@@ -41,7 +56,8 @@ const puedeCobrar = computed(
     cuentaSeleccionada.value.pedidosSinEntregar.length === 0 &&
     Math.abs(faltante.value) < 0.005 &&
     pagos.value.length > 0 &&
-    pagos.value.every((pago) => pago.monto > 0 && pago.montoRecibido >= pago.monto),
+    pagos.value.every((pago) => pago.monto > 0 && pago.montoRecibido >= pago.monto) &&
+    (!requiereConfirmacionCambio.value || confirmacionCambioMetodo.value),
 )
 
 function moneda(cantidad: number): string {
@@ -53,14 +69,16 @@ function fecha(fechaHora: Date): string {
 }
 
 function tipoPago(item: CuentaCaja): string {
-  return item.cuenta.tipoPagoSolicitado === 'digital' ? 'Pago digital' : 'Cobro en caja'
+  if (item.cuenta.tipoPagoSolicitado === 'digital') return 'Pago digital · seleccionar método'
+  if (item.cuenta.tipoPagoSolicitado === 'fisico') return 'Pago en efectivo'
+  return 'Forma de pago no indicada'
 }
 
 async function cargar() {
   cargando.value = true
   try {
     estado.value = await servicios.caja.obtenerEstado()
-    if (!estado.value.corte) recibidoReporte.value = null
+    if (!estado.value.corte) efectivoContado.value = null
     if (seleccionadaId.value && !estado.value.cuentas.some((item) => item.cuenta.idCuenta === seleccionadaId.value)) {
       seleccionadaId.value = null
       pagos.value = []
@@ -76,9 +94,20 @@ async function cargar() {
 function seleccionar(item: CuentaCaja) {
   seleccionadaId.value = item.cuenta.idCuenta
   const efectivo = estado.value?.metodosPago.find((metodo) => metodo.nombre.toLowerCase() === 'efectivo')
-  pagos.value = efectivo ? [{ idMetodo: efectivo.idMetodo, monto: item.cuenta.total, montoRecibido: item.cuenta.total }] : []
+  const metodoInicial = item.cuenta.tipoPagoSolicitado === 'digital' ? null : efectivo
+  pagos.value = metodoInicial
+    ? [{ idMetodo: metodoInicial.idMetodo, monto: item.cuenta.total, montoRecibido: item.cuenta.total }]
+    : []
+  confirmacionCambioMetodo.value = false
   ventaReciente.value = null
   error.value = null
+}
+
+function iniciarPago(idMetodo: number) {
+  const cuenta = cuentaSeleccionada.value
+  if (!cuenta) return
+  pagos.value = [{ idMetodo, monto: cuenta.cuenta.total, montoRecibido: cuenta.cuenta.total }]
+  confirmacionCambioMetodo.value = false
 }
 
 function agregarMetodo() {
@@ -86,6 +115,7 @@ function agregarMetodo() {
   if (!metodo) return
   const importe = Math.max(0, Math.round(faltante.value * 100) / 100)
   pagos.value.push({ idMetodo: metodo.idMetodo, monto: importe, montoRecibido: importe })
+  confirmacionCambioMetodo.value = false
 }
 
 function cambiarMonto(pago: PagoCajaEntrada, monto: number) {
@@ -99,6 +129,12 @@ function cambiarMonto(pago: PagoCajaEntrada, monto: number) {
 function cambiarMetodo(pago: PagoCajaEntrada, idMetodo: number) {
   pago.idMetodo = idMetodo
   pago.montoRecibido = pago.monto
+  confirmacionCambioMetodo.value = false
+}
+
+function quitarMetodo(idMetodo: number) {
+  pagos.value = pagos.value.filter((pago) => pago.idMetodo !== idMetodo)
+  confirmacionCambioMetodo.value = false
 }
 
 function esEfectivo(idMetodo: number): boolean {
@@ -109,15 +145,14 @@ function nombreMetodo(idMetodo: number): string {
   return estado.value?.metodosPago.find((metodo) => metodo.idMetodo === idMetodo)?.nombre ?? 'Método'
 }
 
-function usarTotalSistema() {
-  if (estado.value?.corte) recibidoReporte.value = estado.value.corte.totalVentas
-}
-
 async function abrirCorte() {
+  const inicial = efectivoInicial.value
+  if (inicial === null || !Number.isFinite(inicial) || inicial < 0) return
   procesando.value = true
   error.value = null
   try {
-    await servicios.caja.abrirCorte()
+    await servicios.caja.abrirCorte(inicial)
+    efectivoInicial.value = null
     await cargar()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'No se pudo abrir el corte.'
@@ -126,14 +161,14 @@ async function abrirCorte() {
   }
 }
 
-async function cerrarCorte() {
-  if (!estado.value?.corte || recibidoReporte.value === null) return
+async function cerrarCorte(tipoCierre: TipoCierreCaja) {
+  const contado = efectivoContado.value
+  if (!estado.value?.corte || contado === null || !Number.isFinite(contado) || contado < 0) return
   procesando.value = true
   error.value = null
   try {
-    const corte = await servicios.caja.cerrarCorte(recibidoReporte.value)
-    diferenciaCorte.value = corte.diferencia ?? 0
-    recibidoReporte.value = null
+    corteReciente.value = await servicios.caja.cerrarCorte(contado, tipoCierre)
+    efectivoContado.value = null
     await cargar()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'No se pudo cerrar el corte.'
@@ -158,11 +193,15 @@ async function cobrar() {
   )
   meseroTicket.value = cuenta.meseroNombre
   try {
-    ventaReciente.value = await servicios.caja.cobrar(cuenta.cuenta.idCuenta, pagos.value, window.crypto.randomUUID())
+    ventaReciente.value = await servicios.caja.cobrar(
+      cuenta.cuenta.idCuenta,
+      pagos.value,
+      window.crypto.randomUUID(),
+      confirmacionCambioMetodo.value,
+    )
     seleccionadaId.value = null
     pagos.value = []
-    recibidoReporte.value = null
-    diferenciaCorte.value = null
+    confirmacionCambioMetodo.value = false
     await cargar()
   } catch (e) {
     lineasTicket.value = []
@@ -172,15 +211,31 @@ async function cobrar() {
   }
 }
 
-function imprimirTicket() {
+async function imprimir(modo: 'venta' | 'corte') {
+  modoImpresion.value = modo
+  await nextTick()
+  window.addEventListener('afterprint', () => { modoImpresion.value = null }, { once: true })
   window.print()
+}
+
+function imprimirTicket() {
+  void imprimir('venta')
+}
+
+function imprimirCorte() {
+  void imprimir('corte')
+}
+
+async function exportarCorte() {
+  if (!corteReciente.value) return
+  await descargarCorteExcel(corteReciente.value)
 }
 
 onMounted(cargar)
 </script>
 
 <template>
-  <div class="caja pagina">
+  <div class="caja pagina" :class="{ 'imprimir-corte': modoImpresion === 'corte', 'imprimir-venta': modoImpresion === 'venta' }">
     <header class="pagina__encabezado">
       <div>
         <p class="sobretitulo">Punto de venta</p>
@@ -199,11 +254,6 @@ onMounted(cargar)
       <p>{{ error }}</p>
       <button type="button" class="btn btn--secundario" :disabled="cargando || procesando" @click="cargar">Reintentar</button>
     </div>
-    <div v-if="diferenciaCorte !== null" class="aviso aviso--exito no-imprimir" role="status">
-      <p>Corte cerrado. Diferencia reportada: <strong>{{ moneda(diferenciaCorte) }}</strong></p>
-      <button type="button" class="btn btn--secundario" @click="diferenciaCorte = null">Cerrar</button>
-    </div>
-
     <template v-if="cargando && !estado">
       <div class="esqueletos" aria-hidden="true">
         <div class="esqueleto esqueleto--corte" />
@@ -224,35 +274,60 @@ onMounted(cargar)
             />
           </div>
           <p v-if="estado.corte" class="corte__meta">Abierto desde {{ fecha(estado.corte.inicio) }}</p>
-          <p v-else class="corte__meta">Abre un corte para comenzar a registrar cobros del turno.</p>
+          <p v-else class="corte__meta">Registra el efectivo que recibes para iniciar el turno.</p>
 
           <div class="corte__cifras">
             <div class="corte__cifra">
-              <span>Ventas del turno</span>
+              <span>Ventas cobradas</span>
               <strong class="numero">{{ moneda(estado.corte?.totalVentas ?? 0) }}</strong>
             </div>
             <div class="corte__cifra">
               <span>Cuentas por cobrar</span>
               <strong class="numero">{{ estado.cuentas.length }}</strong>
             </div>
+            <div v-if="estado.corte" class="corte__cifra">
+              <span>Efectivo esperado en caja</span>
+              <strong class="numero">{{ moneda(estado.corte.efectivoEsperado) }}</strong>
+            </div>
           </div>
+
+          <dl v-if="estado.corte" class="metodos-corte">
+            <div v-for="metodo in estado.corte.metodosPago" :key="metodo.idMetodo">
+              <dt>{{ metodo.nombre }}</dt>
+              <dd class="numero">{{ moneda(metodo.monto) }}</dd>
+            </div>
+          </dl>
         </div>
 
         <div class="corte__acciones">
-          <button v-if="!estado.corte" class="btn btn--grande" type="button" :disabled="procesando" @click="abrirCorte">
-            Abrir corte
-          </button>
-          <form v-else class="form-corte" @submit.prevent="cerrarCorte">
+          <form v-if="!estado.corte" class="form-corte" @submit.prevent="abrirCorte">
             <div class="campo">
-              <label for="total-reportado">Total de ventas reportado</label>
-              <input id="total-reportado" v-model.number="recibidoReporte" type="number" min="0" step="0.01" required>
-              <p class="campo__ayuda">El sistema registra {{ moneda(estado.corte.totalVentas) }}.</p>
+              <label for="efectivo-inicial">Fondo inicial en efectivo</label>
+              <input id="efectivo-inicial" v-model.number="efectivoInicial" type="number" min="0" step="0.01" required>
+              <p class="campo__ayuda">Cuenta el efectivo recibido. Tarjeta y transferencia no forman parte del cajón.</p>
             </div>
             <div class="form-corte__acciones">
-              <button type="button" class="btn btn--texto" @click="usarTotalSistema">Usar total del sistema</button>
-              <button class="btn" type="submit" :disabled="procesando">Cerrar corte</button>
+              <button class="btn btn--grande" type="submit" :disabled="procesando">Abrir caja</button>
             </div>
           </form>
+          <div v-else class="form-corte">
+            <div class="campo">
+              <label for="efectivo-contado">Efectivo contado para el corte</label>
+              <input id="efectivo-contado" v-model.number="efectivoContado" type="number" min="0" step="0.01" required>
+              <p class="campo__ayuda">
+                Esperado: {{ moneda(estado.corte.efectivoInicial) }} de fondo + {{ moneda(estado.corte.metodosPago.find((m) => m.nombre.toLowerCase() === 'efectivo')?.monto ?? 0) }} en efectivo.
+                Tarjeta y transferencia se reportan por separado.
+              </p>
+            </div>
+            <div class="form-corte__acciones">
+              <button class="btn btn--secundario" type="button" :disabled="procesando || !efectivoContadoValido" @click="cerrarCorte('parcial')">
+                Corte parcial
+              </button>
+              <button class="btn" type="button" :disabled="procesando || !efectivoContadoValido" @click="cerrarCorte('final')">
+                Cierre final
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -331,6 +406,24 @@ onMounted(cargar)
               />
             </div>
 
+            <div v-if="pagos.length === 0" class="campo metodo-inicial">
+              <label for="metodo-inicial">Método recibido</label>
+              <select id="metodo-inicial" :value="''" @change="iniciarPago(Number(($event.target as HTMLSelectElement).value))">
+                <option value="" disabled>Selecciona tarjeta o transferencia</option>
+                <option v-for="metodo in estado.metodosPago" :key="metodo.idMetodo" :value="metodo.idMetodo">
+                  {{ metodo.nombre }}
+                </option>
+              </select>
+            </div>
+
+            <div v-if="requiereConfirmacionCambio" class="aviso aviso--error aviso-metodo" role="alert">
+              <p>La forma de pago seleccionada no coincide con la que indicó el mesero ({{ tipoPago(cuentaSeleccionada) }}).</p>
+              <label>
+                <input v-model="confirmacionCambioMetodo" type="checkbox">
+                Confirmo que el cliente cambió la forma de pago.
+              </label>
+            </div>
+
             <ul class="pedidos">
               <li v-for="pedido in cuentaSeleccionada.cuenta.pedidos" :key="pedido.idPedido" class="pedido">
                 <div class="pedido__titulo">
@@ -389,7 +482,7 @@ onMounted(cargar)
                     class="btn btn--icono quitar-pago"
                     type="button"
                     :aria-label="`Quitar ${nombreMetodo(pago.idMetodo)}`"
-                    @click="pagos = pagos.filter((item) => item.idMetodo !== pago.idMetodo)"
+                    @click="quitarMetodo(pago.idMetodo)"
                   >
                     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
                       <path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13" />
@@ -421,7 +514,7 @@ onMounted(cargar)
               </div>
 
               <button
-                v-if="pagos.length < estado.metodosPago.length && pagos.length < 3"
+                v-if="pagos.length > 0 && pagos.length < estado.metodosPago.length && pagos.length < 3"
                 class="btn btn--secundario"
                 type="button"
                 @click="agregarMetodo"
@@ -461,6 +554,65 @@ onMounted(cargar)
       <h3>No se pudo mostrar la caja</h3>
       <p>Revisa la conexión e inténtalo de nuevo.</p>
       <button type="button" class="btn" @click="cargar">Reintentar</button>
+    </section>
+
+    <section v-if="corteReciente" class="ticket-panel corte-ticket-panel" aria-labelledby="corte-ticket-titulo">
+      <div class="ticket-panel__barra no-imprimir">
+        <div>
+          <p class="sobretitulo">Corte guardado</p>
+          <h3 id="corte-ticket-titulo">{{ corteReciente.tipoCierre === 'parcial' ? 'Corte parcial' : 'Cierre final' }} · #{{ corteReciente.idCorte }}</h3>
+          <p>{{ corteReciente.cajeroNombre }} · {{ fecha(corteReciente.inicio) }} a {{ corteReciente.fin ? fecha(corteReciente.fin) : 'en curso' }}</p>
+        </div>
+        <div class="ticket-panel__acciones">
+          <button class="btn btn--secundario" type="button" @click="imprimirCorte">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2" />
+              <path d="M6 14h12v7H6z" />
+            </svg>
+            Imprimir corte
+          </button>
+          <button class="btn" type="button" @click="exportarCorte">
+            Descargar Excel
+          </button>
+        </div>
+      </div>
+
+      <div class="ticket corte-ticket">
+        <div class="ticket__marca">
+          <strong>La Madalena</strong>
+          <span>SIGR · {{ corteReciente.tipoCierre === 'parcial' ? 'Corte parcial' : 'Cierre final' }}</span>
+        </div>
+        <dl class="ticket__datos">
+          <div><dt>Corte</dt><dd>#{{ corteReciente.idCorte }}</dd></div>
+          <div><dt>Cajero</dt><dd>{{ corteReciente.cajeroNombre }}</dd></div>
+          <div><dt>Inicio</dt><dd>{{ fecha(corteReciente.inicio) }}</dd></div>
+          <div><dt>Cierre</dt><dd>{{ corteReciente.fin ? fecha(corteReciente.fin) : 'En curso' }}</dd></div>
+          <div><dt>Fondo inicial</dt><dd>{{ moneda(corteReciente.efectivoInicial) }}</dd></div>
+        </dl>
+        <ul class="ticket__pagos">
+          <li v-for="metodo in corteReciente.metodosPago" :key="metodo.idMetodo">
+            <span>{{ metodo.nombre }} ({{ metodo.cantidadPagos }})</span>
+            <span class="numero">{{ moneda(metodo.monto) }}</span>
+          </li>
+        </ul>
+        <p class="ticket__total"><span>Total ventas</span><strong class="numero">{{ moneda(corteReciente.totalVentas) }}</strong></p>
+        <dl class="ticket__datos ticket__efectivo">
+          <div><dt>Efectivo esperado</dt><dd>{{ moneda(corteReciente.efectivoEsperado) }}</dd></div>
+          <div v-if="corteReciente.efectivoContado !== null"><dt>Efectivo contado</dt><dd>{{ moneda(corteReciente.efectivoContado) }}</dd></div>
+          <div v-if="corteReciente.diferenciaEfectivo !== null">
+            <dt>{{ corteReciente.diferenciaEfectivo < 0 ? 'Faltante' : 'Sobrante' }}</dt>
+            <dd>{{ moneda(Math.abs(corteReciente.diferenciaEfectivo)) }}</dd>
+          </div>
+        </dl>
+        <ol class="cuentas-corte" aria-label="Cuentas cobradas en este corte">
+          <li v-for="venta in corteReciente.ventas" :key="venta.idVenta">
+            <strong>Cuenta #{{ venta.idCuenta }} · Mesa {{ venta.mesaNumero }}</strong>
+            <span>{{ fecha(venta.fechaHora) }} · {{ venta.cajeroNombre }}<template v-if="venta.meseroNombre"> · Mesero: {{ venta.meseroNombre }}</template></span>
+            <span>{{ venta.pagos.map((pago) => `${pago.metodo} ${moneda(pago.monto)}`).join(' + ') }}</span>
+            <strong class="numero">{{ moneda(venta.total) }}</strong>
+          </li>
+        </ol>
+      </div>
     </section>
 
     <section v-if="ventaReciente" class="ticket-panel" aria-labelledby="ticket-titulo">
@@ -581,6 +733,31 @@ onMounted(cargar)
   flex-wrap: wrap;
   gap: var(--espacio-6);
   margin-top: var(--espacio-4);
+}
+
+.metodos-corte {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--espacio-2) var(--espacio-4);
+  margin: var(--espacio-4) 0 0;
+}
+
+.metodos-corte div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+  padding-bottom: var(--espacio-1);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.metodos-corte dt {
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+}
+
+.metodos-corte dd {
+  margin: 0;
+  font-weight: 700;
 }
 
 .corte__cifra {
@@ -954,6 +1131,45 @@ onMounted(cargar)
   gap: var(--espacio-2);
 }
 
+.aviso-metodo {
+  margin-top: var(--espacio-3);
+}
+
+.aviso-metodo label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espacio-2);
+}
+
+.metodo-inicial {
+  margin-top: var(--espacio-4);
+}
+
+.cuentas-corte {
+  display: grid;
+  gap: 2mm;
+  margin: 3mm 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cuentas-corte li {
+  display: grid;
+  gap: 1mm;
+  padding: 2mm 0;
+  border-top: 1px dashed #777;
+}
+
+.cuentas-corte span {
+  overflow-wrap: anywhere;
+}
+
+.ticket__efectivo {
+  margin-bottom: 0;
+  padding-top: 2mm;
+  border-top: 1px dashed #555;
+}
+
 .ticket {
   width: 80mm;
   max-width: 100%;
@@ -1130,7 +1346,12 @@ onMounted(cargar)
     margin: 3mm;
   }
 
-  .caja > :not(.ticket-panel) {
+  .caja.imprimir-venta > :not(.ticket-panel),
+  .caja.imprimir-corte > :not(.corte-ticket-panel) {
+    display: none !important;
+  }
+
+  .caja:not(.imprimir-venta):not(.imprimir-corte) > * {
     display: none !important;
   }
 

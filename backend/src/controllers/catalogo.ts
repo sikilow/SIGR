@@ -37,6 +37,52 @@ export const actualizarConfiguracionReservacion = async (req: Request, res: Resp
   res.json(configuracion);
 };
 
+const NuevoMetodoPago = z.object({ nombre: z.string().trim().min(1, "es obligatorio").max(40, "máximo 40 caracteres") }).strict();
+const CambioMetodoPago = z.object({ activo: z.boolean() }).strict();
+
+/** GET /api/catalogo/metodos-pago: métodos activos e inactivos para Gerencia. */
+export const listarMetodosPago = async (_req: Request, res: Response) => {
+  const metodos = await filas(pool, "SELECT id_metodo, nombre, activo FROM metodo_pago ORDER BY id_metodo");
+  res.json(metodos.map((metodo) => ({
+    id_metodo: Number(metodo.id_metodo),
+    nombre: String(metodo.nombre),
+    activo: Boolean(metodo.activo),
+  })));
+};
+
+/** POST /api/catalogo/metodos-pago: agrega un método sin alterar el histórico. */
+export const crearMetodoPago = async (req: Request, res: Response) => {
+  const { nombre } = validar(NuevoMetodoPago, req.body);
+  let idMetodo: number;
+  try {
+    const resultado = await ejecutar(pool, "INSERT INTO metodo_pago (nombre) VALUES (?)", [nombre]);
+    idMetodo = resultado.insertId;
+  } catch (error) {
+    if (esDuplicado(error)) throw new ErrorApi(409, "estado_invalido", "Ya existe un método de pago con ese nombre.");
+    throw error;
+  }
+  const [metodo] = await filas(pool, "SELECT id_metodo, nombre, activo FROM metodo_pago WHERE id_metodo = ?", [idMetodo]);
+  if (!metodo) throw new ErrorApi(500, "desconocido", "No se pudo recuperar el método de pago creado.");
+  res.status(201).json({ id_metodo: Number(metodo.id_metodo), nombre: String(metodo.nombre), activo: Boolean(metodo.activo) });
+};
+
+/** PATCH /api/catalogo/metodos-pago/:id: activa o desactiva sin borrar pagos existentes. */
+export const actualizarMetodoPago = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const { activo } = validar(CambioMetodoPago, req.body);
+  const metodo = await transaccion(async (cx) => {
+    const [actual] = await filas(cx, "SELECT id_metodo, nombre, activo FROM metodo_pago WHERE id_metodo = ? FOR UPDATE", [id]);
+    if (!actual) throw new ErrorApi(404, "no_encontrado", "El método de pago no existe.");
+    if (!activo && Boolean(actual.activo)) {
+      const activos = await filas(cx, "SELECT id_metodo FROM metodo_pago WHERE activo = 1 FOR UPDATE");
+      if (activos.length <= 1) throw new ErrorApi(409, "estado_invalido", "Debe quedar al menos un método de pago activo.");
+    }
+    await ejecutar(cx, "UPDATE metodo_pago SET activo = ? WHERE id_metodo = ?", [activo, id]);
+    return { id_metodo: Number(actual.id_metodo), nombre: String(actual.nombre), activo };
+  });
+  res.json(metodo);
+};
+
 const Texto = (max: number) => z.string().trim().min(1, "es obligatorio").max(max, `máximo ${max} caracteres`);
 const DescripcionProducto = Texto(255).refine(
   (descripcion) => descripcion.toLocaleLowerCase() !== "detalle pendiente de completar",

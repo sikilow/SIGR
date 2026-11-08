@@ -36,7 +36,8 @@ const enlaces = [
   { nombre: 'gerente-usuarios', texto: 'Usuarios', icono: 'usuarios' },
   { nombre: 'gerente-productos', texto: 'Productos', icono: 'productos' },
   { nombre: 'gerente-mesas', texto: 'Mesas', icono: 'mesas' },
-  { nombre: 'gerente-reservaciones', texto: 'Reservaciones', icono: 'reservaciones' },
+  { nombre: 'gerente-reservaciones', texto: 'Reservas', icono: 'reservaciones' },
+  { nombre: 'gerente-metodos-pago', texto: 'Pagos', icono: 'pagos' },
   { nombre: 'gerente-pedidos', texto: 'Pedidos', icono: 'pedidos' },
 ] as const
 
@@ -77,6 +78,10 @@ async function salir() {
           <svg v-else-if="enlace.icono === 'reservaciones'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="5" width="18" height="16" rx="2" />
             <path d="M16 3v4M8 3v4M3 10h18M8 14h3M8 17h7" />
+          </svg>
+          <svg v-else-if="enlace.icono === 'pagos'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2.5" y="5" width="19" height="14" rx="2" />
+            <path d="M3 10h18M7 15h4" />
           </svg>
           <svg v-else viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
@@ -145,7 +150,7 @@ async function salir() {
       </main>
 
       <nav v-if="compacto" class="nav" aria-label="Navegación principal">
-        <RouterLink v-for="enlace in enlaces" :key="enlace.nombre" class="nav__enlace" :to="{ name: enlace.nombre }">
+        <RouterLink v-for="enlace in enlaces" :key="enlace.nombre" class="nav__enlace" :to="{ name: enlace.nombre }" :aria-label="enlace.texto" :title="enlace.texto">
           <svg v-if="enlace.icono === 'usuarios'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="9" cy="8" r="3.5" />
             <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 5a3.5 3.5 0 0 1 0 7M18 14.5c2.2.7 3.5 2.6 3.5 5.5" />
@@ -161,6 +166,10 @@ async function salir() {
           <svg v-else-if="enlace.icono === 'reservaciones'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="5" width="18" height="16" rx="2" />
             <path d="M16 3v4M8 3v4M3 10h18M8 14h3M8 17h7" />
+          </svg>
+          <svg v-else-if="enlace.icono === 'pagos'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2.5" y="5" width="19" height="14" rx="2" />
+            <path d="M3 10h18M7 15h4" />
           </svg>
           <svg v-else viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
@@ -385,7 +394,7 @@ async function salir() {
 
 .nav {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }
@@ -497,6 +506,26 @@ async function salir() {
   padding: 4px 20px;
   border-radius: var(--radio-pill);
   transition: background-color 150ms ease-out;
+}
+
+.nav .nav__enlace svg {
+  padding-inline: 8px;
+}
+
+@media (max-width: 26em) {
+  .nav .nav__enlace span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .nav .nav__enlace svg {
+    padding-inline: 6px;
+  }
 }
 
 /* Activo: píldora tintada + texto oscuro y en negrita (no depende solo del color) */

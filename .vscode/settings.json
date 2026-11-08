@@ -1,0 +1,16 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^npm --prefix frontend ls uuid$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^npm --prefix frontend run build$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^npm --prefix backend test$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

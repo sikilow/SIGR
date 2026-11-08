@@ -95,6 +95,10 @@ de respuesta contra el contrato y las cabeceras de la petición.
 | 7 | `POST /pedidos/{id}/cancelar` | Cancelar pedido |
 | 8 | `POST /pedidos/{id}/entregar` | Marcar como entregado |
 | 9 | `POST /cuentas/{id}/solicitar-pago` | Solicitar cuenta |
+| 10 | `GET /caja/estado`, `POST /caja/cortes` | Caja: consultar métodos activos y abrir con fondo inicial |
+| 11 | `POST /caja/cuentas/{id}/cobrar` | Caja: cobrar y asignar cada pago al cajero/corte |
+| 12 | `POST /caja/cortes/cerrar` | Caja: corte parcial o final, conciliación y exportación |
+| 13 | `GET/POST/PATCH /catalogo/metodos-pago` | Gerente: mantener métodos disponibles en Caja |
 
 ### Pruebas manuales por paso
 
@@ -170,6 +174,21 @@ Usuario de prueba: un mesero real de la base de datos. Antes de cada prueba, rec
 - [ ] Una cuenta ya solicitada, o sin pedidos vigentes, responde 409 `estado_invalido`.
 - [ ] Después ya no se pueden agregar pedidos a esa mesa.
 
+**10. Abrir Caja y conciliar pagos**
+- [ ] Abrir corte con el efectivo inicial contado; verificar que la API guarda `efectivo_inicial` y la hora del cajero autenticado.
+- [ ] Una cuenta solicitada como física inicia en Efectivo; una digital requiere seleccionar Tarjeta/Transferencia. Un cambio completo de método requiere confirmación del cajero y la API rechaza la petición si falta.
+- [ ] Cobrar una cuenta mixta (por ejemplo, efectivo + transferencia): Caja muestra los dos importes por separado; solo el efectivo aplicado aumenta `efectivo_esperado`.
+
+**11. Cortes y reporte**
+- [ ] Cerrar un corte parcial y luego abrir el siguiente tramo con el efectivo que se recibe físicamente.
+- [ ] Revisar que el ticket y el `.xlsx` incluyan cajero, inicio/cierre, tipo de corte, cuentas, mesa, fecha/hora y pagos por método.
+- [ ] `efectivo_esperado` = fondo inicial + pagos aplicados en efectivo; tarjeta y transferencia no se suman al cajón. El efectivo contado muestra la diferencia sin mezclarla con el total de ventas.
+- [ ] Cerrar un turno con `tipo_cierre: final`; verificar que el corte y sus ventas sigan asociados al usuario aunque ya no haya un corte abierto.
+
+**12. Métodos de pago (Gerencia)**
+- [ ] Agregar un método y confirmar que aparezca en Caja; desactivarlo y confirmar que ya no se ofrezca en cobros nuevos.
+- [ ] Los métodos desactivados permanecen en reportes históricos y no se puede desactivar el último método activo.
+
 ## 4. Cuando la respuesta no coincide con lo esperado
 
 La traducción entre el JSON de la API y los tipos del frontend vive **solo** en
@@ -214,5 +233,5 @@ Estados sugeridos: _pendiente_, _ajustado en el mapper_, _ajustado en la API_, _
 
 - [ ] `npm run check` pasa (tipos, pruebas y build).
 - [ ] `npm run build:api` genera el paquete sin la franja demo ni los usuarios de prueba.
-- [ ] Los nueve pasos de la sección 3 probados con la API real y la tabla de diferencias al día.
+- [ ] Todas las rutas de la sección 3 probadas con la API real y la tabla de diferencias al día.
 - [ ] Preguntas abiertas del contrato respondidas por el equipo de API (en especial 1, 5 y 12).
