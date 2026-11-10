@@ -71,6 +71,27 @@ async function iniciarAPI(): Promise<void> {
     throw error;
   }
 
+  // Migraciones posteriores: sin ellas las rutas afectadas responderían 500.
+  const migraciones = [
+    { archivo: "014_clientes_web.sql", consulta: "SELECT id_cliente FROM cliente_credencial LIMIT 0" },
+    { archivo: "015_corte_efectivo.sql", consulta: "SELECT fondo_inicial, efectivo_esperado, efectivo_contado FROM corte_caja LIMIT 0" },
+  ];
+  for (const { archivo, consulta } of migraciones) {
+    try {
+      await filas(pool, consulta);
+    } catch (error) {
+      const codigo = typeof error === "object" && error !== null && "code" in error ? error.code : null;
+      if (codigo === "ER_NO_SUCH_TABLE" || codigo === "ER_BAD_FIELD_ERROR") {
+        throw new Error(
+          `Falta aplicar database/migrations/${archivo} a la base SIGR. ` +
+            "Consulta docs/actualizar-base-datos.md y vuelve a iniciar la API.",
+          { cause: error },
+        );
+      }
+      throw error;
+    }
+  }
+
   app.listen(PUERTO, () => console.log(`API en http://localhost:${PUERTO}`));
   iniciarProcesadorReservaciones();
 }

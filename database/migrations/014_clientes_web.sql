@@ -5,6 +5,8 @@
 -- corrigelos y ejecuta el archivo completo otra vez.
 -- ============================================
 
+USE SIGR;
+
 -- Crear tabla para las contraseñas de clientes
 CREATE TABLE IF NOT EXISTS cliente_credencial (
     id_credencial INT AUTO_INCREMENT PRIMARY KEY,

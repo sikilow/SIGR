@@ -206,9 +206,14 @@ CREATE TABLE corte_caja (
   id_cajero INT NOT NULL,
   inicio DATETIME NOT NULL,
   fin DATETIME NULL,
+  fondo_inicial DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (fondo_inicial >= 0),
+  efectivo_esperado DECIMAL(12,2) NULL,
+  efectivo_contado DECIMAL(12,2) NULL CHECK (efectivo_contado >= 0),
   total_reportado DECIMAL(12,2) NULL CHECK (total_reportado >= 0),
   CONSTRAINT fk_corte_caja_id_cajero FOREIGN KEY (id_cajero) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
+-- fondo_inicial: efectivo al abrir. efectivo_esperado = fondo + cobros en efectivo; efectivo_contado: lo que contó el cajero.
+-- total_reportado solo existe en cortes anteriores a la migración 015.
 
 CREATE TABLE venta (
   id_venta INT AUTO_INCREMENT PRIMARY KEY,

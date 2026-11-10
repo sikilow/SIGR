@@ -1,10 +1,15 @@
 import type { CajaService } from '../interfaces'
-import type { CorteCaja, VentaCaja } from '../../types'
+import type { CobroPorMetodo, CorteCaja, CorteDetalle, VentaCaja } from '../../types'
 import { ErrorServicio } from '../errores'
 import { baseDatos } from './baseDatos'
 import { conRetraso, conRetrasoIdempotente } from './utiles'
 
 let corte: CorteCaja | null = null
+/** Pagos del corte abierto (monto ya sin cambio), para el cuadre al cerrar. */
+let pagosDelCorte: Array<{ idMetodo: number; monto: number }> = []
+let ventasDelCorte = 0
+const cortesCerrados: CorteDetalle[] = []
+let siguienteCorte = 1
 let siguienteVenta = 1
 
 const metodos = [
@@ -12,6 +17,24 @@ const metodos = [
   { idMetodo: 2, nombre: 'Tarjeta' },
   { idMetodo: 3, nombre: 'Transferencia' },
 ]
+
+const centavos = (monto: number): number => Math.round(monto * 100)
+
+function desglose(): CobroPorMetodo[] {
+  return metodos.map((metodo) => {
+    const pagos = pagosDelCorte.filter((pago) => pago.idMetodo === metodo.idMetodo)
+    return {
+      metodo: metodo.nombre,
+      cobros: pagos.length,
+      monto: pagos.reduce((suma, pago) => suma + centavos(pago.monto), 0) / 100,
+    }
+  })
+}
+
+/** Fecha local AAAA-MM-DD, igual que el filtro de la pantalla. */
+function diaLocal(fecha: Date): string {
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
+}
 
 export function crearCajaMock(): CajaService {
   return {
@@ -38,24 +61,58 @@ export function crearCajaMock(): CajaService {
         metodosPago: structuredClone(metodos),
       }))
     },
-    abrirCorte() {
+    abrirCorte(fondoInicial) {
       return conRetraso(() => {
         if (corte) throw new ErrorServicio('estado_invalido', 'Ya tienes un corte de caja abierto.', 409)
-        corte = { idCorte: 1, inicio: new Date(), totalVentas: 0 }
+        if (!Number.isFinite(fondoInicial) || fondoInicial < 0) {
+          throw new ErrorServicio('estado_invalido', 'El fondo inicial debe ser un importe de 0 o más.', 422)
+        }
+        corte = { idCorte: siguienteCorte++, inicio: new Date(), fondoInicial, cobros: 0 }
+        pagosDelCorte = []
+        ventasDelCorte = 0
         return structuredClone(corte)
       })
     },
-    cerrarCorte(totalReportado) {
+    cerrarCorte(efectivoContado) {
       return conRetraso(() => {
         if (!corte) throw new ErrorServicio('estado_invalido', 'No tienes un corte de caja abierto.', 409)
-        const cerrado: CorteCaja = {
-          ...corte,
-          fin: new Date(),
-          totalReportado,
-          diferencia: Math.round((totalReportado - corte.totalVentas) * 100) / 100,
+        if (!Number.isFinite(efectivoContado) || efectivoContado < 0) {
+          throw new ErrorServicio('estado_invalido', 'El efectivo contado debe ser un importe de 0 o más.', 422)
         }
+        const filas = desglose()
+        const efectivo = filas.find((fila) => fila.metodo === 'Efectivo')?.monto ?? 0
+        const esperado = (centavos(corte.fondoInicial) + centavos(efectivo)) / 100
+        const cerrado: CorteDetalle = {
+          idCorte: corte.idCorte,
+          cajeroNombre: 'Marta Solís',
+          inicio: corte.inicio,
+          fin: new Date(),
+          fondoInicial: corte.fondoInicial,
+          cobros: ventasDelCorte,
+          totalVentas: filas.reduce((suma, fila) => suma + centavos(fila.monto), 0) / 100,
+          efectivoEsperado: esperado,
+          efectivoContado,
+          diferencia: (centavos(efectivoContado) - centavos(esperado)) / 100,
+          totalReportado: null,
+          desglose: filas,
+        }
+        cortesCerrados.unshift(cerrado)
         corte = null
-        return cerrado
+        return structuredClone(cerrado)
+      })
+    },
+    listarCortes(filtro = {}) {
+      return conRetraso(() =>
+        cortesCerrados
+          .filter((item) => (!filtro.desde || diaLocal(item.inicio) >= filtro.desde) && (!filtro.hasta || diaLocal(item.inicio) <= filtro.hasta))
+          .map(({ desglose: _desglose, ...resumen }) => structuredClone(resumen)),
+      )
+    },
+    obtenerCorte(idCorte) {
+      return conRetraso(() => {
+        const encontrado = cortesCerrados.find((item) => item.idCorte === idCorte)
+        if (!encontrado) throw new ErrorServicio('no_encontrado', 'El corte no existe o todavía está abierto.', 404)
+        return structuredClone(encontrado)
       })
     },
     cobrar(idCuenta, pagos, claveIdempotencia) {
@@ -93,7 +150,9 @@ export function crearCajaMock(): CajaService {
         pedidos.filter((pedido) => pedido.estado !== 'cancelado').forEach((pedido) => { pedido.estado = 'pagado' })
         const mesa = baseDatos.mesas.find((item) => item.idMesa === cuenta.idMesa)
         if (mesa) mesa.estado = 'libre'
-        corte.totalVentas += total
+        corte.cobros += 1
+        ventasDelCorte += 1
+        pagosDelCorte.push(...pagos.map((pago) => ({ idMetodo: pago.idMetodo, monto: pago.monto })))
         return venta
       })
     },

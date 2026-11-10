@@ -3,15 +3,34 @@ import type { CuentaDto } from './mappers'
 import { aCuenta } from './mappers'
 import { parseFechaMySQL } from './conversion'
 import { solicitar } from './cliente'
-import type { CorteCaja, EstadoCaja, VentaCaja } from '../../types'
+import type { CorteCaja, CorteDetalle, CorteResumen, EstadoCaja, VentaCaja } from '../../types'
 
 interface CorteDto {
   id_corte: number | string
   inicio: string
-  total_ventas: number | string
-  fin?: string
-  total_reportado?: number | string
-  diferencia?: number | string
+  fondo_inicial: number | string
+  cobros: number | string
+}
+
+type Importe = number | string
+
+interface CorteResumenDto {
+  id_corte: number | string
+  cajero_nombre: string
+  inicio: string
+  fin: string
+  fondo_inicial: Importe
+  cobros: number | string
+  total_ventas: Importe
+  efectivo_esperado: Importe | null
+  efectivo_contado: Importe | null
+  diferencia: Importe | null
+  total_reportado: Importe | null
+}
+
+interface CorteDetalleDto extends CorteResumenDto {
+  efectivo_esperado: Importe
+  desglose: Array<{ metodo: string; cobros: number | string; monto: Importe }>
 }
 
 interface EstadoDto {
@@ -44,10 +63,34 @@ function aCorte(dto: CorteDto): CorteCaja {
   return {
     idCorte: Number(dto.id_corte),
     inicio: parseFechaMySQL(dto.inicio, 'corte.inicio'),
+    fondoInicial: Number(dto.fondo_inicial),
+    cobros: Number(dto.cobros),
+  }
+}
+
+const numeroONulo = (valor: Importe | null): number | null => (valor === null ? null : Number(valor))
+
+function aCorteResumen(dto: CorteResumenDto): CorteResumen {
+  return {
+    idCorte: Number(dto.id_corte),
+    cajeroNombre: dto.cajero_nombre,
+    inicio: parseFechaMySQL(dto.inicio, 'corte.inicio'),
+    fin: parseFechaMySQL(dto.fin, 'corte.fin'),
+    fondoInicial: Number(dto.fondo_inicial),
+    cobros: Number(dto.cobros),
     totalVentas: Number(dto.total_ventas),
-    ...(dto.fin ? { fin: parseFechaMySQL(dto.fin, 'corte.fin') } : {}),
-    ...(dto.total_reportado !== undefined ? { totalReportado: Number(dto.total_reportado) } : {}),
-    ...(dto.diferencia !== undefined ? { diferencia: Number(dto.diferencia) } : {}),
+    efectivoEsperado: numeroONulo(dto.efectivo_esperado),
+    efectivoContado: numeroONulo(dto.efectivo_contado),
+    diferencia: numeroONulo(dto.diferencia),
+    totalReportado: numeroONulo(dto.total_reportado),
+  }
+}
+
+function aCorteDetalle(dto: CorteDetalleDto): CorteDetalle {
+  return {
+    ...aCorteResumen(dto),
+    efectivoEsperado: Number(dto.efectivo_esperado),
+    desglose: dto.desglose.map((fila) => ({ metodo: fila.metodo, cobros: Number(fila.cobros), monto: Number(fila.monto) })),
   }
 }
 
@@ -89,15 +132,24 @@ export function crearCajaApi(): CajaService {
         })),
       }
     },
-    async abrirCorte() {
-      return aCorte(await solicitar<CorteDto>('POST', '/caja/cortes', { cuerpo: {} }))
+    async abrirCorte(fondoInicial) {
+      return aCorte(await solicitar<CorteDto>('POST', '/caja/cortes', { cuerpo: { fondo_inicial: fondoInicial } }))
     },
-    async cerrarCorte(totalReportado) {
-      return aCorte(
-        await solicitar<CorteDto>('POST', '/caja/cortes/cerrar', {
-          cuerpo: { total_reportado: totalReportado },
+    async cerrarCorte(efectivoContado) {
+      return aCorteDetalle(
+        await solicitar<CorteDetalleDto>('POST', '/caja/cortes/cerrar', {
+          cuerpo: { efectivo_contado: efectivoContado },
         }),
       )
+    },
+    async listarCortes(filtro = {}) {
+      const dto = await solicitar<CorteResumenDto[]>('GET', '/caja/cortes', {
+        consulta: { desde: filtro.desde, hasta: filtro.hasta },
+      })
+      return dto.map(aCorteResumen)
+    },
+    async obtenerCorte(idCorte) {
+      return aCorteDetalle(await solicitar<CorteDetalleDto>('GET', `/caja/cortes/${idCorte}`))
     },
     async cobrar(idCuenta, pagos, claveIdempotencia) {
       const dto = await solicitar<{ venta: VentaDto }>('POST', `/caja/cuentas/${idCuenta}/cobrar`, {

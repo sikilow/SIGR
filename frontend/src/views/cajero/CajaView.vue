@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import InsigniaEstado from '../../components/InsigniaEstado.vue'
+import ResumenCorte from '../../components/ResumenCorte.vue'
 import { servicios } from '../../services'
 import {
   ETIQUETA_ESTADO_PEDIDO,
+  type CorteDetalle,
   type CuentaCaja,
   type EstadoCaja,
   type PagoCajaEntrada,
@@ -19,14 +21,19 @@ interface LineaTicket {
 const estado = ref<EstadoCaja | null>(null)
 const seleccionadaId = ref<number | null>(null)
 const pagos = ref<PagoCajaEntrada[]>([])
-const recibidoReporte = ref<number | null>(null)
+const fondoInicial = ref<number | null>(null)
+const efectivoContado = ref<number | null>(null)
+const confirmandoCierre = ref(false)
+const corteCerrado = ref<CorteDetalle | null>(null)
 const ventaReciente = ref<VentaCaja | null>(null)
 const lineasTicket = ref<LineaTicket[]>([])
 const meseroTicket = ref('')
 const error = ref<string | null>(null)
 const cargando = ref(true)
 const procesando = ref(false)
-const diferenciaCorte = ref<number | null>(null)
+
+const importeValido = (valor: number | null): valor is number =>
+  typeof valor === 'number' && Number.isFinite(valor) && valor >= 0
 
 const cuentaSeleccionada = computed(
   () => estado.value?.cuentas.find((item) => item.cuenta.idCuenta === seleccionadaId.value) ?? null,
@@ -60,7 +67,10 @@ async function cargar() {
   cargando.value = true
   try {
     estado.value = await servicios.caja.obtenerEstado()
-    if (!estado.value.corte) recibidoReporte.value = null
+    if (!estado.value.corte) {
+      efectivoContado.value = null
+      confirmandoCierre.value = false
+    }
     if (seleccionadaId.value && !estado.value.cuentas.some((item) => item.cuenta.idCuenta === seleccionadaId.value)) {
       seleccionadaId.value = null
       pagos.value = []
@@ -109,15 +119,17 @@ function nombreMetodo(idMetodo: number): string {
   return estado.value?.metodosPago.find((metodo) => metodo.idMetodo === idMetodo)?.nombre ?? 'Método'
 }
 
-function usarTotalSistema() {
-  if (estado.value?.corte) recibidoReporte.value = estado.value.corte.totalVentas
-}
-
 async function abrirCorte() {
+  if (!importeValido(fondoInicial.value)) {
+    error.value = 'Escribe el efectivo con el que inicia la caja (0 o más).'
+    return
+  }
   procesando.value = true
   error.value = null
   try {
-    await servicios.caja.abrirCorte()
+    await servicios.caja.abrirCorte(fondoInicial.value)
+    fondoInicial.value = null
+    corteCerrado.value = null
     await cargar()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'No se pudo abrir el corte.'
@@ -126,14 +138,25 @@ async function abrirCorte() {
   }
 }
 
+/** Primer paso: el cajero revisa lo que contó antes de cerrar, porque el cierre no se puede deshacer. */
+function pedirConfirmacionCierre() {
+  if (!importeValido(efectivoContado.value)) {
+    error.value = 'Escribe el efectivo que contaste en la caja (0 o más).'
+    return
+  }
+  error.value = null
+  confirmandoCierre.value = true
+}
+
 async function cerrarCorte() {
-  if (!estado.value?.corte || recibidoReporte.value === null) return
+  if (!estado.value?.corte || !importeValido(efectivoContado.value)) return
   procesando.value = true
   error.value = null
   try {
-    const corte = await servicios.caja.cerrarCorte(recibidoReporte.value)
-    diferenciaCorte.value = corte.diferencia ?? 0
-    recibidoReporte.value = null
+    corteCerrado.value = await servicios.caja.cerrarCorte(efectivoContado.value)
+    ventaReciente.value = null
+    efectivoContado.value = null
+    confirmandoCierre.value = false
     await cargar()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'No se pudo cerrar el corte.'
@@ -161,8 +184,7 @@ async function cobrar() {
     ventaReciente.value = await servicios.caja.cobrar(cuenta.cuenta.idCuenta, pagos.value, window.crypto.randomUUID())
     seleccionadaId.value = null
     pagos.value = []
-    recibidoReporte.value = null
-    diferenciaCorte.value = null
+    corteCerrado.value = null
     await cargar()
   } catch (e) {
     lineasTicket.value = []
@@ -174,6 +196,12 @@ async function cobrar() {
 
 function imprimirTicket() {
   window.print()
+}
+
+function textoDiferencia(diferencia: number | null): string {
+  if (diferencia === null) return 'Sin conteo de efectivo'
+  if (Math.abs(diferencia) < 0.005) return 'El efectivo cuadra'
+  return diferencia < 0 ? `Faltante de ${moneda(-diferencia)}` : `Sobrante de ${moneda(diferencia)}`
 }
 
 onMounted(cargar)
@@ -199,10 +227,6 @@ onMounted(cargar)
       <p>{{ error }}</p>
       <button type="button" class="btn btn--secundario" :disabled="cargando || procesando" @click="cargar">Reintentar</button>
     </div>
-    <div v-if="diferenciaCorte !== null" class="aviso aviso--exito no-imprimir" role="status">
-      <p>Corte cerrado. Diferencia reportada: <strong>{{ moneda(diferenciaCorte) }}</strong></p>
-      <button type="button" class="btn btn--secundario" @click="diferenciaCorte = null">Cerrar</button>
-    </div>
 
     <template v-if="cargando && !estado">
       <div class="esqueletos" aria-hidden="true">
@@ -227,10 +251,16 @@ onMounted(cargar)
           <p v-else class="corte__meta">Abre un corte para comenzar a registrar cobros del turno.</p>
 
           <div class="corte__cifras">
-            <div class="corte__cifra">
-              <span>Ventas del turno</span>
-              <strong class="numero">{{ moneda(estado.corte?.totalVentas ?? 0) }}</strong>
-            </div>
+            <template v-if="estado.corte">
+              <div class="corte__cifra">
+                <span>Fondo inicial</span>
+                <strong class="numero">{{ moneda(estado.corte.fondoInicial) }}</strong>
+              </div>
+              <div class="corte__cifra">
+                <span>Cobros del turno</span>
+                <strong class="numero">{{ estado.corte.cobros }}</strong>
+              </div>
+            </template>
             <div class="corte__cifra">
               <span>Cuentas por cobrar</span>
               <strong class="numero">{{ estado.cuentas.length }}</strong>
@@ -239,20 +269,32 @@ onMounted(cargar)
         </div>
 
         <div class="corte__acciones">
-          <button v-if="!estado.corte" class="btn btn--grande" type="button" :disabled="procesando" @click="abrirCorte">
-            Abrir corte
-          </button>
-          <form v-else class="form-corte" @submit.prevent="cerrarCorte">
+          <form v-if="!estado.corte" class="form-corte" @submit.prevent="abrirCorte">
             <div class="campo">
-              <label for="total-reportado">Total de ventas reportado</label>
-              <input id="total-reportado" v-model.number="recibidoReporte" type="number" min="0" step="0.01" required>
-              <p class="campo__ayuda">El sistema registra {{ moneda(estado.corte.totalVentas) }}.</p>
+              <label for="fondo-inicial">Efectivo inicial en caja</label>
+              <input id="fondo-inicial" v-model.number="fondoInicial" type="number" min="0" step="0.01" inputmode="decimal" required>
+              <p class="campo__ayuda">Cuenta los billetes y monedas con los que empiezas el turno.</p>
             </div>
-            <div class="form-corte__acciones">
-              <button type="button" class="btn btn--texto" @click="usarTotalSistema">Usar total del sistema</button>
-              <button class="btn" type="submit" :disabled="procesando">Cerrar corte</button>
-            </div>
+            <button class="btn btn--grande" type="submit" :disabled="procesando">Abrir corte</button>
           </form>
+          <form v-else-if="!confirmandoCierre" class="form-corte" @submit.prevent="pedirConfirmacionCierre">
+            <div class="campo">
+              <label for="efectivo-contado">Efectivo contado en caja</label>
+              <input id="efectivo-contado" v-model.number="efectivoContado" type="number" min="0" step="0.01" inputmode="decimal" required>
+              <p class="campo__ayuda">Incluye el fondo inicial. La diferencia aparece después de cerrar.</p>
+            </div>
+            <button class="btn" type="submit" :disabled="procesando">Cerrar corte</button>
+          </form>
+          <div v-else class="form-corte form-corte--confirmar" role="alertdialog" aria-labelledby="confirmar-cierre">
+            <p id="confirmar-cierre">
+              Vas a cerrar el corte con <strong class="numero">{{ moneda(efectivoContado ?? 0) }}</strong> contados.
+              Después ya no podrás cobrar en este corte ni cambiar el conteo.
+            </p>
+            <div class="form-corte__acciones">
+              <button type="button" class="btn btn--secundario" :disabled="procesando" @click="confirmandoCierre = false">Volver a contar</button>
+              <button type="button" class="btn" :disabled="procesando" @click="cerrarCorte">Confirmar cierre</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -525,6 +567,27 @@ onMounted(cargar)
         <p class="ticket__nota">Conserve este comprobante.</p>
       </div>
     </section>
+
+    <section v-if="corteCerrado" class="ticket-panel" aria-labelledby="corte-cerrado-titulo">
+      <div class="ticket-panel__barra no-imprimir">
+        <div>
+          <p class="sobretitulo">Corte cerrado</p>
+          <h3 id="corte-cerrado-titulo">Corte #{{ corteCerrado.idCorte }}</h3>
+          <p>{{ textoDiferencia(corteCerrado.diferencia) }} · {{ fecha(corteCerrado.fin) }}</p>
+        </div>
+        <div class="ticket-panel__acciones">
+          <button class="btn btn--secundario" type="button" @click="corteCerrado = null">Cerrar</button>
+          <button class="btn" type="button" @click="imprimirTicket">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2" />
+              <path d="M6 14h12v7H6z" />
+            </svg>
+            Imprimir corte
+          </button>
+        </div>
+      </div>
+      <ResumenCorte :corte="corteCerrado" />
+    </section>
   </div>
 </template>
 
@@ -621,6 +684,18 @@ onMounted(cargar)
 
 .form-corte__acciones .btn:last-child {
   flex: 1;
+}
+
+.form-corte--confirmar {
+  padding: var(--espacio-4);
+  border: 2px solid var(--color-advertencia);
+  border-radius: var(--radio);
+  background: var(--color-advertencia-fondo);
+  color: var(--color-advertencia-texto);
+}
+
+.form-corte--confirmar p {
+  margin: 0;
 }
 
 .columnas {

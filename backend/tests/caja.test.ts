@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validarImportes, type PagoEntrada } from "../src/models/caja";
+import { cuadrarCorte, validarImportes, type PagoEntrada } from "../src/models/caja";
 import { ErrorApi } from "../src/utils/errores";
 
 function errorDe(fn: () => unknown): ErrorApi {
@@ -44,5 +44,31 @@ describe("validarImportes", () => {
       ]),
     );
     expect(error.estado).toBe(422);
+  });
+});
+
+describe("cuadrarCorte", () => {
+  const desglose = [
+    { metodo: "Efectivo", cobros: 3, monto: 1200 },
+    { metodo: "Tarjeta", cobros: 2, monto: 850.5 },
+    { metodo: "Transferencia", cobros: 0, monto: 0 },
+  ];
+
+  it("espera el fondo inicial más solo lo cobrado en efectivo", () => {
+    expect(cuadrarCorte(500, desglose, 1700)).toEqual({ total_ventas: 2050.5, efectivo_esperado: 1700, diferencia: 0 });
+  });
+
+  it("reporta faltante como diferencia negativa y sobrante como positiva", () => {
+    expect(cuadrarCorte(500, desglose, 1680).diferencia).toBe(-20);
+    expect(cuadrarCorte(500, desglose, 1700.1).diferencia).toBe(0.1);
+  });
+
+  it("sin efectivo contado no calcula diferencia", () => {
+    expect(cuadrarCorte(0, desglose, null)).toEqual({ total_ventas: 2050.5, efectivo_esperado: 1200, diferencia: null });
+  });
+
+  it("evita errores de punto flotante con centavos", () => {
+    const pagos = [{ metodo: "efectivo", cobros: 2, monto: 0.1 }, { metodo: "Efectivo", cobros: 1, monto: 0.2 }];
+    expect(cuadrarCorte(0.1, pagos, 0.4).diferencia).toBe(0);
   });
 });

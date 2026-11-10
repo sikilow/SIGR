@@ -3,6 +3,9 @@
 import type {
   CambioMesa,
   CorteCaja,
+  CorteDetalle,
+  CorteResumen,
+  FiltroCortes,
   EstadoCaja,
   CambioProducto,
   ConfiguracionReservacion,
@@ -101,9 +104,13 @@ export interface CajaService {
   /** GET /caja/estado */
   obtenerEstado(): Promise<EstadoCaja>
   /** POST /caja/cortes */
-  abrirCorte(): Promise<CorteCaja>
+  abrirCorte(fondoInicial: number): Promise<CorteCaja>
   /** POST /caja/cortes/cerrar */
-  cerrarCorte(totalReportado: number): Promise<CorteCaja>
+  cerrarCorte(efectivoContado: number): Promise<CorteDetalle>
+  /** GET /caja/cortes (cajero: los suyos; gerente: todos) */
+  listarCortes(filtro?: FiltroCortes): Promise<CorteResumen[]>
+  /** GET /caja/cortes/{id} */
+  obtenerCorte(idCorte: number): Promise<CorteDetalle>
   /** POST /caja/cuentas/{id}/cobrar */
   cobrar(idCuenta: number, pagos: PagoCajaEntrada[], claveIdempotencia?: string): Promise<VentaCaja>
 }

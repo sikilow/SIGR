@@ -95,6 +95,11 @@ export const router = createRouter({
           component: () => import('../views/gerente/PedidosView.vue'),
         },
         {
+          path: 'cortes',
+          name: 'gerente-cortes',
+          component: () => import('../views/gerente/CortesView.vue'),
+        },
+        {
           path: 'sistema',
           name: 'gerente-sistema',
           component: () => import('../views/gerente/SistemaView.vue'),
