@@ -1,12 +1,17 @@
 <script setup lang="ts">
-// Solicitar la cuenta (diálogo modal). El mesero NO cobra: solo indica a caja el tipo de pago
-// ("fisico" o "digital") con POST /cuentas/{id}/solicitar-pago. Los pedidos sin entregar se avisan
-// pero NO bloquean; solo se bloquea si no hay pedidos vigentes (total 0).
+// Solicitar la cuenta (diálogo modal). El mesero NO cobra: indica a caja cómo pagará el cliente.
 import { computed, nextTick, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import { useAnunciosStore } from '../stores/anuncios'
 import { invalidarDatos } from '../stores/invalidar'
-import { ETIQUETA_ESTADO_PEDIDO, ETIQUETA_TIPO_PAGO, type Cuenta, type EstadoPedido, type TipoPago } from '../types'
+import {
+  ETIQUETA_ESTADO_PEDIDO,
+  ETIQUETA_TIPO_PAGO,
+  type Cuenta,
+  type EstadoPedido,
+  type MetodoPagoAdmin,
+  type TipoPago,
+} from '../types'
 import { formatearMoneda } from '../utils/formato'
 import { crearClaveIdempotencia, esFalloReintentable } from '../utils/idempotencia'
 import { estaSinEntregar, sumaAlTotal } from '../utils/reglas'
@@ -35,6 +40,10 @@ const anuncios = useAnunciosStore()
 const claves = crearClaveIdempotencia()
 
 const tipo = ref<TipoPago | null>(null)
+const metodosDisponibles = ref<MetodoPagoAdmin[]>([])
+const idMetodoPagoSolicitado = ref<number | null>(null)
+const cargandoMetodos = ref(false)
+const errorMetodos = ref('')
 const intentado = ref(false)
 const enCurso = ref(false)
 const errorReintentable = ref('')
@@ -46,7 +55,25 @@ const vigentes = computed(() => (props.cuenta?.pedidos ?? []).filter(sumaAlTotal
 const sinEntregar = computed(() => vigentes.value.filter((p) => estaSinEntregar(p.estado)))
 /** Sin pedidos vigentes no hay nada que cobrar. */
 const sinPedidosActivos = computed(() => (props.cuenta?.total ?? 0) === 0 || vigentes.value.length === 0)
-const errorTipo = computed(() => (intentado.value && tipo.value === null ? 'Elige una forma de pago para continuar.' : ''))
+const errorTipo = computed(() => {
+  if (!intentado.value) return ''
+  if (tipo.value === null) return 'Elige una forma de pago para continuar.'
+  if (tipo.value !== null && idMetodoPagoSolicitado.value === null) return 'Elige un método de pago de la categoría seleccionada.'
+  return ''
+})
+const categoriasDisponibles = computed(() => {
+  const grupos = new Map<number, { id: number; nombre: string; metodos: MetodoPagoAdmin[] }>()
+  for (const metodo of metodosDisponibles.value.filter((item) => item.tipo === tipo.value)) {
+    const grupo = grupos.get(metodo.idCategoriaMetodoPago) ?? {
+      id: metodo.idCategoriaMetodoPago,
+      nombre: metodo.categoria,
+      metodos: [],
+    }
+    grupo.metodos.push(metodo)
+    grupos.set(metodo.idCategoriaMetodoPago, grupo)
+  }
+  return [...grupos.values()]
+})
 
 watch(
   () => props.abierto,
@@ -57,9 +84,27 @@ watch(
     enCurso.value = false
     errorReintentable.value = ''
     rechazo.value = ''
+    metodosDisponibles.value = []
+    idMetodoPagoSolicitado.value = null
+    errorMetodos.value = ''
     claves.soltar()
   },
 )
+
+watch(tipo, async (elegido) => {
+  idMetodoPagoSolicitado.value = null
+  errorMetodos.value = ''
+  if (elegido === null) return
+
+  cargandoMetodos.value = true
+  try {
+    metodosDisponibles.value = await servicios.catalogo.listarMetodosPagoDisponibles()
+  } catch (e) {
+    errorMetodos.value = e instanceof Error ? e.message : 'No se pudieron cargar los métodos digitales.'
+  } finally {
+    cargandoMetodos.value = false
+  }
+})
 
 watch(rechazo, async (texto) => {
   if (!texto) return
@@ -91,9 +136,9 @@ async function explicarRechazo(e: ErrorServicio, cuenta: Cuenta) {
 
 async function solicitar() {
   const cuenta = props.cuenta
-  if (enCurso.value || !cuenta || sinPedidosActivos.value) return
+  if (enCurso.value || !cuenta || sinPedidosActivos.value || sinEntregar.value.length > 0) return
   intentado.value = true
-  if (tipo.value === null) {
+  if (tipo.value === null || idMetodoPagoSolicitado.value === null) {
     grupoPago.value?.querySelector('input')?.focus()
     return
   }
@@ -101,12 +146,14 @@ async function solicitar() {
   enCurso.value = true
   errorReintentable.value = ''
   // Misma cuenta y mismo tipo de pago = reintento (misma clave); otro tipo = intención nueva.
-  const clave = claves.para(`solicitar|${cuenta.idCuenta}|${tipo.value}`)
+  const clave = claves.para(`solicitar|${cuenta.idCuenta}|${tipo.value}|${idMetodoPagoSolicitado.value ?? ''}`)
   const elegido = tipo.value
+  const metodoElegido = idMetodoPagoSolicitado.value
   try {
-    const actualizada = await servicios.cuentas.solicitarPago(cuenta.idCuenta, elegido, clave)
+    const actualizada = await servicios.cuentas.solicitarPago(cuenta.idCuenta, elegido, metodoElegido, clave)
     claves.soltar()
-    void anuncios.anunciar(`Cuenta solicitada · ${ETIQUETA_TIPO_PAGO[elegido]} · Esperando al cajero`)
+    const metodo = metodosDisponibles.value.find((item) => item.idMetodo === metodoElegido)?.nombre
+    void anuncios.anunciar(`Cuenta solicitada · ${ETIQUETA_TIPO_PAGO[elegido]}${metodo ? ` · ${metodo}` : ''} · Esperando al cajero`)
     await invalidarDatos()
     emit('solicitada', actualizada)
   } catch (e) {
@@ -139,7 +186,7 @@ async function solicitar() {
     <form v-if="cuenta" class="solicitar" novalidate @submit.prevent="solicitar">
       <header>
         <h2 id="solicitar-titulo">Solicitar cuenta · Mesa {{ mesaNumero }}</h2>
-        <p class="solicitar__sub">El cajero hará el cobro; aquí solo indicas cómo pagará el cliente.</p>
+        <p class="solicitar__sub">El cajero hará el cobro; aquí eliges la categoría y el método de pago.</p>
       </header>
 
       <p class="solicitar__total">
@@ -173,7 +220,7 @@ async function solicitar() {
       </div>
 
       <template v-else>
-        <!-- Advertencia (no bloquea) -->
+        <!-- Los pedidos listos deben servirse antes de solicitar el cobro. -->
         <div v-if="sinEntregar.length > 0" class="solicitar__advertencia">
           <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3 2 20h20z" />
@@ -186,36 +233,61 @@ async function solicitar() {
             <ul>
               <li v-for="p in sinEntregar" :key="p.idPedido">{{ textoSinEntregar(p.estado, p.idPedido) }}</li>
             </ul>
-            <p>Puedes solicitar la cuenta de todos modos.</p>
+            <p>Entrega todos los pedidos antes de solicitar la cuenta.</p>
           </div>
         </div>
 
-        <fieldset ref="grupoPago" class="pago" :aria-describedby="errorTipo ? 'pago-error' : undefined">
-          <legend>Forma de pago <span class="solicitar__requerido">(obligatorio)</span></legend>
-          <label
-            v-for="opcion in OPCIONES"
-            :key="opcion.valor"
-            class="pago__opcion"
-            :class="{ 'pago__opcion--elegida': tipo === opcion.valor }"
-          >
-            <input
-              v-model="tipo"
-              type="radio"
-              name="tipo-pago"
-              :value="opcion.valor"
-              :disabled="enCurso"
+        <template v-else>
+          <fieldset ref="grupoPago" class="pago" :aria-describedby="errorTipo ? 'pago-error' : undefined">
+            <legend>Forma de pago <span class="solicitar__requerido">(obligatorio)</span></legend>
+            <label
+              v-for="opcion in OPCIONES"
+              :key="opcion.valor"
+              class="pago__opcion"
+              :class="{ 'pago__opcion--elegida': tipo === opcion.valor }"
+            >
+              <input
+                v-model="tipo"
+                type="radio"
+                name="tipo-pago"
+                :value="opcion.valor"
+                :disabled="enCurso"
+                :aria-invalid="errorTipo ? 'true' : undefined"
+              />
+              <span class="pago__texto">
+                <strong>{{ ETIQUETA_TIPO_PAGO[opcion.valor] }}</strong>
+                <small>{{ opcion.ayuda }}</small>
+              </span>
+              <svg v-if="tipo === opcion.valor" class="pago__marca" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m5 12 5 5 9-10" />
+              </svg>
+            </label>
+            <p v-if="errorTipo" id="pago-error" class="texto-error" role="alert">{{ errorTipo }}</p>
+          </fieldset>
+
+          <div v-if="tipo" class="campo">
+            <label for="metodo-pago-solicitado">Método {{ tipo === 'fisico' ? 'físico' : 'digital' }}</label>
+            <select
+              id="metodo-pago-solicitado"
+              v-model.number="idMetodoPagoSolicitado"
+              :disabled="enCurso || cargandoMetodos || categoriasDisponibles.length === 0"
               :aria-invalid="errorTipo ? 'true' : undefined"
-            />
-            <span class="pago__texto">
-              <strong>{{ ETIQUETA_TIPO_PAGO[opcion.valor] }}</strong>
-              <small>{{ opcion.ayuda }}</small>
-            </span>
-            <svg v-if="tipo === opcion.valor" class="pago__marca" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m5 12 5 5 9-10" />
-            </svg>
-          </label>
-          <p v-if="errorTipo" id="pago-error" class="texto-error" role="alert">{{ errorTipo }}</p>
-        </fieldset>
+              :aria-describedby="errorTipo ? 'pago-error' : undefined"
+            >
+              <option :value="null" disabled>Elige un método</option>
+              <optgroup v-for="categoria in categoriasDisponibles" :key="categoria.id" :label="categoria.nombre">
+                <option v-for="metodo in categoria.metodos" :key="metodo.idMetodo" :value="metodo.idMetodo">
+                  {{ metodo.nombre }}
+                </option>
+              </optgroup>
+            </select>
+            <p v-if="cargandoMetodos" class="campo__ayuda" role="status">Cargando métodos disponibles…</p>
+            <p v-else-if="errorMetodos" class="texto-error" role="alert">{{ errorMetodos }}</p>
+            <p v-else-if="categoriasDisponibles.length === 0" class="campo__ayuda">
+              Gerencia aún no ha activado métodos para esta categoría.
+            </p>
+          </div>
+        </template>
 
         <div v-if="errorReintentable" class="solicitar__alerta" role="alert">
           <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -229,7 +301,7 @@ async function solicitar() {
       <p class="solo-lectores" role="status">{{ enCurso ? 'Solicitando la cuenta…' : '' }}</p>
 
       <div class="fila-botones">
-        <button v-if="rechazo || sinPedidosActivos" ref="botonCerrar" type="button" class="btn" autofocus @click="emit('cerrar')">
+        <button v-if="rechazo || sinPedidosActivos || sinEntregar.length > 0" ref="botonCerrar" type="button" class="btn" autofocus @click="emit('cerrar')">
           Cerrar
         </button>
         <template v-else>

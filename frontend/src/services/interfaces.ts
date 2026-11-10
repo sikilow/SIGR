@@ -2,6 +2,7 @@
 // interfaces; `services/index.ts` decide si se usa el mock o la API real.
 import type {
   CambioMesa,
+  CategoriaMetodoPagoAdmin,
   CorteCaja,
   CorteDetalle,
   CorteResumen,
@@ -98,7 +99,7 @@ export interface CuentasService {
   /** GET /mesas/{id}/cuenta. Devuelve `null` si la mesa no tiene cuenta activa. */
   obtenerPorMesa(idMesa: number): Promise<Cuenta | null>
   /** POST /cuentas/{id}/solicitar-pago (con `Idempotency-Key`). */
-  solicitarPago(idCuenta: number, tipo: TipoPago, claveIdempotencia?: string): Promise<Cuenta>
+  solicitarPago(idCuenta: number, tipo: TipoPago, idMetodoPagoSolicitado: number | null, claveIdempotencia?: string): Promise<Cuenta>
 }
 
 export interface CajaService {
@@ -130,16 +131,22 @@ export interface UsuariosService {
 
 /** Administración del catálogo: categorías, productos e inventario. Solo el gerente. */
 export interface CatalogoService {
+  /** GET /catalogo/metodos-pago/disponibles. Categorías y métodos activos para el personal. */
+  listarMetodosPagoDisponibles(): Promise<MetodoPagoAdmin[]>
   /** GET /catalogo/configuracion-reservacion */
   obtenerConfiguracionReservacion(): Promise<ConfiguracionReservacion>
   /** PATCH /catalogo/configuracion-reservacion */
   actualizarConfiguracionReservacion(cambio: ConfiguracionReservacion): Promise<ConfiguracionReservacion>
-  /** GET /catalogo/metodos-pago */
-  listarMetodosPago(): Promise<MetodoPagoAdmin[]>
+  /** GET /catalogo/metodos-pago. Categorías y métodos activos e inactivos. */
+  listarMetodosPago(): Promise<CategoriaMetodoPagoAdmin[]>
+  /** POST /catalogo/metodos-pago/categorias */
+  crearCategoriaMetodoPago(nombre: string, tipo: 'fisico' | 'digital'): Promise<CategoriaMetodoPagoAdmin>
+  /** PATCH /catalogo/metodos-pago/categorias/{id} */
+  actualizarCategoriaMetodoPago(id: number, cambio: { activo: boolean }): Promise<CategoriaMetodoPagoAdmin>
   /** POST /catalogo/metodos-pago */
-  crearMetodoPago(nombre: string): Promise<MetodoPagoAdmin>
+  crearMetodoPago(nombre: string, idCategoriaMetodoPago: number, esEfectivo: boolean): Promise<MetodoPagoAdmin>
   /** PATCH /catalogo/metodos-pago/{id} */
-  actualizarMetodoPago(id: number, cambio: { activo: boolean }): Promise<MetodoPagoAdmin>
+  actualizarMetodoPago(id: number, cambio: { activo?: boolean; esEfectivo?: boolean }): Promise<MetodoPagoAdmin>
   /** GET /catalogo/categorias */
   listarCategorias(): Promise<CategoriaAdmin[]>
   /** POST /catalogo/categorias */

@@ -169,14 +169,15 @@ Usuario de prueba: un mesero real de la base de datos. Antes de cada prueba, rec
 - [ ] Desde cualquier otro estado responde 409 `estado_invalido`.
 
 **9. Solicitar cuenta**
-- [ ] Con "Pago físico" y con "Pago digital": 200 con `estado: por_pagar` y `tipo_pago_solicitado`; la
-      pantalla muestra "Cuenta solicitada · Pago … · Esperando al cajero" y el panel "Cuenta solicitada".
+- [ ] Pago físico o digital guarda `tipo_pago_solicitado` y `id_metodo_pago_solicitado` de un método activo agrupado por categoría.
+- [ ] La pantalla muestra "Cuenta solicitada · Pago … · Esperando al cajero" y el panel "Cuenta solicitada".
 - [ ] Una cuenta ya solicitada, o sin pedidos vigentes, responde 409 `estado_invalido`.
+- [ ] Un pedido listo pero no entregado bloquea solicitar y cobrar la cuenta.
 - [ ] Después ya no se pueden agregar pedidos a esa mesa.
 
 **10. Abrir Caja y conciliar pagos**
 - [ ] Abrir corte con el efectivo inicial contado; verificar que la API guarda `efectivo_inicial` y la hora del cajero autenticado.
-- [ ] Una cuenta solicitada como física inicia en Efectivo; una digital requiere seleccionar Tarjeta/Transferencia. Un cambio completo de método requiere confirmación del cajero y la API rechaza la petición si falta.
+- [ ] Una cuenta física o digital inicia con el método que eligió el mesero y la API rechaza el cobro si no se incluye.
 - [ ] Cobrar una cuenta mixta (por ejemplo, efectivo + transferencia): Caja muestra los dos importes por separado; solo el efectivo aplicado aumenta `efectivo_esperado`.
 
 **11. Cortes y reporte**
@@ -186,8 +187,10 @@ Usuario de prueba: un mesero real de la base de datos. Antes de cada prueba, rec
 - [ ] Cerrar un turno con `tipo_cierre: final`; verificar que el corte y sus ventas sigan asociados al usuario aunque ya no haya un corte abierto.
 
 **12. Métodos de pago (Gerencia)**
-- [ ] Agregar un método y confirmar que aparezca en Caja; desactivarlo y confirmar que ya no se ofrezca en cobros nuevos.
-- [ ] Los métodos desactivados permanecen en reportes históricos y no se puede desactivar el último método activo.
+- [ ] Crear categorías físicas/digitales y categorías personalizadas de ambos tipos; agregar métodos a cada una.
+- [ ] Desactivar una categoría y comprobar que sus métodos dejan de ofrecerse en solicitudes nuevas; desactivar un método individual y comprobar lo mismo.
+- [ ] Las categorías y métodos activos aparecen agrupados para el personal. Las ventas históricas permanecen intactas.
+- [ ] Marcar el método de efectivo y verificar que solo sus pagos se sumen al cuadre, independientemente de su nombre.
 
 ## 4. Cuando la respuesta no coincide con lo esperado
 

@@ -70,7 +70,7 @@ Archivos: `schema.sql` (227 líneas, crea todo), `seed.sql` (25), `seed_demo.sql
 
 | Líneas | Tabla | Qué guarda | Detalles |
 | --- | --- | --- | --- |
-| 96–104 | `cuenta` | La cuenta de una mesa. | `estado`: `abierta`, `por_pagar` o `cerrada` (`CHECK`); `tipo_pago_solicitado`: `fisico`, `digital` o `NULL`; `abierta_en` y `cerrada_en`. |
+| 96–104 | `cuenta` | La cuenta de una mesa. | `estado`: `abierta`, `por_pagar` o `cerrada` (`CHECK`); `tipo_pago_solicitado`: `fisico`, `digital` o `NULL`; `id_metodo_pago_solicitado` guarda el método digital elegido; `abierta_en` y `cerrada_en`. |
 | 106–109 | `estado_pedido` | Catálogo de estados. | Se llena en la línea 220. |
 | 111–114 | `motivo_cancelacion` | Textos de motivos. | `descripcion` hasta 200 caracteres. |
 | 116–128 | `pedido` | Un pedido. | FK a `cuenta`, `usuario` (el mesero), `estado_pedido` y `motivo_cancelacion` (`NULL` mientras no se cancele). **No tiene `id_mesa`**: se llega a la mesa por la cuenta. |
@@ -82,7 +82,8 @@ Archivos: `schema.sql` (227 líneas, crea todo), `seed.sql` (25), `seed_demo.sql
 | --- | --- | --- |
 | 141–148 | `corte_caja` | El corte de un cajero (inicio, fin y total reportado), abierto o cerrado por la API de caja. |
 | 150–160 | `venta` | El cobro de una cuenta. `id_cuenta` es **único**: una venta por cuenta; se liga al corte y al cajero. |
-| 162–165 | `metodo_pago` | Métodos disponibles para pagos divididos: Efectivo, Tarjeta, Transferencia. |
+| 162–165 | `metodo_pago` | Métodos administrables asociados a una categoría física o digital; `es_efectivo` controla el cuadre de caja. |
+| — | `categoria_metodo_pago` | Categorías administrables, clasificadas como `fisico` o `digital`, con activación independiente. |
 | 167–176 | `pago` | Cada pago de una venta (puede haber varios: pago dividido). `monto` es el importe aplicado; `monto_recibido` registra lo recibido y `cambio` el efectivo devuelto. La migración 006 agrega estos dos campos a bases existentes. |
 | 178–186 | `datos_fiscales` | RFC, razón social, régimen y código postal de un cliente. |
 | 188–197 | `factura` | Factura de una venta (única por venta) con `folio` único. |

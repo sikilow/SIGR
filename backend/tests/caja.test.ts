@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cuadrarCorte, validarImportes, type PagoEntrada } from "../src/models/caja";
+import { cuadrarCorte, validarImportes, validarMetodoSolicitado, type PagoEntrada } from "../src/models/caja";
 import { ErrorApi } from "../src/utils/errores";
 
 function errorDe(fn: () => unknown): ErrorApi {
@@ -47,11 +47,30 @@ describe("validarImportes", () => {
   });
 });
 
+describe("validarMetodoSolicitado", () => {
+  const metodos = [
+    { id_metodo: 1, tipo: "fisico" as const, es_efectivo: true },
+    { id_metodo: 2, tipo: "fisico" as const, es_efectivo: false },
+    { id_metodo: 3, tipo: "digital" as const, es_efectivo: false },
+  ];
+
+  it("reconoce cualquier método de la categoría seleccionada", () => {
+    expect(() => validarMetodoSolicitado("fisico", [{ id_metodo: 2, monto: 20 }], metodos, false)).not.toThrow();
+    expect(() => validarMetodoSolicitado("digital", [{ id_metodo: 3, monto: 20 }], metodos, false)).not.toThrow();
+  });
+
+  it("requiere confirmación si se cobra otra categoría", () => {
+    const error = errorDe(() => validarMetodoSolicitado("digital", [{ id_metodo: 1, monto: 20 }], metodos, false));
+    expect(error.estado).toBe(422);
+    expect(() => validarMetodoSolicitado("digital", [{ id_metodo: 1, monto: 20 }], metodos, true)).not.toThrow();
+  });
+});
+
 describe("cuadrarCorte", () => {
   const desglose = [
-    { metodo: "Efectivo", cobros: 3, monto: 1200 },
-    { metodo: "Tarjeta", cobros: 2, monto: 850.5 },
-    { metodo: "Transferencia", cobros: 0, monto: 0 },
+    { metodo: "Monedas y billetes", es_efectivo: true, cobros: 3, monto: 1200 },
+    { metodo: "Tarjeta", es_efectivo: false, cobros: 2, monto: 850.5 },
+    { metodo: "Transferencia", es_efectivo: false, cobros: 0, monto: 0 },
   ];
 
   it("espera el fondo inicial más solo lo cobrado en efectivo", () => {
@@ -68,7 +87,10 @@ describe("cuadrarCorte", () => {
   });
 
   it("evita errores de punto flotante con centavos", () => {
-    const pagos = [{ metodo: "efectivo", cobros: 2, monto: 0.1 }, { metodo: "Efectivo", cobros: 1, monto: 0.2 }];
+    const pagos = [
+      { metodo: "Monedas", es_efectivo: true, cobros: 2, monto: 0.1 },
+      { metodo: "Billetes", es_efectivo: true, cobros: 1, monto: 0.2 },
+    ];
     expect(cuadrarCorte(0.1, pagos, 0.4).diferencia).toBe(0);
   });
 });

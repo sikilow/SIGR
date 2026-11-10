@@ -153,6 +153,7 @@ export interface CuentaDto {
   total: Numerico
   /** cuenta.tipo_pago_solicitado (fisico o digital); NULL mientras no se solicite. */
   tipo_pago_solicitado: string | null
+  id_metodo_pago_solicitado: Numerico | null
 }
 
 // ---------- API → frontend ----------
@@ -257,6 +258,7 @@ export function aCuenta(dto: CuentaDto): Cuenta {
     pedidos: (dto.pedidos ?? []).map(aPedido),
     total: aNumero(dto.total, 'total'),
     tipoPagoSolicitado: aTipoPago(dto.tipo_pago_solicitado),
+    idMetodoPagoSolicitado: aNumeroONulo(dto.id_metodo_pago_solicitado, 'id_metodo_pago_solicitado'),
   }
 }
 
@@ -291,8 +293,8 @@ export function deCancelacion(descripcion: string) {
 }
 
 /** Cuerpo de POST /cuentas/{id}/solicitar-pago: la columna cuenta.tipo_pago_solicitado. */
-export function deSolicitudPago(tipo: TipoPago) {
-  return { tipo_pago_solicitado: tipo }
+export function deSolicitudPago(tipo: TipoPago, idMetodoPagoSolicitado: number | null) {
+  return { tipo_pago_solicitado: tipo, id_metodo_pago_solicitado: idMetodoPagoSolicitado }
 }
 
 export function deItemsDisponibilidad(items: ItemDisponibilidad[]) {

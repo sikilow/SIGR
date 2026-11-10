@@ -37,6 +37,7 @@ const enlaces = [
   { nombre: 'gerente-productos', texto: 'Productos', icono: 'productos' },
   { nombre: 'gerente-mesas', texto: 'Mesas', icono: 'mesas' },
   { nombre: 'gerente-reservaciones', texto: 'Reservaciones', icono: 'reservaciones' },
+  { nombre: 'gerente-metodos-pago', texto: 'Métodos de pago', icono: 'pagos' },
   { nombre: 'gerente-pedidos', texto: 'Pedidos', icono: 'pedidos' },
   { nombre: 'gerente-cortes', texto: 'Cortes', icono: 'cortes' },
 ] as const
@@ -78,6 +79,10 @@ async function salir() {
           <svg v-else-if="enlace.icono === 'reservaciones'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="5" width="18" height="16" rx="2" />
             <path d="M16 3v4M8 3v4M3 10h18M8 14h3M8 17h7" />
+          </svg>
+          <svg v-else-if="enlace.icono === 'pagos'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="5" width="20" height="14" rx="2" />
+            <path d="M2 10h20M6 15h4" />
           </svg>
           <svg v-else-if="enlace.icono === 'cortes'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="6" width="20" height="12" rx="2" />
@@ -167,6 +172,10 @@ async function salir() {
           <svg v-else-if="enlace.icono === 'reservaciones'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="5" width="18" height="16" rx="2" />
             <path d="M16 3v4M8 3v4M3 10h18M8 14h3M8 17h7" />
+          </svg>
+          <svg v-else-if="enlace.icono === 'pagos'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="5" width="20" height="14" rx="2" />
+            <path d="M2 10h20M6 15h4" />
           </svg>
           <svg v-else-if="enlace.icono === 'cortes'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="6" width="20" height="12" rx="2" />
@@ -396,7 +405,7 @@ async function salir() {
 
 .nav {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }
@@ -524,7 +533,7 @@ async function salir() {
 
 /* La navegación lateral de escritorio ya la define el rediseño A (`.sidebar`). */
 
-/* Seis pestañas en un teléfono: píldora más angosta y etiquetas que no se enciman. */
+/* Siete pestañas en un teléfono: píldora más angosta y etiquetas que no se enciman. */
 @media (max-width: 30em) {
   .nav {
     padding: 0 var(--espacio-1);

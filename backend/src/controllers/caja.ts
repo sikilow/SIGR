@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
 import type { PoolConnection } from "mysql2/promise";
 import { z } from "zod";
-import { cargarCuenta, idDeRuta, idEstadoPedido, validar } from "../models/dominio";
-import { cuadrarCorte, Pagos, validarImportes, type CobroPorMetodo } from "../models/caja";
+import { cargarCuenta, idDeRuta, idEstadoPedido, pedidosSinEntregar, validar } from "../models/dominio";
+import { cuadrarCorte, Pagos, validarImportes, validarMetodoSolicitado, type CobroPorMetodo } from "../models/caja";
 import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
 import { conIdempotencia } from "../services/idempotencia";
 import { ErrorApi } from "../utils/errores";
@@ -56,14 +56,19 @@ function aCorteResumen(fila: FilaCorte) {
 async function desgloseCorte(ex: Ejecutor, idCorte: number): Promise<CobroPorMetodo[]> {
   const filasDesglose = await filas(
     ex,
-    `SELECT mp.nombre AS metodo, COUNT(p.id_pago) AS cobros, COALESCE(SUM(p.monto), 0) AS monto
+    `SELECT mp.nombre AS metodo, mp.es_efectivo, COUNT(p.id_pago) AS cobros, COALESCE(SUM(p.monto), 0) AS monto
        FROM metodo_pago mp
        LEFT JOIN (pago p JOIN venta v ON v.id_venta = p.id_venta AND v.id_corte = ?) ON p.id_metodo = mp.id_metodo
       GROUP BY mp.id_metodo, mp.nombre
       ORDER BY mp.id_metodo`,
     [idCorte],
   );
-  return filasDesglose.map((fila) => ({ metodo: String(fila.metodo), cobros: Number(fila.cobros), monto: Number(fila.monto) }));
+  return filasDesglose.map((fila) => ({
+    metodo: String(fila.metodo),
+    es_efectivo: Boolean(fila.es_efectivo),
+    cobros: Number(fila.cobros),
+    monto: Number(fila.monto),
+  }));
 }
 
 async function cargarDetalleCorte(ex: Ejecutor, idCorte: number) {
@@ -120,17 +125,26 @@ export const estadoCaja = async (req: Request, res: Response) => {
     filasCuentas.map(async (fila) => {
       const cuenta = await cargarCuenta(pool, Number(fila.id_cuenta));
       if (!cuenta) throw new ErrorApi(500, "desconocido", `No se pudo cargar la cuenta ${fila.id_cuenta}.`);
+      const pendientes = pedidosSinEntregar(cuenta.pedidos);
       return {
         cuenta,
         mesa_numero: Number(fila.mesa_numero),
         mesero_nombre: [...new Set(cuenta.pedidos.map((pedido) => pedido.nombre_mesero))].join(" · "),
-        pedidos_sin_entregar: cuenta.pedidos
-          .filter((pedido) => !["Entregado", "Cancelado"].includes(pedido.estado))
-          .map((pedido) => ({ id_pedido: pedido.id_pedido, estado: pedido.estado })),
+        pedidos_sin_entregar: pendientes.map((pedido) => ({ id_pedido: pedido.id_pedido, estado: pedido.estado })),
       };
     }),
   );
-  const metodos = await filas(pool, "SELECT id_metodo, nombre FROM metodo_pago ORDER BY id_metodo");
+  const metodos = await filas(
+    pool,
+    `SELECT mp.id_metodo, mp.nombre, mp.id_categoria_metodo_pago, cmp.nombre AS categoria,
+            cmp.tipo, mp.es_efectivo
+       FROM metodo_pago mp JOIN categoria_metodo_pago cmp USING (id_categoria_metodo_pago)
+      WHERE (mp.activo = 1 AND cmp.activo = 1) OR EXISTS (
+        SELECT 1 FROM cuenta c
+         WHERE c.estado = 'por_pagar' AND c.id_metodo_pago_solicitado = mp.id_metodo
+      )
+      ORDER BY cmp.id_categoria_metodo_pago, mp.id_metodo`,
+  );
 
   res.json({
     corte: corte
@@ -142,7 +156,14 @@ export const estadoCaja = async (req: Request, res: Response) => {
         }
       : null,
     cuentas,
-    metodos_pago: metodos.map((metodo) => ({ id_metodo: Number(metodo.id_metodo), nombre: metodo.nombre as string })),
+    metodos_pago: metodos.map((metodo) => ({
+      id_metodo: Number(metodo.id_metodo),
+      nombre: String(metodo.nombre),
+      id_categoria_metodo_pago: Number(metodo.id_categoria_metodo_pago),
+      categoria: String(metodo.categoria),
+      tipo: String(metodo.tipo),
+      es_efectivo: Boolean(metodo.es_efectivo),
+    })),
   });
 };
 
@@ -246,7 +267,7 @@ export const obtenerCorte = async (req: Request, res: Response) => {
 /** POST /api/caja/cuentas/:id/cobrar: cobra y cierra la cuenta atómicamente. */
 export const cobrarCuenta = async (req: Request, res: Response) => {
   const idCuenta = idDeRuta(req.params.id);
-  const { pagos } = validar(Pagos, req.body);
+  const { pagos, confirmar_cambio_metodo } = validar(Pagos, req.body);
   const idCajero = req.usuario!.id;
 
   await conIdempotencia(req, res, 201, () =>
@@ -257,7 +278,7 @@ export const cobrarCuenta = async (req: Request, res: Response) => {
 
       const [fila] = await filas(
         cx,
-        `SELECT c.id_cuenta, c.id_mesa, c.estado, m.numero AS mesa_numero
+        `SELECT c.id_cuenta, c.id_mesa, c.estado, c.tipo_pago_solicitado, c.id_metodo_pago_solicitado, m.numero AS mesa_numero
            FROM cuenta c JOIN mesa m ON m.id_mesa = c.id_mesa
           WHERE c.id_cuenta = ? FOR UPDATE`,
         [idCuenta],
@@ -269,23 +290,49 @@ export const cobrarCuenta = async (req: Request, res: Response) => {
 
       const cuenta = await cargarCuenta(cx, idCuenta);
       if (!cuenta || cuenta.total <= 0) throw new ErrorApi(409, "estado_invalido", "La cuenta no tiene pedidos activos.");
-      const pedidosSinEntregar = cuenta.pedidos.filter((pedido) => !["Entregado", "Cancelado"].includes(pedido.estado));
-      if (pedidosSinEntregar.length) {
+      const pendientes = pedidosSinEntregar(cuenta.pedidos);
+      if (pendientes.length) {
         throw new ErrorApi(409, "estado_invalido", "No se puede cobrar: hay pedidos que aún no se han entregado.", {
-          pedidos: pedidosSinEntregar.map(({ id_pedido, estado }) => ({ id_pedido, estado })),
+          pedidos: pendientes.map(({ id_pedido, estado }) => ({ id_pedido, estado })),
         });
       }
 
       const totales = validarImportes(cuenta.total, pagos);
-      const metodos = await filas(cx, "SELECT id_metodo, nombre FROM metodo_pago WHERE id_metodo IN (?)", [
-        pagos.map((pago) => pago.id_metodo),
-      ]);
+      const metodos = await filas(
+        cx,
+        `SELECT mp.id_metodo, mp.nombre, mp.es_efectivo, cmp.tipo
+           FROM metodo_pago mp JOIN categoria_metodo_pago cmp USING (id_categoria_metodo_pago)
+          WHERE mp.id_metodo IN (?)
+            AND ((mp.activo = 1 AND cmp.activo = 1) OR mp.id_metodo = ?)`,
+        [pagos.map((pago) => pago.id_metodo), fila.id_metodo_pago_solicitado ?? 0],
+      );
       if (metodos.length !== pagos.length) throw new ErrorApi(422, "estado_invalido", "Hay un método de pago que no existe.");
       const nombreMetodo = new Map(metodos.map((metodo) => [Number(metodo.id_metodo), String(metodo.nombre)]));
+      const datosMetodo = new Map(metodos.map((metodo) => [Number(metodo.id_metodo), {
+        esEfectivo: Boolean(metodo.es_efectivo),
+        tipo: String(metodo.tipo) as "fisico" | "digital",
+      }]));
+      validarMetodoSolicitado(
+        fila.tipo_pago_solicitado === "fisico" || fila.tipo_pago_solicitado === "digital" ? fila.tipo_pago_solicitado : null,
+        pagos,
+        metodos.map((metodo) => ({
+          id_metodo: Number(metodo.id_metodo),
+          tipo: String(metodo.tipo) as "fisico" | "digital",
+          es_efectivo: Boolean(metodo.es_efectivo),
+        })),
+        confirmar_cambio_metodo,
+      );
+      if (
+        fila.id_metodo_pago_solicitado !== null &&
+        !pagos.some((pago) => pago.id_metodo === Number(fila.id_metodo_pago_solicitado)) &&
+        !confirmar_cambio_metodo
+      ) {
+        throw new ErrorApi(422, "estado_invalido", "Incluye el método de pago que eligió el mesero para esta cuenta o confirma el cambio.");
+      }
       for (const [i, pago] of pagos.entries()) {
         const recibido = totales.recibidos[i];
         if (recibido === undefined) throw new ErrorApi(500, "desconocido", "No se pudo validar el importe recibido.");
-        if (recibido > pago.monto && nombreMetodo.get(pago.id_metodo)?.toLowerCase() !== "efectivo") {
+        if (recibido > pago.monto && !datosMetodo.get(pago.id_metodo)?.esEfectivo) {
           throw new ErrorApi(422, "estado_invalido", "Solo se puede recibir un importe mayor al aplicado en pagos en efectivo.");
         }
       }

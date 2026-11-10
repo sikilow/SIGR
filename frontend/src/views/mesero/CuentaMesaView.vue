@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Cuenta de mesa (/mesero/mesas/:idMesa/cuenta). Muestra los pedidos de la cuenta activa, su total
 // (calculado por el servidor, sin pedidos cancelados) y permite agregar pedidos o solicitar la cuenta.
-// El mesero NO cobra: solo indica a caja si el pago será físico o digital.
+// El mesero NO cobra: indica a caja la categoría y el método de pago elegidos.
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CancelarPedidoDialog from '../../components/CancelarPedidoDialog.vue'

@@ -37,50 +37,210 @@ export const actualizarConfiguracionReservacion = async (req: Request, res: Resp
   res.json(configuracion);
 };
 
-const NuevoMetodoPago = z.object({ nombre: z.string().trim().min(1, "es obligatorio").max(40, "máximo 40 caracteres") }).strict();
-const CambioMetodoPago = z.object({ activo: z.boolean() }).strict();
+const TipoCategoriaPago = z.enum(["fisico", "digital"]);
+const NombreMetodoPago = z.string().trim().min(1, "es obligatorio").max(40, "máximo 40 caracteres");
+const NuevaCategoriaPago = z.object({ nombre: NombreMetodoPago, tipo: TipoCategoriaPago }).strict();
+const CambioCategoriaPago = z.object({ activo: z.boolean() }).strict();
+const NuevoMetodoPago = z.object({
+  nombre: NombreMetodoPago,
+  id_categoria_metodo_pago: z.number().int().positive(),
+  es_efectivo: z.boolean().default(false),
+}).strict();
+const CambioMetodoPago = z.object({
+  activo: z.boolean().optional(),
+  es_efectivo: z.boolean().optional(),
+}).strict().refine((cambio) => cambio.activo !== undefined || cambio.es_efectivo !== undefined);
 
-/** GET /api/catalogo/metodos-pago: métodos activos e inactivos para Gerencia. */
+const SELECT_METODOS_PAGO = `
+  SELECT cmp.id_categoria_metodo_pago, cmp.nombre AS categoria, cmp.tipo, cmp.activo AS categoria_activa,
+         mp.id_metodo, mp.nombre, mp.es_efectivo, mp.activo
+    FROM categoria_metodo_pago cmp
+    LEFT JOIN metodo_pago mp ON mp.id_categoria_metodo_pago = cmp.id_categoria_metodo_pago`;
+
+function metodoPagoDto(fila: Record<string, unknown>) {
+  return {
+    id_metodo: Number(fila.id_metodo),
+    nombre: String(fila.nombre),
+    id_categoria_metodo_pago: Number(fila.id_categoria_metodo_pago),
+    categoria: String(fila.categoria),
+    tipo: String(fila.tipo) as "fisico" | "digital",
+    es_efectivo: Boolean(fila.es_efectivo),
+    activo: Boolean(fila.activo),
+  };
+}
+
+function categoriaPagoDto(filasCategoria: Array<Record<string, unknown>>) {
+  const primera = filasCategoria[0];
+  if (!primera) throw new ErrorApi(500, "desconocido", "No se pudo recuperar la categoría de pago.");
+  return {
+    id_categoria_metodo_pago: Number(primera.id_categoria_metodo_pago),
+    nombre: String(primera.categoria),
+    tipo: String(primera.tipo) as "fisico" | "digital",
+    activo: Boolean(primera.categoria_activa),
+    metodos: filasCategoria.filter((fila) => fila.id_metodo !== null).map(metodoPagoDto),
+  };
+}
+
+/** GET /api/catalogo/metodos-pago: categorías y métodos para Gerencia. */
 export const listarMetodosPago = async (_req: Request, res: Response) => {
-  const metodos = await filas(pool, "SELECT id_metodo, nombre, activo FROM metodo_pago ORDER BY id_metodo");
-  res.json(metodos.map((metodo) => ({
-    id_metodo: Number(metodo.id_metodo),
-    nombre: String(metodo.nombre),
-    activo: Boolean(metodo.activo),
-  })));
+  const filasPago = await filas(pool, `${SELECT_METODOS_PAGO} ORDER BY cmp.id_categoria_metodo_pago, mp.id_metodo`);
+  const porCategoria = new Map<number, Array<Record<string, unknown>>>();
+  for (const fila of filasPago) {
+    const id = Number(fila.id_categoria_metodo_pago);
+    const grupo = porCategoria.get(id) ?? [];
+    grupo.push(fila);
+    porCategoria.set(id, grupo);
+  }
+  res.json([...porCategoria.values()].map(categoriaPagoDto));
 };
 
-/** POST /api/catalogo/metodos-pago: agrega un método sin alterar el histórico. */
+/** GET /api/catalogo/metodos-pago/disponibles: categorías y métodos activos para todo el personal. */
+export const listarMetodosPagoDisponibles = async (_req: Request, res: Response) => {
+  const metodos = await filas(
+    pool,
+    `SELECT cmp.id_categoria_metodo_pago, cmp.nombre AS categoria, cmp.tipo,
+            mp.id_metodo, mp.nombre, mp.es_efectivo, mp.activo
+       FROM categoria_metodo_pago cmp
+       JOIN metodo_pago mp ON mp.id_categoria_metodo_pago = cmp.id_categoria_metodo_pago
+      WHERE cmp.activo = 1 AND mp.activo = 1
+      ORDER BY cmp.id_categoria_metodo_pago, mp.id_metodo`,
+  );
+  res.json(metodos.map((fila) => metodoPagoDto({ ...fila, categoria_activa: true })));
+};
+
+/** POST /api/catalogo/metodos-pago/categorias: crea una categoría física o digital. */
+export const crearCategoriaMetodoPago = async (req: Request, res: Response) => {
+  const datos = validar(NuevaCategoriaPago, req.body);
+  let idCategoria: number;
+  try {
+    const resultado = await ejecutar(pool, "INSERT INTO categoria_metodo_pago (nombre, tipo) VALUES (?, ?)", [datos.nombre, datos.tipo]);
+    idCategoria = resultado.insertId;
+  } catch (error) {
+    if (esDuplicado(error)) throw new ErrorApi(409, "estado_invalido", "Ya existe una categoría de pago con ese nombre.");
+    throw error;
+  }
+  const [categoria] = await filas(pool, "SELECT id_categoria_metodo_pago, nombre, tipo, activo FROM categoria_metodo_pago WHERE id_categoria_metodo_pago = ?", [idCategoria]);
+  if (!categoria) throw new ErrorApi(500, "desconocido", "No se pudo recuperar la categoría de pago creada.");
+  res.status(201).json({
+    id_categoria_metodo_pago: Number(categoria.id_categoria_metodo_pago),
+    nombre: String(categoria.nombre),
+    tipo: String(categoria.tipo),
+    activo: Boolean(categoria.activo),
+    metodos: [],
+  });
+};
+
+/** PATCH /api/catalogo/metodos-pago/categorias/:id: activa o desactiva la categoría. */
+export const actualizarCategoriaMetodoPago = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const { activo } = validar(CambioCategoriaPago, req.body);
+  const categoria = await transaccion(async (cx) => {
+    const [actual] = await filas(cx, "SELECT id_categoria_metodo_pago, nombre, tipo FROM categoria_metodo_pago WHERE id_categoria_metodo_pago = ? FOR UPDATE", [id]);
+    if (!actual) throw new ErrorApi(404, "no_encontrado", "La categoría de pago no existe.");
+    await ejecutar(cx, "UPDATE categoria_metodo_pago SET activo = ? WHERE id_categoria_metodo_pago = ?", [activo, id]);
+    return {
+      id_categoria_metodo_pago: Number(actual.id_categoria_metodo_pago),
+      nombre: String(actual.nombre),
+      tipo: String(actual.tipo) as "fisico" | "digital",
+      activo,
+    };
+  });
+  const metodos = await filas(
+    pool,
+    `SELECT cmp.id_categoria_metodo_pago, cmp.nombre AS categoria, cmp.tipo, cmp.activo AS categoria_activa,
+            mp.id_metodo, mp.nombre, mp.es_efectivo, mp.activo
+       FROM categoria_metodo_pago cmp
+       LEFT JOIN metodo_pago mp ON mp.id_categoria_metodo_pago = cmp.id_categoria_metodo_pago
+      WHERE cmp.id_categoria_metodo_pago = ? ORDER BY mp.id_metodo`,
+    [id],
+  );
+  res.json({ ...categoria, metodos: metodos.filter((fila) => fila.id_metodo !== null).map(metodoPagoDto) });
+};
+
+/** POST /api/catalogo/metodos-pago: agrega un método a una categoría. */
 export const crearMetodoPago = async (req: Request, res: Response) => {
-  const { nombre } = validar(NuevoMetodoPago, req.body);
+  const datos = validar(NuevoMetodoPago, req.body);
+  const [categoria] = await filas(
+    pool,
+    "SELECT tipo FROM categoria_metodo_pago WHERE id_categoria_metodo_pago = ?",
+    [datos.id_categoria_metodo_pago],
+  );
+  if (!categoria) throw new ErrorApi(404, "no_encontrado", "La categoría de pago no existe.");
+  if (datos.es_efectivo) {
+    if (categoria.tipo !== "fisico") {
+      throw new ErrorApi(422, "estado_invalido", "El método de efectivo debe pertenecer a una categoría física.");
+    }
+    const efectivo = await transaccion(async (cx) => {
+      const existentes = await filas(cx, "SELECT id_metodo FROM metodo_pago WHERE es_efectivo = 1 FOR UPDATE");
+      if (existentes.length) throw new ErrorApi(409, "estado_invalido", "Ya existe un método marcado como efectivo.");
+      const resultado = await ejecutar(cx, "INSERT INTO metodo_pago (nombre, id_categoria_metodo_pago, es_efectivo) VALUES (?, ?, 1)", [
+        datos.nombre,
+        datos.id_categoria_metodo_pago,
+      ]);
+      return resultado.insertId;
+    }).catch((error: unknown) => {
+      if (esDuplicado(error)) throw new ErrorApi(409, "estado_invalido", "Ya existe un método de pago con ese nombre.");
+      throw error;
+    });
+    const [fila] = await filas(pool, `${SELECT_METODOS_PAGO} WHERE mp.id_metodo = ?`, [efectivo]);
+    if (!fila) throw new ErrorApi(500, "desconocido", "No se pudo recuperar el método de pago creado.");
+    res.status(201).json(metodoPagoDto(fila));
+    return;
+  }
+
   let idMetodo: number;
   try {
-    const resultado = await ejecutar(pool, "INSERT INTO metodo_pago (nombre) VALUES (?)", [nombre]);
+    const resultado = await ejecutar(
+      pool,
+      "INSERT INTO metodo_pago (nombre, id_categoria_metodo_pago) VALUES (?, ?)",
+      [datos.nombre, datos.id_categoria_metodo_pago],
+    );
     idMetodo = resultado.insertId;
   } catch (error) {
     if (esDuplicado(error)) throw new ErrorApi(409, "estado_invalido", "Ya existe un método de pago con ese nombre.");
     throw error;
   }
-  const [metodo] = await filas(pool, "SELECT id_metodo, nombre, activo FROM metodo_pago WHERE id_metodo = ?", [idMetodo]);
+  const [metodo] = await filas(pool, `${SELECT_METODOS_PAGO} WHERE mp.id_metodo = ?`, [idMetodo]);
   if (!metodo) throw new ErrorApi(500, "desconocido", "No se pudo recuperar el método de pago creado.");
-  res.status(201).json({ id_metodo: Number(metodo.id_metodo), nombre: String(metodo.nombre), activo: Boolean(metodo.activo) });
+  res.status(201).json(metodoPagoDto(metodo));
 };
 
-/** PATCH /api/catalogo/metodos-pago/:id: activa o desactiva sin borrar pagos existentes. */
+/** PATCH /api/catalogo/metodos-pago/:id: activa o desactiva un método o su marca de efectivo. */
 export const actualizarMetodoPago = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
-  const { activo } = validar(CambioMetodoPago, req.body);
-  const metodo = await transaccion(async (cx) => {
-    const [actual] = await filas(cx, "SELECT id_metodo, nombre, activo FROM metodo_pago WHERE id_metodo = ? FOR UPDATE", [id]);
+  const cambio = validar(CambioMetodoPago, req.body);
+  const datos = await transaccion(async (cx) => {
+    const [actual] = await filas(
+      cx,
+      `SELECT mp.id_metodo, mp.es_efectivo, cmp.tipo
+         FROM metodo_pago mp JOIN categoria_metodo_pago cmp USING (id_categoria_metodo_pago)
+        WHERE mp.id_metodo = ? FOR UPDATE`,
+      [id],
+    );
     if (!actual) throw new ErrorApi(404, "no_encontrado", "El método de pago no existe.");
-    if (!activo && Boolean(actual.activo)) {
-      const activos = await filas(cx, "SELECT id_metodo FROM metodo_pago WHERE activo = 1 FOR UPDATE");
-      if (activos.length <= 1) throw new ErrorApi(409, "estado_invalido", "Debe quedar al menos un método de pago activo.");
+    const esEfectivo = cambio.es_efectivo ?? Boolean(actual.es_efectivo);
+    if (esEfectivo && actual.tipo !== "fisico") {
+      throw new ErrorApi(422, "estado_invalido", "El método de efectivo debe pertenecer a una categoría física.");
     }
-    await ejecutar(cx, "UPDATE metodo_pago SET activo = ? WHERE id_metodo = ?", [activo, id]);
-    return { id_metodo: Number(actual.id_metodo), nombre: String(actual.nombre), activo };
+    if (cambio.es_efectivo !== undefined && esEfectivo !== Boolean(actual.es_efectivo)) {
+      const [uso] = await filas(cx, "SELECT id_pago FROM pago WHERE id_metodo = ? LIMIT 1 FOR UPDATE", [id]);
+      if (uso) throw new ErrorApi(409, "estado_invalido", "No se puede cambiar el cuadre de un método que ya tiene pagos registrados.");
+    }
+    if (cambio.es_efectivo && !Boolean(actual.es_efectivo)) {
+      const existentes = await filas(cx, "SELECT id_metodo FROM metodo_pago WHERE es_efectivo = 1 FOR UPDATE");
+      if (existentes.some((fila) => Number(fila.id_metodo) !== id)) {
+        throw new ErrorApi(409, "estado_invalido", "Ya existe un método marcado como efectivo.");
+      }
+    }
+    await ejecutar(
+      cx,
+      "UPDATE metodo_pago SET activo = COALESCE(?, activo), es_efectivo = ? WHERE id_metodo = ?",
+      [cambio.activo ?? null, esEfectivo, id],
+    );
   });
-  res.json(metodo);
+  const [fila] = await filas(pool, `${SELECT_METODOS_PAGO} WHERE mp.id_metodo = ?`, [id]);
+  if (!fila) throw new ErrorApi(500, "desconocido", "No se pudo recuperar el método de pago actualizado.");
+  res.json(metodoPagoDto(fila));
 };
 
 const Texto = (max: number) => z.string().trim().min(1, "es obligatorio").max(max, `máximo ${max} caracteres`);

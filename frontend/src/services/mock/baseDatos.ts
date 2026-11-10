@@ -214,15 +214,15 @@ function crearPedidos(): Pedido[] {
 
 function crearCuentas(): CuentaGuardada[] {
   return [
-    { idCuenta: 1, idMesa: 3, estado: 'abierta', abiertaEn: hace(55), cerradaEn: null, tipoPagoSolicitado: null },
-    { idCuenta: 2, idMesa: 5, estado: 'abierta', abiertaEn: hace(10), cerradaEn: null, tipoPagoSolicitado: null },
-    { idCuenta: 3, idMesa: 8, estado: 'por_pagar', abiertaEn: hace(90), cerradaEn: null, tipoPagoSolicitado: 'fisico' },
-    { idCuenta: 4, idMesa: 11, estado: 'abierta', abiertaEn: hace(6), cerradaEn: null, tipoPagoSolicitado: null },
-    { idCuenta: 5, idMesa: 12, estado: 'abierta', abiertaEn: hace(45), cerradaEn: null, tipoPagoSolicitado: null },
-    { idCuenta: 6, idMesa: 2, estado: 'cerrada', abiertaEn: hace(320), cerradaEn: hace(280), tipoPagoSolicitado: 'digital' },
+    { idCuenta: 1, idMesa: 3, estado: 'abierta', abiertaEn: hace(55), cerradaEn: null, tipoPagoSolicitado: null, idMetodoPagoSolicitado: null },
+    { idCuenta: 2, idMesa: 5, estado: 'abierta', abiertaEn: hace(10), cerradaEn: null, tipoPagoSolicitado: null, idMetodoPagoSolicitado: null },
+    { idCuenta: 3, idMesa: 8, estado: 'por_pagar', abiertaEn: hace(90), cerradaEn: null, tipoPagoSolicitado: 'fisico', idMetodoPagoSolicitado: null },
+    { idCuenta: 4, idMesa: 11, estado: 'abierta', abiertaEn: hace(6), cerradaEn: null, tipoPagoSolicitado: null, idMetodoPagoSolicitado: null },
+    { idCuenta: 5, idMesa: 12, estado: 'abierta', abiertaEn: hace(45), cerradaEn: null, tipoPagoSolicitado: null, idMetodoPagoSolicitado: null },
+    { idCuenta: 6, idMesa: 2, estado: 'cerrada', abiertaEn: hace(320), cerradaEn: hace(280), tipoPagoSolicitado: 'digital', idMetodoPagoSolicitado: 2 },
     // Historial: cuentas de días anteriores, ya cobradas (no afectan el estado actual de las mesas).
-    { idCuenta: 7, idMesa: 4, estado: 'cerrada', abiertaEn: hace(24 * 60 + 100), cerradaEn: hace(24 * 60 + 20), tipoPagoSolicitado: 'fisico' },
-    { idCuenta: 8, idMesa: 6, estado: 'cerrada', abiertaEn: hace(2 * 24 * 60 + 130), cerradaEn: hace(2 * 24 * 60), tipoPagoSolicitado: 'digital' },
+    { idCuenta: 7, idMesa: 4, estado: 'cerrada', abiertaEn: hace(24 * 60 + 100), cerradaEn: hace(24 * 60 + 20), tipoPagoSolicitado: 'fisico', idMetodoPagoSolicitado: null },
+    { idCuenta: 8, idMesa: 6, estado: 'cerrada', abiertaEn: hace(2 * 24 * 60 + 130), cerradaEn: hace(2 * 24 * 60), tipoPagoSolicitado: 'digital', idMetodoPagoSolicitado: 3 },
   ]
 }
 

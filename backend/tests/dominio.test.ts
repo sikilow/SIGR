@@ -6,6 +6,7 @@ import {
   idDeRuta,
   nombreEstadoDeFiltro,
   normalizarCodigo,
+  pedidosSinEntregar,
   validar,
 } from "../src/models/dominio";
 import { ErrorApi } from "../src/utils/errores";
@@ -42,6 +43,16 @@ describe("estados del pedido", () => {
 
   it("«enviado» se guarda como «Pendiente» en la base de datos", () => {
     expect(ESTADO_PEDIDO_DB.enviado).toBe("Pendiente");
+  });
+
+  it("solo considera entregados o cancelados como listos para cobrar, sin depender de mayúsculas o acentos", () => {
+    const pedidos = [
+      { id: 1, estado: "Listo" },
+      { id: 2, estado: "Entregado" },
+      { id: 3, estado: "Cancelado" },
+      { id: 4, estado: "En preparación" },
+    ];
+    expect(pedidosSinEntregar(pedidos).map((pedido) => pedido.id)).toEqual([1, 4]);
   });
 });
 

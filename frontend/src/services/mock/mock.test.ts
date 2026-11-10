@@ -242,30 +242,46 @@ describe('mock: sección de las mesas del panel (RF-MES-007)', () => {
 })
 
 describe('mock: solicitar cuenta', () => {
-  it('pasa la cuenta de abierta a por_pagar y guarda el tipo de pago', async () => {
-    const { cuentas, mesas } = await nuevoMock()
-    const cuenta = await resolver(cuentas.solicitarPago(1, 'digital'))
+  it('no permite solicitar el cobro hasta entregar los pedidos listos', async () => {
+    const { cuentas } = await nuevoMock()
+    expect(await codigoDeError(cuentas.solicitarPago(1, 'digital', 2))).toBe('estado_invalido')
+  })
+
+  it('pasa la cuenta de abierta a por_pagar y guarda la modalidad y método digital', async () => {
+    const { cuentas, mesas, baseDatos } = await nuevoMock()
+    baseDatos.pedidos.filter((p) => p.idCuenta === 1).forEach((pedido) => { pedido.estado = 'entregado' })
+    const cuenta = await resolver(cuentas.solicitarPago(1, 'digital', 2))
     expect(cuenta.estado).toBe('por_pagar')
     expect(cuenta.tipoPagoSolicitado).toBe('digital')
+    expect(cuenta.idMetodoPagoSolicitado).toBe(2)
     expect((await resolver(mesas.listar())).find((m) => m.idMesa === 3)?.estadoCuenta).toBe('por_pagar')
   })
 
+  it('guarda también el método de la categoría física para precargarlo en Caja', async () => {
+    const { cuentas, baseDatos } = await nuevoMock()
+    baseDatos.pedidos.filter((pedido) => pedido.idCuenta === 1).forEach((pedido) => { pedido.estado = 'entregado' })
+    const cuenta = await resolver(cuentas.solicitarPago(1, 'fisico', 1))
+    expect(cuenta.tipoPagoSolicitado).toBe('fisico')
+    expect(cuenta.idMetodoPagoSolicitado).toBe(1)
+  })
+
   it('si la cuenta ya no está abierta devuelve estado_invalido', async () => {
-    const { cuentas } = await nuevoMock()
-    expect(await codigoDeError(cuentas.solicitarPago(3, 'fisico'))).toBe('estado_invalido') // la 3 ya está por_pagar
-    await resolver(cuentas.solicitarPago(1, 'fisico'))
-    expect(await codigoDeError(cuentas.solicitarPago(1, 'digital'))).toBe('estado_invalido')
+    const { cuentas, baseDatos } = await nuevoMock()
+    expect(await codigoDeError(cuentas.solicitarPago(3, 'fisico', null))).toBe('estado_invalido') // la 3 ya está por_pagar
+    baseDatos.pedidos.filter((p) => p.idCuenta === 1).forEach((pedido) => { pedido.estado = 'entregado' })
+    await resolver(cuentas.solicitarPago(1, 'fisico', null))
+    expect(await codigoDeError(cuentas.solicitarPago(1, 'digital', 2))).toBe('estado_invalido')
   })
 
   it('una cuenta sin pedidos vigentes no se puede solicitar (total 0)', async () => {
     const { cuentas, baseDatos } = await nuevoMock()
     baseDatos.pedidos.filter((p) => p.idCuenta === 1).forEach((p) => (p.estado = 'cancelado'))
-    expect(await codigoDeError(cuentas.solicitarPago(1, 'fisico'))).toBe('estado_invalido')
+    expect(await codigoDeError(cuentas.solicitarPago(1, 'fisico', null))).toBe('estado_invalido')
   })
 
   it('una cuenta inexistente devuelve no_encontrado', async () => {
     const { cuentas } = await nuevoMock()
-    expect(await codigoDeError(cuentas.solicitarPago(999, 'fisico'))).toBe('no_encontrado')
+    expect(await codigoDeError(cuentas.solicitarPago(999, 'fisico', null))).toBe('no_encontrado')
   })
 })
 

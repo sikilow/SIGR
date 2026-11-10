@@ -185,6 +185,7 @@ describe('aCuenta', () => {
     pedidos: [pedidoDto],
     total: 80,
     tipo_pago_solicitado: null,
+    id_metodo_pago_solicitado: null,
   }
 
   it('mapea la cuenta con sus pedidos, sin fecha de cierre y con el tipo de pago en null', () => {
@@ -202,6 +203,11 @@ describe('aCuenta', () => {
       estado: 'por_pagar',
       tipoPagoSolicitado: 'digital',
     })
+  })
+
+  it('mapea el método digital solicitado para que caja pueda precargarlo', () => {
+    expect(aCuenta({ ...dto, estado: 'por_pagar', tipo_pago_solicitado: 'digital', id_metodo_pago_solicitado: '2' }))
+      .toMatchObject({ idMetodoPagoSolicitado: 2 })
   })
 
   it('convierte texto de PDO y una cuenta cerrada trae cerrada_en', () => {
@@ -281,8 +287,9 @@ describe('frontend → API (cuerpos de petición)', () => {
     expect(deCredenciales({ nombreUsuario: 'mesero', contrasena: '1234' })).toEqual({ nombre_usuario: 'mesero', contrasena: '1234' })
   })
 
-  it('solicitar el pago envía el tipo (columna propuesta tipo_pago_solicitado)', () => {
-    expect(deSolicitudPago('digital')).toEqual({ tipo_pago_solicitado: 'digital' })
+  it('solicitar el pago envía el tipo y el método digital seleccionado', () => {
+    expect(deSolicitudPago('digital', 2)).toEqual({ tipo_pago_solicitado: 'digital', id_metodo_pago_solicitado: 2 })
+    expect(deSolicitudPago('fisico', null)).toEqual({ tipo_pago_solicitado: 'fisico', id_metodo_pago_solicitado: null })
   })
 })
 

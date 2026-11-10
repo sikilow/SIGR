@@ -29,7 +29,7 @@ export const puedeEditarOEnviar = (estado: EstadoPedido): boolean => estadoParaR
 /** Solo un pedido `listo` se marca como entregado. */
 export const puedeEntregar = (estado: EstadoPedido): boolean => estado === 'listo'
 
-/** Pedidos que aún no llegaron a la mesa: se avisa al solicitar la cuenta, sin bloquear. */
+/** Pedidos que aún no llegaron a la mesa; bloquean la solicitud y el cobro de la cuenta. */
 export function estaSinEntregar(estado: EstadoPedido): boolean {
   const efectivo = estadoParaReglas(estado)
   return efectivo === 'registrado' || efectivo === 'enviado' || efectivo === 'en_preparacion' || efectivo === 'listo'

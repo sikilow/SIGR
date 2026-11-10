@@ -97,7 +97,8 @@ El frontend no consume `id_estado` ni `detalle[].id_detalle` (la API los envía 
 
   "pedidos": [ { "...": "objetos Pedido" } ],
   "total": 310,
-  "tipo_pago_solicitado": null
+  "tipo_pago_solicitado": null,
+  "id_metodo_pago_solicitado": null
 }
 ```
 
@@ -107,6 +108,7 @@ El frontend no consume `id_estado` ni `detalle[].id_detalle` (la API los envía 
 | `pedidos` | **calculado por la API, no es columna** (`pedido.id_cuenta`) |
 | `total` | **calculado por la API, no es columna**: suma de `cantidad × precio_unitario`, **sin pedidos cancelados** |
 | `tipo_pago_solicitado` | columna de `cuenta`: `"fisico"` \| `"digital"` \| `null` (`CHECK` en la BD) |
+| `id_metodo_pago_solicitado` | FK nullable a `metodo_pago`; se llena cuando se elige un método físico o digital |
 
 ## Endpoints
 
@@ -345,13 +347,16 @@ interpreta como "sin cuenta").
 
 ```json
 // petición
-{ "tipo_pago_solicitado": "fisico" }   // "fisico" | "digital"  (columna cuenta.tipo_pago_solicitado)
-// 200: Cuenta con "estado": "por_pagar" y "tipo_pago_solicitado": "fisico"
+{ "tipo_pago_solicitado": "digital", "id_metodo_pago_solicitado": 2 }
+// Para pago físico: { "tipo_pago_solicitado": "fisico", "id_metodo_pago_solicitado": 1 }
+// 200: Cuenta por pagar, con la categoría y método elegido.
 ```
 
-Errores: `estado_invalido` (409) si la cuenta no está `abierta` (p. ej. ya se solicitó) **o si no tiene pedidos vigentes** (total 0; el
-frontend ya lo bloquea, pero la API debe validarlo). Los pedidos sin entregar **no** bloquean: el frontend solo avisa (pregunta 14).
-Con `Idempotency-Key`.
+Para elegir un método, el mesero consulta `GET /catalogo/metodos-pago/disponibles`, que requiere autenticación y devuelve los métodos de categorías activas que no estén desactivados. La categoría física/digital y el método elegido se conservan en la cuenta para que Caja los precargue.
+
+Errores: `estado_invalido` (409) si la cuenta no está `abierta`, no tiene pedidos vigentes o hay pedidos activos sin entregar
+(incluidos los que ya están listos en cocina); `estado_invalido` (422) si se omite un método requerido o está inactiva su categoría o el método. El mesero
+debe entregar todos los pedidos antes de solicitar el cobro. Con `Idempotency-Key`.
 
 ## Idempotencia
 

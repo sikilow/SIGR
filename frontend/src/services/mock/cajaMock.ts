@@ -2,6 +2,7 @@ import type { CajaService } from '../interfaces'
 import type { CobroPorMetodo, CorteCaja, CorteDetalle, VentaCaja } from '../../types'
 import { ErrorServicio } from '../errores'
 import { baseDatos } from './baseDatos'
+import { categoriasMetodoPagoMock, metodosPagoMock } from './metodosPago'
 import { conRetraso, conRetrasoIdempotente } from './utiles'
 
 let corte: CorteCaja | null = null
@@ -12,16 +13,10 @@ const cortesCerrados: CorteDetalle[] = []
 let siguienteCorte = 1
 let siguienteVenta = 1
 
-const metodos = [
-  { idMetodo: 1, nombre: 'Efectivo' },
-  { idMetodo: 2, nombre: 'Tarjeta' },
-  { idMetodo: 3, nombre: 'Transferencia' },
-]
-
 const centavos = (monto: number): number => Math.round(monto * 100)
 
 function desglose(): CobroPorMetodo[] {
-  return metodos.map((metodo) => {
+  return metodosPagoMock.map((metodo) => {
     const pagos = pagosDelCorte.filter((pago) => pago.idMetodo === metodo.idMetodo)
     return {
       metodo: metodo.nombre,
@@ -58,7 +53,19 @@ export function crearCajaMock(): CajaService {
                 .map((pedido) => ({ idPedido: pedido.idPedido, estado: pedido.estado })),
             }
           }),
-        metodosPago: structuredClone(metodos),
+        metodosPago: structuredClone(
+          metodosPagoMock.filter(
+            (metodo) => {
+              const solicitado = baseDatos.cuentas.some(
+                (cuenta) => cuenta.estado === 'por_pagar' && cuenta.idMetodoPagoSolicitado === metodo.idMetodo,
+              )
+              const categoria = categoriasMetodoPagoMock.find(
+                (item) => item.idCategoriaMetodoPago === metodo.idCategoriaMetodoPago,
+              )
+              return (metodo.activo && Boolean(categoria?.activo)) || solicitado
+            },
+          ),
+        ),
       }))
     },
     abrirCorte(fondoInicial) {
@@ -80,7 +87,9 @@ export function crearCajaMock(): CajaService {
           throw new ErrorServicio('estado_invalido', 'El efectivo contado debe ser un importe de 0 o más.', 422)
         }
         const filas = desglose()
-        const efectivo = filas.find((fila) => fila.metodo === 'Efectivo')?.monto ?? 0
+        const efectivo = pagosDelCorte
+          .filter((pago) => metodosPagoMock.find((metodo) => metodo.idMetodo === pago.idMetodo)?.esEfectivo)
+          .reduce((suma, pago) => suma + centavos(pago.monto), 0) / 100
         const esperado = (centavos(corte.fondoInicial) + centavos(efectivo)) / 100
         const cerrado: CorteDetalle = {
           idCorte: corte.idCorte,
@@ -125,12 +134,30 @@ export function crearCajaMock(): CajaService {
         const pedidos = baseDatos.pedidos.filter((pedido) => pedido.idCuenta === idCuenta)
         const pendientes = pedidos.filter((pedido) => !['entregado', 'cancelado'].includes(pedido.estado))
         if (pendientes.length) throw new ErrorServicio('estado_invalido', 'Hay pedidos que aún no se han entregado.', 409)
+        if (cuenta.idMetodoPagoSolicitado !== null && !pagos.some((pago) => pago.idMetodo === cuenta.idMetodoPagoSolicitado)) {
+          throw new ErrorServicio('estado_invalido', 'Incluye el método de pago que eligió el mesero para esta cuenta.', 422)
+        }
+        const metodosAplicados = pagos.map((pago) => metodosPagoMock.find((metodo) => metodo.idMetodo === pago.idMetodo))
+        if (metodosAplicados.some((metodo) => {
+          if (!metodo) return true
+          const categoria = categoriasMetodoPagoMock.find((item) => item.idCategoriaMetodoPago === metodo.idCategoriaMetodoPago)
+          const esSolicitado = metodo.idMetodo === cuenta.idMetodoPagoSolicitado
+          return (!metodo.activo || !categoria?.activo) && !esSolicitado
+        })) {
+          throw new ErrorServicio('estado_invalido', 'Hay un método de pago inactivo o inexistente.', 422)
+        }
+        if (cuenta.tipoPagoSolicitado && !metodosAplicados.some((metodo) => metodo?.tipo === cuenta.tipoPagoSolicitado)) {
+          throw new ErrorServicio('estado_invalido', 'El método cobrado no coincide con la categoría solicitada.', 422)
+        }
         const total = pedidos.filter((pedido) => pedido.estado !== 'cancelado').reduce((suma, pedido) => suma + pedido.total, 0)
         const aplicado = pagos.reduce((suma, pago) => suma + Math.round(pago.monto * 100), 0)
         if (total <= 0 || aplicado !== Math.round(total * 100)) {
           throw new ErrorServicio('estado_invalido', 'La suma de los pagos debe cubrir exactamente el total de la cuenta.', 422)
         }
         const cambio = Math.round(pagos.reduce((suma, pago) => suma + (pago.montoRecibido - pago.monto), 0) * 100) / 100
+        if (pagos.some((pago, i) => (pago.montoRecibido > pago.monto) && !metodosAplicados[i]?.esEfectivo)) {
+          throw new ErrorServicio('estado_invalido', 'Solo se puede recibir un importe mayor al aplicado en pagos en efectivo.', 422)
+        }
         const venta: VentaCaja = {
           idVenta: siguienteVenta++,
           fechaHora: new Date(),
@@ -139,7 +166,7 @@ export function crearCajaMock(): CajaService {
           mesaNumero: cuenta.idMesa,
           cambio,
           pagos: pagos.map((pago) => ({
-            metodo: metodos.find((metodo) => metodo.idMetodo === pago.idMetodo)?.nombre ?? 'Desconocido',
+            metodo: metodosPagoMock.find((metodo) => metodo.idMetodo === pago.idMetodo)?.nombre ?? 'Desconocido',
             monto: pago.monto,
             montoRecibido: pago.montoRecibido,
             cambio: Math.round((pago.montoRecibido - pago.monto) * 100) / 100,

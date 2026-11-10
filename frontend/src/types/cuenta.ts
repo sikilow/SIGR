@@ -2,7 +2,7 @@
 import type { EstadoCuenta } from './estados'
 import type { Pedido } from './pedido'
 
-/** Forma de pago solicitada: cobro en caja física o pago digital (cuenta.tipo_pago_solicitado). */
+/** Modalidad de pago solicitada por el mesero. */
 export type TipoPago = 'fisico' | 'digital'
 
 /** Una cuenta activa por mesa; agrupa varios pedidos. */
@@ -26,4 +26,6 @@ export interface Cuenta {
 
   /** cuenta.tipo_pago_solicitado; NULL mientras no se solicite. */
   tipoPagoSolicitado: TipoPago | null
+  /** cuenta.id_metodo_pago_solicitado; se define cuando el mesero elige un método. */
+  idMetodoPagoSolicitado: number | null
 }

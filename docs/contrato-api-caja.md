@@ -7,6 +7,7 @@ Todas las rutas están bajo `/api/caja`. La operación del turno (estado, abrir 
 Devuelve el corte abierto del cajero autenticado, las cuentas en `por_pagar` de todo el restaurante y los métodos de pago disponibles. Las cuentas incluyen pedidos sin entregar para que la pantalla los identifique y bloquee el cobro.
 
 El corte abierto no incluye totales de venta ni el efectivo esperado: el cajero cuenta el efectivo al cerrar sin conocer la cifra del sistema.
+Las cuentas incluyen `id_metodo_pago_solicitado` cuando el mesero registró un método; caja precarga ese método en el formulario de cobro. Los métodos están asociados a una categoría física o digital.
 
 ```json
 {
@@ -17,12 +18,13 @@ El corte abierto no incluye totales de venta ni el efectivo esperado: el cajero 
     "pedidos_sin_entregar": []
   }],
   "metodos_pago": [
-    { "id_metodo": 1, "nombre": "Efectivo" },
-    { "id_metodo": 2, "nombre": "Tarjeta" },
-    { "id_metodo": 3, "nombre": "Transferencia" }
+    { "id_metodo": 1, "nombre": "Efectivo", "id_categoria_metodo_pago": 1, "categoria": "Físico", "tipo": "fisico", "es_efectivo": true },
+    { "id_metodo": 2, "nombre": "Tarjeta", "id_categoria_metodo_pago": 2, "categoria": "Digital", "tipo": "digital", "es_efectivo": false }
   ]
 }
 ```
+
+`GET /api/catalogo/metodos-pago/disponibles` requiere autenticación de empleado y devuelve solo métodos cuya categoría y método estén activos. Gerencia administra categorías y métodos con `GET/POST /api/catalogo/metodos-pago`, `POST/PATCH /api/catalogo/metodos-pago/categorias` y `PATCH /api/catalogo/metodos-pago/:id`.
 
 ## `POST /api/caja/cortes`
 
@@ -42,7 +44,7 @@ Cierra el corte abierto del cajero con el efectivo que contó en la caja (inclui
 { "efectivo_contado": 1680 }
 ```
 
-El servidor calcula `efectivo_esperado = fondo_inicial + cobros en efectivo`. Cada pago guarda en `monto` lo aplicado a la cuenta, sin el cambio entregado, así que el cambio ya no cuenta como efectivo en caja. Tarjeta y transferencia aparecen en el desglose pero no se cuentan. La respuesta es el detalle del corte (ver `GET /api/caja/cortes/:id`); `diferencia = contado - esperado` (negativa: faltante; positiva: sobrante). Los cobros y el cierre se serializan por cajero para evitar carreras.
+El servidor calcula `efectivo_esperado = fondo_inicial + pagos aplicados a métodos marcados como efectivo`. Cada pago guarda en `monto` lo aplicado a la cuenta, sin el cambio entregado, así que el cambio ya no cuenta como efectivo en caja. La respuesta es el detalle del corte (ver `GET /api/caja/cortes/:id`); `diferencia = contado - esperado` (negativa: faltante; positiva: sobrante). Los cobros y el cierre se serializan por cajero para evitar carreras.
 
 ## `GET /api/caja/cortes?desde=AAAA-MM-DD&hasta=AAAA-MM-DD`
 
@@ -93,6 +95,6 @@ Solo permite cuentas solicitadas por el mesero (`por_pagar`), con todos los pedi
 }
 ```
 
-Se aceptan de uno a tres métodos distintos, sin dividir una misma forma en varias líneas. Solo efectivo puede registrar un importe recibido superior al aplicado; la diferencia es el cambio. La respuesta `201` incluye la venta y el desglose imprimible del ticket.
+Se aceptan de uno a tres métodos distintos, sin dividir una misma forma en varias líneas. El método que eligió el mesero debe incluirse en el cobro. No se puede cobrar mientras haya pedidos activos sin entregar (incluidos los que ya están listos en cocina). Solo un método marcado como efectivo puede registrar un importe recibido superior al aplicado; la diferencia es el cambio. La respuesta `201` incluye la venta y el desglose imprimible del ticket.
 
 El éxito de la transacción registra venta y pagos, marca como `Pagado` los pedidos no cancelados, cierra la cuenta con `cerrada_en` y libera la mesa. La restricción única de `venta.id_cuenta`, los bloqueos de filas y la idempotencia protegen contra cobros duplicados. Facturación fiscal y el reporte de ventas no forman parte de estas rutas.

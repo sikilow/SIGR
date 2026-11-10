@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { crearCajaMock } from './cajaMock'
+import { baseDatos } from './baseDatos'
 
 describe('caja demo', () => {
   it('cobra una cuenta solicitada con pago dividido, registra el cambio y libera la mesa', async () => {
@@ -43,5 +44,25 @@ describe('caja demo', () => {
   it('rechaza un fondo inicial negativo', async () => {
     const caja = crearCajaMock()
     await expect(caja.abrirCorte(-1)).rejects.toThrow('fondo inicial')
+  })
+
+  it('no cobra una cuenta con pedidos listos que todavía no se han entregado', async () => {
+    const cuentaGuardada = baseDatos.cuentas.find((item) => item.idCuenta === 4)
+    if (!cuentaGuardada) throw new Error('No existe una cuenta disponible para la prueba')
+    cuentaGuardada.estado = 'por_pagar'
+    cuentaGuardada.tipoPagoSolicitado = 'fisico'
+    const pedidosCuenta = baseDatos.pedidos.filter((pedido) => pedido.idCuenta === cuentaGuardada.idCuenta)
+    pedidosCuenta.forEach((pedido) => { pedido.estado = 'entregado' })
+    const pedidoListo = pedidosCuenta[0]
+    if (!pedidoListo) throw new Error('La cuenta no tiene pedidos')
+    pedidoListo.estado = 'listo'
+
+    const caja = crearCajaMock()
+    const estado = await caja.obtenerEstado()
+    expect(estado.cuentas.some((item) => item.cuenta.idCuenta === cuentaGuardada.idCuenta)).toBe(true)
+    await caja.abrirCorte(500)
+    await expect(caja.cobrar(cuentaGuardada.idCuenta, [{ idMetodo: 1, monto: 310, montoRecibido: 310 }])).rejects.toThrow(
+      'aún no se han entregado',
+    )
   })
 })

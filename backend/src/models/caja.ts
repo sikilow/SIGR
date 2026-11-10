@@ -24,18 +24,13 @@ export type PagoEntrada = z.infer<typeof Pagos>["pagos"][number];
 export function validarMetodoSolicitado(
   solicitado: "fisico" | "digital" | null,
   pagos: PagoEntrada[],
-  metodos: Array<{ id_metodo: number; nombre: string }>,
+  metodos: Array<{ id_metodo: number; tipo: "fisico" | "digital"; es_efectivo: boolean }>,
   confirmarCambio: boolean,
 ): void {
   if (!solicitado) return;
 
-  const nombres = new Map(metodos.map((metodo) => [metodo.id_metodo, metodo.nombre.toLocaleLowerCase()]));
-  const tieneEfectivo = pagos.some((pago) => nombres.get(pago.id_metodo) === "efectivo");
-  const tieneDigital = pagos.some((pago) => {
-    const nombre = nombres.get(pago.id_metodo);
-    return nombre !== undefined && nombre !== "efectivo";
-  });
-  const coincide = solicitado === "fisico" ? tieneEfectivo : tieneDigital;
+  const tipos = new Map(metodos.map((metodo) => [metodo.id_metodo, metodo.tipo]));
+  const coincide = pagos.some((pago) => tipos.get(pago.id_metodo) === solicitado);
 
   if (!coincide && !confirmarCambio) {
     throw new ErrorApi(
@@ -48,10 +43,10 @@ export function validarMetodoSolicitado(
 
 export function calcularEfectivoEsperado(
   efectivoInicial: number,
-  metodos: Array<{ nombre: string; monto: number }>,
+  metodos: Array<{ es_efectivo: boolean; monto: number }>,
 ): number {
   const efectivoCobrado = metodos
-    .filter((metodo) => metodo.nombre.toLocaleLowerCase() === "efectivo")
+    .filter((metodo) => metodo.es_efectivo)
     .reduce((total, metodo) => total + metodo.monto, 0);
   return Math.round((efectivoInicial + efectivoCobrado) * 100) / 100;
 }
@@ -86,6 +81,7 @@ export function validarImportes(total: number, pagos: PagoEntrada[]): { cambio: 
 
 export interface CobroPorMetodo {
   metodo: string;
+  es_efectivo: boolean;
   cobros: number;
   monto: number;
 }
@@ -103,7 +99,7 @@ export interface CuadreCorte {
 export function cuadrarCorte(fondoInicial: number, desglose: CobroPorMetodo[], efectivoContado: number | null): CuadreCorte {
   const totalVentas = desglose.reduce((suma, fila) => suma + centavos(fila.monto), 0);
   const efectivo = desglose
-    .filter((fila) => fila.metodo.toLowerCase() === "efectivo")
+    .filter((fila) => fila.es_efectivo)
     .reduce((suma, fila) => suma + centavos(fila.monto), 0);
   const esperado = centavos(fondoInicial) + efectivo;
   return {

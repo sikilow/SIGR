@@ -35,6 +35,11 @@ export function normalizarCodigo(texto: string): string {
     .replace(/[\s-]+/g, "_");
 }
 
+/** Pedidos que todavía no pueden cobrarse: solo se excluyen entregados y cancelados. */
+export function pedidosSinEntregar<T extends { estado: string }>(pedidos: T[]): T[] {
+  return pedidos.filter((pedido) => !["entregado", "cancelado"].includes(normalizarCodigo(pedido.estado)));
+}
+
 /**
  * Filtro `?estado=` de GET /pedidos: acepta el código interno (`enviado`), el nombre del catálogo
  * (`Pendiente`, `En preparacion`) o su versión normalizada (`pendiente`). Devuelve el nombre en `estado_pedido`.
@@ -346,6 +351,7 @@ export interface CuentaDto {
   cerrada_en: string | null;
   /** cuenta.tipo_pago_solicitado ("fisico" | "digital"); NULL mientras no se solicite. */
   tipo_pago_solicitado: string | null;
+  id_metodo_pago_solicitado: number | null;
   /** Calculado: pedidos de la cuenta (pedido.id_cuenta). */
   pedidos: PedidoDto[];
   /** Calculado: suma de cantidad × precio_unitario de los pedidos NO cancelados. */
@@ -356,7 +362,8 @@ export interface CuentaDto {
 export async function cargarCuenta(ex: Ejecutor, idCuenta: number): Promise<CuentaDto | null> {
   const [c] = await filas(
     ex,
-    "SELECT id_cuenta, id_mesa, estado, abierta_en, cerrada_en, tipo_pago_solicitado FROM cuenta WHERE id_cuenta = ?",
+    `SELECT id_cuenta, id_mesa, estado, abierta_en, cerrada_en, tipo_pago_solicitado, id_metodo_pago_solicitado
+       FROM cuenta WHERE id_cuenta = ?`,
     [idCuenta],
   );
   if (!c) return null;
@@ -368,6 +375,7 @@ export async function cargarCuenta(ex: Ejecutor, idCuenta: number): Promise<Cuen
     abierta_en: c.abierta_en as string,
     cerrada_en: (c.cerrada_en as string | null) ?? null,
     tipo_pago_solicitado: (c.tipo_pago_solicitado as string | null) ?? null,
+    id_metodo_pago_solicitado: (c.id_metodo_pago_solicitado as number | null) ?? null,
     pedidos,
     total: redondear(pedidos.filter((p) => p.estado !== ESTADO_PEDIDO_DB.cancelado).reduce((suma, p) => suma + p.total, 0)),
   };

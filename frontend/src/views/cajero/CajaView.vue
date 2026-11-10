@@ -60,7 +60,10 @@ function fecha(fechaHora: Date): string {
 }
 
 function tipoPago(item: CuentaCaja): string {
-  return item.cuenta.tipoPagoSolicitado === 'digital' ? 'Pago digital' : 'Cobro en caja'
+  const metodo = estado.value?.metodosPago.find((opcion) => opcion.idMetodo === item.cuenta.idMetodoPagoSolicitado)
+  if (!item.cuenta.tipoPagoSolicitado) return 'Tipo de pago sin registrar'
+  const tipo = item.cuenta.tipoPagoSolicitado === 'fisico' ? 'Pago físico' : 'Pago digital'
+  return metodo ? `${tipo} · ${metodo.categoria} · ${metodo.nombre}` : `${tipo} · elegir método`
 }
 
 async function cargar() {
@@ -85,8 +88,15 @@ async function cargar() {
 
 function seleccionar(item: CuentaCaja) {
   seleccionadaId.value = item.cuenta.idCuenta
-  const efectivo = estado.value?.metodosPago.find((metodo) => metodo.nombre.toLowerCase() === 'efectivo')
-  pagos.value = efectivo ? [{ idMetodo: efectivo.idMetodo, monto: item.cuenta.total, montoRecibido: item.cuenta.total }] : []
+  const metodosDisponibles = estado.value?.metodosPago ?? []
+  const metodoSolicitado = item.cuenta.idMetodoPagoSolicitado
+    ? metodosDisponibles.find((metodo) => metodo.idMetodo === item.cuenta.idMetodoPagoSolicitado)
+    : item.cuenta.tipoPagoSolicitado === 'digital'
+      ? metodosDisponibles.find((metodo) => metodo.tipo === 'digital')
+      : metodosDisponibles.find((metodo) => metodo.esEfectivo)
+  pagos.value = metodoSolicitado
+    ? [{ idMetodo: metodoSolicitado.idMetodo, monto: item.cuenta.total, montoRecibido: item.cuenta.total }]
+    : []
   ventaReciente.value = null
   error.value = null
 }
@@ -101,7 +111,7 @@ function agregarMetodo() {
 function cambiarMonto(pago: PagoCajaEntrada, monto: number) {
   pago.monto = Number.isFinite(monto) ? Math.max(0, Math.round(monto * 100) / 100) : 0
   const metodo = estado.value?.metodosPago.find((item) => item.idMetodo === pago.idMetodo)
-  if (!metodo || metodo.nombre.toLowerCase() !== 'efectivo' || pago.montoRecibido < pago.monto) {
+  if (!metodo?.esEfectivo || pago.montoRecibido < pago.monto) {
     pago.montoRecibido = pago.monto
   }
 }
@@ -112,7 +122,7 @@ function cambiarMetodo(pago: PagoCajaEntrada, idMetodo: number) {
 }
 
 function esEfectivo(idMetodo: number): boolean {
-  return estado.value?.metodosPago.find((metodo) => metodo.idMetodo === idMetodo)?.nombre.toLowerCase() === 'efectivo'
+  return estado.value?.metodosPago.find((metodo) => metodo.idMetodo === idMetodo)?.esEfectivo ?? false
 }
 
 function nombreMetodo(idMetodo: number): string {
@@ -275,7 +285,7 @@ onMounted(cargar)
               <input id="fondo-inicial" v-model.number="fondoInicial" type="number" min="0" step="0.01" inputmode="decimal" required>
               <p class="campo__ayuda">Cuenta los billetes y monedas con los que empiezas el turno.</p>
             </div>
-            <button class="btn btn--grande" type="submit" :disabled="procesando">Abrir corte</button>
+            <button class="btn btn--grande" type="submit" :disabled="procesando">Inicio de caja</button>
           </form>
           <form v-else-if="!confirmandoCierre" class="form-corte" @submit.prevent="pedirConfirmacionCierre">
             <div class="campo">
@@ -410,7 +420,7 @@ onMounted(cargar)
                         :key="metodo.idMetodo"
                         :value="metodo.idMetodo"
                       >
-                        {{ metodo.nombre }}
+                        {{ metodo.categoria }} · {{ metodo.nombre }}
                       </option>
                     </select>
                   </div>

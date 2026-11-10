@@ -88,6 +88,7 @@ export function crearPedidosMock(): PedidosService {
             abiertaEn: new Date(),
             cerradaEn: null,
             tipoPagoSolicitado: null,
+            idMetodoPagoSolicitado: null,
           }
           baseDatos.cuentas.push(cuenta)
         }

@@ -51,6 +51,7 @@
 | `Cuenta.pedidos` | — (`pedido` con `id_cuenta`) | `pedidos` | `pedidos` | calculado (composición) |
 | `Cuenta.total` | — | `total` | `total` | calculado por la API (suma de `cantidad × precio_unitario`, sin pedidos cancelados) |
 | `Cuenta.tipoPagoSolicitado` | `cuenta.tipo_pago_solicitado` | `tipoPagoSolicitado` | `tipo_pago_solicitado` | columna (`fisico` \| `digital`, NULL mientras no se solicite; `CHECK`) |
+| `Cuenta.idMetodoPagoSolicitado` | `cuenta.id_metodo_pago_solicitado` | `idMetodoPagoSolicitado` | `id_metodo_pago_solicitado` | FK nullable a `metodo_pago`; método seleccionado en categoría física o digital |
 
 ## Pedidos — tipo `Pedido` (tabla `pedido`)
 

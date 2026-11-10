@@ -163,6 +163,7 @@ CREATE TABLE cuenta (
   cerrada_en DATETIME NULL,
   estado VARCHAR(20) NOT NULL DEFAULT 'abierta' CHECK (estado IN ('abierta', 'por_pagar', 'cerrada')),
   tipo_pago_solicitado VARCHAR(10) NULL CHECK (tipo_pago_solicitado IS NULL OR tipo_pago_solicitado IN ('fisico', 'digital')),
+  id_metodo_pago_solicitado INT NULL,
   CONSTRAINT fk_cuenta_id_mesa FOREIGN KEY (id_mesa) REFERENCES mesa (id_mesa) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -232,11 +233,30 @@ CREATE TABLE venta (
   CONSTRAINT fk_venta_id_cajero FOREIGN KEY (id_cajero) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+CREATE TABLE categoria_metodo_pago (
+  id_categoria_metodo_pago INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(40) NOT NULL UNIQUE,
+  tipo ENUM('fisico', 'digital') NOT NULL,
+  activo BOOLEAN NOT NULL DEFAULT TRUE
+) ENGINE=InnoDB;
+
 CREATE TABLE metodo_pago (
   id_metodo INT AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(40) NOT NULL UNIQUE,
+  id_categoria_metodo_pago INT NOT NULL,
+  es_efectivo BOOLEAN NOT NULL DEFAULT FALSE,
   activo BOOLEAN NOT NULL DEFAULT TRUE
 ) ENGINE=InnoDB;
+
+ALTER TABLE metodo_pago
+  ADD CONSTRAINT fk_metodo_pago_categoria
+  FOREIGN KEY (id_categoria_metodo_pago) REFERENCES categoria_metodo_pago (id_categoria_metodo_pago)
+  ON UPDATE CASCADE ON DELETE RESTRICT;
+
+ALTER TABLE cuenta
+  ADD CONSTRAINT fk_cuenta_metodo_pago_solicitado
+  FOREIGN KEY (id_metodo_pago_solicitado) REFERENCES metodo_pago (id_metodo)
+  ON UPDATE CASCADE ON DELETE RESTRICT;
 
 CREATE TABLE pago (
   id_pago INT AUTO_INCREMENT PRIMARY KEY,
@@ -297,7 +317,14 @@ JOIN cuenta c ON c.id_cuenta = v.id_cuenta JOIN mesa m ON m.id_mesa = c.id_mesa;
 INSERT INTO rol(nombre) VALUES ('Gerente'),('Mesero'),('Cocinero'),('Cajero'),('Hostess');
 INSERT INTO estado_pedido(nombre) VALUES ('Pendiente'),('En preparacion'),('Listo'),('Entregado'),('Cancelado'),('Registrado'),('Pagado');
 -- Nota: 'Pendiente' = enviado a cocina (ver backend/src/models/dominio.ts).
-INSERT INTO metodo_pago(nombre) VALUES ('Efectivo'),('Tarjeta'),('Transferencia');
+INSERT INTO categoria_metodo_pago(nombre, tipo)
+VALUES (CONVERT(X'46C3AD7369636F' USING utf8mb4), 'fisico'),('Digital', 'digital');
+INSERT INTO metodo_pago(nombre, id_categoria_metodo_pago, es_efectivo)
+SELECT 'Efectivo', id_categoria_metodo_pago, TRUE FROM categoria_metodo_pago WHERE tipo = 'fisico';
+INSERT INTO metodo_pago(nombre, id_categoria_metodo_pago)
+SELECT nombres.nombre, categoria.id_categoria_metodo_pago
+  FROM (SELECT 'Tarjeta' AS nombre UNION ALL SELECT 'Transferencia') nombres
+  JOIN categoria_metodo_pago categoria ON categoria.tipo = 'digital';
 
 -- Pruebas básicas de consulta (ejecutar tras agregar registros de prueba):
 SELECT * FROM estado_pedido;

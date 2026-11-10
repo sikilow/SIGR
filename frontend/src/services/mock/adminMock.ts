@@ -5,7 +5,7 @@ import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CategoriaAdmin
 import { ErrorServicio } from '../errores'
 import type { CatalogoService, UsuariosService } from '../interfaces'
 import { baseDatos, type MesaGuardada } from './baseDatos'
-import { metodosPagoMock } from './metodosPago'
+import { categoriasMetodoPagoMock, metodosPagoMock } from './metodosPago'
 import { conRetraso } from './utiles'
 
 const duplicado = (campo: string) => new ErrorServicio('estado_invalido', `Ya existe otro usuario con ese ${campo}.`, 409)
@@ -278,19 +278,72 @@ function exigirNumeroLibre(numero: number, exceptoId?: number): void {
 export function crearCatalogoMock(): CatalogoService {
   // Los productos agotados de la demo cuentan como "activos sin existencia" salvo que se indique otra cosa.
   return {
-    listarMetodosPago() {
-      return conRetraso(() => structuredClone(metodosPagoMock))
+    listarMetodosPagoDisponibles() {
+      return conRetraso(() => structuredClone(metodosPagoMock.filter((metodo) =>
+        metodo.activo && categoriasMetodoPagoMock.some((categoria) =>
+          categoria.idCategoriaMetodoPago === metodo.idCategoriaMetodoPago && categoria.activo,
+        ),
+      )))
     },
 
-    crearMetodoPago(nombre) {
+    listarMetodosPago() {
+      return conRetraso(() => structuredClone(categoriasMetodoPagoMock.map((categoria) => ({
+        ...categoria,
+        metodos: metodosPagoMock.filter((metodo) => metodo.idCategoriaMetodoPago === categoria.idCategoriaMetodoPago),
+      }))))
+    },
+
+    crearCategoriaMetodoPago(nombre, tipo) {
       return conRetraso(() => {
         const limpio = nombre.trim()
+        if (!limpio || limpio.length > 40) throw new ErrorServicio('estado_invalido', 'El nombre debe tener entre 1 y 40 caracteres.', 422)
+        if (categoriasMetodoPagoMock.some((categoria) => categoria.nombre.toLocaleLowerCase() === limpio.toLocaleLowerCase())) {
+          throw new ErrorServicio('estado_invalido', 'Ya existe una categoría de pago con ese nombre.', 409)
+        }
+        const idCategoriaMetodoPago = Math.max(0, ...categoriasMetodoPagoMock.map((categoria) => categoria.idCategoriaMetodoPago)) + 1
+        const categoria = { idCategoriaMetodoPago, nombre: limpio, tipo, activo: true, metodos: [] }
+        categoriasMetodoPagoMock.push(categoria)
+        return structuredClone(categoria)
+      })
+    },
+
+    actualizarCategoriaMetodoPago(id, cambio) {
+      return conRetraso(() => {
+        const categoria = categoriasMetodoPagoMock.find((item) => item.idCategoriaMetodoPago === id)
+        if (!categoria) throw noExiste('La categoría de pago')
+        categoria.activo = cambio.activo
+        return {
+          ...structuredClone(categoria),
+          metodos: structuredClone(metodosPagoMock.filter((metodo) => metodo.idCategoriaMetodoPago === id)),
+        }
+      })
+    },
+
+    crearMetodoPago(nombre, idCategoriaMetodoPago, esEfectivo) {
+      return conRetraso(() => {
+        const limpio = nombre.trim()
+        const categoria = categoriasMetodoPagoMock.find((item) => item.idCategoriaMetodoPago === idCategoriaMetodoPago)
+        if (!categoria) throw noExiste('La categoría de pago')
         if (!limpio || limpio.length > 40) throw new ErrorServicio('estado_invalido', 'El nombre debe tener entre 1 y 40 caracteres.', 422)
         if (metodosPagoMock.some((metodo) => metodo.nombre.toLocaleLowerCase() === limpio.toLocaleLowerCase())) {
           throw new ErrorServicio('estado_invalido', 'Ya existe un método de pago con ese nombre.', 409)
         }
+        if (esEfectivo && categoria.tipo !== 'fisico') {
+          throw new ErrorServicio('estado_invalido', 'El método de efectivo debe pertenecer a una categoría física.', 422)
+        }
+        if (esEfectivo && metodosPagoMock.some((metodo) => metodo.esEfectivo)) {
+          throw new ErrorServicio('estado_invalido', 'Ya existe un método marcado como efectivo.', 409)
+        }
         const idMetodo = Math.max(0, ...metodosPagoMock.map((metodo) => metodo.idMetodo)) + 1
-        const metodo = { idMetodo, nombre: limpio, activo: true }
+        const metodo = {
+          idMetodo,
+          nombre: limpio,
+          idCategoriaMetodoPago,
+          categoria: categoria.nombre,
+          tipo: categoria.tipo,
+          esEfectivo,
+          activo: true,
+        }
         metodosPagoMock.push(metodo)
         return { ...metodo }
       })
@@ -300,10 +353,14 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const metodo = metodosPagoMock.find((item) => item.idMetodo === id)
         if (!metodo) throw noExiste('El método de pago')
-        if (!cambio.activo && metodo.activo && metodosPagoMock.filter((item) => item.activo).length <= 1) {
-          throw new ErrorServicio('estado_invalido', 'Debe quedar al menos un método de pago activo.', 409)
+        if (cambio.esEfectivo && metodo.tipo !== 'fisico') {
+          throw new ErrorServicio('estado_invalido', 'El método de efectivo debe pertenecer a una categoría física.', 422)
         }
-        metodo.activo = cambio.activo
+        if (cambio.esEfectivo && !metodo.esEfectivo && metodosPagoMock.some((item) => item.esEfectivo)) {
+          throw new ErrorServicio('estado_invalido', 'Ya existe un método marcado como efectivo.', 409)
+        }
+        if (cambio.activo !== undefined) metodo.activo = cambio.activo
+        if (cambio.esEfectivo !== undefined) metodo.esEfectivo = cambio.esEfectivo
         return { ...metodo }
       })
     },

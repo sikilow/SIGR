@@ -120,13 +120,13 @@ Regla: la existencia se **descuenta al enviar** el pedido a cocina y se **devuel
 
 | Líneas | Qué hace | Por qué |
 | --- | --- | --- |
-| 12–18 | `SolicitudPago`: `tipo_pago_solicitado` debe ser `"fisico"` o `"digital"` (acepta `tipo` como alias). `.refine(...)` exige que venga alguno de los dos y `.transform` lo deja como `{ tipo }`. | `refine` es una validación personalizada. |
+| 12–18 | `SolicitudPago`: valida la modalidad y el método de la categoría seleccionada. | El método y su categoría deben estar activos y coincidir con `fisico` o `digital`. |
 | 21 | `POST /api/cuentas/:id/solicitar-pago`, solo `mesero` y `gerente`. | |
 | 22–23 | Toma el id de la URL y valida el cuerpo. | |
 | 25 | Envuelve todo en `conIdempotencia(req, res, 200, async () => {...})`. | Si el mesero toca dos veces el botón, no se repite. |
 | 26–28 | La cuenta debe existir (404) y estar `abierta` (409). | |
-| 31–34 | Carga la cuenta; si `total === 0` (sin pedidos o todos cancelados) no hay nada que cobrar. | |
-| 37–42 | `UPDATE cuenta SET estado = 'por_pagar', tipo_pago_solicitado = ? WHERE id_cuenta = ? AND estado = 'abierta'`. Si `affectedRows === 0`, alguien la cambió justo antes. | El `AND estado = 'abierta'` es **control de concurrencia**: dos peticiones simultáneas no la solicitan dos veces. |
+| 31–34 | Carga la cuenta; si `total === 0` o hay pedidos activos sin entregar (incluidos los `Listo`) no se puede solicitar. | La entrega debe ocurrir antes de solicitar el cobro. |
+| 37–42 | `UPDATE cuenta` guarda la modalidad y `id_metodo_pago_solicitado`. | Se ejecuta dentro de una transacción con la fila de la cuenta bloqueada. |
 | 44 | Devuelve la cuenta ya actualizada. | |
 
 ---

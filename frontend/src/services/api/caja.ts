@@ -41,7 +41,14 @@ interface EstadoDto {
     mesero_nombre?: string | null
     pedidos_sin_entregar: Array<{ id_pedido: number | string; estado: string }>
   }>
-  metodos_pago: Array<{ id_metodo: number | string; nombre: string }>
+  metodos_pago: Array<{
+    id_metodo: number | string
+    nombre: string
+    id_categoria_metodo_pago: number | string
+    categoria: string
+    tipo: 'fisico' | 'digital'
+    es_efectivo: boolean | number
+  }>
 }
 
 interface VentaDto {
@@ -129,6 +136,10 @@ export function crearCajaApi(): CajaService {
         metodosPago: dto.metodos_pago.map((metodo) => ({
           idMetodo: Number(metodo.id_metodo),
           nombre: metodo.nombre,
+          idCategoriaMetodoPago: Number(metodo.id_categoria_metodo_pago),
+          categoria: metodo.categoria,
+          tipo: metodo.tipo,
+          esEfectivo: Boolean(metodo.es_efectivo),
         })),
       }
     },

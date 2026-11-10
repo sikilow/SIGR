@@ -3,10 +3,22 @@ import type { Cuenta } from './cuenta'
 export interface MetodoPago {
   idMetodo: number
   nombre: string
+  idCategoriaMetodoPago: number
+  categoria: string
+  tipo: 'fisico' | 'digital'
+  esEfectivo: boolean
 }
 
 export interface MetodoPagoAdmin extends MetodoPago {
   activo: boolean
+}
+
+export interface CategoriaMetodoPagoAdmin {
+  idCategoriaMetodoPago: number
+  nombre: string
+  tipo: 'fisico' | 'digital'
+  activo: boolean
+  metodos: MetodoPagoAdmin[]
 }
 
 export interface PedidoPendienteCaja {

@@ -19,7 +19,7 @@ Guía para poner una base MySQL existente al día con el esquema del proyecto si
 
 ## 2. Aplicar solo las migraciones pendientes
 
-Si ya aplicaste 007–014, ejecuta únicamente **015** (fondo inicial y cuadre de efectivo en el corte de caja). Sin ella, abrir, cerrar y consultar cortes responde error 500:
+Si ya aplicaste 007–014, revisa y aplica solo las migraciones pendientes entre **015** y **017**. La 015 agrega el fondo inicial y el cuadre de efectivo en el corte:
 
 ```powershell
 Get-Content -Raw "..\database\migrations\015_corte_efectivo.sql" | mysql -h localhost -P 3306 -u root -p SIGR
@@ -27,7 +27,23 @@ Get-Content -Raw "..\database\migrations\015_corte_efectivo.sql" | mysql -h loca
 
 Desde la raíz del repositorio usa la ruta `.\database\migrations\015_corte_efectivo.sql`. Revisa la sección «Migración 015» antes de aplicarla.
 
-Si ya aplicaste 007–013, ejecuta **014** (portal web de clientes) y después **015**. Sin la 014, el registro y el inicio de sesión de clientes responden error 500:
+Después de 015, aplica **016** para guardar el método digital que eligió el mesero y bloquear el cobro hasta entregar los pedidos:
+
+```powershell
+Get-Content -Raw "..\database\migrations\016_metodo_pago_solicitado.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+```
+
+Desde la raíz del repositorio usa `.\database\migrations\016_metodo_pago_solicitado.sql`.
+
+Después de 016, aplica **017** para organizar métodos de pago en categorías:
+
+```powershell
+Get-Content -Raw "..\database\migrations\017_categorias_metodos_pago.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+```
+
+Desde la raíz del repositorio usa `.\database\migrations\017_categorias_metodos_pago.sql`.
+
+Si ya aplicaste 007–013, ejecuta **014** (portal web de clientes), **015**, **016** y **017** en ese orden. Sin la 014, el registro y el inicio de sesión de clientes responden error 500:
 
 ```powershell
 Get-Content -Raw "..\database\migrations\014_clientes_web.sql" | mysql -h localhost -P 3306 -u root -p SIGR
@@ -35,7 +51,7 @@ Get-Content -Raw "..\database\migrations\014_clientes_web.sql" | mysql -h localh
 
 Desde la raíz del repositorio usa la ruta `.\database\migrations\014_clientes_web.sql`. Revisa la sección «Migración 014» antes de aplicarla.
 
-Si ya aplicaste 007–012, ejecuta **013**, **014** y **015** en ese orden:
+Si ya aplicaste 007–012, ejecuta **013**, **014**, **015**, **016** y **017** en ese orden:
 
 ```powershell
 Get-Content -Raw "..\database\migrations\013_auditoria_seguridad.sql" | mysql -h localhost -P 3306 -u root -p SIGR
@@ -45,7 +61,7 @@ Ese comando es para PowerShell abierto en `backend\`. Si estás en la raíz del 
 
 La migración 013 puede volver a ejecutarse para completar una ejecución interrumpida: conserva las tablas existentes y reemplaza los triggers y el procedimiento de auditoría. Si MySQL informa un error, corrige la causa y vuelve a ejecutar el comando completo; no hace falta borrar manualmente tablas ni triggers.
 
-Si ya aplicaste 007–010, ejecuta **011**, **012**, **013**, **014** y **015** en ese orden:
+Si ya aplicaste 007–010, ejecuta **011** a **017** en ese orden:
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
@@ -53,11 +69,13 @@ mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/013_auditoria_seguridad.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/014_clientes_web.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/015_corte_efectivo.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/016_metodo_pago_solicitado.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/017_categorias_metodos_pago.sql"
 ```
 
-Si ya aplicaste 007–009, ejecuta 010 a 015 en orden. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
+Si ya aplicaste 007–009, ejecuta 010 a 017 en orden. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
 
-Si las migraciones 007–015 siguen pendientes, aplícalas en orden (una sola vez cada una):
+Si las migraciones 007–017 siguen pendientes, aplícalas en orden (una sola vez cada una):
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/007_catalogo_descripciones_obligatorias.sql"
@@ -69,6 +87,8 @@ mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/013_auditoria_seguridad.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/014_clientes_web.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/015_corte_efectivo.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/016_metodo_pago_solicitado.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/017_categorias_metodos_pago.sql"
 ```
 
 Escribe la contraseña de MySQL cuando la solicite. Asegúrate de conectarte al mismo servidor y usuario configurados en `backend/.env`.
@@ -108,6 +128,8 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `013_auditoria_seguridad.sql` | Protege al gerente inicial y audita INSERT/UPDATE/DELETE en las tablas de negocio | Una vez, tras el esquema y usuarios iniciales |
 | `014_clientes_web.sql` | Contraseñas de clientes del portal web y correo único por cliente | Tras 013; puede repetirse |
 | `015_corte_efectivo.sql` | Fondo inicial, efectivo esperado y contado en el corte de caja | Una vez, tras 014 |
+| `016_metodo_pago_solicitado.sql` | Método elegido por el mesero y control de entrega antes de cobrar | Tras 015; actualiza triggers de auditoría de cuenta |
+| `017_categorias_metodos_pago.sql` | Categorías físicas/digitales configurables y métodos asociados | Tras 016 |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
@@ -245,11 +267,37 @@ Get-Content -Raw ".\database\migrations\015_corte_efectivo.sql" | mysql -h local
 mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW COLUMNS FROM corte_caja;"
 ```
 
-Deben aparecer `fondo_inicial`, `efectivo_esperado` y `efectivo_contado`. Los cortes cerrados antes de la 015 se conservan: aparecen en **Gerente → Cortes** sin conteo de efectivo y con el total que se reportó en su momento. La 013 ya incluye estas columnas en sus triggers; si necesitas volver a ejecutarla, aplica antes la 015.
+Deben aparecer `fondo_inicial`, `efectivo_esperado` y `efectivo_contado`. Los cortes cerrados antes de la 015 se conservan: aparecen en **Gerente → Cortes** sin conteo de efectivo y con el total que se reportó en su momento. La 015 recrea los triggers de auditoría de corte para incluir las columnas nuevas; si vuelves a aplicar la 013, vuelve a aplicar la 015.
+
+## Migración 016: método de pago digital solicitado
+
+Agrega a `cuenta` el método de pago digital elegido por el mesero y actualiza sus triggers de auditoría. Puede volver a ejecutarse: comprueba la columna y la llave foránea antes de crearlas y reemplaza los triggers.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-016.sql"
+Get-Content -Raw ".\database\migrations\016_metodo_pago_solicitado.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW COLUMNS FROM cuenta LIKE 'id_metodo_pago_solicitado'; SHOW CREATE TABLE cuenta;"
+```
+
+La columna admite `NULL` para cuentas existentes. La API solo permite solicitar cuentas después de entregar todos sus pedidos activos; un pedido listo en cocina todavía no se puede cobrar.
+
+## Migración 017: categorías de métodos de pago
+
+Crea las categorías iniciales **Físico** y **Digital**, asigna los métodos existentes (Efectivo a Físico; otros métodos a Digital), asegura que los métodos tengan su indicador de activación y agrega la marca que determina qué método suma efectivo al cuadre de caja. La migración puede repetirse si se interrumpe: agrega las columnas faltantes, rellena los métodos sin categoría y verifica la llave foránea antes de crearla.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-017.sql"
+Get-Content -Raw ".\database\migrations\017_categorias_metodos_pago.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT cmp.nombre, cmp.tipo, mp.nombre AS metodo, mp.activo, cmp.activo AS categoria_activa, mp.es_efectivo FROM categoria_metodo_pago cmp LEFT JOIN metodo_pago mp USING (id_categoria_metodo_pago) ORDER BY cmp.id_categoria_metodo_pago, mp.id_metodo;"
+```
+
+Gerencia puede crear categorías nuevas indicando si son físicas o digitales, agregarles métodos y desactivar cada categoría o método por separado. El personal solo recibe categorías y métodos activos. Los métodos ya solicitados para una cuenta siguen disponibles en Caja aunque luego se desactiven.
 
 ## Base nueva o entorno de demostración
 
-- **Base nueva y vacía:** ejecuta `database/init.sql` y el seed de usuarios iniciales; aplica `013_auditoria_seguridad.sql` después del seed y antes de iniciar la API. `init.sql` ya incluye los cambios de esquema de 001–012, 014 y 015, así que no los apliques otra vez.
+- **Base nueva y vacía:** ejecuta `database/init.sql` y el seed de usuarios iniciales; aplica `013_auditoria_seguridad.sql` después del seed, luego 016 y 017 para actualizar los triggers de cuenta y de métodos. `init.sql` ya incluye la estructura y los datos iniciales de categorías y métodos.
 - **Base de desarrollo en Docker que ya contiene datos:** no uses `docker compose down -v`, ya que elimina el volumen de la base. Con el contenedor activo y el puerto 3306 publicado, los comandos `mysql` anteriores la actualizan igual que una instalación local.
 - Guarda el respaldo de forma segura. No lo agregues al repositorio ni lo compartas: contiene los datos de la base.
 

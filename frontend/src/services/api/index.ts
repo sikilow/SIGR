@@ -4,7 +4,7 @@ import { ErrorServicio } from '../errores'
 import { crearCajaApi } from './caja'
 import { crearHostessApi } from '../hostess/api'
 import type { Servicios } from '../interfaces'
-import type { MetodoPagoAdmin } from '../../types'
+import type { CategoriaMetodoPagoAdmin, MetodoPagoAdmin } from '../../types'
 import { solicitar } from './cliente'
 import { guardarToken, leerToken, limpiarToken } from './token'
 import {
@@ -149,8 +149,8 @@ export function crearServiciosApi(): Servicios {
         }
       },
 
-      async solicitarPago(idCuenta, tipo, claveIdempotencia) {
-        const cuerpo = deSolicitudPago(tipo)
+      async solicitarPago(idCuenta, tipo, idMetodoPagoSolicitado, claveIdempotencia) {
+        const cuerpo = deSolicitudPago(tipo, idMetodoPagoSolicitado)
         return aCuenta(
           await solicitar<CuentaDto>('POST', `/cuentas/${idCuenta}/solicitar-pago`, { cuerpo, claveIdempotencia }),
         )
@@ -180,34 +180,172 @@ export function crearServiciosApi(): Servicios {
     },
 
     catalogo: {
-      async listarMetodosPago() {
-        const metodos = await solicitar<Array<{ id_metodo: number | string; nombre: string; activo: boolean | number }>>(
+      async listarMetodosPagoDisponibles() {
+        const metodos = await solicitar<Array<{
+          id_metodo: number | string
+          nombre: string
+          id_categoria_metodo_pago: number | string
+          categoria: string
+          tipo: 'fisico' | 'digital'
+          es_efectivo: boolean | number
+          activo: boolean | number
+        }>>(
           'GET',
-          '/catalogo/metodos-pago',
+          '/catalogo/metodos-pago/disponibles',
         )
         return metodos.map((metodo): MetodoPagoAdmin => ({
           idMetodo: Number(metodo.id_metodo),
           nombre: metodo.nombre,
+          idCategoriaMetodoPago: Number(metodo.id_categoria_metodo_pago),
+          categoria: metodo.categoria,
+          tipo: metodo.tipo,
+          esEfectivo: Boolean(metodo.es_efectivo),
           activo: Boolean(metodo.activo),
         }))
       },
 
-      async crearMetodoPago(nombre) {
-        const metodo = await solicitar<{ id_metodo: number | string; nombre: string; activo: boolean | number }>(
+      async listarMetodosPago() {
+        const categorias = await solicitar<Array<{
+          id_categoria_metodo_pago: number | string
+          nombre: string
+          tipo: 'fisico' | 'digital'
+          activo: boolean | number
+          metodos: Array<{
+            id_metodo: number | string
+            nombre: string
+            id_categoria_metodo_pago: number | string
+            categoria: string
+            tipo: 'fisico' | 'digital'
+            es_efectivo: boolean | number
+            activo: boolean | number
+          }>
+        }>>(
+          'GET',
+          '/catalogo/metodos-pago',
+        )
+        return categorias.map((categoria): CategoriaMetodoPagoAdmin => ({
+          idCategoriaMetodoPago: Number(categoria.id_categoria_metodo_pago),
+          nombre: categoria.nombre,
+          tipo: categoria.tipo,
+          activo: Boolean(categoria.activo),
+          metodos: categoria.metodos.map((metodo): MetodoPagoAdmin => ({
+            idMetodo: Number(metodo.id_metodo),
+            nombre: metodo.nombre,
+            idCategoriaMetodoPago: Number(metodo.id_categoria_metodo_pago),
+            categoria: metodo.categoria,
+            tipo: metodo.tipo,
+            esEfectivo: Boolean(metodo.es_efectivo),
+            activo: Boolean(metodo.activo),
+          })),
+        }))
+      },
+
+      async crearCategoriaMetodoPago(nombre, tipo) {
+        const categoria = await solicitar<{
+          id_categoria_metodo_pago: number | string
+          nombre: string
+          tipo: 'fisico' | 'digital'
+          activo: boolean | number
+          metodos: MetodoPagoAdmin[]
+        }>(
+          'POST',
+          '/catalogo/metodos-pago/categorias',
+          { cuerpo: { nombre: nombre.trim(), tipo } },
+        )
+        return {
+          idCategoriaMetodoPago: Number(categoria.id_categoria_metodo_pago),
+          nombre: categoria.nombre,
+          tipo: categoria.tipo,
+          activo: Boolean(categoria.activo),
+          metodos: [],
+        }
+      },
+
+      async actualizarCategoriaMetodoPago(id, cambio) {
+        const categoria = await solicitar<{
+          id_categoria_metodo_pago: number | string
+          nombre: string
+          tipo: 'fisico' | 'digital'
+          activo: boolean | number
+          metodos: Array<{
+            id_metodo: number | string
+            nombre: string
+            id_categoria_metodo_pago: number | string
+            categoria: string
+            tipo: 'fisico' | 'digital'
+            es_efectivo: boolean | number
+            activo: boolean | number
+          }>
+        }>(
+          'PATCH',
+          `/catalogo/metodos-pago/categorias/${id}`,
+          { cuerpo: cambio },
+        )
+        return {
+          idCategoriaMetodoPago: Number(categoria.id_categoria_metodo_pago),
+          nombre: categoria.nombre,
+          tipo: categoria.tipo,
+          activo: Boolean(categoria.activo),
+          metodos: categoria.metodos.map((metodo): MetodoPagoAdmin => ({
+            idMetodo: Number(metodo.id_metodo),
+            nombre: metodo.nombre,
+            idCategoriaMetodoPago: Number(metodo.id_categoria_metodo_pago),
+            categoria: metodo.categoria,
+            tipo: metodo.tipo,
+            esEfectivo: Boolean(metodo.es_efectivo),
+            activo: Boolean(metodo.activo),
+          })),
+        }
+      },
+
+      async crearMetodoPago(nombre, idCategoriaMetodoPago, esEfectivo) {
+        const metodo = await solicitar<{
+          id_metodo: number | string
+          nombre: string
+          id_categoria_metodo_pago: number | string
+          categoria: string
+          tipo: 'fisico' | 'digital'
+          es_efectivo: boolean | number
+          activo: boolean | number
+        }>(
           'POST',
           '/catalogo/metodos-pago',
-          { cuerpo: { nombre: nombre.trim() } },
+          { cuerpo: { nombre: nombre.trim(), id_categoria_metodo_pago: idCategoriaMetodoPago, es_efectivo: esEfectivo } },
         )
-        return { idMetodo: Number(metodo.id_metodo), nombre: metodo.nombre, activo: Boolean(metodo.activo) }
+        return {
+          idMetodo: Number(metodo.id_metodo),
+          nombre: metodo.nombre,
+          idCategoriaMetodoPago: Number(metodo.id_categoria_metodo_pago),
+          categoria: metodo.categoria,
+          tipo: metodo.tipo,
+          esEfectivo: Boolean(metodo.es_efectivo),
+          activo: Boolean(metodo.activo),
+        }
       },
 
       async actualizarMetodoPago(id, cambio) {
-        const metodo = await solicitar<{ id_metodo: number | string; nombre: string; activo: boolean | number }>(
+        const metodo = await solicitar<{
+          id_metodo: number | string
+          nombre: string
+          id_categoria_metodo_pago: number | string
+          categoria: string
+          tipo: 'fisico' | 'digital'
+          es_efectivo: boolean | number
+          activo: boolean | number
+        }>(
           'PATCH',
           `/catalogo/metodos-pago/${id}`,
-          { cuerpo: cambio },
+          { cuerpo: { activo: cambio.activo, es_efectivo: cambio.esEfectivo } },
         )
-        return { idMetodo: Number(metodo.id_metodo), nombre: metodo.nombre, activo: Boolean(metodo.activo) }
+        return {
+          idMetodo: Number(metodo.id_metodo),
+          nombre: metodo.nombre,
+          idCategoriaMetodoPago: Number(metodo.id_categoria_metodo_pago),
+          categoria: metodo.categoria,
+          tipo: metodo.tipo,
+          esEfectivo: Boolean(metodo.es_efectivo),
+          activo: Boolean(metodo.activo),
+        }
       },
 
       async listarCategorias() {

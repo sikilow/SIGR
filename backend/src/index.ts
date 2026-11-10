@@ -75,6 +75,8 @@ async function iniciarAPI(): Promise<void> {
   const migraciones = [
     { archivo: "014_clientes_web.sql", consulta: "SELECT id_cliente FROM cliente_credencial LIMIT 0" },
     { archivo: "015_corte_efectivo.sql", consulta: "SELECT fondo_inicial, efectivo_esperado, efectivo_contado FROM corte_caja LIMIT 0" },
+    { archivo: "016_metodo_pago_solicitado.sql", consulta: "SELECT id_metodo_pago_solicitado FROM cuenta LIMIT 0" },
+    { archivo: "017_categorias_metodos_pago.sql", consulta: "SELECT mp.activo, mp.id_categoria_metodo_pago, mp.es_efectivo FROM metodo_pago mp JOIN categoria_metodo_pago cmp USING (id_categoria_metodo_pago) LIMIT 0" },
   ];
   for (const { archivo, consulta } of migraciones) {
     try {
@@ -90,6 +92,32 @@ async function iniciarAPI(): Promise<void> {
       }
       throw error;
     }
+  }
+
+  const [auditoriaCuenta] = await filas(
+    pool,
+    `SELECT COUNT(*) AS total
+       FROM information_schema.triggers
+      WHERE trigger_schema = DATABASE()
+        AND trigger_name IN ('trg_aud_cuenta_ai', 'trg_aud_cuenta_au', 'trg_aud_cuenta_ad')
+        AND action_statement LIKE '%id_metodo_pago_solicitado%'`,
+  );
+  if (Number(auditoriaCuenta?.total ?? 0) !== 3) {
+    throw new Error("Falta aplicar database/migrations/016_metodo_pago_solicitado.sql para actualizar la auditoría de cuenta.");
+  }
+
+  const [auditoriaPagos] = await filas(
+    pool,
+    `SELECT COUNT(*) AS total
+       FROM information_schema.triggers
+      WHERE trigger_schema = DATABASE()
+        AND trigger_name IN (
+          'trg_aud_metodo_pago_ai', 'trg_aud_metodo_pago_au', 'trg_aud_metodo_pago_ad',
+          'trg_aud_categoria_metodo_pago_ai', 'trg_aud_categoria_metodo_pago_au', 'trg_aud_categoria_metodo_pago_ad'
+        )`,
+  );
+  if (Number(auditoriaPagos?.total ?? 0) !== 6) {
+    throw new Error("Falta aplicar database/migrations/017_categorias_metodos_pago.sql para actualizar la auditoría de métodos de pago.");
   }
 
   app.listen(PUERTO, () => console.log(`API en http://localhost:${PUERTO}`));
