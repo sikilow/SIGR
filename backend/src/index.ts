@@ -3,6 +3,7 @@ import express from "express";
 import { ORIGENES_PERMITIDOS, PUERTO } from "./utils/config";
 import { ErrorApi, manejarErrores } from "./utils/errores";
 import { authRouter } from "./routes/auth";
+import { authClientesRouter } from "./routes/authClientes";
 import { catalogoRouter } from "./routes/catalogo";
 import { clientesRouter } from "./routes/clientes";
 import { cuentasRouter } from "./routes/cuentas";
@@ -13,6 +14,7 @@ import { mesasRouter } from "./routes/mesas";
 import { pedidosRouter } from "./routes/pedidos";
 import { productosRouter } from "./routes/productos";
 import { reservacionesRouter } from "./routes/reservaciones";
+import { reservacionesClientesRouter } from "./routes/reservacionesClientes";
 import { usuariosRouter } from "./routes/usuarios";
 import { iniciarProcesadorReservaciones } from "./services/notificacionesReservacion";
 import { filas, pool } from "./services/db";
@@ -26,8 +28,10 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/auth-clientes", authClientesRouter);
 app.use("/api/clientes", clientesRouter);
 app.use("/api/reservaciones", reservacionesRouter);
+app.use("/api/reservaciones-clientes", reservacionesClientesRouter);
 app.use("/api/lista-espera", listaEsperaRouter);
 app.use("/api/mesas", mesasRouter);
 app.use("/api/menu", menuRouter);
@@ -65,6 +69,27 @@ async function iniciarAPI(): Promise<void> {
       );
     }
     throw error;
+  }
+
+  // Migraciones posteriores: sin ellas las rutas afectadas responderían 500.
+  const migraciones = [
+    { archivo: "014_clientes_web.sql", consulta: "SELECT id_cliente FROM cliente_credencial LIMIT 0" },
+    { archivo: "015_corte_efectivo.sql", consulta: "SELECT fondo_inicial, efectivo_esperado, efectivo_contado FROM corte_caja LIMIT 0" },
+  ];
+  for (const { archivo, consulta } of migraciones) {
+    try {
+      await filas(pool, consulta);
+    } catch (error) {
+      const codigo = typeof error === "object" && error !== null && "code" in error ? error.code : null;
+      if (codigo === "ER_NO_SUCH_TABLE" || codigo === "ER_BAD_FIELD_ERROR") {
+        throw new Error(
+          `Falta aplicar database/migrations/${archivo} a la base SIGR. ` +
+            "Consulta docs/actualizar-base-datos.md y vuelve a iniciar la API.",
+          { cause: error },
+        );
+      }
+      throw error;
+    }
   }
 
   app.listen(PUERTO, () => console.log(`API en http://localhost:${PUERTO}`));

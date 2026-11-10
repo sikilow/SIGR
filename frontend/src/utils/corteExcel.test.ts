@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { crearLibroCorte } from './corteExcel'
-import type { CorteCaja } from '../types'
+import { crearLibroCorte, type CorteCajaExportable } from './corteExcel'
 
 describe('crearLibroCorte', () => {
   it('incluye el inicio, el cierre y los pagos por método en un XLSX válido', async () => {
-    const corte: CorteCaja = {
+    const corte: CorteCajaExportable = {
       idCorte: 8,
       idCajero: 3,
       cajeroNombre: 'Cajero Demo',

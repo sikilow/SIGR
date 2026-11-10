@@ -1,10 +1,34 @@
 import type ExcelJS from 'exceljs'
-import type { CorteCaja } from '../types'
+
+export interface CorteCajaExportable {
+  idCorte: number
+  idCajero: number
+  cajeroNombre: string
+  inicio: Date
+  efectivoInicial: number
+  totalVentas: number
+  efectivoEsperado: number
+  efectivoContado: number
+  diferenciaEfectivo: number
+  tipoCierre: 'parcial' | 'final'
+  fin: Date
+  metodosPago: Array<{ idMetodo: number; nombre: string; cantidadPagos: number; monto: number }>
+  ventas: Array<{
+    idVenta: number
+    idCuenta: number
+    mesaNumero: number
+    fechaHora: Date
+    total: number
+    cajeroNombre: string
+    meseroNombre: string
+    pagos: Array<{ metodo: string; monto: number; montoRecibido: number; cambio: number }>
+  }>
+}
 
 const formatoMoneda = '"$"#,##0.00;[Red]-"$"#,##0.00'
 const formatosMetodo = ['Efectivo', 'Tarjeta', 'Transferencia']
 
-export async function crearLibroCorte(corte: CorteCaja): Promise<ExcelJS.Workbook> {
+export async function crearLibroCorte(corte: CorteCajaExportable): Promise<ExcelJS.Workbook> {
   const { default: ExcelJSRuntime } = await import('exceljs')
   const workbook = new ExcelJSRuntime.Workbook()
   workbook.creator = 'SIGR'
@@ -82,7 +106,7 @@ export async function crearLibroCorte(corte: CorteCaja): Promise<ExcelJS.Workboo
   return workbook
 }
 
-export async function descargarCorteExcel(corte: CorteCaja): Promise<void> {
+export async function descargarCorteExcel(corte: CorteCajaExportable): Promise<void> {
   const workbook = await crearLibroCorte(corte)
   const contenido = await workbook.xlsx.writeBuffer()
   const archivo = new Blob([new Uint8Array(contenido)], {

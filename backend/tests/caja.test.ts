@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularEfectivoEsperado, validarImportes, validarMetodoSolicitado, type PagoEntrada } from "../src/models/caja";
+import { cuadrarCorte, validarImportes, type PagoEntrada } from "../src/models/caja";
 import { ErrorApi } from "../src/utils/errores";
 
 function errorDe(fn: () => unknown): ErrorApi {
@@ -47,34 +47,28 @@ describe("validarImportes", () => {
   });
 });
 
-describe("validarMetodoSolicitado", () => {
-  const metodos = [
-    { id_metodo: 1, nombre: "Efectivo" },
-    { id_metodo: 2, nombre: "Tarjeta" },
-    { id_metodo: 3, nombre: "Transferencia" },
+describe("cuadrarCorte", () => {
+  const desglose = [
+    { metodo: "Efectivo", cobros: 3, monto: 1200 },
+    { metodo: "Tarjeta", cobros: 2, monto: 850.5 },
+    { metodo: "Transferencia", cobros: 0, monto: 0 },
   ];
 
-  it("acepta métodos que coinciden con la solicitud y pagos combinados que la incluyen", () => {
-    expect(() => validarMetodoSolicitado("digital", [{ id_metodo: 3, monto: 100 }], metodos, false)).not.toThrow();
-    expect(() => validarMetodoSolicitado("fisico", [
-      { id_metodo: 1, monto: 50 },
-      { id_metodo: 2, monto: 50 },
-    ], metodos, false)).not.toThrow();
+  it("espera el fondo inicial más solo lo cobrado en efectivo", () => {
+    expect(cuadrarCorte(500, desglose, 1700)).toEqual({ total_ventas: 2050.5, efectivo_esperado: 1700, diferencia: 0 });
   });
 
-  it("requiere confirmar cuando el cobro no incluye la forma solicitada", () => {
-    const error = errorDe(() => validarMetodoSolicitado("digital", [{ id_metodo: 1, monto: 100 }], metodos, false));
-    expect(error.estado).toBe(422);
-    expect(() => validarMetodoSolicitado("digital", [{ id_metodo: 1, monto: 100 }], metodos, true)).not.toThrow();
+  it("reporta faltante como diferencia negativa y sobrante como positiva", () => {
+    expect(cuadrarCorte(500, desglose, 1680).diferencia).toBe(-20);
+    expect(cuadrarCorte(500, desglose, 1700.1).diferencia).toBe(0.1);
   });
-});
 
-describe("calcularEfectivoEsperado", () => {
-  it("suma el fondo y los pagos en efectivo sin agregar tarjeta ni transferencias", () => {
-    expect(calcularEfectivoEsperado(600, [
-      { nombre: "Efectivo", monto: 300 },
-      { nombre: "Tarjeta", monto: 80 },
-      { nombre: "Transferencia", monto: 100 },
-    ])).toBe(900);
+  it("sin efectivo contado no calcula diferencia", () => {
+    expect(cuadrarCorte(0, desglose, null)).toEqual({ total_ventas: 2050.5, efectivo_esperado: 1200, diferencia: null });
+  });
+
+  it("evita errores de punto flotante con centavos", () => {
+    const pagos = [{ metodo: "efectivo", cobros: 2, monto: 0.1 }, { metodo: "Efectivo", cobros: 1, monto: 0.2 }];
+    expect(cuadrarCorte(0.1, pagos, 0.4).diferencia).toBe(0);
   });
 });

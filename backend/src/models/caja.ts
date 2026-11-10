@@ -83,3 +83,32 @@ export function validarImportes(total: number, pagos: PagoEntrada[]): { cambio: 
     recibidos: recibidoPorPago,
   };
 }
+
+export interface CobroPorMetodo {
+  metodo: string;
+  cobros: number;
+  monto: number;
+}
+
+export interface CuadreCorte {
+  total_ventas: number;
+  efectivo_esperado: number;
+  diferencia: number | null;
+}
+
+/**
+ * Cuadre del corte: solo el efectivo se cuenta en caja. `monto` de cada pago ya excluye el cambio entregado,
+ * así que el efectivo esperado es el fondo inicial más lo cobrado en efectivo. Diferencia = contado - esperado.
+ */
+export function cuadrarCorte(fondoInicial: number, desglose: CobroPorMetodo[], efectivoContado: number | null): CuadreCorte {
+  const totalVentas = desglose.reduce((suma, fila) => suma + centavos(fila.monto), 0);
+  const efectivo = desglose
+    .filter((fila) => fila.metodo.toLowerCase() === "efectivo")
+    .reduce((suma, fila) => suma + centavos(fila.monto), 0);
+  const esperado = centavos(fondoInicial) + efectivo;
+  return {
+    total_ventas: totalVentas / 100,
+    efectivo_esperado: esperado / 100,
+    diferencia: efectivoContado === null ? null : (centavos(efectivoContado) - esperado) / 100,
+  };
+}

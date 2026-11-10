@@ -1,5 +1,5 @@
 -- SIGR · Script inicial de la base de datos (esquema + datos base)
--- Crea la base SIGR con sus 26 tablas, los catálogos (roles, estados de pedido, métodos de pago)
+-- Crea la base SIGR con sus 26 tablas de negocio, la de credenciales de clientes, los catálogos (roles, estados de pedido, métodos de pago)
 -- y los datos base (mesas 1 a 6, menú y un cliente de prueba).
 -- Los usuarios con contraseña NO se crean aquí: se crean con `npx tsx src/utils/seed.ts` (en backend/).
 -- Después del seed, aplicar 013_auditoria_seguridad.sql antes de iniciar la API.
@@ -44,7 +44,17 @@ CREATE TABLE cliente (
   id_cliente INT AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(100) NOT NULL,
   telefono VARCHAR(20) NULL,
-  correo VARCHAR(120) NULL
+  correo VARCHAR(120) NULL,
+  CONSTRAINT uq_cliente_correo UNIQUE (correo)
+) ENGINE=InnoDB;
+-- correo: único y en minúsculas; lo usa el portal de clientes para iniciar sesión.
+
+-- Contraseñas de los clientes del portal web (migración 014).
+CREATE TABLE cliente_credencial (
+  id_credencial INT AUTO_INCREMENT PRIMARY KEY,
+  id_cliente INT NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  CONSTRAINT fk_credencial_cliente FOREIGN KEY (id_cliente) REFERENCES cliente (id_cliente) ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE seccion (
@@ -197,6 +207,9 @@ CREATE TABLE corte_caja (
   inicio DATETIME NOT NULL,
   efectivo_inicial DECIMAL(12,2) NOT NULL DEFAULT 0,
   fin DATETIME NULL,
+  fondo_inicial DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (fondo_inicial >= 0),
+  efectivo_esperado DECIMAL(12,2) NULL,
+  efectivo_contado DECIMAL(12,2) NULL CHECK (efectivo_contado >= 0),
   total_reportado DECIMAL(12,2) NULL CHECK (total_reportado >= 0),
   efectivo_contado DECIMAL(12,2) NULL,
   tipo_cierre ENUM('parcial','final') NULL,
@@ -204,6 +217,8 @@ CREATE TABLE corte_caja (
   CONSTRAINT chk_corte_efectivo_contado CHECK (efectivo_contado IS NULL OR efectivo_contado >= 0),
   CONSTRAINT fk_corte_caja_id_cajero FOREIGN KEY (id_cajero) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
+-- fondo_inicial: efectivo al abrir. efectivo_esperado = fondo + cobros en efectivo; efectivo_contado: lo que contó el cajero.
+-- total_reportado solo existe en cortes anteriores a la migración 015.
 
 CREATE TABLE venta (
   id_venta INT AUTO_INCREMENT PRIMARY KEY,
@@ -228,10 +243,12 @@ CREATE TABLE pago (
   id_venta INT NOT NULL,
   id_metodo INT NOT NULL,
   monto DECIMAL(12,2) NOT NULL CHECK (monto > 0),
-  monto_recibido DECIMAL(12,2) NOT NULL CHECK (monto_recibido >= monto),
+  monto_recibido DECIMAL(12,2) NOT NULL,
   cambio DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (cambio >= 0),
   pagado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   referencia VARCHAR(100) NULL,
+  -- MySQL 8 no acepta un CHECK de columna que use otra columna (error 3813).
+  CONSTRAINT chk_pago_monto_recibido CHECK (monto_recibido >= monto),
   CONSTRAINT fk_pago_id_venta FOREIGN KEY (id_venta) REFERENCES venta (id_venta) ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT fk_pago_id_metodo FOREIGN KEY (id_metodo) REFERENCES metodo_pago (id_metodo) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;

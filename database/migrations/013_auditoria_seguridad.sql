@@ -465,17 +465,17 @@ DROP TRIGGER IF EXISTS `trg_aud_corte_caja_ad`$$
 CREATE TRIGGER `trg_aud_corte_caja_ai` AFTER INSERT ON `corte_caja` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'corte_caja', 'INSERT', JSON_OBJECT('id_corte', NEW.`id_corte`), JSON_OBJECT('id_corte', NEW.`id_corte`, 'id_cajero', NEW.`id_cajero`, 'inicio', NEW.`inicio`, 'fin', NEW.`fin`, 'total_reportado', NEW.`total_reportado`), USER());
+  VALUES (@sigr_actor_id, 'corte_caja', 'INSERT', JSON_OBJECT('id_corte', NEW.`id_corte`), JSON_OBJECT('id_corte', NEW.`id_corte`, 'id_cajero', NEW.`id_cajero`, 'inicio', NEW.`inicio`, 'fin', NEW.`fin`, 'fondo_inicial', NEW.`fondo_inicial`, 'efectivo_esperado', NEW.`efectivo_esperado`, 'efectivo_contado', NEW.`efectivo_contado`, 'total_reportado', NEW.`total_reportado`), USER());
 END$$
 CREATE TRIGGER `trg_aud_corte_caja_au` AFTER UPDATE ON `corte_caja` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'corte_caja', 'UPDATE', JSON_OBJECT('id_corte', NEW.`id_corte`), JSON_OBJECT('id_corte', OLD.`id_corte`, 'id_cajero', OLD.`id_cajero`, 'inicio', OLD.`inicio`, 'fin', OLD.`fin`, 'total_reportado', OLD.`total_reportado`), JSON_OBJECT('id_corte', NEW.`id_corte`, 'id_cajero', NEW.`id_cajero`, 'inicio', NEW.`inicio`, 'fin', NEW.`fin`, 'total_reportado', NEW.`total_reportado`), USER());
+  VALUES (@sigr_actor_id, 'corte_caja', 'UPDATE', JSON_OBJECT('id_corte', NEW.`id_corte`), JSON_OBJECT('id_corte', OLD.`id_corte`, 'id_cajero', OLD.`id_cajero`, 'inicio', OLD.`inicio`, 'fin', OLD.`fin`, 'fondo_inicial', OLD.`fondo_inicial`, 'efectivo_esperado', OLD.`efectivo_esperado`, 'efectivo_contado', OLD.`efectivo_contado`, 'total_reportado', OLD.`total_reportado`), JSON_OBJECT('id_corte', NEW.`id_corte`, 'id_cajero', NEW.`id_cajero`, 'inicio', NEW.`inicio`, 'fin', NEW.`fin`, 'fondo_inicial', NEW.`fondo_inicial`, 'efectivo_esperado', NEW.`efectivo_esperado`, 'efectivo_contado', NEW.`efectivo_contado`, 'total_reportado', NEW.`total_reportado`), USER());
 END$$
 CREATE TRIGGER `trg_aud_corte_caja_ad` AFTER DELETE ON `corte_caja` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
-  VALUES (@sigr_actor_id, 'corte_caja', 'DELETE', JSON_OBJECT('id_corte', OLD.`id_corte`), JSON_OBJECT('id_corte', OLD.`id_corte`, 'id_cajero', OLD.`id_cajero`, 'inicio', OLD.`inicio`, 'fin', OLD.`fin`, 'total_reportado', OLD.`total_reportado`), USER());
+  VALUES (@sigr_actor_id, 'corte_caja', 'DELETE', JSON_OBJECT('id_corte', OLD.`id_corte`), JSON_OBJECT('id_corte', OLD.`id_corte`, 'id_cajero', OLD.`id_cajero`, 'inicio', OLD.`inicio`, 'fin', OLD.`fin`, 'fondo_inicial', OLD.`fondo_inicial`, 'efectivo_esperado', OLD.`efectivo_esperado`, 'efectivo_contado', OLD.`efectivo_contado`, 'total_reportado', OLD.`total_reportado`), USER());
 END$$
 DROP TRIGGER IF EXISTS `trg_aud_venta_ai`$$
 DROP TRIGGER IF EXISTS `trg_aud_venta_au`$$

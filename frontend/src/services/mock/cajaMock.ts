@@ -1,41 +1,46 @@
 import type { CajaService } from '../interfaces'
-import type { CorteCaja, TipoCierreCaja, VentaCaja, VentaCajaReporte } from '../../types'
+import type { CobroPorMetodo, CorteCaja, CorteDetalle, VentaCaja } from '../../types'
 import { ErrorServicio } from '../errores'
 import { baseDatos } from './baseDatos'
-import { metodosPagoMock } from './metodosPago'
 import { conRetraso, conRetrasoIdempotente } from './utiles'
 
 let corte: CorteCaja | null = null
-let siguienteVenta = 1
+/** Pagos del corte abierto (monto ya sin cambio), para el cuadre al cerrar. */
+let pagosDelCorte: Array<{ idMetodo: number; monto: number }> = []
+let ventasDelCorte = 0
+const cortesCerrados: CorteDetalle[] = []
 let siguienteCorte = 1
-const ventasRegistradas: Array<VentaCajaReporte & { idCorte: number }> = []
+let siguienteVenta = 1
 
-function resumirCorte(abierto: CorteCaja): CorteCaja {
-  const ventas = ventasRegistradas.filter((venta) => venta.idCorte === abierto.idCorte)
-  const metodosPago = metodosPagoMock.map((metodo) => ({
-    idMetodo: metodo.idMetodo,
-    nombre: metodo.nombre,
-    cantidadPagos: ventas.reduce((total, venta) => total + venta.pagos.filter((pago) => pago.metodo === metodo.nombre).length, 0),
-    monto: ventas.reduce(
-      (total, venta) => total + venta.pagos.filter((pago) => pago.metodo === metodo.nombre).reduce((suma, pago) => suma + pago.monto, 0),
-      0,
-    ),
-  }))
-  const efectivo = metodosPago.find((metodo) => metodo.nombre === 'Efectivo')?.monto ?? 0
-  return {
-    ...abierto,
-    totalVentas: ventas.reduce((total, venta) => total + venta.total, 0),
-    efectivoEsperado: Math.round((abierto.efectivoInicial + efectivo) * 100) / 100,
-    metodosPago,
-    ventas: ventas.map(({ idCorte: _idCorte, ...venta }) => venta),
-  }
+const metodos = [
+  { idMetodo: 1, nombre: 'Efectivo' },
+  { idMetodo: 2, nombre: 'Tarjeta' },
+  { idMetodo: 3, nombre: 'Transferencia' },
+]
+
+const centavos = (monto: number): number => Math.round(monto * 100)
+
+function desglose(): CobroPorMetodo[] {
+  return metodos.map((metodo) => {
+    const pagos = pagosDelCorte.filter((pago) => pago.idMetodo === metodo.idMetodo)
+    return {
+      metodo: metodo.nombre,
+      cobros: pagos.length,
+      monto: pagos.reduce((suma, pago) => suma + centavos(pago.monto), 0) / 100,
+    }
+  })
+}
+
+/** Fecha local AAAA-MM-DD, igual que el filtro de la pantalla. */
+function diaLocal(fecha: Date): string {
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
 }
 
 export function crearCajaMock(): CajaService {
   return {
     obtenerEstado() {
       return conRetraso(() => ({
-        corte: corte ? structuredClone(resumirCorte(corte)) : null,
+        corte: corte ? structuredClone(corte) : null,
         cuentas: baseDatos.cuentas
           .filter((cuenta) => cuenta.estado === 'por_pagar')
           .map((cuenta) => {
@@ -53,64 +58,69 @@ export function crearCajaMock(): CajaService {
                 .map((pedido) => ({ idPedido: pedido.idPedido, estado: pedido.estado })),
             }
           }),
-        metodosPago: structuredClone(metodosPagoMock.filter((metodo) => metodo.activo)),
+        metodosPago: structuredClone(metodos),
       }))
     },
-    abrirCorte(efectivoInicial) {
+    abrirCorte(fondoInicial) {
       return conRetraso(() => {
         if (corte) throw new ErrorServicio('estado_invalido', 'Ya tienes un corte de caja abierto.', 409)
-        corte = {
-          idCorte: siguienteCorte++,
-          idCajero: 1,
-          cajeroNombre: 'Cajero demo',
-          inicio: new Date(),
-          efectivoInicial,
-          totalVentas: 0,
-          efectivoEsperado: efectivoInicial,
-          metodosPago: [],
-          ventas: [],
-          fin: null,
-          tipoCierre: null,
-          efectivoContado: null,
-          diferenciaEfectivo: null,
+        if (!Number.isFinite(fondoInicial) || fondoInicial < 0) {
+          throw new ErrorServicio('estado_invalido', 'El fondo inicial debe ser un importe de 0 o más.', 422)
         }
-        return structuredClone(resumirCorte(corte))
+        corte = { idCorte: siguienteCorte++, inicio: new Date(), fondoInicial, cobros: 0 }
+        pagosDelCorte = []
+        ventasDelCorte = 0
+        return structuredClone(corte)
       })
     },
-    cerrarCorte(efectivoContado, tipoCierre: TipoCierreCaja) {
+    cerrarCorte(efectivoContado) {
       return conRetraso(() => {
         if (!corte) throw new ErrorServicio('estado_invalido', 'No tienes un corte de caja abierto.', 409)
-        const resumen = resumirCorte(corte)
-        const cerrado: CorteCaja = {
-          ...resumen,
-          fin: new Date(),
-          tipoCierre,
-          efectivoContado,
-          diferenciaEfectivo: Math.round((efectivoContado - resumen.efectivoEsperado) * 100) / 100,
+        if (!Number.isFinite(efectivoContado) || efectivoContado < 0) {
+          throw new ErrorServicio('estado_invalido', 'El efectivo contado debe ser un importe de 0 o más.', 422)
         }
+        const filas = desglose()
+        const efectivo = filas.find((fila) => fila.metodo === 'Efectivo')?.monto ?? 0
+        const esperado = (centavos(corte.fondoInicial) + centavos(efectivo)) / 100
+        const cerrado: CorteDetalle = {
+          idCorte: corte.idCorte,
+          cajeroNombre: 'Marta Solís',
+          inicio: corte.inicio,
+          fin: new Date(),
+          fondoInicial: corte.fondoInicial,
+          cobros: ventasDelCorte,
+          totalVentas: filas.reduce((suma, fila) => suma + centavos(fila.monto), 0) / 100,
+          efectivoEsperado: esperado,
+          efectivoContado,
+          diferencia: (centavos(efectivoContado) - centavos(esperado)) / 100,
+          totalReportado: null,
+          desglose: filas,
+        }
+        cortesCerrados.unshift(cerrado)
         corte = null
-        return cerrado
+        return structuredClone(cerrado)
       })
     },
-    cobrar(idCuenta, pagos, claveIdempotencia, confirmarCambioMetodo = false) {
+    listarCortes(filtro = {}) {
+      return conRetraso(() =>
+        cortesCerrados
+          .filter((item) => (!filtro.desde || diaLocal(item.inicio) >= filtro.desde) && (!filtro.hasta || diaLocal(item.inicio) <= filtro.hasta))
+          .map(({ desglose: _desglose, ...resumen }) => structuredClone(resumen)),
+      )
+    },
+    obtenerCorte(idCorte) {
+      return conRetraso(() => {
+        const encontrado = cortesCerrados.find((item) => item.idCorte === idCorte)
+        if (!encontrado) throw new ErrorServicio('no_encontrado', 'El corte no existe o todavía está abierto.', 404)
+        return structuredClone(encontrado)
+      })
+    },
+    cobrar(idCuenta, pagos, claveIdempotencia) {
       return conRetrasoIdempotente(claveIdempotencia, () => {
         if (!corte) throw new ErrorServicio('estado_invalido', 'Abre un corte de caja antes de cobrar.', 409)
         const cuenta = baseDatos.cuentas.find((item) => item.idCuenta === idCuenta)
         if (!cuenta || cuenta.estado !== 'por_pagar') {
           throw new ErrorServicio('estado_invalido', 'Solo se pueden cobrar cuentas solicitadas por el mesero.', 409)
-        }
-        const nombresPago = pagos.map((pago) => metodosPagoMock.find((metodo) => metodo.idMetodo === pago.idMetodo && metodo.activo)?.nombre.toLowerCase())
-        const coincideSolicitud = cuenta.tipoPagoSolicitado === 'fisico'
-          ? nombresPago.includes('efectivo')
-          : cuenta.tipoPagoSolicitado === 'digital'
-            ? nombresPago.some((nombre) => !!nombre && nombre !== 'efectivo')
-            : true
-        if (!coincideSolicitud && !confirmarCambioMetodo) {
-          throw new ErrorServicio(
-            'estado_invalido',
-            'El método cobrado no coincide con el solicitado por el mesero. Confirma el cambio antes de continuar.',
-            422,
-          )
         }
         const pedidos = baseDatos.pedidos.filter((pedido) => pedido.idCuenta === idCuenta)
         const pendientes = pedidos.filter((pedido) => !['entregado', 'cancelado'].includes(pedido.estado))
@@ -129,23 +139,20 @@ export function crearCajaMock(): CajaService {
           mesaNumero: cuenta.idMesa,
           cambio,
           pagos: pagos.map((pago) => ({
-            metodo: metodosPagoMock.find((metodo) => metodo.idMetodo === pago.idMetodo && metodo.activo)?.nombre ?? 'Desconocido',
+            metodo: metodos.find((metodo) => metodo.idMetodo === pago.idMetodo)?.nombre ?? 'Desconocido',
             monto: pago.monto,
             montoRecibido: pago.montoRecibido,
             cambio: Math.round((pago.montoRecibido - pago.monto) * 100) / 100,
           })),
         }
-        ventasRegistradas.push({
-          ...venta,
-          idCorte: corte.idCorte,
-          cajeroNombre: corte.cajeroNombre,
-          meseroNombre: [...new Set(pedidos.map((pedido) => pedido.nombreMesero))].join(' · '),
-        })
         cuenta.estado = 'cerrada'
         cuenta.cerradaEn = new Date()
         pedidos.filter((pedido) => pedido.estado !== 'cancelado').forEach((pedido) => { pedido.estado = 'pagado' })
         const mesa = baseDatos.mesas.find((item) => item.idMesa === cuenta.idMesa)
         if (mesa) mesa.estado = 'libre'
+        corte.cobros += 1
+        ventasDelCorte += 1
+        pagosDelCorte.push(...pagos.map((pago) => ({ idMetodo: pago.idMetodo, monto: pago.monto })))
         return venta
       })
     },

@@ -3,6 +3,9 @@
 import type {
   CambioMesa,
   CorteCaja,
+  CorteDetalle,
+  CorteResumen,
+  FiltroCortes,
   EstadoCaja,
   CambioProducto,
   ConfiguracionReservacion,
@@ -102,16 +105,15 @@ export interface CajaService {
   /** GET /caja/estado */
   obtenerEstado(): Promise<EstadoCaja>
   /** POST /caja/cortes */
-  abrirCorte(efectivoInicial: number): Promise<CorteCaja>
+  abrirCorte(fondoInicial: number): Promise<CorteCaja>
   /** POST /caja/cortes/cerrar */
-  cerrarCorte(efectivoContado: number, tipoCierre: 'parcial' | 'final'): Promise<CorteCaja>
+  cerrarCorte(efectivoContado: number): Promise<CorteDetalle>
+  /** GET /caja/cortes (cajero: los suyos; gerente: todos) */
+  listarCortes(filtro?: FiltroCortes): Promise<CorteResumen[]>
+  /** GET /caja/cortes/{id} */
+  obtenerCorte(idCorte: number): Promise<CorteDetalle>
   /** POST /caja/cuentas/{id}/cobrar */
-  cobrar(
-    idCuenta: number,
-    pagos: PagoCajaEntrada[],
-    claveIdempotencia?: string,
-    confirmarCambioMetodo?: boolean,
-  ): Promise<VentaCaja>
+  cobrar(idCuenta: number, pagos: PagoCajaEntrada[], claveIdempotencia?: string): Promise<VentaCaja>
 }
 
 /** Administración de usuarios. Solo el gerente (la API lo valida con 403 `sin_permiso`). */
@@ -128,16 +130,16 @@ export interface UsuariosService {
 
 /** Administración del catálogo: categorías, productos e inventario. Solo el gerente. */
 export interface CatalogoService {
-  /** GET /catalogo/metodos-pago (incluye inactivos) */
-  listarMetodosPago(): Promise<MetodoPagoAdmin[]>
-  /** POST /catalogo/metodos-pago */
-  crearMetodoPago(nombre: string): Promise<MetodoPagoAdmin>
-  /** PATCH /catalogo/metodos-pago/{id}; los pagos históricos se conservan. */
-  actualizarMetodoPago(id: number, cambio: { activo: boolean }): Promise<MetodoPagoAdmin>
   /** GET /catalogo/configuracion-reservacion */
   obtenerConfiguracionReservacion(): Promise<ConfiguracionReservacion>
   /** PATCH /catalogo/configuracion-reservacion */
   actualizarConfiguracionReservacion(cambio: ConfiguracionReservacion): Promise<ConfiguracionReservacion>
+  /** GET /catalogo/metodos-pago */
+  listarMetodosPago(): Promise<MetodoPagoAdmin[]>
+  /** POST /catalogo/metodos-pago */
+  crearMetodoPago(nombre: string): Promise<MetodoPagoAdmin>
+  /** PATCH /catalogo/metodos-pago/{id} */
+  actualizarMetodoPago(id: number, cambio: { activo: boolean }): Promise<MetodoPagoAdmin>
   /** GET /catalogo/categorias */
   listarCategorias(): Promise<CategoriaAdmin[]>
   /** POST /catalogo/categorias */

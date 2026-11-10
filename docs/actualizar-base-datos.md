@@ -19,28 +19,45 @@ Guía para poner una base MySQL existente al día con el esquema del proyecto si
 
 ## 2. Aplicar solo las migraciones pendientes
 
-Si ya aplicaste 007–013, ejecuta únicamente **014**:
+Si ya aplicaste 007–014, ejecuta únicamente **015** (fondo inicial y cuadre de efectivo en el corte de caja). Sin ella, abrir, cerrar y consultar cortes responde error 500:
 
 ```powershell
-Get-Content -Raw "..\database\migrations\014_caja_inicio_y_cortes_parciales.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+Get-Content -Raw "..\database\migrations\015_corte_efectivo.sql" | mysql -h localhost -P 3306 -u root -p SIGR
 ```
 
-Ese comando es para PowerShell abierto en `backend\`. Si estás en la raíz del repositorio, usa la ruta `.\database\migrations\014_caja_inicio_y_cortes_parciales.sql`. Ejecuta el comando como una línea completa; no pegues varias instrucciones de PowerShell juntas en una sola línea sin separadores.
+Desde la raíz del repositorio usa la ruta `.\database\migrations\015_corte_efectivo.sql`. Revisa la sección «Migración 015» antes de aplicarla.
 
-La migración 014 agrega el fondo inicial, el efectivo contado y el tipo de corte; agrega `metodo_pago.activo` y actualiza los triggers de auditoría de `corte_caja` y `metodo_pago`. Detecta columnas y restricciones existentes, por lo que también se puede ejecutar después de crear la base con `init.sql`; recrea los triggers de forma segura. Si MySQL informa un error, detén la API y revisa el estado de la base con quien la administra antes de continuar.
+Si ya aplicaste 007–013, ejecuta **014** (portal web de clientes) y después **015**. Sin la 014, el registro y el inicio de sesión de clientes responden error 500:
 
-Si ya aplicaste 007–010, ejecuta **011**, **012**, **013** y **014** en ese orden:
+```powershell
+Get-Content -Raw "..\database\migrations\014_clientes_web.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+```
+
+Desde la raíz del repositorio usa la ruta `.\database\migrations\014_clientes_web.sql`. Revisa la sección «Migración 014» antes de aplicarla.
+
+Si ya aplicaste 007–012, ejecuta **013**, **014** y **015** en ese orden:
+
+```powershell
+Get-Content -Raw "..\database\migrations\013_auditoria_seguridad.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+```
+
+Ese comando es para PowerShell abierto en `backend\`. Si estás en la raíz del repositorio, usa la ruta `.\database\migrations\013_auditoria_seguridad.sql`. Ejecuta el comando como una línea completa; no pegues varias instrucciones de PowerShell juntas en una sola línea sin separadores.
+
+La migración 013 puede volver a ejecutarse para completar una ejecución interrumpida: conserva las tablas existentes y reemplaza los triggers y el procedimiento de auditoría. Si MySQL informa un error, corrige la causa y vuelve a ejecutar el comando completo; no hace falta borrar manualmente tablas ni triggers.
+
+Si ya aplicaste 007–010, ejecuta **011**, **012**, **013**, **014** y **015** en ese orden:
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_cancelacion.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/013_auditoria_seguridad.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/014_caja_inicio_y_cortes_parciales.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/014_clientes_web.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/015_corte_efectivo.sql"
 ```
 
-Si ya aplicaste 007–009, ejecuta 010, 011, 012, 013 y 014 en ese orden. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
+Si ya aplicaste 007–009, ejecuta 010 a 015 en orden. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
 
-Si las migraciones 007–014 siguen pendientes, aplícalas en orden (una sola vez cada una):
+Si las migraciones 007–015 siguen pendientes, aplícalas en orden (una sola vez cada una):
 
 ```powershell
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/007_catalogo_descripciones_obligatorias.sql"
@@ -50,17 +67,18 @@ mysql -h localhost -P 3306 -u root -p -e "source database/migrations/010_reserva
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_cancelacion.sql"
 mysql -h localhost -P 3306 -u root -p -e "source database/migrations/013_auditoria_seguridad.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/014_caja_inicio_y_cortes_parciales.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/014_clientes_web.sql"
+mysql -h localhost -P 3306 -u root -p -e "source database/migrations/015_corte_efectivo.sql"
 ```
 
 Escribe la contraseña de MySQL cuando la solicite. Asegúrate de conectarte al mismo servidor y usuario configurados en `backend/.env`.
 
-La migración **007** convierte las descripciones vacías o `NULL` a «Detalle pendiente de completar» y luego las vuelve obligatorias. La migración **008** agrega la columna `presentacion` y un índice para buscar productos por categoría, nombre y presentación. La migración **009** crea el catálogo de secciones, registra las secciones ya usadas, asigna «General» a mesas sin sección y hace obligatoria `mesa.zona`. La migración **010** agrega características de acceso de mesas, configuración de tolerancia y recordatorio, y la cola de notificaciones por correo. La migración **011** agrega `evento` a la cola, permite confirmaciones y cambia la deduplicación por `(id_reservacion, tipo, evento)`. La migración **012** permite el tipo `cancelacion` en esa misma cola. La **013** protege al gerente inicial y audita INSERT/UPDATE/DELETE en las 26 tablas de negocio y en la tabla de configuración de seguridad mediante triggers; también crea `sp_consultar_auditoria`. La **014** registra efectivo inicial/contado, tipo de corte y estado de los métodos de pago; además amplía la auditoría de `corte_caja` y `metodo_pago`. Requiere privilegios MySQL para crear tablas, triggers y procedimientos. Las descripciones de relleno deben sustituirse después desde **Gerente → Productos** por información real.
+La migración **007** convierte las descripciones vacías o `NULL` a «Detalle pendiente de completar» y luego las vuelve obligatorias. La migración **008** agrega la columna `presentacion` y un índice para buscar productos por categoría, nombre y presentación. La migración **009** crea el catálogo de secciones, registra las secciones ya usadas, asigna «General» a mesas sin sección y hace obligatoria `mesa.zona`. La migración **010** agrega características de acceso de mesas, configuración de tolerancia y recordatorio, y la cola de notificaciones por correo. La migración **011** agrega `evento` a la cola, permite confirmaciones y cambia la deduplicación por `(id_reservacion, tipo, evento)`. La migración **012** permite el tipo `cancelacion` en esa misma cola. La **013** protege al gerente inicial y audita INSERT/UPDATE/DELETE en las 26 tablas de negocio y en la tabla de configuración de seguridad mediante triggers; también crea `sp_consultar_auditoria`. Requiere privilegios MySQL para crear tablas, triggers y procedimientos. Las descripciones de relleno deben sustituirse después desde **Gerente → Productos** por información real.
 
-No ejecutes de nuevo 007–012 si ya se aplicaron: son cambios de esquema que no están diseñados para repetirse. La 013 puede volver a crear sus triggers y procedimiento; la 014 detecta columnas existentes y recrea sus triggers. Detén la API y respalda la base antes de repetir 013 o 014. Si no sabes si se ejecutaron, revisa primero el esquema:
+No ejecutes de nuevo 007–012 si ya se aplicaron: son cambios de esquema que no están diseñados para repetirse. La 013 puede volver a crear sus triggers y procedimiento; aun así, detén la API y respalda la base antes de reaplicarla. Si no sabes si se ejecutaron, revisa primero el esquema:
 
 ```powershell
-mysql -h localhost -P 3306 -u root -p -e "USE SIGR; SHOW COLUMNS FROM producto LIKE 'descripcion'; SHOW COLUMNS FROM producto LIKE 'presentacion'; SHOW INDEX FROM producto WHERE Key_name = 'idx_producto_variante'; SHOW TABLES LIKE 'seccion'; SHOW COLUMNS FROM mesa LIKE 'zona'; SHOW COLUMNS FROM corte_caja; SHOW COLUMNS FROM metodo_pago;"
+mysql -h localhost -P 3306 -u root -p -e "USE SIGR; SHOW COLUMNS FROM producto LIKE 'descripcion'; SHOW COLUMNS FROM producto LIKE 'presentacion'; SHOW INDEX FROM producto WHERE Key_name = 'idx_producto_variante'; SHOW TABLES LIKE 'seccion'; SHOW COLUMNS FROM mesa LIKE 'zona';"
 ```
 
 Si la columna `presentacion` y el índice ya existen, 008 ya fue aplicada. Si la descripción ya figura como `NOT NULL`, 007 probablemente ya fue aplicada. Si existe la tabla `seccion` y `mesa.zona` es `NOT NULL`, 009 ya fue aplicada. Para 010 confirma que existen `mesa.planta_baja`, `mesa.espacio_carriola`, `mesa.sin_escaleras`, `configuracion_reservacion` y `notificacion_reservacion`. Para 011 confirma que `notificacion_reservacion` tiene la columna `evento` y la clave única `uq_notificacion_reservacion_evento`. Para 012 revisa que los CHECK de `tipo` incluyan `cancelacion`:
@@ -69,7 +87,7 @@ Si la columna `presentacion` y el índice ya existen, 008 ya fue aplicada. Si la
 SHOW CREATE TABLE notificacion_reservacion\G
 ```
 
-Confirma que 014 añadió `corte_caja.efectivo_inicial`, `corte_caja.efectivo_contado`, `corte_caja.tipo_cierre` y `metodo_pago.activo`. Confirma también con quien administra la base antes de repetir una migración.
+Confirma también con quien administra la base antes de repetir una migración.
 
 ### Historial de migraciones
 
@@ -88,7 +106,8 @@ Confirma que 014 añadió `corte_caja.efectivo_inicial`, `corte_caja.efectivo_co
 | `011_cola_unificada_resend.sql` | Evento de confirmación y deduplicación por `(id_reservacion, tipo, evento)` | Una vez, tras 010 |
 | `012_correo_cancelacion.sql` | Tipo `cancelacion` en la cola de correo de reservaciones | Una vez, tras 011 |
 | `013_auditoria_seguridad.sql` | Protege al gerente inicial y audita INSERT/UPDATE/DELETE en las tablas de negocio | Una vez, tras el esquema y usuarios iniciales |
-| `014_caja_inicio_y_cortes_parciales.sql` | Registra fondos/cortes parciales, activa/desactiva métodos de pago y amplía su auditoría | Una vez, tras 013 |
+| `014_clientes_web.sql` | Contraseñas de clientes del portal web y correo único por cliente | Tras 013; puede repetirse |
+| `015_corte_efectivo.sql` | Fondo inicial, efectivo esperado y contado en el corte de caja | Una vez, tras 014 |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
@@ -197,9 +216,40 @@ mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT * FROM configuracion_segur
 
 La migración requiere `CREATE TRIGGER`, `CREATE ROUTINE` y permisos para crear las tablas de auditoría. Los triggers guardan cada cambio de fila junto con el actor autenticado de la API. Se excluyen el hash de contraseña y la respuesta almacenada para idempotencia. Los procesos SQL o de fondo sin actor autenticado producen `actor_id = NULL`. Consulta [Protección de usuarios y auditoría](auditoria-seguridad.md) para entender los datos registrados y los límites de seguridad.
 
+## Migración 014: portal web de clientes
+
+Crea `cliente_credencial` (contraseñas de los clientes del portal), guarda los correos de `cliente` en minúsculas y sin espacios, convierte los correos vacíos en `NULL` y agrega el índice único `uq_cliente_correo`. Haz un respaldo antes de aplicarla.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-014.sql"
+Get-Content -Raw ".\database\migrations\014_clientes_web.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+```
+
+Si dos clientes comparten correo, la migración no crea el índice y muestra esos correos con los `id_cliente` que los usan. Deja cada correo en un solo cliente y vuelve a ejecutar el archivo completo; es seguro repetirlo. Para comprobar el resultado:
+
+```powershell
+mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW TABLES LIKE 'cliente_credencial'; SHOW INDEX FROM cliente WHERE Key_name = 'uq_cliente_correo';"
+```
+
+Un cliente que la hostess ya registró con su correo puede crear su cuenta en el portal con ese mismo correo y el teléfono que dio en el restaurante; conserva sus reservaciones anteriores.
+
+## Migración 015: fondo inicial y cuadre de efectivo
+
+Agrega a `corte_caja` el fondo inicial con el que abre el cajero, el efectivo esperado (fondo inicial más cobros en efectivo, sin el cambio entregado) y el efectivo contado al cerrar. También recrea los triggers de auditoría de `corte_caja` para que registren esas columnas. Un corte que siga abierto al aplicarla queda con fondo inicial de 0. Haz un respaldo antes.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-015.sql"
+Get-Content -Raw ".\database\migrations\015_corte_efectivo.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW COLUMNS FROM corte_caja;"
+```
+
+Deben aparecer `fondo_inicial`, `efectivo_esperado` y `efectivo_contado`. Los cortes cerrados antes de la 015 se conservan: aparecen en **Gerente → Cortes** sin conteo de efectivo y con el total que se reportó en su momento. La 013 ya incluye estas columnas en sus triggers; si necesitas volver a ejecutarla, aplica antes la 015.
+
 ## Base nueva o entorno de demostración
 
-- **Base nueva y vacía:** ejecuta `database/init.sql` y el seed de usuarios iniciales; aplica `013_auditoria_seguridad.sql` después del seed y antes de iniciar la API. `init.sql` ya incluye los cambios de esquema anteriores (001–012), así que no los apliques otra vez.
+- **Base nueva y vacía:** ejecuta `database/init.sql` y el seed de usuarios iniciales; aplica `013_auditoria_seguridad.sql` después del seed y antes de iniciar la API. `init.sql` ya incluye los cambios de esquema de 001–012, 014 y 015, así que no los apliques otra vez.
 - **Base de desarrollo en Docker que ya contiene datos:** no uses `docker compose down -v`, ya que elimina el volumen de la base. Con el contenedor activo y el puerto 3306 publicado, los comandos `mysql` anteriores la actualizan igual que una instalación local.
 - Guarda el respaldo de forma segura. No lo agregues al repositorio ni lo compartas: contiene los datos de la base.
 

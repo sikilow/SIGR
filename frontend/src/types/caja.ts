@@ -22,43 +22,50 @@ export interface CuentaCaja {
   pedidosSinEntregar: PedidoPendienteCaja[]
 }
 
+/** Corte abierto del cajero. No incluye totales: el efectivo se cuenta sin conocer lo esperado. */
 export interface CorteCaja {
   idCorte: number
-  idCajero: number
-  cajeroNombre: string
   inicio: Date
-  efectivoInicial: number
-  totalVentas: number
-  efectivoEsperado: number
-  metodosPago: ResumenMetodoCaja[]
-  ventas: VentaCajaReporte[]
-  fin: Date | null
-  tipoCierre: 'parcial' | 'final' | null
-  efectivoContado: number | null
-  diferenciaEfectivo: number | null
-  totalReportado?: number
-  diferencia?: number
+  fondoInicial: number
+  cobros: number
 }
 
-export interface ResumenMetodoCaja {
-  idMetodo: number
-  nombre: string
-  cantidadPagos: number
+export interface CobroPorMetodo {
+  metodo: string
+  cobros: number
   monto: number
 }
 
-export interface VentaCajaReporte {
-  idVenta: number
-  idCuenta: number
-  mesaNumero: number
-  fechaHora: Date
-  total: number
+/** Corte cerrado, como aparece en el historial. */
+export interface CorteResumen {
+  idCorte: number
   cajeroNombre: string
-  meseroNombre: string
-  pagos: PagoCajaTicket[]
+  inicio: Date
+  fin: Date
+  fondoInicial: number
+  cobros: number
+  totalVentas: number
+  /** Fondo inicial + cobros en efectivo. Null en cortes anteriores a la migración 015 (solo en el historial). */
+  efectivoEsperado: number | null
+  /** Null en cortes anteriores a la migración 015, que no contaban efectivo. */
+  efectivoContado: number | null
+  /** Contado − esperado: negativo es faltante y positivo, sobrante. */
+  diferencia: number | null
+  /** Solo cortes anteriores a la 015: total de ventas que reportó el cajero. */
+  totalReportado: number | null
 }
 
-export type TipoCierreCaja = 'parcial' | 'final'
+export interface CorteDetalle extends CorteResumen {
+  efectivoEsperado: number
+  desglose: CobroPorMetodo[]
+}
+
+export interface FiltroCortes {
+  /** AAAA-MM-DD */
+  desde?: string
+  /** AAAA-MM-DD */
+  hasta?: string
+}
 
 export interface PagoCajaEntrada {
   idMetodo: number
