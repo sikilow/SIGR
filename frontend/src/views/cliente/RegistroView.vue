@@ -22,6 +22,11 @@ async function registrarCliente() {
     return
   }
 
+  if (!/^\d{10}$/.test(telefono.value.trim())) {
+    error.value = 'El teléfono debe tener 10 dígitos, sin espacios ni guiones.'
+    return
+  }
+
   if (contrasena.value.length < 8) {
     error.value = 'La contraseña debe tener al menos 8 caracteres.'
     return
@@ -119,9 +124,12 @@ async function registrarCliente() {
             id="telefono"
             v-model="telefono"
             type="tel"
-            placeholder="Tu número telefónico"
-            autocomplete="tel"
-            maxlength="20"
+            inputmode="numeric"
+            placeholder="10 dígitos, ej. 3111234567"
+            autocomplete="tel-national"
+            maxlength="10"
+            pattern="\d{10}"
+            title="10 dígitos, sin espacios ni guiones"
             required
           />
 

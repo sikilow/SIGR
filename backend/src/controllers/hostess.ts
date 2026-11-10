@@ -43,6 +43,18 @@ function esDuplicado(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ER_DUP_ENTRY";
 }
 
+/** El índice único de correo (migración 014) se reconoce por su nombre en el mensaje de MySQL. */
+function esCorreoDuplicado(error: unknown): boolean {
+  return esDuplicado(error) && error instanceof Error && error.message.includes("uq_cliente_correo");
+}
+
+const MENSAJE_CORREO_DUPLICADO = "Ya existe un cliente con ese correo. Búscalo para seleccionarlo.";
+
+async function exigirCorreoLibre(ex: Ejecutor, correo: string, idCliente = 0): Promise<void> {
+  const [otro] = await filas(ex, "SELECT id_cliente FROM cliente WHERE correo = ? AND id_cliente <> ? LIMIT 1", [correo, idCliente]);
+  if (otro) throw new ErrorApi(409, "estado_invalido", MENSAJE_CORREO_DUPLICADO);
+}
+
 function esFechaHoraMySQLValida(fechaHora: string): boolean {
   const partes = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(fechaHora);
   if (!partes) return false;
@@ -181,6 +193,7 @@ export const registrarCliente = async (req: Request, res: Response) => {
     if (existente) {
       throw new ErrorApi(409, "estado_invalido", "Ya existe un cliente con ese teléfono. Búscalo para seleccionarlo.");
     }
+    if (correo) await exigirCorreoLibre(pool, correo);
     try {
       const insertado = await ejecutar(
         pool,
@@ -189,6 +202,7 @@ export const registrarCliente = async (req: Request, res: Response) => {
       );
       return exigirRegistro(await cargarCliente(pool, insertado.insertId), "cliente");
     } catch (error) {
+      if (esCorreoDuplicado(error)) throw new ErrorApi(409, "estado_invalido", MENSAJE_CORREO_DUPLICADO);
       if (esDuplicado(error)) {
         throw new ErrorApi(409, "estado_invalido", "Ya existe un cliente con ese teléfono. Búscalo para seleccionarlo.");
       }
@@ -206,7 +220,13 @@ export const actualizarCorreoCliente = async (req: Request, res: Response) => {
   const cliente = await transaccion(async (cx) => {
     const [existente] = await filas(cx, "SELECT id_cliente FROM cliente WHERE id_cliente = ? FOR UPDATE", [id]);
     if (!existente) throw new ErrorApi(404, "no_encontrado", "El cliente no existe.");
-    await ejecutar(cx, "UPDATE cliente SET correo = ? WHERE id_cliente = ?", [correo, id]);
+    await exigirCorreoLibre(cx, correo, id);
+    try {
+      await ejecutar(cx, "UPDATE cliente SET correo = ? WHERE id_cliente = ?", [correo, id]);
+    } catch (error) {
+      if (esCorreoDuplicado(error)) throw new ErrorApi(409, "estado_invalido", MENSAJE_CORREO_DUPLICADO);
+      throw error;
+    }
     const [actualizado] = await filas(cx, "SELECT id_cliente, nombre, telefono, correo FROM cliente WHERE id_cliente = ?", [id]);
     return actualizado ?? null;
   });

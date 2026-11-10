@@ -5,13 +5,15 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { JWT_SECRET } from "../utils/config";
 import { filas, pool } from "../services/db";
+import { validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 
 // Validaciones para registrar clientes
+// (mismo formato de telefono que exige la hostess)
 const RegistroCliente = z.object({
   nombre: z.string().trim().min(2).max(100),
   correo: z.string().trim().email().max(120),
-  telefono: z.string().trim().max(20),
+  telefono: z.string().trim().regex(/^\d{10}$/, "el teléfono debe tener 10 dígitos"),
   contrasena: z.string().min(8).max(72),
 });
 
@@ -26,21 +28,49 @@ export const registrarCuentaCliente = async (
   req: Request,
   res: Response
 ) => {
-  const datos = RegistroCliente.parse(req.body);
+  const datos = validar(RegistroCliente, req.body);
 
   const correo = datos.correo.toLowerCase();
 
   const [existente] = await filas(
     pool,
-    "SELECT id_cliente FROM cliente WHERE correo = ?",
+    `SELECT c.id_cliente, c.telefono, cc.id_credencial
+     FROM cliente c
+     LEFT JOIN cliente_credencial cc
+       ON cc.id_cliente = c.id_cliente
+     WHERE c.correo = ?`,
     [correo]
   );
 
-  if (existente) {
+  if (existente?.id_credencial) {
     throw new ErrorApi(
       409,
       "estado_invalido",
-      "Este correo ya está registrado."
+      "Este correo ya tiene una cuenta. Inicia sesión."
+    );
+  }
+
+  // Si la hostess ya registro a este cliente, la cuenta solo se crea
+  // cuando el telefono coincide con el que dio en el restaurante.
+  if (existente?.telefono && existente.telefono !== datos.telefono) {
+    throw new ErrorApi(
+      409,
+      "estado_invalido",
+      "Ya tienes un registro en el restaurante con este correo. Usa el teléfono que diste ahí."
+    );
+  }
+
+  const [otroConTelefono] = await filas(
+    pool,
+    "SELECT id_cliente FROM cliente WHERE telefono = ? AND id_cliente <> ? LIMIT 1",
+    [datos.telefono, existente?.id_cliente ?? 0]
+  );
+
+  if (otroConTelefono) {
+    throw new ErrorApi(
+      409,
+      "estado_invalido",
+      "Este teléfono ya está registrado con otro correo."
     );
   }
 
@@ -55,15 +85,27 @@ export const registrarCuentaCliente = async (
   try {
     await conexion.beginTransaction();
 
-    const [resultado] = await conexion.execute(
-      `INSERT INTO cliente
-       (nombre, correo, telefono)
-       VALUES (?, ?, ?)`,
-      [datos.nombre, correo, datos.telefono]
-    );
+    let idCliente: number;
 
-    const idCliente = (resultado as { insertId: number })
-      .insertId;
+    if (existente) {
+      // Reutiliza el cliente que capturo la hostess y conserva su historial.
+      idCliente = existente.id_cliente as number;
+
+      await conexion.execute(
+        "UPDATE cliente SET telefono = ? WHERE id_cliente = ?",
+        [datos.telefono, idCliente]
+      );
+    } else {
+      const [resultado] = await conexion.execute(
+        `INSERT INTO cliente
+         (nombre, correo, telefono)
+         VALUES (?, ?, ?)`,
+        [datos.nombre, correo, datos.telefono]
+      );
+
+      idCliente = (resultado as { insertId: number })
+        .insertId;
+    }
 
     await conexion.execute(
       `INSERT INTO cliente_credencial
@@ -109,7 +151,7 @@ export const iniciarSesionCliente = async (
   req: Request,
   res: Response
 ) => {
-  const datos = LoginCliente.parse(req.body);
+  const datos = validar(LoginCliente, req.body);
 
   const [cliente] = await filas(
     pool,
