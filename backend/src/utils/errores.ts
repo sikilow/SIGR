@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { esSinConexion } from "../services/db";
 
 /**
  * Códigos que entiende el frontend (services/errores.ts → CodigoError).
@@ -37,6 +38,14 @@ export function manejarErrores(err: unknown, _req: Request, res: Response, _next
   // JSON mal formado en el cuerpo de la petición
   if (typeof err === "object" && err !== null && "status" in err && err.status === 400) {
     res.status(400).json({ codigo: "estado_invalido", mensaje: "El cuerpo de la petición no es un JSON válido." });
+    return;
+  }
+  if (esSinConexion(err)) {
+    console.error("Sin conexión con la base de datos:", err instanceof Error ? err.message : err);
+    res.status(503).json({
+      codigo: "desconocido",
+      mensaje: "No hay conexión con la base de datos. Revisa el internet del servidor e inténtalo de nuevo.",
+    });
     return;
   }
   console.error(err);

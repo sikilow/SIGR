@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { leerCuerpo, mensajeDeError } from '../../utils/respuestaApi'
 
 const router = useRouter()
 
@@ -48,11 +49,11 @@ async function registrarCliente() {
       })
     })
 
-    const datos = await respuesta.json()
+    const datos = await leerCuerpo(respuesta)
 
     if (!respuesta.ok) {
       throw new Error(
-        datos.mensaje || 'No se pudo crear la cuenta.'
+        mensajeDeError(respuesta, datos, 'No se pudo crear la cuenta.')
       )
     }
 

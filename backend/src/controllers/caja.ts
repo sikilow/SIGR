@@ -1,15 +1,10 @@
 import type { Request, Response } from "express";
-import type { PoolConnection } from "mysql2/promise";
 import { z } from "zod";
 import { cargarCuenta, idDeRuta, idEstadoPedido, pedidosSinEntregar, validar } from "../models/dominio";
-import { cuadrarCorte, Pagos, validarImportes, validarMetodoSolicitado, type CobroPorMetodo } from "../models/caja";
-import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
+import { AbrirCorte, CerrarCorte, cuadrarCorte, Pagos, validarImportes, validarMetodoSolicitado, type CobroPorMetodo } from "../models/caja";
+import { ejecutar, filas, pool, transaccion, type Conexion, type Ejecutor } from "../services/db";
 import { conIdempotencia } from "../services/idempotencia";
 import { ErrorApi } from "../utils/errores";
-
-const Importe = z.number().finite().min(0).max(9_999_999_999.99);
-const AbrirCorte = z.object({ fondo_inicial: Importe }).strict();
-const CerrarCorte = z.object({ efectivo_contado: Importe }).strict();
 
 function esFechaISOValida(fecha: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false;
@@ -72,7 +67,7 @@ async function desgloseCorte(ex: Ejecutor, idCorte: number): Promise<CobroPorMet
 }
 
 async function cargarDetalleCorte(ex: Ejecutor, idCorte: number) {
-  const [fila] = await filas(ex, `${SELECT_CORTE} WHERE cc.id_corte = ? GROUP BY cc.id_corte`, [idCorte]);
+  const [fila] = await filas(ex, `${SELECT_CORTE} WHERE cc.id_corte = ? GROUP BY cc.id_corte, u.nombre`, [idCorte]);
   if (!fila) return null;
   const resumen = aCorteResumen(fila);
   const desglose = await desgloseCorte(ex, idCorte);
@@ -87,12 +82,12 @@ async function cargarDetalleCorte(ex: Ejecutor, idCorte: number) {
   };
 }
 
-async function bloquearCajero(cx: PoolConnection, idCajero: number): Promise<void> {
+async function bloquearCajero(cx: Conexion, idCajero: number): Promise<void> {
   const [usuario] = await filas(cx, "SELECT id_usuario FROM usuario WHERE id_usuario = ? FOR UPDATE", [idCajero]);
   if (!usuario) throw new ErrorApi(401, "no_autenticado", "La sesión no corresponde a un usuario activo.");
 }
 
-async function corteAbierto(cx: PoolConnection, idCajero: number) {
+async function corteAbierto(cx: Conexion, idCajero: number) {
   const [corte] = await filas(
     cx,
     "SELECT id_corte, inicio FROM corte_caja WHERE id_cajero = ? AND fin IS NULL ORDER BY id_corte DESC LIMIT 1 FOR UPDATE",
@@ -139,7 +134,7 @@ export const estadoCaja = async (req: Request, res: Response) => {
     `SELECT mp.id_metodo, mp.nombre, mp.id_categoria_metodo_pago, cmp.nombre AS categoria,
             cmp.tipo, mp.es_efectivo
        FROM metodo_pago mp JOIN categoria_metodo_pago cmp USING (id_categoria_metodo_pago)
-      WHERE (mp.activo = 1 AND cmp.activo = 1) OR EXISTS (
+      WHERE (mp.activo AND cmp.activo) OR EXISTS (
         SELECT 1 FROM cuenta c
          WHERE c.estado = 'por_pagar' AND c.id_metodo_pago_solicitado = mp.id_metodo
       )
@@ -178,7 +173,7 @@ export const abrirCorte = async (req: Request, res: Response) => {
     }
     const { insertId } = await ejecutar(
       cx,
-      "INSERT INTO corte_caja (id_cajero, inicio, fondo_inicial) VALUES (?, NOW(), ?)",
+      "INSERT INTO corte_caja (id_cajero, inicio, fondo_inicial) VALUES (?, LOCALTIMESTAMP(0), ?) RETURNING id_corte",
       [idCajero, fondo_inicial],
     );
     const [nuevo] = await filas(cx, "SELECT id_corte, inicio, fondo_inicial FROM corte_caja WHERE id_corte = ?", [insertId]);
@@ -206,7 +201,7 @@ export const cerrarCorte = async (req: Request, res: Response) => {
     const cuadre = cuadrarCorte(Number(fondo?.fondo_inicial ?? 0), await desgloseCorte(cx, idCorte), efectivo_contado);
     await ejecutar(
       cx,
-      `UPDATE corte_caja SET fin = NOW(), efectivo_esperado = ?, efectivo_contado = ?
+      `UPDATE corte_caja SET fin = LOCALTIMESTAMP(0), efectivo_esperado = ?, efectivo_contado = ?
         WHERE id_corte = ? AND fin IS NULL`,
       [cuadre.efectivo_esperado, efectivo_contado, idCorte],
     );
@@ -233,10 +228,10 @@ export const listarCortes = async (req: Request, res: Response) => {
     condiciones.push("cc.inicio >= ?");
     params.push(filtro.desde);
   } else if (!filtro.hasta) {
-    condiciones.push("cc.inicio >= CURDATE() - INTERVAL 30 DAY");
+    condiciones.push("cc.inicio >= CURRENT_DATE - 30");
   }
   if (filtro.hasta) {
-    condiciones.push("cc.inicio < ? + INTERVAL 1 DAY");
+    condiciones.push("cc.inicio < ?::date + 1");
     params.push(filtro.hasta);
   }
   if (req.usuario!.rol === "cajero") {
@@ -245,7 +240,7 @@ export const listarCortes = async (req: Request, res: Response) => {
   }
   const filasCortes = await filas(
     pool,
-    `${SELECT_CORTE} WHERE ${condiciones.join(" AND ")} GROUP BY cc.id_corte ORDER BY cc.inicio DESC, cc.id_corte DESC LIMIT 200`,
+    `${SELECT_CORTE} WHERE ${condiciones.join(" AND ")} GROUP BY cc.id_corte, u.nombre ORDER BY cc.inicio DESC, cc.id_corte DESC LIMIT 200`,
     params,
   );
   res.json(filasCortes.map(aCorteResumen));
@@ -303,7 +298,7 @@ export const cobrarCuenta = async (req: Request, res: Response) => {
         `SELECT mp.id_metodo, mp.nombre, mp.es_efectivo, cmp.tipo
            FROM metodo_pago mp JOIN categoria_metodo_pago cmp USING (id_categoria_metodo_pago)
           WHERE mp.id_metodo IN (?)
-            AND ((mp.activo = 1 AND cmp.activo = 1) OR mp.id_metodo = ?)`,
+            AND ((mp.activo AND cmp.activo) OR mp.id_metodo = ?)`,
         [pagos.map((pago) => pago.id_metodo), fila.id_metodo_pago_solicitado ?? 0],
       );
       if (metodos.length !== pagos.length) throw new ErrorApi(422, "estado_invalido", "Hay un método de pago que no existe.");
@@ -339,7 +334,7 @@ export const cobrarCuenta = async (req: Request, res: Response) => {
 
       const { insertId: idVenta } = await ejecutar(
         cx,
-        "INSERT INTO venta (id_cuenta, id_corte, id_cajero, total) VALUES (?, ?, ?, ?)",
+        "INSERT INTO venta (id_cuenta, id_corte, id_cajero, total) VALUES (?, ?, ?, ?) RETURNING id_venta",
         [idCuenta, corte.id_corte, idCajero, cuenta.total],
       );
       const valores = pagos.map((pago, i) => {
@@ -347,7 +342,8 @@ export const cobrarCuenta = async (req: Request, res: Response) => {
         if (recibido === undefined) throw new ErrorApi(500, "desconocido", "No se pudo guardar el importe recibido.");
         return [idVenta, pago.id_metodo, pago.monto, recibido, Math.round((recibido - pago.monto) * 100) / 100];
       });
-      await cx.query(
+      await ejecutar(
+        cx,
         "INSERT INTO pago (id_venta, id_metodo, monto, monto_recibido, cambio) VALUES ?",
         [valores],
       );
@@ -359,7 +355,7 @@ export const cobrarCuenta = async (req: Request, res: Response) => {
           WHERE id_cuenta = ? AND id_estado <> (SELECT id_estado FROM estado_pedido WHERE nombre = 'Cancelado')`,
         [estadoPagado, idCuenta],
       );
-      await ejecutar(cx, "UPDATE cuenta SET estado = 'cerrada', cerrada_en = NOW() WHERE id_cuenta = ?", [idCuenta]);
+      await ejecutar(cx, "UPDATE cuenta SET estado = 'cerrada', cerrada_en = LOCALTIMESTAMP(0) WHERE id_cuenta = ?", [idCuenta]);
       await ejecutar(cx, "UPDATE mesa SET estado = 'libre' WHERE id_mesa = ?", [fila.id_mesa]);
 
       return {

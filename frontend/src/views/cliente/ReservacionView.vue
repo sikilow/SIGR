@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { leerCuerpo, mensajeDeError } from '../../utils/respuestaApi'
 
 const router = useRouter()
 
@@ -75,7 +76,7 @@ async function solicitarReservacion() {
       }
     )
 
-    const datos = await respuesta.json()
+    const datos = await leerCuerpo<{ reservacion: { id_reservacion: number } }>(respuesta)
 
     if (respuesta.status === 401) {
       sessionStorage.removeItem('cliente_token')
@@ -86,13 +87,13 @@ async function solicitarReservacion() {
 
     if (!respuesta.ok) {
       throw new Error(
-        datos.mensaje ||
-        'No se pudo registrar la reservación.'
+        mensajeDeError(respuesta, datos,
+        'No se pudo registrar la reservación.')
       )
     }
 
     reservacionCreada.value =
-      datos.reservacion.id_reservacion
+      datos.reservacion?.id_reservacion ?? null
 
     mensaje.value =
       'Tu solicitud fue registrada correctamente. ' +

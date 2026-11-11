@@ -44,6 +44,7 @@ export interface CorteCaja {
 
 export interface CobroPorMetodo {
   metodo: string
+  esEfectivo: boolean
   cobros: number
   monto: number
 }

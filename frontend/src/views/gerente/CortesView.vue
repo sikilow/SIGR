@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import ResumenCorte from '../../components/ResumenCorte.vue'
+import VistaCorte from '../../components/VistaCorte.vue'
 import { ErrorServicio, servicios } from '../../services'
 import type { CorteDetalle, CorteResumen } from '../../types'
 
@@ -16,6 +17,7 @@ const desde = ref(diaLocal(haceUnaSemana))
 const hasta = ref(diaLocal(hoy))
 const cortes = ref<CorteResumen[]>([])
 const seleccionado = ref<CorteDetalle | null>(null)
+const panelDetalle = ref<HTMLElement | null>(null)
 const cargando = ref(true)
 const cargandoDetalle = ref(false)
 const error = ref('')
@@ -64,6 +66,9 @@ async function ver(corte: CorteResumen) {
   error.value = ''
   try {
     seleccionado.value = await servicios.caja.obtenerCorte(corte.idCorte)
+    await nextTick()
+    // En tablet y teléfono el detalle queda arriba de la lista: se lleva a la vista al abrirlo.
+    if (window.matchMedia('(max-width: 64em)').matches) panelDetalle.value?.scrollIntoView({ block: 'start' })
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo abrir el corte.'
   } finally {
@@ -104,7 +109,7 @@ onMounted(() => void cargar())
       <p>{{ error }}</p>
     </div>
 
-    <div class="paneles">
+    <div class="paneles" :class="{ 'paneles--con-detalle': seleccionado }">
       <section class="lista no-imprimir" aria-label="Cortes cerrados">
         <template v-if="cargando">
           <div v-for="n in 4" :key="n" class="esqueleto" aria-hidden="true" />
@@ -145,7 +150,7 @@ onMounted(() => void cargar())
         </template>
       </section>
 
-      <section class="detalle" aria-label="Detalle del corte" :aria-busy="cargandoDetalle">
+      <section ref="panelDetalle" class="detalle" aria-label="Detalle del corte" :aria-busy="cargandoDetalle">
         <div v-if="!seleccionado" class="vacio no-imprimir">
           <h3>Elige un corte</h3>
           <p>Verás el desglose por método de pago y el cuadre de efectivo, listo para imprimir.</p>
@@ -161,6 +166,7 @@ onMounted(() => void cargar())
               Imprimir corte
             </button>
           </div>
+          <VistaCorte :corte="seleccionado" mostrar-cuadre />
           <ResumenCorte :corte="seleccionado" />
         </template>
       </section>
@@ -201,6 +207,11 @@ onMounted(() => void cargar())
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
   gap: var(--espacio-5);
+}
+
+/* El resumen visual necesita ancho para poner el total junto al desglose. */
+.paneles--con-detalle {
+  grid-template-columns: minmax(15rem, 0.6fr) minmax(0, 1.4fr);
 }
 
 .lista {
@@ -317,6 +328,19 @@ onMounted(() => void cargar())
   justify-content: flex-end;
   gap: var(--espacio-2);
   width: 100%;
+}
+
+/* Tablet: el resumen ocupa todo el ancho para conservar el total junto al desglose. */
+@media screen and (max-width: 64em) {
+  .paneles--con-detalle {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .paneles--con-detalle .detalle {
+    position: static;
+    order: -1;
+    scroll-margin-top: 7rem;
+  }
 }
 
 @media (max-width: 52em) {

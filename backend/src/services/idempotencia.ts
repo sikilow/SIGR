@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
 import type { Request, Response } from "express";
-import { ejecutar, filas, pool } from "./db";
+import { conConexion, ejecutar, filas } from "./db";
 import { ErrorApi } from "../utils/errores";
 
 /**
@@ -10,7 +9,8 @@ import { ErrorApi } from "../utils/errores";
  *  - Reintento con la misma clave (p. ej. se perdió la respuesta): se devuelve la respuesta guardada
  *    SIN repetir la acción (no duplica pedidos).
  *  - Si no viene la cabecera, la acción se ejecuta normal.
- * Un candado de MySQL (GET_LOCK) evita que dos peticiones simultáneas con la misma clave se ejecuten a la vez.
+ * Un candado consultivo de PostgreSQL (pg_advisory_lock) evita que dos peticiones simultáneas con la
+ * misma clave se ejecuten a la vez; se espera hasta 10 s, como hacía GET_LOCK en MySQL.
  */
 export async function conIdempotencia<T>(
   req: Request,
@@ -29,42 +29,46 @@ export async function conIdempotencia<T>(
 
   const usuarioId = req.usuario!.id;
   const ruta = `${req.method} ${req.originalUrl.split("?")[0]}`;
-  const candado = `idem_${createHash("sha1").update(`${usuarioId}:${clave}`).digest("hex")}`;
+  const candado = `idem:${usuarioId}:${clave}`;
 
-  const cx = await pool.getConnection();
-  try {
-    const [lock] = await filas(cx, "SELECT GET_LOCK(?, 10) AS ok", [candado]);
-    if (!lock || Number(lock.ok) !== 1) {
-      throw new ErrorApi(409, "estado_invalido", "Hay otra petición con la misma clave en curso. Reintenta en un momento.");
-    }
-
-    const [previa] = await filas(
-      cx,
-      "SELECT ruta, estado_http, respuesta FROM idempotencia WHERE clave = ? AND id_usuario = ?",
-      [clave, usuarioId],
-    );
-    if (previa) {
-      if (previa.ruta !== ruta) {
-        throw new ErrorApi(422, "estado_invalido", "Esa clave de idempotencia ya se usó en otra operación.");
-      }
-      const cuerpo = typeof previa.respuesta === "string" ? JSON.parse(previa.respuesta) : previa.respuesta;
-      res.status(previa.estado_http as number).json(cuerpo);
-      return;
-    }
-
-    const resultado = await accion();
-    await ejecutar(
-      cx,
-      "INSERT INTO idempotencia (clave, id_usuario, ruta, estado_http, respuesta) VALUES (?, ?, ?, ?, ?)",
-      [clave, usuarioId, ruta, estadoOk, JSON.stringify(resultado)],
-    );
-    res.status(estadoOk).json(resultado);
-  } finally {
+  await conConexion(async (cx) => {
     try {
-      await filas(cx, "SELECT RELEASE_LOCK(?)", [candado]);
-    } catch {
-      // Si falla, el candado se libera solo al cerrar la conexión.
+      await filas(cx, "SET lock_timeout = '10s'");
+      await filas(cx, "SELECT pg_advisory_lock(hashtextextended(?, 0))", [candado]);
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "55P03") {
+        throw new ErrorApi(409, "estado_invalido", "Hay otra petición con la misma clave en curso. Reintenta en un momento.");
+      }
+      throw error;
+    } finally {
+      await filas(cx, "RESET lock_timeout").catch(() => undefined);
     }
-    cx.release();
-  }
+
+    try {
+      const [previa] = await filas(
+        cx,
+        "SELECT ruta, estado_http, respuesta FROM idempotencia WHERE clave = ? AND id_usuario = ?",
+        [clave, usuarioId],
+      );
+      if (previa) {
+        if (previa.ruta !== ruta) {
+          throw new ErrorApi(422, "estado_invalido", "Esa clave de idempotencia ya se usó en otra operación.");
+        }
+        const cuerpo = typeof previa.respuesta === "string" ? JSON.parse(previa.respuesta) : previa.respuesta;
+        res.status(previa.estado_http as number).json(cuerpo);
+        return;
+      }
+
+      const resultado = await accion();
+      await ejecutar(
+        cx,
+        "INSERT INTO idempotencia (clave, id_usuario, ruta, estado_http, respuesta) VALUES (?, ?, ?, ?, ?)",
+        [clave, usuarioId, ruta, estadoOk, JSON.stringify(resultado)],
+      );
+      res.status(estadoOk).json(resultado);
+    } finally {
+      // Si falla, el candado se libera solo al cerrar la conexión.
+      await filas(cx, "SELECT pg_advisory_unlock(hashtextextended(?, 0))", [candado]).catch(() => undefined);
+    }
+  });
 }

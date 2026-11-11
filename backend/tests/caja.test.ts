@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cuadrarCorte, validarImportes, validarMetodoSolicitado, type PagoEntrada } from "../src/models/caja";
+import { CerrarCorte, cuadrarCorte, validarImportes, validarMetodoSolicitado, type PagoEntrada } from "../src/models/caja";
 import { ErrorApi } from "../src/utils/errores";
 
 function errorDe(fn: () => unknown): ErrorApi {
@@ -63,6 +63,23 @@ describe("validarMetodoSolicitado", () => {
     const error = errorDe(() => validarMetodoSolicitado("digital", [{ id_metodo: 1, monto: 20 }], metodos, false));
     expect(error.estado).toBe(422);
     expect(() => validarMetodoSolicitado("digital", [{ id_metodo: 1, monto: 20 }], metodos, true)).not.toThrow();
+  });
+});
+
+describe("CerrarCorte", () => {
+  it("acepta únicamente el efectivo contado", () => {
+    expect(CerrarCorte.safeParse({ efectivo_contado: 790 }).success).toBe(true);
+  });
+
+  it.each(["total_ventas", "efectivo_esperado", "diferencia", "fondo_inicial", "desglose"])(
+    "rechaza que el cajero envíe %s",
+    (campo) => {
+      expect(CerrarCorte.safeParse({ efectivo_contado: 790, [campo]: 1 }).success).toBe(false);
+    },
+  );
+
+  it("rechaza un conteo negativo", () => {
+    expect(CerrarCorte.safeParse({ efectivo_contado: -1 }).success).toBe(false);
   });
 });
 

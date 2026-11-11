@@ -48,7 +48,6 @@ function cerrarSesion() {
     <header class="encabezado">
 
       <RouterLink to="/cliente" class="marca">
-        <div class="marca-icono">✦</div>
 
         <div>
           <h2>La Madalena</h2>

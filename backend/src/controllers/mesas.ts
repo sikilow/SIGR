@@ -24,8 +24,8 @@ export const listarMesas = async (_req: Request, res: Response) => {
        LEFT JOIN cuenta c ON c.id_mesa = m.id_mesa AND c.estado <> 'cerrada'
        LEFT JOIN (
               SELECT p.id_cuenta,
-                     SUM(ep.nombre NOT IN ('Cancelado', 'Pagado')) AS pedidos_activos,
-                     SUM(ep.nombre = 'Listo')                      AS pedidos_listos
+                     COUNT(*) FILTER (WHERE ep.nombre NOT IN ('Cancelado', 'Pagado')) AS pedidos_activos,
+                     COUNT(*) FILTER (WHERE ep.nombre = 'Listo') AS pedidos_listos
                 FROM pedido p JOIN estado_pedido ep ON ep.id_estado = p.id_estado
                GROUP BY p.id_cuenta
             ) pa ON pa.id_cuenta = c.id_cuenta
@@ -151,7 +151,7 @@ export const asignarMesa = async (req: Request, res: Response) => {
       if ("id_reservacion" in grupo) {
         await ejecutar(
           cx,
-          "UPDATE reservacion SET id_mesa = ?, estado = 'llego', llegada_en = NOW() WHERE id_reservacion = ?",
+          "UPDATE reservacion SET id_mesa = ?, estado = 'llego', llegada_en = LOCALTIMESTAMP(0) WHERE id_reservacion = ?",
           [mesaId, grupo.id_reservacion],
         );
         reservacionId = grupo.id_reservacion;
@@ -208,7 +208,7 @@ export const cambiarEstadoMesa = async (req: Request, res: Response) => {
       cx,
       `SELECT m.id_mesa, m.numero, m.activa, s.activa AS seccion_activa
          FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
-        WHERE m.id_mesa = ? FOR UPDATE`,
+        WHERE m.id_mesa = ? FOR UPDATE OF m`,
       [mesaId],
     );
     if (!mesa) throw new ErrorApi(404, "no_encontrado", `La mesa ${mesaId} no existe.`);

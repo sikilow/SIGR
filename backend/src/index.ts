@@ -17,7 +17,7 @@ import { reservacionesRouter } from "./routes/reservaciones";
 import { reservacionesClientesRouter } from "./routes/reservacionesClientes";
 import { usuariosRouter } from "./routes/usuarios";
 import { iniciarProcesadorReservaciones } from "./services/notificacionesReservacion";
-import { filas, pool } from "./services/db";
+import { esEsquemaIncompleto, esSinConexion, filas, pool } from "./services/db";
 
 const app = express();
 app.use(cors({ origin: ORIGENES_PERMITIDOS }));
@@ -49,75 +49,26 @@ app.use("/api", () => {
 
 app.use(manejarErrores);
 
+/** Último archivo de database/supabase que la API necesita aplicado; súbelo al agregar una migración. */
+const MIGRACION_REQUERIDA = "001_esquema.sql";
+
 async function iniciarAPI(): Promise<void> {
+  const faltaMigrar = new Error(
+    `Falta aplicar ${MIGRACION_REQUERIDA} a la base de datos: ejecuta \`npm run db:migrar\` en backend/ ` +
+      "(consulta docs/actualizar-base-datos.md) y vuelve a iniciar la API.",
+  );
   try {
-    const [configuracion] = await filas(pool, "SELECT id FROM configuracion_seguridad WHERE id = 1");
-    if (!configuracion) {
-      throw new Error("Falta completar la configuración creada por la migración 013 en la base SIGR.");
-    }
+    const [aplicada] = await filas(pool, "SELECT 1 AS ok FROM sigr.migracion WHERE archivo = ?", [MIGRACION_REQUERIDA]);
+    if (!aplicada) throw faltaMigrar;
   } catch (error) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "ER_NO_SUCH_TABLE"
-    ) {
-      throw new Error(
-        "Falta aplicar database/migrations/013_auditoria_seguridad.sql a la base SIGR. " +
-          "Consulta docs/actualizar-base-datos.md y vuelve a iniciar la API.",
-        { cause: error },
-      );
-    }
-    throw error;
-  }
-
-  // Migraciones posteriores: sin ellas las rutas afectadas responderían 500.
-  const migraciones = [
-    { archivo: "014_clientes_web.sql", consulta: "SELECT id_cliente FROM cliente_credencial LIMIT 0" },
-    { archivo: "015_corte_efectivo.sql", consulta: "SELECT fondo_inicial, efectivo_esperado, efectivo_contado FROM corte_caja LIMIT 0" },
-    { archivo: "016_metodo_pago_solicitado.sql", consulta: "SELECT id_metodo_pago_solicitado FROM cuenta LIMIT 0" },
-    { archivo: "017_categorias_metodos_pago.sql", consulta: "SELECT mp.activo, mp.id_categoria_metodo_pago, mp.es_efectivo FROM metodo_pago mp JOIN categoria_metodo_pago cmp USING (id_categoria_metodo_pago) LIMIT 0" },
-  ];
-  for (const { archivo, consulta } of migraciones) {
-    try {
-      await filas(pool, consulta);
-    } catch (error) {
-      const codigo = typeof error === "object" && error !== null && "code" in error ? error.code : null;
-      if (codigo === "ER_NO_SUCH_TABLE" || codigo === "ER_BAD_FIELD_ERROR") {
-        throw new Error(
-          `Falta aplicar database/migrations/${archivo} a la base SIGR. ` +
-            "Consulta docs/actualizar-base-datos.md y vuelve a iniciar la API.",
-          { cause: error },
-        );
-      }
-      throw error;
-    }
-  }
-
-  const [auditoriaCuenta] = await filas(
-    pool,
-    `SELECT COUNT(*) AS total
-       FROM information_schema.triggers
-      WHERE trigger_schema = DATABASE()
-        AND trigger_name IN ('trg_aud_cuenta_ai', 'trg_aud_cuenta_au', 'trg_aud_cuenta_ad')
-        AND action_statement LIKE '%id_metodo_pago_solicitado%'`,
-  );
-  if (Number(auditoriaCuenta?.total ?? 0) !== 3) {
-    throw new Error("Falta aplicar database/migrations/016_metodo_pago_solicitado.sql para actualizar la auditoría de cuenta.");
-  }
-
-  const [auditoriaPagos] = await filas(
-    pool,
-    `SELECT COUNT(*) AS total
-       FROM information_schema.triggers
-      WHERE trigger_schema = DATABASE()
-        AND trigger_name IN (
-          'trg_aud_metodo_pago_ai', 'trg_aud_metodo_pago_au', 'trg_aud_metodo_pago_ad',
-          'trg_aud_categoria_metodo_pago_ai', 'trg_aud_categoria_metodo_pago_au', 'trg_aud_categoria_metodo_pago_ad'
-        )`,
-  );
-  if (Number(auditoriaPagos?.total ?? 0) !== 6) {
-    throw new Error("Falta aplicar database/migrations/017_categorias_metodos_pago.sql para actualizar la auditoría de métodos de pago.");
+    if (esEsquemaIncompleto(error)) throw new Error(faltaMigrar.message, { cause: error });
+    if (!esSinConexion(error)) throw error;
+    // Sin red hacia Supabase la API arranca igual: responde 503 "No hay conexión con la base de datos"
+    // y vuelve a funcionar sola cuando regresa la conexión (no hace falta reiniciarla).
+    console.warn(
+      "Aviso: no hay conexión con la base de datos (¿la red bloquea el puerto 5432?). " +
+        `La API arranca de todos modos y responderá 503 hasta que se recupere. Detalle: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   app.listen(PUERTO, () => console.log(`API en http://localhost:${PUERTO}`));
@@ -128,7 +79,7 @@ void iniciarAPI().catch((error: unknown) => {
   console.error("No se pudo iniciar la API:", error);
   void pool.end()
     .catch((shutdownError: unknown) => {
-      console.error("No se pudo cerrar el pool de MySQL:", shutdownError);
+      console.error("No se pudo cerrar el pool de la base de datos:", shutdownError);
     })
     .finally(() => {
       process.exitCode = 1;

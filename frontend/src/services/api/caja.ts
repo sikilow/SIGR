@@ -30,7 +30,7 @@ interface CorteResumenDto {
 
 interface CorteDetalleDto extends CorteResumenDto {
   efectivo_esperado: Importe
-  desglose: Array<{ metodo: string; cobros: number | string; monto: Importe }>
+  desglose: Array<{ metodo: string; es_efectivo: boolean | number; cobros: number | string; monto: Importe }>
 }
 
 interface EstadoDto {
@@ -97,7 +97,12 @@ function aCorteDetalle(dto: CorteDetalleDto): CorteDetalle {
   return {
     ...aCorteResumen(dto),
     efectivoEsperado: Number(dto.efectivo_esperado),
-    desglose: dto.desglose.map((fila) => ({ metodo: fila.metodo, cobros: Number(fila.cobros), monto: Number(fila.monto) })),
+    desglose: dto.desglose.map((fila) => ({
+      metodo: fila.metodo,
+      esEfectivo: Boolean(fila.es_efectivo),
+      cobros: Number(fila.cobros),
+      monto: Number(fila.monto),
+    })),
   }
 }
 

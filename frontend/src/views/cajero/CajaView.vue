@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import InsigniaEstado from '../../components/InsigniaEstado.vue'
 import ResumenCorte from '../../components/ResumenCorte.vue'
+import VistaCorte from '../../components/VistaCorte.vue'
 import { servicios } from '../../services'
 import {
   ETIQUETA_ESTADO_PEDIDO,
@@ -25,6 +26,7 @@ const fondoInicial = ref<number | null>(null)
 const efectivoContado = ref<number | null>(null)
 const confirmandoCierre = ref(false)
 const corteCerrado = ref<CorteDetalle | null>(null)
+const tituloCorteCerrado = ref<HTMLElement | null>(null)
 const ventaReciente = ref<VentaCaja | null>(null)
 const lineasTicket = ref<LineaTicket[]>([])
 const meseroTicket = ref('')
@@ -168,6 +170,8 @@ async function cerrarCorte() {
     efectivoContado.value = null
     confirmandoCierre.value = false
     await cargar()
+    await nextTick()
+    tituloCorteCerrado.value?.focus()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'No se pudo cerrar el corte.'
   } finally {
@@ -206,12 +210,6 @@ async function cobrar() {
 
 function imprimirTicket() {
   window.print()
-}
-
-function textoDiferencia(diferencia: number | null): string {
-  if (diferencia === null) return 'Sin conteo de efectivo'
-  if (Math.abs(diferencia) < 0.005) return 'El efectivo cuadra'
-  return diferencia < 0 ? `Faltante de ${moneda(-diferencia)}` : `Sobrante de ${moneda(diferencia)}`
 }
 
 onMounted(cargar)
@@ -291,7 +289,7 @@ onMounted(cargar)
             <div class="campo">
               <label for="efectivo-contado">Efectivo contado en caja</label>
               <input id="efectivo-contado" v-model.number="efectivoContado" type="number" min="0" step="0.01" inputmode="decimal" required>
-              <p class="campo__ayuda">Incluye el fondo inicial. La diferencia aparece después de cerrar.</p>
+              <p class="campo__ayuda">Cuenta billetes y monedas, incluido el fondo inicial. Al cerrar verás el desglose de tu turno.</p>
             </div>
             <button class="btn" type="submit" :disabled="procesando">Cerrar corte</button>
           </form>
@@ -582,8 +580,8 @@ onMounted(cargar)
       <div class="ticket-panel__barra no-imprimir">
         <div>
           <p class="sobretitulo">Corte cerrado</p>
-          <h3 id="corte-cerrado-titulo">Corte #{{ corteCerrado.idCorte }}</h3>
-          <p>{{ textoDiferencia(corteCerrado.diferencia) }} · {{ fecha(corteCerrado.fin) }}</p>
+          <h3 id="corte-cerrado-titulo" ref="tituloCorteCerrado" class="corte-cerrado__titulo" tabindex="-1">Corte #{{ corteCerrado.idCorte }}</h3>
+          <p>Cerrado el {{ fecha(corteCerrado.fin) }}</p>
         </div>
         <div class="ticket-panel__acciones">
           <button class="btn btn--secundario" type="button" @click="corteCerrado = null">Cerrar</button>
@@ -596,7 +594,11 @@ onMounted(cargar)
           </button>
         </div>
       </div>
-      <ResumenCorte :corte="corteCerrado" />
+      <VistaCorte :corte="corteCerrado" />
+      <!-- El ticket trae el cuadre completo: al cajero no se le muestra en pantalla, solo sale al imprimir. -->
+      <div class="corte-solo-impresion">
+        <ResumenCorte :corte="corteCerrado" />
+      </div>
     </section>
   </div>
 </template>
@@ -1039,6 +1041,14 @@ onMounted(cargar)
   gap: var(--espacio-2);
 }
 
+.corte-cerrado__titulo:focus {
+  outline: none;
+}
+
+.corte-solo-impresion {
+  display: none;
+}
+
 .ticket {
   width: 80mm;
   max-width: 100%;
@@ -1223,6 +1233,11 @@ onMounted(cargar)
     display: block !important;
     width: 100% !important;
     padding: 0 !important;
+  }
+
+  /* Sin caja propia: el ticket se maqueta igual que si no estuviera envuelto. */
+  .corte-solo-impresion {
+    display: contents;
   }
 
   .ticket {

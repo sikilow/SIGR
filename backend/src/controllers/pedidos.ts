@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
-import type { PoolConnection } from "mysql2/promise";
 import { z } from "zod";
-import { ejecutar, filas, pool, transaccion } from "../services/db";
+import { ejecutar, filas, pool, transaccion, type Conexion } from "../services/db";
 import { ESTADO_PEDIDO_DB, ESTADOS_PEDIDO, cargarPedido, cargarPedidos, exigirDisponibles, idDeRuta, idEstadoPedido, idMotivoTexto, devolverExistencia, nombreEstadoDeFiltro, validar, verificarExistencia, type PedidoDto } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 import { conIdempotencia } from "../services/idempotencia";
@@ -32,14 +31,14 @@ const Filtros = z.object({
 });
 
 /** Verifica que los productos existan y estén disponibles, y guarda las líneas con el precio VIGENTE de la BD. */
-async function guardarDetalle(cx: PoolConnection, pedidoId: number, lineas: LineaPedido[]): Promise<void> {
+async function guardarDetalle(cx: Conexion, pedidoId: number, lineas: LineaPedido[]): Promise<void> {
   const productos = await exigirDisponibles(cx, lineas.map((l) => l.id_producto));
   const valores = lineas.map((l) => [pedidoId, l.id_producto, l.cantidad, productos.get(l.id_producto)!.precio, l.indicaciones || null]);
-  await cx.query("INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad, precio_unitario, indicaciones) VALUES ?", [valores]);
+  await ejecutar(cx, "INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad, precio_unitario, indicaciones) VALUES ?", [valores]);
 }
 
 /** Bloquea la fila del pedido durante la transacción y devuelve su estado y propietario. */
-async function bloquearPedido(cx: PoolConnection, id: number) {
+async function bloquearPedido(cx: Conexion, id: number) {
   const [fila] = await filas(
     cx,
     `SELECT p.id_pedido, p.id_mesero, ep.nombre AS estado, c.estado AS estado_cuenta
@@ -60,7 +59,7 @@ function exigirPedidoPropio(req: Request, idMesero: number): void {
   }
 }
 
-async function pedidoOError(cx: PoolConnection, id: number): Promise<PedidoDto> {
+async function pedidoOError(cx: Conexion, id: number): Promise<PedidoDto> {
   const pedido = await cargarPedido(cx, id);
   if (!pedido) throw new ErrorApi(404, "no_encontrado", `El pedido ${id} no existe.`);
   return pedido;
@@ -91,10 +90,10 @@ export const crearPedido = async (req: Request, res: Response) => {
       if (activa?.estado === "por_pagar") throw new ErrorApi(409, "estado_invalido", "La cuenta ya solicitó el pago.");
       const cuentaId = activa
         ? (activa.id_cuenta as number)
-        : (await ejecutar(cx, "INSERT INTO cuenta (id_mesa) VALUES (?)", [id_mesa])).insertId;
+        : (await ejecutar(cx, "INSERT INTO cuenta (id_mesa) VALUES (?) RETURNING id_cuenta", [id_mesa])).insertId;
 
       const idEstado = await idEstadoPedido(cx, "registrado");
-      const { insertId } = await ejecutar(cx, "INSERT INTO pedido (id_cuenta, id_mesero, id_estado) VALUES (?, ?, ?)", [cuentaId, meseroId, idEstado]);
+      const { insertId } = await ejecutar(cx, "INSERT INTO pedido (id_cuenta, id_mesero, id_estado) VALUES (?, ?, ?) RETURNING id_pedido", [cuentaId, meseroId, idEstado]);
       await guardarDetalle(cx, insertId, detalle);
       return pedidoOError(cx, insertId);
     }),

@@ -4,7 +4,6 @@
 // CONTRATO JSON: las claves son los NOMBRES EXACTOS de las columnas de la BD (id_mesa, fecha_hora,
 // precio_unitario…). Lo que no es columna se marca como "calculado" (estado, id_mesa y mesa_numero del pedido,
 // motivo_descripcion, total, nombre_producto…). Ver docs/contrato-api-mesero.md y docs/equivalencias-bd.md.
-import type { RowDataPacket } from "mysql2/promise";
 import { z } from "zod";
 import { ejecutar, filas, type Ejecutor } from "../services/db";
 import { ErrorApi } from "../utils/errores";
@@ -75,7 +74,7 @@ export function idDeRuta(valor: string | string[] | undefined): number {
 }
 
 export async function idEstadoPedido(ex: Ejecutor, estado: EstadoPedido): Promise<number> {
-  const [fila] = await filas<RowDataPacket>(ex, "SELECT id_estado FROM estado_pedido WHERE nombre = ?", [
+  const [fila] = await filas(ex, "SELECT id_estado FROM estado_pedido WHERE nombre = ?", [
     ESTADO_PEDIDO_DB[estado],
   ]);
   if (!fila) {
@@ -93,9 +92,9 @@ export async function idEstadoPedido(ex: Ejecutor, estado: EstadoPedido): Promis
  * un motivo igual en motivo_cancelacion; si no, se crea.
  */
 export async function idMotivoTexto(ex: Ejecutor, texto: string): Promise<number> {
-  const [fila] = await filas<RowDataPacket>(ex, "SELECT id_motivo FROM motivo_cancelacion WHERE descripcion = ? LIMIT 1", [texto]);
+  const [fila] = await filas(ex, "SELECT id_motivo FROM motivo_cancelacion WHERE descripcion = ? LIMIT 1", [texto]);
   if (fila) return fila.id_motivo as number;
-  const res = await ejecutar(ex, "INSERT INTO motivo_cancelacion (descripcion) VALUES (?)", [texto]);
+  const res = await ejecutar(ex, "INSERT INTO motivo_cancelacion (descripcion) VALUES (?) RETURNING id_motivo", [texto]);
   return res.insertId;
 }
 
@@ -115,7 +114,7 @@ export async function productosPorId(ex: Ejecutor, ids: number[]): Promise<Map<n
   const rows = await filas(
     ex,
     `SELECT p.id_producto AS id, p.nombre, p.precio,
-            (p.disponible AND (p.controla_existencia = 0 OR COALESCE(i.existencia, 0) > 0)) AS disponible
+            (p.disponible AND (NOT p.controla_existencia OR COALESCE(i.existencia, 0) > 0)) AS disponible
        FROM producto p
        LEFT JOIN disponibilidadProducto i ON i.id_producto = p.id_producto
       WHERE p.id_producto IN (?)`,
@@ -228,7 +227,7 @@ export async function devolverExistencia(ex: Ejecutor, pedidoId: number): Promis
     `SELECT dp.id_producto, SUM(dp.cantidad) AS cantidad
        FROM detalle_pedido dp
        JOIN producto p ON p.id_producto = dp.id_producto
-      WHERE dp.id_pedido = ? AND p.controla_existencia = 1
+      WHERE dp.id_pedido = ? AND p.controla_existencia
       GROUP BY dp.id_producto
       ORDER BY dp.id_producto`,
     [pedidoId],

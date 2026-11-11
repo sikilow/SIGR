@@ -20,6 +20,7 @@ function desglose(): CobroPorMetodo[] {
     const pagos = pagosDelCorte.filter((pago) => pago.idMetodo === metodo.idMetodo)
     return {
       metodo: metodo.nombre,
+      esEfectivo: metodo.esEfectivo,
       cobros: pagos.length,
       monto: pagos.reduce((suma, pago) => suma + centavos(pago.monto), 0) / 100,
     }

@@ -20,6 +20,8 @@ vi.mock("../src/services/db", () => ({
   ejecutar: ejecutarMock,
   filas: filasMock,
   transaccion: transaccionMock,
+  esDuplicado: () => false,
+  restriccionDe: () => "",
 }));
 vi.mock("../src/services/idempotencia", () => ({
   conIdempotencia: conIdempotenciaMock,
@@ -132,7 +134,7 @@ describe("confirmaciones encoladas por la hostess", () => {
 
     expect(ejecutarMock).toHaveBeenCalledWith(
       cxPrueba,
-      expect.stringContaining("ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion"),
+      expect.stringContaining("ON CONFLICT (id_reservacion, tipo, evento) DO NOTHING"),
       ["creada", 123],
     );
     expect(
@@ -147,7 +149,7 @@ describe("confirmaciones encoladas por la hostess", () => {
 
     expect(ejecutarMock).toHaveBeenCalledWith(
       cxPrueba,
-      expect.stringContaining("ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion"),
+      expect.stringContaining("ON CONFLICT (id_reservacion, tipo, evento) DO NOTHING"),
       ["confirmada", 123],
     );
     expect(avisosConfirmados).toHaveLength(1);
@@ -193,7 +195,7 @@ describe("confirmaciones encoladas por la hostess", () => {
 
     expect(ejecutarMock).toHaveBeenCalledWith(
       cxPrueba,
-      expect.stringContaining("ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion"),
+      expect.stringContaining("ON CONFLICT (id_reservacion, tipo, evento) DO NOTHING"),
       ["creada", 123],
     );
     expect(avisosConfirmados).toHaveLength(0);
@@ -211,7 +213,7 @@ describe("confirmaciones encoladas por la hostess", () => {
 
     expect(ejecutarMock).toHaveBeenCalledWith(
       cxPrueba,
-      expect.stringContaining("ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion"),
+      expect.stringContaining("ON CONFLICT (id_reservacion, tipo, evento) DO NOTHING"),
       ["creada", 123],
     );
     expect(solicitarProcesamientoMock).not.toHaveBeenCalled();

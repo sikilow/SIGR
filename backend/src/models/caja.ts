@@ -21,6 +21,11 @@ export const Pagos = z
 
 export type PagoEntrada = z.infer<typeof Pagos>["pagos"][number];
 
+const Importe = z.number().finite().min(0).max(9_999_999_999.99);
+export const AbrirCorte = z.object({ fondo_inicial: Importe }).strict();
+/** Lo único que captura el cajero al cerrar: los totales y el esperado los calcula el servidor. */
+export const CerrarCorte = z.object({ efectivo_contado: Importe }).strict();
+
 export function validarMetodoSolicitado(
   solicitado: "fisico" | "digital" | null,
   pagos: PagoEntrada[],

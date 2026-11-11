@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { JWT_SECRET } from "../utils/config";
-import { filas, pool } from "../services/db";
+import { ejecutar, esDuplicado, filas, pool, transaccion } from "../services/db";
 import { validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 
@@ -80,41 +80,26 @@ export const registrarCuentaCliente = async (
   );
 
   // Ambas inserciones se realizan en una transaccion.
-  const conexion = await pool.getConnection();
-
   try {
-    await conexion.beginTransaction();
-
-    let idCliente: number;
-
-    if (existente) {
-      // Reutiliza el cliente que capturo la hostess y conserva su historial.
-      idCliente = existente.id_cliente as number;
-
-      await conexion.execute(
-        "UPDATE cliente SET telefono = ? WHERE id_cliente = ?",
-        [datos.telefono, idCliente]
-      );
-    } else {
-      const [resultado] = await conexion.execute(
+    const idCliente = await transaccion(async (cx) => {
+      if (existente) {
+        // Reutiliza el cliente que capturo la hostess y conserva su historial.
+        const id = existente.id_cliente as number;
+        await ejecutar(cx, "UPDATE cliente SET telefono = ? WHERE id_cliente = ?", [datos.telefono, id]);
+        await ejecutar(cx, "INSERT INTO cliente_credencial (id_cliente, password_hash) VALUES (?, ?)", [id, passwordHash]);
+        return id;
+      }
+      const { insertId } = await ejecutar(
+        cx,
         `INSERT INTO cliente
          (nombre, correo, telefono)
-         VALUES (?, ?, ?)`,
+         VALUES (?, ?, ?)
+         RETURNING id_cliente`,
         [datos.nombre, correo, datos.telefono]
       );
-
-      idCliente = (resultado as { insertId: number })
-        .insertId;
-    }
-
-    await conexion.execute(
-      `INSERT INTO cliente_credencial
-       (id_cliente, password_hash)
-       VALUES (?, ?)`,
-      [idCliente, passwordHash]
-    );
-
-    await conexion.commit();
+      await ejecutar(cx, "INSERT INTO cliente_credencial (id_cliente, password_hash) VALUES (?, ?)", [insertId, passwordHash]);
+      return insertId;
+    });
 
     res.status(201).json({
       mensaje: "Cuenta creada correctamente.",
@@ -125,14 +110,7 @@ export const registrarCuentaCliente = async (
       },
     });
   } catch (error) {
-    await conexion.rollback();
-
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "ER_DUP_ENTRY"
-    ) {
+    if (esDuplicado(error)) {
       throw new ErrorApi(
         409,
         "estado_invalido",
@@ -141,8 +119,6 @@ export const registrarCuentaCliente = async (
     }
 
     throw error;
-  } finally {
-    conexion.release();
   }
 };
 

@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { leerCuerpo, mensajeDeError } from '../../utils/respuestaApi'
 
 interface Reservacion {
   id_reservacion: number
@@ -45,7 +46,9 @@ async function cargarReservaciones() {
     }
 
     if (!respuesta.ok) {
-      throw new Error('No se pudieron consultar las reservaciones.')
+      throw new Error(
+        mensajeDeError(respuesta, await leerCuerpo(respuesta), 'No se pudieron consultar las reservaciones.')
+      )
     }
 
     reservaciones.value = await respuesta.json()

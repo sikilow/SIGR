@@ -1,306 +1,74 @@
-# Actualizar la base de datos de SIGR
+# Base de datos de SIGR en Supabase
 
-Guía para poner una base MySQL existente al día con el esquema del proyecto sin borrarla. Los scripts de migración están en [`database/migrations/`](../database/migrations/); ejecútalos **una sola vez y en orden**, omitiendo los que ya se aplicaron.
+Desde noviembre de 2026 SIGR usa **PostgreSQL en Supabase** (proyecto `zsyjplhuynvmqxoxgjtw`) en lugar de MySQL local. Todos los dispositivos y todo el equipo trabajan sobre la misma base en la nube; el backend de Express sigue siendo el único que habla con ella.
 
-> **Importante:** SIGR no lleva una tabla automática de migraciones aplicadas. Antes de ejecutar scripts, confirma con el equipo qué cambios ya recibió esa base. No ejecutes `database/init.sql` sobre una base con datos: es para crear una base nueva, no para actualizarla.
+- Esquema: [`database/supabase/001_esquema.sql`](../database/supabase/001_esquema.sql). Equivale a `init.sql` más las migraciones MySQL 001 a 017.
+- Datos de demostración: [`database/supabase/datos_demo.sql`](../database/supabase/datos_demo.sql). Equivale a `seed_demo.sql`.
+- Los archivos MySQL (`database/init.sql`, `database/migrations/`, `database/seed_demo.sql`, `database/docker-compose.yml`) quedan solo como referencia histórica; el backend ya no los usa.
 
-## 1. Antes de empezar
+## 1. Conectar el backend
 
-1. Detén temporalmente el backend y cualquier otra aplicación que esté escribiendo en la base.
-2. Desde PowerShell, crea un respaldo fuera del repositorio:
+1. En el panel de Supabase abre el proyecto y pulsa **Connect**. Copia la URI del **Session pooler** (puerto `5432`, usuario `postgres.zsyjplhuynvmqxoxgjtw`).
+   - No uses la conexión directa (`db.zsyjplhuynvmqxoxgjtw.supabase.co`): en el plan gratuito solo funciona por IPv6 y muchas redes no lo tienen.
+   - No uses el *Transaction pooler* (puerto `6543`): el backend necesita transacciones con bloqueos y candados de sesión.
+2. En `backend/.env` pon la URI con la contraseña de la base (la que se eligió al crear el proyecto; se puede restablecer en *Project Settings → Database*):
 
-   ```powershell
-   mysqldump -h localhost -P 3306 -u root -p SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-antes-migraciones.sql"
+   ```
+   DATABASE_URL=postgresql://postgres.zsyjplhuynvmqxoxgjtw:TU_CONTRASEÑA@aws-0-us-west-2.pooler.supabase.com:5432/postgres
    ```
 
-   Cambia host, puerto y usuario si tu servidor usa otros valores. En Docker, el puerto publicado por `database/docker-compose.yml` es `3306`; la contraseña predeterminada de desarrollo es `sigr1234`.
-3. Comprueba que el respaldo exista y no esté vacío antes de continuar.
-4. Abre PowerShell en la raíz del repositorio. Si la terminal está en `backend`, puedes calcular la ruta al archivo desde cualquiera de esas dos carpetas con los comandos de la sección siguiente. El cliente `mysql` debe estar instalado y ser accesible desde la terminal. Si usas otros valores de conexión, reemplaza `root` y `localhost:3306` por `DB_USER` y `DB_HOST`/puerto; estos scripts usan explícitamente la base `SIGR`, así que ese es el valor esperado de `DB_NAME`. `DB_PASSWORD` se solicita de forma interactiva con `-p`.
+   Si la contraseña tiene caracteres como `@`, `#` o `/`, escríbelos codificados (`%40`, `%23`, `%2F`).
+3. Opcional: `DB_ZONA_HORARIA` (por defecto `America/Mazatlan`, la hora de Tepic) y `DB_SSL_CA` (ruta al certificado que Supabase ofrece en *Database → SSL Configuration*; sin él la conexión va cifrada pero sin verificar el servidor).
 
-## 2. Aplicar solo las migraciones pendientes
+`backend/.env` nunca se sube a Git. Cada integrante pone ahí la misma `DATABASE_URL`.
 
-Si ya aplicaste 007–014, revisa y aplica solo las migraciones pendientes entre **015** y **017**. La 015 agrega el fondo inicial y el cuadre de efectivo en el corte:
+## 2. Crear el esquema (una sola vez por proyecto de Supabase)
 
-```powershell
-Get-Content -Raw "..\database\migrations\015_corte_efectivo.sql" | mysql -h localhost -P 3306 -u root -p SIGR
-```
-
-Desde la raíz del repositorio usa la ruta `.\database\migrations\015_corte_efectivo.sql`. Revisa la sección «Migración 015» antes de aplicarla.
-
-Después de 015, aplica **016** para guardar el método digital que eligió el mesero y bloquear el cobro hasta entregar los pedidos:
+Desde `backend/`:
 
 ```powershell
-Get-Content -Raw "..\database\migrations\016_metodo_pago_solicitado.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+npm run db:migrar   # crea el esquema sigr, catálogos y menú inicial; fija la zona horaria de la base
+npm run seed        # usuarios de prueba: gerente, mesero, cocinero, cajero, hostess (contraseña 1234)
+npm run db:demo     # opcional: mesas 7-18, pedidos, clientes, reservaciones y a mesero2
 ```
 
-Desde la raíz del repositorio usa `.\database\migrations\016_metodo_pago_solicitado.sql`.
+`db:migrar` anota cada archivo aplicado en la tabla `sigr.migracion`, así que se puede volver a ejecutar sin riesgo: solo aplica lo que falte. Cada archivo corre en una transacción; si falla, no queda nada a medias. `db:demo` solo se carga una vez.
 
-Después de 016, aplica **017** para organizar métodos de pago en categorías:
+Después, `npm run dev` levanta la API. Si al arrancar dice que falta una migración, ejecuta `npm run db:migrar`.
 
-```powershell
-Get-Content -Raw "..\database\migrations\017_categorias_metodos_pago.sql" | mysql -h localhost -P 3306 -u root -p SIGR
-```
+## 3. Cambios futuros al esquema
 
-Desde la raíz del repositorio usa `.\database\migrations\017_categorias_metodos_pago.sql`.
+1. Crea un archivo nuevo en `database/supabase/` con el siguiente número: `002_lo_que_cambia.sql`. No edites `001_esquema.sql` una vez aplicado en Supabase.
+2. Escribe SQL de PostgreSQL. Las tablas viven en el esquema `sigr`; empieza el archivo con `SET search_path TO sigr, public;`.
+3. Si la API depende del cambio, actualiza `MIGRACION_REQUERIDA` en `backend/src/index.ts` para que avise cuando falte aplicarlo.
+4. Si agregas una tabla, actívale RLS y la auditoría como las demás (ver el final de `001_esquema.sql`).
+5. Ejecuta `npm run db:migrar`.
 
-Si ya aplicaste 007–013, ejecuta **014** (portal web de clientes), **015**, **016** y **017** en ese orden. Sin la 014, el registro y el inicio de sesión de clientes responden error 500:
+## 4. Qué cambió respecto a MySQL
 
-```powershell
-Get-Content -Raw "..\database\migrations\014_clientes_web.sql" | mysql -h localhost -P 3306 -u root -p SIGR
-```
-
-Desde la raíz del repositorio usa la ruta `.\database\migrations\014_clientes_web.sql`. Revisa la sección «Migración 014» antes de aplicarla.
-
-Si ya aplicaste 007–012, ejecuta **013**, **014**, **015**, **016** y **017** en ese orden:
-
-```powershell
-Get-Content -Raw "..\database\migrations\013_auditoria_seguridad.sql" | mysql -h localhost -P 3306 -u root -p SIGR
-```
-
-Ese comando es para PowerShell abierto en `backend\`. Si estás en la raíz del repositorio, usa la ruta `.\database\migrations\013_auditoria_seguridad.sql`. Ejecuta el comando como una línea completa; no pegues varias instrucciones de PowerShell juntas en una sola línea sin separadores.
-
-La migración 013 puede volver a ejecutarse para completar una ejecución interrumpida: conserva las tablas existentes y reemplaza los triggers y el procedimiento de auditoría. Si MySQL informa un error, corrige la causa y vuelve a ejecutar el comando completo; no hace falta borrar manualmente tablas ni triggers.
-
-Si ya aplicaste 007–010, ejecuta **011** a **017** en ese orden:
-
-```powershell
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_cancelacion.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/013_auditoria_seguridad.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/014_clientes_web.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/015_corte_efectivo.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/016_metodo_pago_solicitado.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/017_categorias_metodos_pago.sql"
-```
-
-Si ya aplicaste 007–009, ejecuta 010 a 017 en orden. Para cualquier otro avance parcial, aplica solo las migraciones pendientes y respeta el orden numérico.
-
-Si las migraciones 007–017 siguen pendientes, aplícalas en orden (una sola vez cada una):
-
-```powershell
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/007_catalogo_descripciones_obligatorias.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/008_presentacion_producto.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/009_secciones_mesas.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/010_reservaciones_y_caracteristicas.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/011_cola_unificada_resend.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/012_correo_cancelacion.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/013_auditoria_seguridad.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/014_clientes_web.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/015_corte_efectivo.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/016_metodo_pago_solicitado.sql"
-mysql -h localhost -P 3306 -u root -p -e "source database/migrations/017_categorias_metodos_pago.sql"
-```
-
-Escribe la contraseña de MySQL cuando la solicite. Asegúrate de conectarte al mismo servidor y usuario configurados en `backend/.env`.
-
-La migración **007** convierte las descripciones vacías o `NULL` a «Detalle pendiente de completar» y luego las vuelve obligatorias. La migración **008** agrega la columna `presentacion` y un índice para buscar productos por categoría, nombre y presentación. La migración **009** crea el catálogo de secciones, registra las secciones ya usadas, asigna «General» a mesas sin sección y hace obligatoria `mesa.zona`. La migración **010** agrega características de acceso de mesas, configuración de tolerancia y recordatorio, y la cola de notificaciones por correo. La migración **011** agrega `evento` a la cola, permite confirmaciones y cambia la deduplicación por `(id_reservacion, tipo, evento)`. La migración **012** permite el tipo `cancelacion` en esa misma cola. La **013** protege al gerente inicial y audita INSERT/UPDATE/DELETE en las 26 tablas de negocio y en la tabla de configuración de seguridad mediante triggers; también crea `sp_consultar_auditoria`. Requiere privilegios MySQL para crear tablas, triggers y procedimientos. Las descripciones de relleno deben sustituirse después desde **Gerente → Productos** por información real.
-
-No ejecutes de nuevo 007–012 si ya se aplicaron: son cambios de esquema que no están diseñados para repetirse. La 013 puede volver a crear sus triggers y procedimiento; aun así, detén la API y respalda la base antes de reaplicarla. Si no sabes si se ejecutaron, revisa primero el esquema:
-
-```powershell
-mysql -h localhost -P 3306 -u root -p -e "USE SIGR; SHOW COLUMNS FROM producto LIKE 'descripcion'; SHOW COLUMNS FROM producto LIKE 'presentacion'; SHOW INDEX FROM producto WHERE Key_name = 'idx_producto_variante'; SHOW TABLES LIKE 'seccion'; SHOW COLUMNS FROM mesa LIKE 'zona';"
-```
-
-Si la columna `presentacion` y el índice ya existen, 008 ya fue aplicada. Si la descripción ya figura como `NOT NULL`, 007 probablemente ya fue aplicada. Si existe la tabla `seccion` y `mesa.zona` es `NOT NULL`, 009 ya fue aplicada. Para 010 confirma que existen `mesa.planta_baja`, `mesa.espacio_carriola`, `mesa.sin_escaleras`, `configuracion_reservacion` y `notificacion_reservacion`. Para 011 confirma que `notificacion_reservacion` tiene la columna `evento` y la clave única `uq_notificacion_reservacion_evento`. Para 012 revisa que los CHECK de `tipo` incluyan `cancelacion`:
-
-```sql
-SHOW CREATE TABLE notificacion_reservacion\G
-```
-
-Confirma también con quien administra la base antes de repetir una migración.
-
-### Historial de migraciones
-
-| Script | Cambio principal | Nota |
+| Tema | MySQL | Supabase / PostgreSQL |
 | --- | --- | --- |
-| `001_ajustes_front.sql` | Ajustes de estados de mesa y cuenta, catálogo de estados de pedido y motivo «Otro» | Una vez, en bases anteriores |
-| `002_api_idempotencia.sql` | Motivos de cancelación de texto libre y tabla de idempotencia | Requiere 001 |
-| `003_existencia_producto.sql` | Control de existencia de productos | Requiere 001 y 002 |
-| `004_mesas_13_a_18.sql` | Inserta mesas 13 a 18 | Diseñada para poder repetirse |
-| `005_mesas_zona_activa.sql` | Sección y disponibilidad de mesa | Una vez |
-| `006_caja.sql` | Efectivo recibido y cambio en pagos | Una vez |
-| `007_catalogo_descripciones_obligatorias.sql` | Completa descripciones vacías y exige descripción | Una vez |
-| `008_presentacion_producto.sql` | Presentación/variante del producto e índice de búsqueda | Una vez |
-| `009_secciones_mesas.sql` | Catálogo administrable de secciones y sección obligatoria en cada mesa | Una vez |
-| `010_reservaciones_y_caracteristicas.sql` | Características de acceso, configuración de reservaciones y cola de correo | Una vez |
-| `011_cola_unificada_resend.sql` | Evento de confirmación y deduplicación por `(id_reservacion, tipo, evento)` | Una vez, tras 010 |
-| `012_correo_cancelacion.sql` | Tipo `cancelacion` en la cola de correo de reservaciones | Una vez, tras 011 |
-| `013_auditoria_seguridad.sql` | Protege al gerente inicial y audita INSERT/UPDATE/DELETE en las tablas de negocio | Una vez, tras el esquema y usuarios iniciales |
-| `014_clientes_web.sql` | Contraseñas de clientes del portal web y correo único por cliente | Tras 013; puede repetirse |
-| `015_corte_efectivo.sql` | Fondo inicial, efectivo esperado y contado en el corte de caja | Una vez, tras 014 |
-| `016_metodo_pago_solicitado.sql` | Método elegido por el mesero y control de entrega antes de cobrar | Tras 015; actualiza triggers de auditoría de cuenta |
-| `017_categorias_metodos_pago.sql` | Categorías físicas/digitales configurables y métodos asociados | Tras 016 |
+| Dónde están las tablas | Base `SIGR` | Esquema `sigr` de la base `postgres` |
+| Acceso | Usuario root local | Solo el backend; RLS activado y sin acceso para las claves públicas `anon`/`authenticated` |
+| Texto | `utf8mb4_unicode_ci` | Collation `sigr.es_ci`: tampoco distingue mayúsculas ni acentos (`cajero` = `Cajero`, `Salon` = `Salón`) |
+| Booleanos | `TINYINT(1)` | `BOOLEAN`; la API los sigue devolviendo como `1`/`0` |
+| Fechas | `DATETIME` en hora del servidor | `TIMESTAMP(0)` en la hora de `DB_ZONA_HORARIA`; la API devuelve el mismo texto `AAAA-MM-DD HH:MM:SS` |
+| Auditoría | 3 triggers por tabla y `CALL sp_consultar_auditoria(...)` | Una función genérica `sigr.fn_auditar` y `SELECT * FROM sigr.consultar_auditoria(NULL, NULL, NULL, NULL, 100)` |
+| Candado de idempotencia | `GET_LOCK` | `pg_advisory_lock` |
+| Migraciones | Scripts manuales con `mysql` | `npm run db:migrar`, con registro en `sigr.migracion` |
 
-La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
+Para el código del backend, la capa `backend/src/services/db.ts` conserva la misma forma de trabajo: parámetros con `?`, `filas`, `ejecutar` y `transaccion`. Al escribir SQL nuevo:
 
-## 3. Verificar el resultado
+- Para obtener el id de un `INSERT`, agrega `RETURNING id_...`; `ejecutar(...).insertId` toma la primera columna devuelta.
+- Usa `ON CONFLICT (...) DO UPDATE/NOTHING` en vez de `ON DUPLICATE KEY`, `LOCALTIMESTAMP(0)` para guardar la hora actual, `CURRENT_DATE` en vez de `CURDATE()` e `INTERVAL '30 minutes'` o `make_interval(mins => ...)` en vez de `INTERVAL 30 MINUTE`.
+- Las columnas booleanas se comparan como booleanos (`WHERE activo`, no `activo = 1`).
+- Para buscar texto dentro de otro sin mayúsculas ni acentos usa `contiene(columna, ?)`: `LIKE` y `strpos` no funcionan con la collation `sigr.es_ci`.
+- Un `FOR UPDATE` con `LEFT JOIN` debe indicar la tabla: `FOR UPDATE OF m`.
+- Un valor repetido en una llave única se detecta con `esDuplicado(error)` y la restricción con `restriccionDe(error)`.
 
-Conéctate a MySQL:
+## 5. Precauciones
 
-```powershell
-mysql -h localhost -P 3306 -u root -p
-```
-
-En el cliente de MySQL, ejecuta:
-
-```sql
-USE SIGR;
-SHOW COLUMNS FROM producto;
-SHOW INDEX FROM producto WHERE Key_name = 'idx_producto_variante';
-SHOW TABLES LIKE 'seccion';
-SHOW COLUMNS FROM mesa LIKE 'zona';
-SHOW COLUMNS FROM mesa LIKE 'planta_baja';
-SHOW COLUMNS FROM mesa LIKE 'espacio_carriola';
-SHOW COLUMNS FROM mesa LIKE 'sin_escaleras';
-SHOW TABLES LIKE 'configuracion_reservacion';
-SHOW TABLES LIKE 'notificacion_reservacion';
-SHOW CREATE TABLE notificacion_reservacion\G
-SELECT * FROM configuracion_reservacion;
-SELECT nombre, activa FROM seccion ORDER BY nombre;
-SELECT id_mesa, numero, zona FROM mesa ORDER BY numero;
-SELECT id_producto, id_categoria, nombre, presentacion, descripcion
-FROM producto
-ORDER BY id_categoria, nombre, presentacion;
-SELECT COUNT(*) AS descripciones_pendientes
-FROM producto
-WHERE descripcion = 'Detalle pendiente de completar';
-```
-
-Confirma que `producto.presentacion` exista como `VARCHAR(100)`, que `descripcion` sea `NOT NULL`, que aparezca el índice `idx_producto_variante`, que `seccion` contenga las secciones del restaurante, que `mesa.zona` sea obligatoria y que existan las columnas/tablas de 010. En `notificacion_reservacion` deben existir `evento`, la clave única por `(id_reservacion, tipo, evento)` y los CHECK con `confirmacion` y `cancelacion`. Las mesas que antes estaban sin sección quedan en «General» y pueden reasignarse desde **Gerente → Mesas**. Completa las descripciones de productos con texto pendiente con su información real.
-
-Después de verificar, inicia el backend con las variables de conexión apuntando a esa misma base. Desde la raíz:
-
-```powershell
-Push-Location backend
-npm run dev
-Pop-Location
-```
-
-En el formulario **Gerente → Productos**, una variante nueva se identifica por categoría, nombre y presentación. Si ya existe, el sistema rechaza el alta y pide editar el producto existente para cambiar su inventario. Ejemplo: Coca-Cola «lata de 355 ml» y «botella de 1 litro» son variantes diferentes; repetir la misma presentación no crea otra fila.
-
-## Correo de reservaciones con Resend o Gmail SMTP
-
-El correo del cliente es opcional para registrar una reservación. Si existe, las confirmaciones, recordatorios, avisos de vencimiento y cancelaciones se procesan en la misma cola y se envían a la dirección guardada para ese cliente. Desde **Gerente → Reservas** se configuran la tolerancia (15 minutos por defecto; 5–180) y la anticipación del recordatorio (5 minutos por defecto; 1–30). Sin llegada tras `fecha_hora + tolerancia_minutos`, el servicio revalida bajo bloqueo que siga pendiente o confirmada, marca `vencida`, libera la mesa y encola una sola notificación. Si la reservación se cancela desde hostess, se encola un correo de cancelación solo cuando la reservación estaba pendiente o confirmada y el cliente tiene un correo válido.
-
-Configura un único remitente `CORREO_REMITENTE` y selecciona `CORREO_PROVEEDOR=resend` o `smtp`. Si no se selecciona proveedor, el backend prefiere Resend cuando hay `RESEND_API_KEY`, después SMTP cuando hay usuario y contraseña; si no hay credenciales, el correo queda desactivado. Gmail requiere contraseña de aplicación (16 caracteres, no la contraseña habitual), `smtp.gmail.com`, puerto 465, y que el correo autenticado coincida con `CORREO_REMITENTE`. El límite aproximado de una cuenta personal es 500 mensajes al día y 100 destinatarios por mensaje; el error `550 5.4.5` reintenta después de seis horas. Los avisos usan las plantillas HTML y de texto de `backend/src/services/plantillasCorreo.ts`. Consulta [`resend-reservaciones.md`](resend-reservaciones.md) para el resto de la configuración. No guardes credenciales en Git ni en documentación.
-
-## Migración 011: cola unificada de correo
-
-La migración requiere que 010 ya esté aplicada. Haz el respaldo y la prueba únicamente en una base de desarrollo aislada; sustituye `SIGR_desarrollo` si tu base de desarrollo tiene otro nombre.
-
-```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
-mysqldump -h localhost -P 3306 -u root -p --databases SIGR_desarrollo --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR_desarrollo-antes-011.sql"
-
-# Inspecciona el nombre real del CHECK existente antes de cambiarlo.
-mysql -h localhost -P 3306 -u root -p SIGR_desarrollo -e "SHOW CREATE TABLE notificacion_reservacion\G"
-
-# Aplica el archivo al esquema de desarrollo seleccionado (sin ejecutar la migración en producción).
-Get-Content -Raw ".\database\migrations\011_cola_unificada_resend.sql" | mysql -h localhost -P 3306 -u root -p SIGR_desarrollo
-
-# Comprueba el CHECK, el índice compuesto y que no se duplicó ningún evento.
-mysql -h localhost -P 3306 -u root -p SIGR_desarrollo -e "SHOW CREATE TABLE notificacion_reservacion\G; SHOW INDEX FROM notificacion_reservacion; SELECT id_reservacion, tipo, evento, COUNT(*) AS cantidad FROM notificacion_reservacion GROUP BY id_reservacion, tipo, evento HAVING COUNT(*) > 1;"
-```
-
-El script localiza por su expresión el `CHECK` anterior de `tipo`, cuyo nombre autogenerado se ve con `SHOW CREATE TABLE`; así no supone que la restricción se llame igual en todas las bases. Agrega `evento` (vacío para recordatorios y vencimientos; `creada` o `confirmada` para confirmaciones) y reemplaza la clave única por `(id_reservacion, tipo, evento)`. No inserta confirmaciones retroactivas para reservaciones antiguas. En `database/init.sql` ya está el esquema final para bases nuevas.
-
-## Migración 012: correo de cancelación
-
-La migración requiere que 011 ya esté aplicada: reemplaza los CHECK nombrados `chk_notificacion_tipo` y `chk_notificacion_evento` que crea 011. Si tu base tiene otros nombres, inspecciónalos antes con `SHOW CREATE TABLE notificacion_reservacion\G` y ajusta los `DROP CHECK` del script.
-
-```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
-mysqldump -h localhost -P 3306 -u root -p --databases SIGR_desarrollo --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR_desarrollo-antes-012.sql"
-
-mysql -h localhost -P 3306 -u root -p SIGR_desarrollo -e "SHOW CREATE TABLE notificacion_reservacion\G"
-Get-Content -Raw ".\database\migrations\012_correo_cancelacion.sql" | mysql -h localhost -P 3306 -u root -p SIGR_desarrollo
-
-mysql -h localhost -P 3306 -u root -p SIGR_desarrollo -e "SHOW CREATE TABLE notificacion_reservacion\G; SELECT tipo, COUNT(*) FROM notificacion_reservacion GROUP BY tipo;"
-```
-
-El CHECK de `tipo` queda con `recordatorio`, `vencida`, `confirmacion` y `cancelacion`; el de `evento` exige `creada` o `confirmada` para confirmaciones y `''` para los demás tipos. Si el script falla porque los CHECK no se llaman así, no lo repitas a ciegas: corrige los nombres en una copia revisada. La cancelación de una reservación pendiente o confirmada encola el aviso una sola vez por reservación. En `database/init.sql` ya está el esquema final para bases nuevas.
-
-## Migración 013: seguridad y auditoría
-
-Haz un respaldo y detén la API antes de aplicar esta migración. Debe ejecutarse después de que existan las tablas y los usuarios iniciales; identifica al gerente más antiguo como protegido. La API en ejecución necesita que se haya aplicado, pues la consulta de usuarios incluye esa marca.
-
-```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
-mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-013.sql"
-Get-Content -Raw ".\database\migrations\013_auditoria_seguridad.sql" | mysql -h localhost -P 3306 -u root -p SIGR
-```
-
-Verifica el gerente designado, los triggers y el procedimiento antes de reiniciar la API:
-
-```powershell
-mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT * FROM configuracion_seguridad; SELECT COUNT(*) AS triggers_auditoria FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND TRIGGER_NAME LIKE 'trg_aud_%'; SHOW PROCEDURE STATUS WHERE Db = DATABASE() AND Name = 'sp_consultar_auditoria'; CALL sp_consultar_auditoria(NULL, NULL, NULL, NULL, 10);"
-```
-
-La migración requiere `CREATE TRIGGER`, `CREATE ROUTINE` y permisos para crear las tablas de auditoría. Los triggers guardan cada cambio de fila junto con el actor autenticado de la API. Se excluyen el hash de contraseña y la respuesta almacenada para idempotencia. Los procesos SQL o de fondo sin actor autenticado producen `actor_id = NULL`. Consulta [Protección de usuarios y auditoría](auditoria-seguridad.md) para entender los datos registrados y los límites de seguridad.
-
-## Migración 014: portal web de clientes
-
-Crea `cliente_credencial` (contraseñas de los clientes del portal), guarda los correos de `cliente` en minúsculas y sin espacios, convierte los correos vacíos en `NULL` y agrega el índice único `uq_cliente_correo`. Haz un respaldo antes de aplicarla.
-
-```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
-mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-014.sql"
-Get-Content -Raw ".\database\migrations\014_clientes_web.sql" | mysql -h localhost -P 3306 -u root -p SIGR
-```
-
-Si dos clientes comparten correo, la migración no crea el índice y muestra esos correos con los `id_cliente` que los usan. Deja cada correo en un solo cliente y vuelve a ejecutar el archivo completo; es seguro repetirlo. Para comprobar el resultado:
-
-```powershell
-mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW TABLES LIKE 'cliente_credencial'; SHOW INDEX FROM cliente WHERE Key_name = 'uq_cliente_correo';"
-```
-
-Un cliente que la hostess ya registró con su correo puede crear su cuenta en el portal con ese mismo correo y el teléfono que dio en el restaurante; conserva sus reservaciones anteriores.
-
-## Migración 015: fondo inicial y cuadre de efectivo
-
-Agrega a `corte_caja` el fondo inicial con el que abre el cajero, el efectivo esperado (fondo inicial más cobros en efectivo, sin el cambio entregado) y el efectivo contado al cerrar. También recrea los triggers de auditoría de `corte_caja` para que registren esas columnas. Un corte que siga abierto al aplicarla queda con fondo inicial de 0. Haz un respaldo antes.
-
-```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
-mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-015.sql"
-Get-Content -Raw ".\database\migrations\015_corte_efectivo.sql" | mysql -h localhost -P 3306 -u root -p SIGR
-mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW COLUMNS FROM corte_caja;"
-```
-
-Deben aparecer `fondo_inicial`, `efectivo_esperado` y `efectivo_contado`. Los cortes cerrados antes de la 015 se conservan: aparecen en **Gerente → Cortes** sin conteo de efectivo y con el total que se reportó en su momento. La 015 recrea los triggers de auditoría de corte para incluir las columnas nuevas; si vuelves a aplicar la 013, vuelve a aplicar la 015.
-
-## Migración 016: método de pago digital solicitado
-
-Agrega a `cuenta` el método de pago digital elegido por el mesero y actualiza sus triggers de auditoría. Puede volver a ejecutarse: comprueba la columna y la llave foránea antes de crearlas y reemplaza los triggers.
-
-```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
-mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-016.sql"
-Get-Content -Raw ".\database\migrations\016_metodo_pago_solicitado.sql" | mysql -h localhost -P 3306 -u root -p SIGR
-mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW COLUMNS FROM cuenta LIKE 'id_metodo_pago_solicitado'; SHOW CREATE TABLE cuenta;"
-```
-
-La columna admite `NULL` para cuentas existentes. La API solo permite solicitar cuentas después de entregar todos sus pedidos activos; un pedido listo en cocina todavía no se puede cobrar.
-
-## Migración 017: categorías de métodos de pago
-
-Crea las categorías iniciales **Físico** y **Digital**, asigna los métodos existentes (Efectivo a Físico; otros métodos a Digital), asegura que los métodos tengan su indicador de activación y agrega la marca que determina qué método suma efectivo al cuadre de caja. La migración puede repetirse si se interrumpe: agrega las columnas faltantes, rellena los métodos sin categoría y verifica la llave foránea antes de crearla.
-
-```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
-mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-017.sql"
-Get-Content -Raw ".\database\migrations\017_categorias_metodos_pago.sql" | mysql -h localhost -P 3306 -u root -p SIGR
-mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT cmp.nombre, cmp.tipo, mp.nombre AS metodo, mp.activo, cmp.activo AS categoria_activa, mp.es_efectivo FROM categoria_metodo_pago cmp LEFT JOIN metodo_pago mp USING (id_categoria_metodo_pago) ORDER BY cmp.id_categoria_metodo_pago, mp.id_metodo;"
-```
-
-Gerencia puede crear categorías nuevas indicando si son físicas o digitales, agregarles métodos y desactivar cada categoría o método por separado. El personal solo recibe categorías y métodos activos. Los métodos ya solicitados para una cuenta siguen disponibles en Caja aunque luego se desactiven.
-
-## Base nueva o entorno de demostración
-
-- **Base nueva y vacía:** ejecuta `database/init.sql` y el seed de usuarios iniciales; aplica `013_auditoria_seguridad.sql` después del seed, luego 016 y 017 para actualizar los triggers de cuenta y de métodos. `init.sql` ya incluye la estructura y los datos iniciales de categorías y métodos.
-- **Base de desarrollo en Docker que ya contiene datos:** no uses `docker compose down -v`, ya que elimina el volumen de la base. Con el contenedor activo y el puerto 3306 publicado, los comandos `mysql` anteriores la actualizan igual que una instalación local.
-- Guarda el respaldo de forma segura. No lo agregues al repositorio ni lo compartas: contiene los datos de la base.
-
-## Secciones de mesas
-
-En **Gerente → Mesas → Secciones** se pueden crear, renombrar, inhabilitar, habilitar y borrar secciones. Renombrar actualiza las mesas asociadas. Una sección solo se puede borrar cuando no tiene mesas asignadas. Al inhabilitarla, sus mesas se conservan pero dejan de aparecer para meseros y hostess; para evitar ocultar trabajo activo, primero hay que liberar las mesas y resolver sus cuentas y reservaciones vigentes. No se permite asignar mesas a secciones inhabilitadas.
+- **El proyecto gratuito se pausa** tras unos 7 días sin actividad. Antes de una revisión o presentación entra al panel de Supabase y confirma que esté activo; si está pausado, reactívalo y espera a que termine de arrancar.
+- **Respaldo:** en el plan gratuito Supabase no garantiza copias que puedas restaurar tú. Para guardar una copia: `pg_dump "TU_DATABASE_URL" --schema=sigr --file=sigr-respaldo.sql` (requiere las herramientas cliente de PostgreSQL).
+- **Latencia:** cada consulta viaja a la nube. Si una pantalla se siente lenta, revisa que la región del proyecto sea la más cercana (se elige al crearlo).
+- La contraseña de la base da acceso completo: no la pegues en el frontend, en variables `VITE_*` ni en el chat del equipo; compártela por un canal privado.

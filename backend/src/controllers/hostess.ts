@@ -1,12 +1,11 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
+import { ejecutar, esDuplicado, filas, pool, restriccionDe, transaccion, type Ejecutor, type Fila } from "../services/db";
 import { idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 import { conIdempotencia } from "../services/idempotencia";
-import { esCorreoValido } from "../services/correo";
+import { encolarAvisoReservacion, type AvisoInmediato } from "../services/avisosReservacion";
 import { solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
-import type { RowDataPacket } from "mysql2/promise";
 
 const FiltroReservaciones = z.object({ fecha: z.string().optional() });
 const FiltroEspera = z.object({ estado: z.enum(["esperando", "asignada", "cancelada"]).optional() });
@@ -39,13 +38,9 @@ const LlegadaReservacion = z.object({
   id_mesa: z.number().int().positive().optional(),
 }).strict();
 
-function esDuplicado(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ER_DUP_ENTRY";
-}
-
-/** El índice único de correo (migración 014) se reconoce por su nombre en el mensaje de MySQL. */
+/** El índice único de correo (migración 014) se reconoce por el nombre de la restricción. */
 function esCorreoDuplicado(error: unknown): boolean {
-  return esDuplicado(error) && error instanceof Error && error.message.includes("uq_cliente_correo");
+  return esDuplicado(error) && restriccionDe(error) === "uq_cliente_correo";
 }
 
 const MENSAJE_CORREO_DUPLICADO = "Ya existe un cliente con ese correo. Búscalo para seleccionarlo.";
@@ -106,28 +101,8 @@ function exigirRegistro<T>(registro: T | null, nombre: string): T {
   return registro;
 }
 
-async function encolarNotificacionReservacion(
-  cx: Ejecutor,
-  reservacion: RowDataPacket,
-  tipo: "confirmacion" | "cancelacion",
-  evento: "creada" | "confirmada" | "",
-): Promise<void> {
-  if (typeof reservacion.cliente_correo !== "string" || !esCorreoValido(reservacion.cliente_correo)) {
-    return;
-  }
-  // `tipo` sale de una unión cerrada (no de la petición), por eso puede ir literal en el SQL.
-  await ejecutar(
-    cx,
-    `INSERT INTO notificacion_reservacion (id_reservacion, tipo, evento, destinatario)
-     SELECT r.id_reservacion, '${tipo}', ?, c.correo
-       FROM reservacion r
-       JOIN cliente c ON c.id_cliente = r.id_cliente
-      WHERE r.id_reservacion = ?
-        AND c.correo IS NOT NULL
-        AND TRIM(c.correo) <> ''
-     ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion`,
-    [evento, reservacion.id_reservacion],
-  );
+function encolarNotificacionReservacion(cx: Ejecutor, reservacion: Fila, aviso: AvisoInmediato): Promise<void> {
+  return encolarAvisoReservacion(cx, Number(reservacion.id_reservacion), reservacion.cliente_correo, aviso);
 }
 
 function esFechaISOValida(fecha: string): boolean {
@@ -176,7 +151,7 @@ export const listarClientes = async (req: Request, res: Response) => {
     pool,
     `SELECT id_cliente, nombre, telefono, correo
        FROM cliente
-      WHERE LOCATE(?, nombre) > 0${porTelefono ? " OR LOCATE(?, telefono) > 0" : ""}
+      WHERE contiene(nombre, ?)${porTelefono ? " OR contiene(telefono, ?)" : ""}
       ORDER BY nombre, id_cliente
       LIMIT 20`,
     porTelefono ? [q, digitos] : [q],
@@ -197,7 +172,7 @@ export const registrarCliente = async (req: Request, res: Response) => {
     try {
       const insertado = await ejecutar(
         pool,
-        "INSERT INTO cliente (nombre, telefono, correo) VALUES (?, ?, ?)",
+        "INSERT INTO cliente (nombre, telefono, correo) VALUES (?, ?, ?) RETURNING id_cliente",
         [datos.nombre, datos.telefono, correo],
       );
       return exigirRegistro(await cargarCliente(pool, insertado.insertId), "cliente");
@@ -243,7 +218,7 @@ export const listarReservaciones = async (req: Request, res: Response) => {
   let filtroFecha: string;
   let params: string[];
   if (fecha === undefined) {
-    filtroFecha = "r.fecha_hora >= CURDATE() AND r.fecha_hora < DATE_ADD(CURDATE(), INTERVAL 1 DAY)";
+    filtroFecha = "r.fecha_hora >= CURRENT_DATE AND r.fecha_hora < CURRENT_DATE + 1";
     params = [];
   } else if (fecha === "9999-12-31") {
     filtroFecha = "r.fecha_hora >= ? AND r.fecha_hora <= ?";
@@ -278,9 +253,9 @@ export const crearReservacion = async (req: Request, res: Response) => {
       const [fecha] = await filas(
         cx,
         `SELECT
-           ? < DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:00') AS pasada,
-           ? > DATE_ADD(NOW(), INTERVAL 365 DAY) AS lejana,
-           DATE(?) = CURDATE() AS es_hoy`,
+           ?::timestamp < date_trunc('minute', LOCALTIMESTAMP) AS pasada,
+           ?::timestamp > LOCALTIMESTAMP + INTERVAL '365 days' AS lejana,
+           ?::date = CURRENT_DATE AS es_hoy`,
         [datos.fecha_hora, datos.fecha_hora, datos.fecha_hora],
       );
       if (!fecha) throw new ErrorApi(500, "desconocido", "No se pudo validar la fecha de la reservación.");
@@ -299,7 +274,7 @@ export const crearReservacion = async (req: Request, res: Response) => {
           cx,
           `SELECT m.numero, m.estado, m.activa, s.activa AS seccion_activa
              FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
-            WHERE m.id_mesa = ? FOR UPDATE`,
+            WHERE m.id_mesa = ? FOR UPDATE OF m`,
           [datos.id_mesa],
         );
         if (!mesa) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
@@ -312,11 +287,11 @@ export const crearReservacion = async (req: Request, res: Response) => {
 
       const insertado = await ejecutar(
         cx,
-        "INSERT INTO reservacion (id_cliente, id_mesa, fecha_hora, personas) VALUES (?, ?, ?, ?)",
+        "INSERT INTO reservacion (id_cliente, id_mesa, fecha_hora, personas) VALUES (?, ?, ?, ?) RETURNING id_reservacion",
         [datos.id_cliente, datos.id_mesa ?? null, datos.fecha_hora, datos.personas],
       );
       const reservacion = exigirRegistro(await cargarReservacion(cx, insertado.insertId), "reservación");
-      await encolarNotificacionReservacion(cx, reservacion, "confirmacion", "creada");
+      await encolarNotificacionReservacion(cx, reservacion, { tipo: "confirmacion", evento: "creada" });
       return reservacion;
     }).then((reservacion) => {
       solicitarProcesamientoReservaciones();
@@ -370,8 +345,8 @@ export const editarReservacion = async (req: Request, res: Response) => {
             const [fecha] = await filas(
               cx,
               `SELECT
-                 ? < DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:00') AS pasada,
-                 ? > DATE_ADD(NOW(), INTERVAL 365 DAY) AS lejana`,
+                 ?::timestamp < date_trunc('minute', LOCALTIMESTAMP) AS pasada,
+                 ?::timestamp > LOCALTIMESTAMP + INTERVAL '365 days' AS lejana`,
               [cambio.fecha_hora, cambio.fecha_hora],
             );
             if (!fecha) throw new ErrorApi(500, "desconocido", "No se pudo validar la fecha de la reservación.");
@@ -382,7 +357,7 @@ export const editarReservacion = async (req: Request, res: Response) => {
         }
 
         if (mesaFinal !== null) {
-          const [fechaMesa] = await filas(cx, "SELECT DATE(?) = CURDATE() AS es_hoy", [fechaFinal]);
+          const [fechaMesa] = await filas(cx, "SELECT ?::date = CURRENT_DATE AS es_hoy", [fechaFinal]);
           if (!fechaMesa) throw new ErrorApi(500, "desconocido", "No se pudo validar la fecha de la reservación.");
           if (Number(fechaMesa.es_hoy) !== 1) {
             throw new ErrorApi(422, "estado_invalido", "Solo se puede asignar una mesa a una reservación de hoy.");
@@ -394,7 +369,7 @@ export const editarReservacion = async (req: Request, res: Response) => {
             cx,
             `SELECT m.numero, m.estado, m.activa, s.activa AS seccion_activa
                FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
-              WHERE m.id_mesa = ? FOR UPDATE`,
+              WHERE m.id_mesa = ? FOR UPDATE OF m`,
             [mesaFinal],
           );
           if (!mesa) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
@@ -425,9 +400,9 @@ export const editarReservacion = async (req: Request, res: Response) => {
 
       const reservacionActualizada = exigirRegistro(await cargarReservacion(cx, id), "reservación");
       if (cambio.estado === "confirmada") {
-        await encolarNotificacionReservacion(cx, reservacionActualizada, "confirmacion", "confirmada");
+        await encolarNotificacionReservacion(cx, reservacionActualizada, { tipo: "confirmacion", evento: "confirmada" });
       } else if (cambio.estado === "cancelada") {
-        await encolarNotificacionReservacion(cx, reservacionActualizada, "cancelacion", "");
+        await encolarNotificacionReservacion(cx, reservacionActualizada, { tipo: "cancelacion", evento: "" });
       }
       return reservacionActualizada;
     }).then((reservacion) => {
@@ -465,7 +440,7 @@ export const registrarLlegada = async (req: Request, res: Response) => {
         cx,
         `SELECT m.id_mesa, m.numero, m.capacidad, m.estado, m.activa, s.activa AS seccion_activa
            FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
-          WHERE m.id_mesa = ? FOR UPDATE`,
+          WHERE m.id_mesa = ? FOR UPDATE OF m`,
         [mesaId],
       );
       if (!mesa) throw new ErrorApi(404, "no_encontrado", `La mesa ${mesaId} no existe.`);
@@ -490,7 +465,7 @@ export const registrarLlegada = async (req: Request, res: Response) => {
       await ejecutar(cx, "UPDATE mesa SET estado = 'ocupada' WHERE id_mesa = ?", [mesaId]);
       await ejecutar(
         cx,
-        "UPDATE reservacion SET id_mesa = ?, estado = 'llego', llegada_en = NOW() WHERE id_reservacion = ?",
+        "UPDATE reservacion SET id_mesa = ?, estado = 'llego', llegada_en = LOCALTIMESTAMP(0) WHERE id_reservacion = ?",
         [mesaId, id],
       );
       if (mesaId !== mesaAnterior) await liberarMesaSiCorresponde(cx, mesaAnterior, id);
@@ -515,7 +490,7 @@ export const listarEspera = async (req: Request, res: Response) => {
   const filtro =
     estado !== undefined
       ? "le.estado = ?"
-      : "(le.registrado_en >= CURDATE() AND le.registrado_en < DATE_ADD(CURDATE(), INTERVAL 1 DAY) OR le.estado = 'esperando')";
+      : "(le.registrado_en >= CURRENT_DATE AND le.registrado_en < CURRENT_DATE + 1 OR le.estado = 'esperando')";
   const rows = await filas(
     pool,
     `SELECT le.id_espera, le.id_cliente, le.personas, le.registrado_en, le.estado,
@@ -546,7 +521,7 @@ export const agregarEspera = async (req: Request, res: Response) => {
 
       const insertado = await ejecutar(
         cx,
-        "INSERT INTO lista_espera (id_cliente, personas) VALUES (?, ?)",
+        "INSERT INTO lista_espera (id_cliente, personas) VALUES (?, ?) RETURNING id_espera",
         [datos.id_cliente, datos.personas],
       );
       return exigirRegistro(await cargarEspera(cx, insertado.insertId), "grupo de espera");

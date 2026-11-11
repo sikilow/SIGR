@@ -27,7 +27,7 @@ export const obtenerMenu = async (_req: Request, res: Response) => {
             COALESCE(p.descripcion, '') AS descripcion, p.precio,
             p.controla_existencia AS controla, COALESCE(i.existencia, 0) AS existencia,
             COALESCE(i.stock_minimo, 0) AS stock_minimo,
-            (p.disponible AND (p.controla_existencia = 0 OR COALESCE(i.existencia, 0) > 0)) AS disponible
+            (p.disponible AND (NOT p.controla_existencia OR COALESCE(i.existencia, 0) > 0)) AS disponible
        FROM categoria_menu cm
        JOIN producto p ON p.id_categoria = cm.id_categoria
        LEFT JOIN disponibilidadProducto i ON i.id_producto = p.id_producto

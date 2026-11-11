@@ -10,7 +10,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![Pinia](https://img.shields.io/badge/Pinia-state-F7D336?style=flat-square&logo=pinia&logoColor=black)
 ![Express](https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?style=flat-square&logo=mysql&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
 ![JWT](https://img.shields.io/badge/Auth-JWT-000000?style=flat-square&logo=jsonwebtokens&logoColor=white)
 
 </div>
@@ -21,7 +21,7 @@
 
 ## ¿Qué es SIGR?
 
-SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mesero toma pedidos desde el celular o la tablet, la cocina los recibe, el gerente administra menú, inventario y personal, y la cuenta de cada mesa se lleva de principio a fin. Todos los roles trabajan sobre una misma base de datos MySQL a través de una API REST.
+SIGR digitaliza la operación diaria de un restaurante (**La Madalena**): el mesero toma pedidos desde el celular o la tablet, la cocina los recibe, el gerente administra menú, inventario y personal, y la cuenta de cada mesa se lleva de principio a fin. Todos los roles trabajan sobre una misma base de datos PostgreSQL en Supabase a través de una API REST.
 
 ---
 
@@ -222,7 +222,7 @@ Aplican a todos los módulos del sistema.
 
 | Código | Requisito | Estado | Nota |
 | --- | --- | --- | --- |
-| `RNF-022` | Garantizar la integridad de los datos almacenados | ✅ | Llaves foráneas, `CHECK` y transacciones con `mysql2` |
+| `RNF-022` | Garantizar la integridad de los datos almacenados | ✅ | Llaves foráneas, `CHECK` y transacciones con `pg` (PostgreSQL) |
 | `RNF-023` | Mantener la consistencia de la información en todo momento | ✅ |  |
 | `RNF-024` | Garantizar el envío correcto de pedidos a cocina sin errores | ✅ | Envío en transacción y con `Idempotency-Key` para no duplicar |
 | `RNF-025` | Reflejar las actualizaciones en tiempo real (< 2 s) | 🟡 | El frontend actualiza por consulta periódica (cada 10 s, configurable con `VITE_POLL_MS`) |
@@ -347,13 +347,13 @@ Cuando aparezca algo que no está en el ERS:
 **Backend** (`backend/`)
 
 - [Node.js](https://nodejs.org) + [Express 5](https://expressjs.com) + TypeScript
-- [mysql2](https://github.com/sidorares/node-mysql2) con transacciones
+- [pg](https://node-postgres.com/) con transacciones
 - [zod](https://zod.dev) para validar las peticiones
 - JWT (`jsonwebtoken`) y `bcryptjs` para la autenticación
 
 **Base de datos** (`database/`)
 
-- MySQL 8.0 (esquema, datos de prueba y migraciones numeradas)
+- PostgreSQL en [Supabase](https://supabase.com/) (esquema, datos de prueba y migraciones numeradas)
 
 ---
 
@@ -430,9 +430,9 @@ El árbol de arriba es el modelo; las carpetas ya existen y contienen lo siguien
 | `backend/src/models/` | `dominio.ts`: DTOs, consultas compartidas, estados del pedido y reglas de existencia. |
 | `backend/src/services/` | `db.ts` (pool, transacciones y contexto del actor de auditoría), `contextoAuditoria.ts`, `idempotencia.ts`, `correo.ts` (transporte Resend o SMTP), `plantillasCorreo.ts` (diseño HTML y texto de los avisos) y `notificacionesReservacion.ts` (cola común de confirmaciones, recordatorios, vencimientos y cancelaciones). |
 | `backend/src/mocks/` | `clientes.mock.ts` y `productos.mock.ts`: datos falsos tipados para probar la API. |
-| `backend/src/utils/` | `config.ts`, `errores.ts`, `auth.ts` (JWT y permisos por rol) y `seed.ts` (usuarios de prueba). |
+| `backend/src/utils/` | `config.ts`, `errores.ts`, `auth.ts` (JWT y permisos por rol), `seed.ts` (usuarios de prueba) y `migrar.ts` (aplica `database/supabase/`). |
 | `backend/tests/` | Pruebas unitarias con Vitest: dominio, mocks, caja, transporte, plantillas de correo y cola de notificaciones. |
-| `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `013`). |
+| `database/` | `supabase/` (esquema de PostgreSQL y datos de demostración, los que usa el backend). `init.sql`, `migrations/`, `seed_demo.sql` y `docker-compose.yml` son la versión MySQL anterior, solo como referencia. |
 | `docs/` | `arquitectura.md` y el resto de la documentación (contratos de API, equivalencias, pendientes, guía de código, [seguridad y auditoría](docs/auditoria-seguridad.md) y [actualización de la base](docs/actualizar-base-datos.md)). |
 
 ### Archivos y carpetas adicionales
@@ -444,10 +444,10 @@ Además de lo del modelo, el proyecto necesita estos elementos:
 | `frontend/src/types/`, `layouts/`, `composables/`, `styles/` | Modelos y estados, estructura de cada rol, lógica reutilizable de Vue y estilos base | El modelo no las nombra, pero las vistas y los componentes dependen de ellas. |
 | `frontend/src/services/hostess/` | Servicios de clientes, reservaciones y lista de espera | Forman parte de la capa de servicios. |
 | `frontend/scripts/`, `tsconfig*.json`, `.env.example`, `.env.api` | Informe de contraste, configuración de TypeScript y variables de entorno | Apoyo de desarrollo. |
-| `database/seed_demo.sql` | Datos de demostración opcionales | No forman parte del script inicial. |
+| `database/supabase/datos_demo.sql` | Datos de demostración opcionales | No forman parte del esquema inicial; se cargan con `npm run db:demo`. |
 | `backend/.env.example` | Variables de entorno del backend | El archivo `.env` real no se sube a Git. |
 
-> **Nota:** `docker-compose.yml` está escrito pero no se probó en este entorno de trabajo. El backend, el frontend y sus pruebas sí se compilaron y ejecutaron tras la reorganización.
+> **Nota:** la base de datos vive en Supabase; ya no hace falta instalar MySQL ni Docker.
 
 ---
 
@@ -456,7 +456,7 @@ Además de lo del modelo, el proyecto necesita estos elementos:
 ### Prerrequisitos
 
 - Node.js 22 (mínimo 20.19)
-- MySQL 8.0
+- Acceso al proyecto de Supabase de SIGR (la cadena de conexión la comparte el equipo)
 
 ### Pasos
 
@@ -465,31 +465,24 @@ Además de lo del modelo, el proyecto necesita estos elementos:
 git clone https://github.com/sikilow/SIGR.git
 cd SIGR
 
-# 2. Base de datos (elige una opción)
-#    a) Con Docker, sin instalar MySQL (la contraseña de root es sigr1234):
-docker compose -f database/docker-compose.yml up -d
-#    b) Con MySQL ya instalado:
-mysql -u root -p -e "source database/init.sql"
-
-# 3. Backend
+# 2. Backend
 cd backend
 npm install
-cp .env.example .env        # edita DB_PASSWORD (con Docker: sigr1234) y JWT_SECRET
-npx tsx src/utils/seed.ts         # crea los usuarios de prueba
-# (obligatorio, después del seed) instala protección del gerente inicial y auditoría:
-Get-Content -Raw "..\database\migrations\013_auditoria_seguridad.sql" | mysql -u root -p SIGR
+cp .env.example .env        # pon DATABASE_URL (Supabase) y JWT_SECRET
+# Solo la primera vez en un proyecto de Supabase nuevo (si el equipo ya lo hizo, sáltalo):
+npm run db:migrar           # crea el esquema, catálogos y menú inicial
+npm run seed                # crea los usuarios de prueba
+npm run db:demo             # (opcional) datos de demostración, crea además a mesero2
 npm run dev                 # http://localhost:3000
-# (opcional, base recién creada) datos de demostración, ver el encabezado de database/seed_demo.sql:
-# mysql --default-character-set=utf8mb4 -u root -p SIGR < ../database/seed_demo.sql   (crea además a mesero2)
 
-# 4. Frontend (otra terminal)
+# 3. Frontend (otra terminal)
 cd frontend
 npm install
 cp .env.example .env.local  # pon VITE_USE_MOCK=false para usar el backend real
 npm run dev                 # http://localhost:5173
 ```
 
-> **Base de datos ya existente:** no la recrees ni ejecutes todas las migraciones a ciegas. Revisa cuáles están pendientes y sigue [`docs/actualizar-base-datos.md`](docs/actualizar-base-datos.md), con pasos de respaldo, comandos y verificación del esquema.
+> **Base de datos:** cómo obtener la cadena de conexión, aplicar cambios de esquema y qué cambió respecto a MySQL está en [`docs/actualizar-base-datos.md`](docs/actualizar-base-datos.md). `npm run db:migrar` se puede volver a ejecutar sin riesgo: solo aplica lo que falte.
 
 ### Variables de entorno
 
@@ -497,10 +490,8 @@ npm run dev                 # http://localhost:5173
 
 ```
 PORT=3000
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=tu_password
-DB_NAME=SIGR
+DATABASE_URL=postgresql://postgres.zsyjplhuynvmqxoxgjtw:TU_CONTRASEÑA@aws-0-us-west-2.pooler.supabase.com:5432/postgres
+# DB_ZONA_HORARIA=America/Mazatlan
 JWT_SECRET=cambia_esto_por_algo_largo
 # CORS_ORIGIN=http://localhost:5173
 RESEND_API_KEY=
@@ -530,7 +521,8 @@ Con `VITE_USE_MOCK=true` el frontend funciona **sin backend ni base de datos**, 
 | `backend/` | `npm run dev` | API con recarga automática |
 | `backend/` | `npm run build` | Revisa tipos y compila a `dist/` |
 | `backend/` | `npm test` | Pruebas unitarias del backend |
-| raíz | `docker compose -f database/docker-compose.yml up -d` | Levanta MySQL 8 con `init.sql` |
+| `backend/` | `npm run db:migrar` | Aplica en Supabase los archivos de `database/supabase/` que falten |
+| `backend/` | `npm run seed` / `npm run db:demo` | Usuarios de prueba / datos de demostración |
 | `frontend/` | `npm run dev` | Servidor de desarrollo |
 | `frontend/` | `npm run build` | Revisa tipos y genera el build |
 | `frontend/` | `npx vitest run` | Corre las pruebas |

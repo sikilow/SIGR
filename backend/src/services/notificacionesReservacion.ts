@@ -1,5 +1,5 @@
 import { consumirErrorEnvioCorreo, enviarCorreo } from "./correo";
-import { ejecutar, filas, pool, transaccion } from "./db";
+import { ejecutar, filas, pool, transaccion, type Fila } from "./db";
 import {
   plantillaCancelacion,
   plantillaConfirmacion,
@@ -8,13 +8,12 @@ import {
   type CorreoReservacion,
   type DatosReservacion,
 } from "./plantillasCorreo";
-import type { RowDataPacket } from "mysql2/promise";
 
 const INTERVALO_PROCESAMIENTO_MS = 30_000;
 const LIMITE_NOTIFICACIONES = 20;
 const ESPERA_CUOTA_GMAIL_SEGUNDOS = 6 * 60 * 60;
 
-interface AvisoReservacion extends RowDataPacket {
+interface AvisoReservacion extends Fila {
   id_notificacion: number;
   tipo: "recordatorio" | "vencida" | "confirmacion" | "cancelacion";
   evento: "creada" | "confirmada" | "";
@@ -36,9 +35,9 @@ async function programarRecordatorios(): Promise<void> {
        JOIN configuracion_reservacion cr ON cr.id = 1
       WHERE r.estado IN ('pendiente', 'confirmada')
         AND c.correo IS NOT NULL AND TRIM(c.correo) <> ''
-        AND r.fecha_hora > NOW()
-        AND r.fecha_hora <= DATE_ADD(NOW(), INTERVAL cr.recordatorio_minutos MINUTE)
-     ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion`,
+        AND r.fecha_hora > LOCALTIMESTAMP
+        AND r.fecha_hora <= LOCALTIMESTAMP + make_interval(mins => cr.recordatorio_minutos)
+     ON CONFLICT (id_reservacion, tipo, evento) DO NOTHING`,
   );
 }
 
@@ -49,7 +48,7 @@ async function vencerReservaciones(): Promise<void> {
        FROM reservacion r
        JOIN configuracion_reservacion cr ON cr.id = 1
       WHERE r.estado IN ('pendiente', 'confirmada')
-        AND DATE_ADD(r.fecha_hora, INTERVAL cr.tolerancia_minutos MINUTE) <= NOW()
+        AND r.fecha_hora + make_interval(mins => cr.tolerancia_minutos) <= LOCALTIMESTAMP
       ORDER BY r.fecha_hora
       LIMIT ?`,
     [LIMITE_NOTIFICACIONES],
@@ -65,8 +64,8 @@ async function vencerReservaciones(): Promise<void> {
            JOIN configuracion_reservacion cr ON cr.id = 1
           WHERE r.id_reservacion = ?
             AND r.estado IN ('pendiente', 'confirmada')
-            AND DATE_ADD(r.fecha_hora, INTERVAL cr.tolerancia_minutos MINUTE) <= NOW()
-          FOR UPDATE`,
+            AND r.fecha_hora + make_interval(mins => cr.tolerancia_minutos) <= LOCALTIMESTAMP
+          FOR UPDATE OF r`,
         [candidata.id_reservacion],
       );
       if (!r) return;
@@ -92,7 +91,7 @@ async function vencerReservaciones(): Promise<void> {
           cx,
           `INSERT INTO notificacion_reservacion (id_reservacion, tipo, destinatario)
            VALUES (?, 'vencida', ?)
-           ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion`,
+           ON CONFLICT (id_reservacion, tipo, evento) DO NOTHING`,
           [r.id_reservacion, r.correo],
         );
       } else {
@@ -112,7 +111,7 @@ async function procesarNotificaciones(): Promise<void> {
        JOIN cliente c ON c.id_cliente = r.id_cliente
        LEFT JOIN mesa m ON m.id_mesa = r.id_mesa
        LEFT JOIN configuracion_reservacion cr ON cr.id = 1
-      WHERE n.estado = 'pendiente' AND n.creada_en <= NOW()
+      WHERE n.estado = 'pendiente' AND n.creada_en <= LOCALTIMESTAMP
       ORDER BY n.creada_en, n.id_notificacion
       LIMIT ?`,
     [LIMITE_NOTIFICACIONES],
@@ -155,7 +154,7 @@ async function procesarNotificaciones(): Promise<void> {
       }
       await ejecutar(
         pool,
-        "UPDATE notificacion_reservacion SET estado = 'enviada', enviada_en = NOW(), ultimo_error = NULL WHERE id_notificacion = ?",
+        "UPDATE notificacion_reservacion SET estado = 'enviada', enviada_en = LOCALTIMESTAMP(0), ultimo_error = NULL WHERE id_notificacion = ?",
         [id],
       );
     } catch (error) {
@@ -173,14 +172,10 @@ async function registrarFallo(id: number, mensaje: string): Promise<void> {
     `UPDATE notificacion_reservacion
         SET intentos = intentos + 1,
             ultimo_error = LEFT(?, 500),
-            creada_en = DATE_ADD(
-              NOW(),
-              INTERVAL IF(
-                ? = 1,
-                ${ESPERA_CUOTA_GMAIL_SEGUNDOS},
-                LEAST(POWER(2, LEAST(intentos, 7)) * 30, 3600)
-              ) SECOND
-            )
+            creada_en = LOCALTIMESTAMP(0) + make_interval(secs => CASE
+                WHEN ?::int = 1 THEN ${ESPERA_CUOTA_GMAIL_SEGUNDOS}
+                ELSE LEAST(POWER(2, LEAST(intentos, 7)) * 30, 3600)
+              END)
       WHERE id_notificacion = ? AND estado = 'pendiente'`,
     [mensaje.slice(0, 500), esperaLarga ? 1 : 0, id],
   );

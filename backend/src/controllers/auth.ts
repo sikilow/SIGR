@@ -55,7 +55,7 @@ export const iniciarSesion = async (req: Request, res: Response) => {
   }
 
   await conActorAuditoria(fila.id_usuario as number, () =>
-    ejecutar(pool, "UPDATE credenciales SET ultimo_acceso = NOW() WHERE id_usuario = ?", [fila.id_usuario]),
+    ejecutar(pool, "UPDATE credenciales SET ultimo_acceso = LOCALTIMESTAMP(0) WHERE id_usuario = ?", [fila.id_usuario]),
   );
 
   // En la BD el rol es "Mesero"; dentro del token (uso interno de la API) se guarda en minúsculas.

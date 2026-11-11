@@ -2,6 +2,8 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { ejecutar, filas, pool, transaccion } from "../services/db";
+import { encolarAvisoReservacion } from "../services/avisosReservacion";
+import { solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
 import { validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 
@@ -76,12 +78,12 @@ export const crearReservacionCliente = async (
   }
 
   const reservacion = await transaccion(async (cx) => {
-    // Verificar fecha contra la hora de MySQL
+    // Verificar fecha contra la hora de la base de datos
     const [fecha] = await filas(
       cx,
       `SELECT
-         ? < NOW() AS pasada,
-         ? > DATE_ADD(NOW(), INTERVAL 365 DAY) AS lejana`,
+         ?::timestamp < LOCALTIMESTAMP AS pasada,
+         ?::timestamp > LOCALTIMESTAMP + INTERVAL '365 days' AS lejana`,
       [datos.fecha_hora, datos.fecha_hora]
     );
 
@@ -120,7 +122,8 @@ export const crearReservacionCliente = async (
       cx,
       `INSERT INTO reservacion
        (id_cliente, id_mesa, fecha_hora, personas, estado)
-       VALUES (?, NULL, ?, ?, 'pendiente')`,
+       VALUES (?, NULL, ?, ?, 'pendiente')
+       RETURNING id_reservacion`,
       [idCliente, datos.fecha_hora, datos.personas]
     );
 
@@ -133,8 +136,15 @@ export const crearReservacionCliente = async (
       [resultado.insertId]
     );
 
+    // Mismo aviso que cuando la registra la hostess: "recibimos tu reservación".
+    const [cliente] = await filas(cx, "SELECT correo FROM cliente WHERE id_cliente = ?", [idCliente]);
+    await encolarAvisoReservacion(cx, resultado.insertId, cliente?.correo, { tipo: "confirmacion", evento: "creada" });
+
     return nueva;
   });
+
+  // Después del commit: el correo sale sin esperar al ciclo de 30 s.
+  solicitarProcesamientoReservaciones();
 
   res.status(201).json({
     mensaje: "Solicitud de reservación registrada. Pendiente de confirmación.",

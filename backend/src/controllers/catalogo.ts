@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
+import { ejecutar, esDuplicado as esDuplicadoBD, filas, pool, transaccion, type Ejecutor } from "../services/db";
 import { idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 
@@ -102,7 +102,7 @@ export const listarMetodosPagoDisponibles = async (_req: Request, res: Response)
             mp.id_metodo, mp.nombre, mp.es_efectivo, mp.activo
        FROM categoria_metodo_pago cmp
        JOIN metodo_pago mp ON mp.id_categoria_metodo_pago = cmp.id_categoria_metodo_pago
-      WHERE cmp.activo = 1 AND mp.activo = 1
+      WHERE cmp.activo AND mp.activo
       ORDER BY cmp.id_categoria_metodo_pago, mp.id_metodo`,
   );
   res.json(metodos.map((fila) => metodoPagoDto({ ...fila, categoria_activa: true })));
@@ -113,7 +113,7 @@ export const crearCategoriaMetodoPago = async (req: Request, res: Response) => {
   const datos = validar(NuevaCategoriaPago, req.body);
   let idCategoria: number;
   try {
-    const resultado = await ejecutar(pool, "INSERT INTO categoria_metodo_pago (nombre, tipo) VALUES (?, ?)", [datos.nombre, datos.tipo]);
+    const resultado = await ejecutar(pool, "INSERT INTO categoria_metodo_pago (nombre, tipo) VALUES (?, ?) RETURNING id_categoria_metodo_pago", [datos.nombre, datos.tipo]);
     idCategoria = resultado.insertId;
   } catch (error) {
     if (esDuplicado(error)) throw new ErrorApi(409, "estado_invalido", "Ya existe una categoría de pago con ese nombre.");
@@ -171,9 +171,9 @@ export const crearMetodoPago = async (req: Request, res: Response) => {
       throw new ErrorApi(422, "estado_invalido", "El método de efectivo debe pertenecer a una categoría física.");
     }
     const efectivo = await transaccion(async (cx) => {
-      const existentes = await filas(cx, "SELECT id_metodo FROM metodo_pago WHERE es_efectivo = 1 FOR UPDATE");
+      const existentes = await filas(cx, "SELECT id_metodo FROM metodo_pago WHERE es_efectivo FOR UPDATE");
       if (existentes.length) throw new ErrorApi(409, "estado_invalido", "Ya existe un método marcado como efectivo.");
-      const resultado = await ejecutar(cx, "INSERT INTO metodo_pago (nombre, id_categoria_metodo_pago, es_efectivo) VALUES (?, ?, 1)", [
+      const resultado = await ejecutar(cx, "INSERT INTO metodo_pago (nombre, id_categoria_metodo_pago, es_efectivo) VALUES (?, ?, TRUE) RETURNING id_metodo", [
         datos.nombre,
         datos.id_categoria_metodo_pago,
       ]);
@@ -192,7 +192,7 @@ export const crearMetodoPago = async (req: Request, res: Response) => {
   try {
     const resultado = await ejecutar(
       pool,
-      "INSERT INTO metodo_pago (nombre, id_categoria_metodo_pago) VALUES (?, ?)",
+      "INSERT INTO metodo_pago (nombre, id_categoria_metodo_pago) VALUES (?, ?) RETURNING id_metodo",
       [datos.nombre, datos.id_categoria_metodo_pago],
     );
     idMetodo = resultado.insertId;
@@ -227,7 +227,7 @@ export const actualizarMetodoPago = async (req: Request, res: Response) => {
       if (uso) throw new ErrorApi(409, "estado_invalido", "No se puede cambiar el cuadre de un método que ya tiene pagos registrados.");
     }
     if (cambio.es_efectivo && !Boolean(actual.es_efectivo)) {
-      const existentes = await filas(cx, "SELECT id_metodo FROM metodo_pago WHERE es_efectivo = 1 FOR UPDATE");
+      const existentes = await filas(cx, "SELECT id_metodo FROM metodo_pago WHERE es_efectivo FOR UPDATE");
       if (existentes.some((fila) => Number(fila.id_metodo) !== id)) {
         throw new ErrorApi(409, "estado_invalido", "Ya existe un método marcado como efectivo.");
       }
@@ -250,7 +250,7 @@ const DescripcionProducto = Texto(255).refine(
 );
 
 function esDuplicado(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ER_DUP_ENTRY";
+  return esDuplicadoBD(error);
 }
 
 // ======================= Categorías =======================
@@ -292,7 +292,7 @@ const CategoriaCuerpo = z.object({ nombre: Texto(80) });
 export const crearCategoria = async (req: Request, res: Response) => {
   const { nombre } = validar(CategoriaCuerpo, req.body);
   try {
-    const r = await ejecutar(pool, "INSERT INTO categoria_menu (nombre) VALUES (?)", [nombre]);
+    const r = await ejecutar(pool, "INSERT INTO categoria_menu (nombre) VALUES (?) RETURNING id_categoria", [nombre]);
     res.status(201).json(await cargarCategoria(pool, r.insertId));
   } catch (e) {
     if (esDuplicado(e)) throw new ErrorApi(409, "estado_invalido", "Ya existe una categoría con ese nombre.");
@@ -436,7 +436,7 @@ export const crearProducto = async (req: Request, res: Response) => {
 
     const p = await ejecutar(
       cx,
-      "INSERT INTO producto (id_categoria, nombre, presentacion, descripcion, precio, disponible, controla_existencia) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO producto (id_categoria, nombre, presentacion, descripcion, precio, disponible, controla_existencia) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id_producto",
       [d.id_categoria, d.nombre, d.presentacion ?? "", d.descripcion, d.precio, d.activo ?? true, d.controla_existencia ?? true],
     );
     await ejecutar(cx, "INSERT INTO disponibilidadProducto (id_producto, existencia, stock_minimo) VALUES (?, ?, ?)", [
@@ -518,9 +518,9 @@ export const editarProducto = async (req: Request, res: Response) => {
       await ejecutar(
         cx,
         `INSERT INTO disponibilidadProducto (id_producto, existencia, stock_minimo) VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           existencia = COALESCE(?, existencia),
-           stock_minimo = COALESCE(?, stock_minimo)`,
+         ON CONFLICT (id_producto) DO UPDATE SET
+           existencia = COALESCE(?::int, disponibilidadProducto.existencia),
+           stock_minimo = COALESCE(?::int, disponibilidadProducto.stock_minimo)`,
         [id, d.existencia ?? 0, d.stock_minimo ?? 0, d.existencia ?? null, d.stock_minimo ?? null],
       );
     }
@@ -715,7 +715,7 @@ export const crearMesaAdmin = async (req: Request, res: Response) => {
       await exigirSeccionActiva(cx, d.zona);
       return ejecutar(cx, `INSERT INTO mesa
         (numero, capacidad, zona, planta_baja, espacio_carriola, sin_escaleras, activa)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+        VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id_mesa`, [
         d.numero,
         d.capacidad,
         d.zona,

@@ -75,9 +75,9 @@ Detalle de un corte cerrado: los mismos campos del historial más `desglose`, co
 ```json
 {
   "desglose": [
-    { "metodo": "Efectivo", "cobros": 3, "monto": 1200 },
-    { "metodo": "Tarjeta", "cobros": 2, "monto": 850.5 },
-    { "metodo": "Transferencia", "cobros": 0, "monto": 0 }
+    { "metodo": "Efectivo", "es_efectivo": true, "cobros": 3, "monto": 1200 },
+    { "metodo": "Tarjeta", "es_efectivo": false, "cobros": 2, "monto": 850.5 },
+    { "metodo": "Transferencia", "es_efectivo": false, "cobros": 0, "monto": 0 }
   ]
 }
 ```

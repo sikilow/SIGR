@@ -3,6 +3,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { leerCuerpo, mensajeDeError } from '../../utils/respuestaApi'
 
 const router = useRouter()
 
@@ -30,11 +31,11 @@ async function iniciarSesion() {
       }
     )
 
-    const datos = await respuesta.json()
+    const datos = await leerCuerpo<{ token: string; cliente: unknown }>(respuesta)
 
-    if (!respuesta.ok) {
+    if (!respuesta.ok || !datos.token) {
       throw new Error(
-        datos.mensaje || 'No se pudo iniciar sesión.'
+        mensajeDeError(respuesta, datos, 'No se pudo iniciar sesión.')
       )
     }
 
@@ -76,7 +77,6 @@ async function iniciarSesion() {
           Inicia sesión para disfrutar de una
           experiencia especial en nuestro restaurante.
         </p>
-        <div class="decoracion">✦</div>
       </div>
 
       <div class="formulario">

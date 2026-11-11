@@ -212,7 +212,6 @@ CREATE TABLE corte_caja (
   efectivo_esperado DECIMAL(12,2) NULL,
   efectivo_contado DECIMAL(12,2) NULL CHECK (efectivo_contado >= 0),
   total_reportado DECIMAL(12,2) NULL CHECK (total_reportado >= 0),
-  efectivo_contado DECIMAL(12,2) NULL,
   tipo_cierre ENUM('parcial','final') NULL,
   CONSTRAINT chk_corte_efectivo_inicial CHECK (efectivo_inicial >= 0),
   CONSTRAINT chk_corte_efectivo_contado CHECK (efectivo_contado IS NULL OR efectivo_contado >= 0),

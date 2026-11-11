@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
+import { ejecutar, esDuplicado, filas, pool, restriccionDe, transaccion, type Ejecutor } from "../services/db";
 import { idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 
@@ -82,11 +82,10 @@ async function idRol(ex: Ejecutor, rol: string): Promise<number> {
   return fila.id_rol as number;
 }
 
-/** MySQL avisa de un valor repetido (correo o usuario) con ER_DUP_ENTRY: se traduce a un 409 legible. */
+/** PostgreSQL avisa de un valor repetido (correo o usuario) con el código 23505: se traduce a un 409 legible. */
 function traducirDuplicado(error: unknown): never {
-  if (typeof error === "object" && error !== null && "code" in error && error.code === "ER_DUP_ENTRY") {
-    const texto = String((error as { sqlMessage?: string }).sqlMessage ?? "");
-    const campo = texto.includes("correo") ? "correo" : "nombre de usuario";
+  if (esDuplicado(error)) {
+    const campo = restriccionDe(error).includes("correo") ? "correo" : "nombre de usuario";
     throw new ErrorApi(409, "estado_invalido", `Ya existe otro usuario con ese ${campo}.`);
   }
   throw error;
@@ -116,7 +115,7 @@ export const crearUsuario = async (req: Request, res: Response) => {
     const [existe] = await filas(cx, "SELECT 1 AS x FROM credenciales WHERE nombre_usuario = ?", [d.nombre_usuario]);
     if (existe) throw new ErrorApi(409, "estado_invalido", "Ya existe otro usuario con ese nombre de usuario.");
     try {
-      const u = await ejecutar(cx, "INSERT INTO usuario (id_rol, nombre, correo) VALUES (?, ?, ?)", [
+      const u = await ejecutar(cx, "INSERT INTO usuario (id_rol, nombre, correo) VALUES (?, ?, ?) RETURNING id_usuario", [
         await idRol(cx, d.rol),
         d.nombre,
         d.correo,
@@ -214,7 +213,7 @@ export const editarUsuario = async (req: Request, res: Response) => {
       if (d.telefono !== undefined) {
         await ejecutar(
           cx,
-          "INSERT INTO perfil_usuario (id_usuario, telefono) VALUES (?, ?) ON DUPLICATE KEY UPDATE telefono = VALUES(telefono)",
+          "INSERT INTO perfil_usuario (id_usuario, telefono) VALUES (?, ?) ON CONFLICT (id_usuario) DO UPDATE SET telefono = EXCLUDED.telefono",
           [id, d.telefono || null],
         );
       }

@@ -167,12 +167,12 @@ describe("procesador de la cola de reservaciones", () => {
 
     await __pruebas.vencerReservaciones();
 
-    expect(filasMock.mock.calls[0]?.[1]).toContain("DATE_ADD(r.fecha_hora, INTERVAL cr.tolerancia_minutos MINUTE) <= NOW()");
+    expect(filasMock.mock.calls[0]?.[1]).toContain("r.fecha_hora + make_interval(mins => cr.tolerancia_minutos) <= LOCALTIMESTAMP");
     expect(filasMock.mock.calls[1]?.[1]).toContain("FOR UPDATE");
     expect(filasMock.mock.calls[1]?.[1]).toContain("r.estado IN ('pendiente', 'confirmada')");
     expect(ejecutarMock).toHaveBeenCalledWith(
       { id: "tx" },
-      expect.stringContaining("ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion"),
+      expect.stringContaining("ON CONFLICT (id_reservacion, tipo, evento) DO NOTHING"),
       [9, "cliente@gmail.com"],
     );
   });
