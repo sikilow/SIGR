@@ -1,6 +1,6 @@
 # Incrementos del SIGR
 
-Este documento organiza los comentarios de la maestra durante la presentación del sistema. El **Incremento 1** recoge las observaciones sobre la demostración; el **Incremento 2** resume los objetivos que se mencionaron para la siguiente entrega. En la grabación no se definió el alcance del Incremento 3.
+Este documento organiza los comentarios de la maestra durante la presentación del sistema. El **Incremento 1** recoge las observaciones sobre la demostración; el **Incremento 2** resume los objetivos que se mencionaron para la siguiente entrega; el **Incremento 3** recoge la revisión del 15 de noviembre, con el portal de clientes, Caja y las correcciones que pidió la maestra antes de la presentación final.
 
 > Las observaciones originales se conservan como requisitos de la revisión. La sección «Estado verificado» compara esos requisitos con el código actual; no implica que se haya probado el sistema conectado a una API/base compartida.
 
@@ -8,7 +8,7 @@ Para ubicar los contratos, guías por rol y documentación técnica relacionada,
 
 ## Estado verificado de los requisitos
 
-Revisión del código y la documentación del proyecto realizada el 7 de noviembre de 2026. Las transcripciones del [Incremento 1](incrementos_audios_transcritos/incremento-1-2026-10-31.md) y del [Incremento 2](incrementos_audios_transcritos/incremento-2-2026-11-03.md) se generaron automáticamente y pueden contener errores de reconocimiento; las frases dudosas no se interpretan como reglas definitivas.
+Revisión del código y la documentación del proyecto realizada el 7 de noviembre de 2026. Las transcripciones del [Incremento 1](incrementos_audios_transcritos/incremento-1-2026-10-31.md), del [Incremento 2](incrementos_audios_transcritos/incremento-2-2026-11-03.md) y del [Incremento 3](incrementos_audios_transcritos/incremento-3-2026-11-15.md) se generaron automáticamente y pueden contener errores de reconocimiento; las frases dudosas no se interpretan como reglas definitivas.
 
 | Área | Estado | Qué hace el proyecto y qué falta |
 |---|---|---|
@@ -104,9 +104,48 @@ La revisión del repositorio confirma que el backend tiene pruebas unitarias de 
 
 La Caja y la integración con API ya cuentan con documentación en el repositorio: [contrato-api-caja.md](contrato-api-caja.md) e [integracion-api.md](integracion-api.md). Esta referencia no sustituye la verificación de que el flujo completo esté conectado y funcione en el entorno de entrega.
 
-## Incremento 3: por definir
+## Incremento 3: revisión del 15 de noviembre de 2026
 
-La grabación no especifica funcionalidades ni criterios de aceptación para este incremento. Su alcance debe acordarse en una revisión posterior; no se asignan aquí requisitos por suposición.
+La [transcripción íntegra del audio del 15 de noviembre](incrementos_audios_transcritos/incremento-3-2026-11-15.md) (46 min) registra la demostración del portal de clientes, del flujo de pedido y cobro, del corte de caja y de los métodos de pago, junto con las correcciones que pidió la maestra. La transcripción es automática; solo se tratan como requisitos los puntos claros. Lo que no se entiende bien se marca «por confirmar».
+
+La columna «Estado» indica lo observado en la demostración y lo pedido; **no se ha verificado todavía contra el código** de la rama actual.
+
+### Correcciones pedidas
+
+La maestra cerró la sesión con esta lista de correcciones (0:43:45 a 0:44:45 en la transcripción):
+
+1. Corregir la mesa virtual para los pedidos para llevar.
+2. Corregir los métodos de pago, incluidos los adicionales.
+3. Alertar a la hostess cuando entra una solicitud de reservación.
+4. Cambiar los nombres de los estados de la reservación, con un estado «pendiente de solicitud».
+5. Corregir el correo.
+6. Mostrar la reservación como próxima solo después de que se confirme.
+7. Mostrar en el corte lo que falta o sobra.
+
+### Hallazgos de revisión
+
+| Área | Estado | Qué pidió la maestra o qué se observó |
+|---|---|---|
+| Estados de la reservación hecha por el cliente | ⬜ Pendiente | Desde el portal, el cliente registra una **solicitud**, no una reservación confirmada. Debe quedar en un estado previo (pendiente o solicitada) y pasar a confirmada solo cuando la hostess la confirme. En la demo, la reservación aparecía como próxima al registrarse; la maestra señaló que «se están brincando un estado» y que eso puede causar problemas al restaurante. Faltan nombres de estado claros y que la lista del cliente no la muestre como próxima mientras esté pendiente. |
+| Correo de una solicitud nueva | ⬜ Pendiente | El primer correo no debe decir que la mesa está apartada. Debe decir que se recibió la solicitud y que se confirmará en un momento. El correo de «ya tienes mesa confirmada» solo debe salir cuando la hostess confirme. Motivo: si el cliente cree que ya tiene mesa y no hay, se genera un conflicto. |
+| Alerta a la hostess por solicitudes | ⬜ Pendiente | Debe haber un aviso para que las solicitudes no se queden esperando. La hostess atiende muchas cosas a la vez y la reservación tiene un plazo de aproximadamente una hora. También se pidió que la hostess tenga dos listas: solicitudes pendientes y reservaciones confirmadas. |
+| Portal de clientes | 🟡 Parcial | Se demostró el registro del cliente y el alta de la reservación, con consulta de su estado. En la demo el portal solo ofrece registrarse, reservar y consultar. Las horas se eligen en punto, sin media hora. La mesa la asigna la hostess, no el cliente. |
+| WhatsApp u otro canal | 🟡 Por decidir | La maestra sugirió WhatsApp o Telegram para una versión 2. El equipo señaló que WhatsApp Business tiene costo y requisitos. Por ahora el canal es el correo y no se exigió migrar. |
+| Pedidos para llevar y mesa virtual | ⬜ Pendiente | Hoy la cuenta pertenece a una mesa. Con la cuenta solicitada no se puede agregar un pedido a esa mesa, y no hay forma de registrar un pedido para llevar o en línea sin mesa. La maestra pidió una **mesa virtual o ficticia** para esos pedidos, numerada por orden de llegada (por ejemplo 18.1 y 18.2), para que cocina los atienda en orden. El pedido queda a cargo de un mesero, que lo entrega y solicita la cuenta, y el cajero cobra. El resto del flujo es igual al de una mesa. |
+| «Para llevar» dentro de la misma cuenta | 🟡 Por decidir | Antes de cerrar la cuenta, lo que el cliente pide para llevar se agrega al mismo pedido con la observación «para llevar». Una vez pagada la cuenta, cualquier cosa nueva es otro pedido. Se sugirió que el mesero pregunte siempre si desean algo más o para llevar. |
+| Método de pago del mesero y del cajero | ✅ Observado en la demo | El equipo mostró que ya se corrigió el error del incremento anterior: el método que elige el mesero llega a Caja. |
+| Corte de caja y cuadre de efectivo | ✅ Observado en la demo | Se demostraron apertura con fondo (500), dos cobros (uno en efectivo y uno por transferencia), conteo de efectivo, confirmar el cierre o volver a contar, y un sobrante de 30. El gerente ve efectivo contado, diferencia y desglose por método. Con tarjeta deben conservarse los vouchers. |
+| Etiqueta «diferencia» del corte | 🟡 Por confirmar | La maestra pidió mostrar con claridad lo que falta y lo que sobra, y sugirió cambiar la etiqueta «diferencia» por «faltante». |
+| Nombre de «Cortes» en Gerencia | 🟡 Por confirmar | La maestra comentó que el nombre «Cortes» no era lo más adecuado en ese contexto. El audio no deja claro qué alternativa propone. |
+| Categorías y métodos de pago nuevos | ⬜ Pendiente | El gerente creó la categoría «Vales de despensa». Al cobrar un pedido, el método nuevo **no apareció** en Caja, y tampoco funcionó el pago con tarjeta. La maestra indicó que es un error de ejecución del programa y que el modelo de datos no está mal. Hay que corregirlo y probar los métodos adicionales. |
+| Presentación final | 🟡 Por definir | La maestra dijo que enviará por correo lo que hay que presentar. Se mencionó una presentación de unos 10 minutos y código de vestimenta. La fecha y el formato no quedaron claros en el audio. Se pidió cuidar la conexión de la base de datos y las pruebas antes de presentar. |
+
+### Observaciones de la demostración
+
+- La demostración del flujo completo (asignar mesa, pedir, cocina, entregar, solicitar cuenta, cobrar) funcionó con datos locales.
+- Se confirmó que se puede seguir agregando pedidos a una mesa mientras la cuenta no se haya solicitado.
+- Durante la presentación hubo fallos al probar métodos de pago nuevos. La maestra recomendó descubrirlos antes de la presentación final.
+- El equipo pidió ver también la vista del gerente de cortes, que muestra efectivo contado, diferencia y desglose por método.
 
 ## Corrección posterior: acceso de Gerencia a Reservas
 

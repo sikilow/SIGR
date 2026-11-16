@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import InsigniaEstado from '../../components/InsigniaEstado.vue'
+import { usePolling } from '../../composables/usePolling'
 import ResumenCorte from '../../components/ResumenCorte.vue'
 import { servicios } from '../../services'
 import {
@@ -66,8 +67,14 @@ function tipoPago(item: CuentaCaja): string {
   return metodo ? `${tipo} · ${metodo.categoria} · ${metodo.nombre}` : `${tipo} · elegir método`
 }
 
-async function cargar() {
-  cargando.value = true
+/**
+ * Carga el estado de la caja. `silencioso` es la actualización periódica: no muestra el esqueleto de carga,
+ * no se solapa con un cobro en curso y no pisa un error de la acción que el cajero está viendo.
+ * Así los métodos que Gerencia agrega o desactiva aparecen sin tener que recargar la página.
+ */
+async function cargar(silencioso = false) {
+  if (silencioso && procesando.value) return
+  if (!silencioso) cargando.value = true
   try {
     estado.value = await servicios.caja.obtenerEstado()
     if (!estado.value.corte) {
@@ -78,11 +85,11 @@ async function cargar() {
       seleccionadaId.value = null
       pagos.value = []
     }
-    error.value = null
+    if (!silencioso) error.value = null
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'No se pudo cargar la caja.'
+    if (!silencioso) error.value = e instanceof Error ? e.message : 'No se pudo cargar la caja.'
   } finally {
-    cargando.value = false
+    if (!silencioso) cargando.value = false
   }
 }
 
@@ -214,7 +221,10 @@ function textoDiferencia(diferencia: number | null): string {
   return diferencia < 0 ? `Faltante de ${moneda(-diferencia)}` : `Sobrante de ${moneda(diferencia)}`
 }
 
-onMounted(cargar)
+const polling = usePolling(() => cargar(true))
+onMounted(() => {
+  void cargar().finally(() => polling.iniciar())
+})
 </script>
 
 <template>
@@ -225,7 +235,7 @@ onMounted(cargar)
         <h2>Caja</h2>
         <p>Cuentas solicitadas por el mesero y corte del turno.</p>
       </div>
-      <button class="btn btn--secundario no-imprimir" type="button" :disabled="cargando || procesando" @click="cargar">
+      <button class="btn btn--secundario no-imprimir" type="button" :disabled="cargando || procesando" @click="cargar()">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
         </svg>
@@ -235,7 +245,7 @@ onMounted(cargar)
 
     <div v-if="error" class="aviso aviso--error no-imprimir" role="alert">
       <p>{{ error }}</p>
-      <button type="button" class="btn btn--secundario" :disabled="cargando || procesando" @click="cargar">Reintentar</button>
+      <button type="button" class="btn btn--secundario" :disabled="cargando || procesando" @click="cargar()">Reintentar</button>
     </div>
 
     <template v-if="cargando && !estado">
@@ -512,7 +522,7 @@ onMounted(cargar)
     <section v-else class="vacio no-imprimir" role="alert">
       <h3>No se pudo mostrar la caja</h3>
       <p>Revisa la conexión e inténtalo de nuevo.</p>
-      <button type="button" class="btn" @click="cargar">Reintentar</button>
+      <button type="button" class="btn" @click="cargar()">Reintentar</button>
     </section>
 
     <section v-if="ventaReciente" class="ticket-panel" aria-labelledby="ticket-titulo">

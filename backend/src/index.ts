@@ -22,6 +22,12 @@ import { filas, pool } from "./services/db";
 const app = express();
 app.use(cors({ origin: ORIGENES_PERMITIDOS }));
 app.use(express.json());
+// Los datos de la API cambian entre peticiones (métodos de pago, mesas, pedidos…): ningún navegador ni proxy
+// (por ejemplo Nginx en el servidor compartido) debe servir una respuesta guardada.
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });

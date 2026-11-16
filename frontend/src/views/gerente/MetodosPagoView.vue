@@ -1,11 +1,20 @@
 <script setup lang="ts">
+// Métodos de pago (/gerente/metodos-pago). Gerencia organiza los métodos por categoría (física o digital).
+// Lo que está activo aquí es lo que ven el mesero (al solicitar la cuenta) y el cajero (al cobrar).
 import { computed, onMounted, ref } from 'vue'
 import { ErrorServicio, servicios } from '../../services'
 import type { CategoriaMetodoPagoAdmin, MetodoPagoAdmin } from '../../types'
 
+type Tipo = 'fisico' | 'digital'
+
+const TIPOS: ReadonlyArray<{ valor: Tipo; etiqueta: string; ayuda: string }> = [
+  { valor: 'fisico', etiqueta: 'Físico', ayuda: 'Se cobra en persona (efectivo, vales).' },
+  { valor: 'digital', etiqueta: 'Digital', ayuda: 'Tarjeta, transferencia y similares.' },
+]
+
 const categorias = ref<CategoriaMetodoPagoAdmin[]>([])
 const nombreCategoria = ref('')
-const tipoCategoria = ref<'fisico' | 'digital'>('digital')
+const tipoCategoria = ref<Tipo>('digital')
 const nombresMetodo = ref<Record<number, string>>({})
 const metodoEfectivo = ref<Record<number, boolean>>({})
 const cargando = ref(true)
@@ -13,8 +22,22 @@ const cargado = ref(false)
 const guardando = ref(false)
 const error = ref('')
 const mensaje = ref('')
+
 const categoriasActivas = computed(() => categorias.value.filter((categoria) => categoria.activo).length)
-const metodosActivos = computed(() => categorias.value.flatMap((categoria) => categoria.metodos).filter((metodo) => metodo.activo).length)
+const metodosActivos = computed(
+  () => categorias.value.filter((categoria) => categoria.activo).flatMap((categoria) => categoria.metodos).filter((metodo) => metodo.activo).length,
+)
+
+function etiquetaTipo(tipo: Tipo): string {
+  return tipo === 'fisico' ? 'Físico' : 'Digital'
+}
+
+/** Dónde aparece hoy cada método: ayuda a entender por qué un método no se ve. */
+function visibilidad(categoria: CategoriaMetodoPagoAdmin, metodo: MetodoPagoAdmin): string {
+  if (!categoria.activo) return 'Oculto: la categoría está desactivada'
+  if (!metodo.activo) return 'Oculto para mesero y cajero'
+  return `Visible en «Pago ${etiquetaTipo(categoria.tipo).toLowerCase()}»`
+}
 
 async function cargar() {
   cargando.value = true
@@ -43,7 +66,7 @@ async function crearCategoria() {
     const nueva = await servicios.catalogo.crearCategoriaMetodoPago(limpio, tipoCategoria.value)
     categorias.value = [...categorias.value, nueva]
     nombreCategoria.value = ''
-    mensaje.value = `Se agregó la categoría «${nueva.nombre}».`
+    mensaje.value = `Se agregó la categoría «${nueva.nombre}». Agrégale al menos un método para que se pueda elegir.`
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo agregar la categoría.'
   } finally {
@@ -69,7 +92,9 @@ async function crearMetodo(categoria: CategoriaMetodoPagoAdmin) {
       : actual)
     nombresMetodo.value[categoria.idCategoriaMetodoPago] = ''
     metodoEfectivo.value[categoria.idCategoriaMetodoPago] = false
-    mensaje.value = `Se agregó «${nuevo.nombre}» a «${categoria.nombre}».`
+    mensaje.value = categoria.activo
+      ? `«${nuevo.nombre}» ya está disponible para el mesero y el cajero en «Pago ${etiquetaTipo(categoria.tipo).toLowerCase()}».`
+      : `Se agregó «${nuevo.nombre}», pero la categoría «${categoria.nombre}» está desactivada: actívala para que se vea.`
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo agregar el método de pago.'
   } finally {
@@ -85,7 +110,7 @@ async function cambiarEstadoCategoria(categoria: CategoriaMetodoPagoAdmin, activ
   try {
     const actualizada = await servicios.catalogo.actualizarCategoriaMetodoPago(categoria.idCategoriaMetodoPago, { activo })
     categorias.value = categorias.value.map((actual) => actual.idCategoriaMetodoPago === actualizada.idCategoriaMetodoPago ? actualizada : actual)
-    mensaje.value = `${actualizada.nombre}: categoría ${activo ? 'disponible' : 'desactivada'}.`
+    mensaje.value = `${actualizada.nombre}: categoría ${activo ? 'activada' : 'desactivada'}.`
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo actualizar la categoría.'
   } finally {
@@ -95,7 +120,7 @@ async function cambiarEstadoCategoria(categoria: CategoriaMetodoPagoAdmin, activ
 
 async function cambiarEstadoMetodo(metodo: MetodoPagoAdmin, activo: boolean) {
   if (guardando.value || metodo.activo === activo) return
-  await actualizarMetodo(metodo, { activo }, activo ? 'disponible' : 'desactivado')
+  await actualizarMetodo(metodo, { activo }, activo ? 'activado' : 'desactivado')
 }
 
 async function cambiarEfectivo(metodo: MetodoPagoAdmin, esEfectivo: boolean) {
@@ -134,7 +159,9 @@ onMounted(() => void cargar())
       <div>
         <p class="sobretitulo">Gerencia</p>
         <h2>Métodos de pago</h2>
-        <p>Organiza los métodos por categoría. Las categorías principales son físicas y digitales.</p>
+        <p class="encabezado__ayuda">
+          Lo que actives aquí lo ven el mesero al solicitar la cuenta y el cajero al cobrar, sin recargar la página.
+        </p>
       </div>
       <button class="btn btn--secundario" type="button" :disabled="cargando || guardando" @click="cargar">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -145,7 +172,7 @@ onMounted(() => void cargar())
     </header>
 
     <p v-if="error" class="aviso aviso--error" role="alert">{{ error }}</p>
-    <p v-if="mensaje" class="aviso aviso--exito" role="status">{{ mensaje }}</p>
+    <p v-else-if="mensaje" class="aviso aviso--exito" role="status">{{ mensaje }}</p>
 
     <template v-if="cargando && !cargado">
       <div class="esqueleto" aria-hidden="true" />
@@ -155,44 +182,109 @@ onMounted(() => void cargar())
       <h3>No se pudieron cargar los métodos</h3>
       <button class="btn" type="button" @click="cargar">Reintentar</button>
     </div>
+
     <template v-else>
-      <form class="nuevo panel" @submit.prevent="crearCategoria">
+      <dl class="resumen" aria-label="Resumen">
+        <div>
+          <dt>Categorías activas</dt>
+          <dd class="numero">{{ categoriasActivas }}<small> de {{ categorias.length }}</small></dd>
+        </div>
+        <div>
+          <dt>Métodos disponibles</dt>
+          <dd class="numero">{{ metodosActivos }}</dd>
+        </div>
+      </dl>
+
+      <form class="nueva panel" @submit.prevent="crearCategoria">
         <h3>Nueva categoría</h3>
-        <div class="campo">
-          <label for="categoria-pago-nombre">Nombre</label>
-          <input id="categoria-pago-nombre" v-model="nombreCategoria" type="text" maxlength="40" autocomplete="off" required placeholder="Ej.: Vales" :disabled="guardando">
+        <div class="nueva__fila">
+          <div class="campo nueva__nombre">
+            <label for="categoria-pago-nombre">Nombre</label>
+            <input id="categoria-pago-nombre" v-model="nombreCategoria" type="text" maxlength="40" autocomplete="off" required placeholder="Ej.: Vales de despensa" :disabled="guardando">
+          </div>
+          <fieldset class="tipos" :disabled="guardando">
+            <legend>Tipo de cobro</legend>
+            <div class="tipos__opciones">
+              <label v-for="tipo in TIPOS" :key="tipo.valor" class="tipo" :class="{ 'tipo--elegido': tipoCategoria === tipo.valor }">
+                <input v-model="tipoCategoria" type="radio" name="tipo-categoria" :value="tipo.valor">
+                <strong>{{ tipo.etiqueta }}</strong>
+                <small>{{ tipo.ayuda }}</small>
+              </label>
+            </div>
+          </fieldset>
+          <button class="btn nueva__boton" type="submit" :disabled="guardando || !nombreCategoria.trim()">Agregar categoría</button>
         </div>
-        <div class="campo">
-          <label for="categoria-pago-tipo">Tipo</label>
-          <select id="categoria-pago-tipo" v-model="tipoCategoria" :disabled="guardando">
-            <option value="fisico">Físico</option>
-            <option value="digital">Digital</option>
-          </select>
-        </div>
-        <button class="btn" type="submit" :disabled="guardando || !nombreCategoria.trim()">Agregar categoría</button>
       </form>
 
-      <section class="lista panel" aria-labelledby="lista-metodos-titulo">
-        <div class="lista__encabezado">
-          <h3 id="lista-metodos-titulo">Categorías y métodos</h3>
-          <span>{{ categoriasActivas }} categorías · {{ metodosActivos }} métodos activos</span>
-        </div>
-        <p class="lista__ayuda">Al desactivar una categoría se ocultan todos sus métodos. También puedes desactivar métodos individuales; las ventas anteriores se conservan.</p>
-        <article v-for="categoria in categorias" :key="categoria.idCategoriaMetodoPago" class="categoria">
+      <section class="lista" aria-labelledby="lista-metodos-titulo">
+        <h3 id="lista-metodos-titulo">Categorías y métodos</h3>
+
+        <article
+          v-for="categoria in categorias"
+          :key="categoria.idCategoriaMetodoPago"
+          class="categoria panel"
+          :class="{ 'categoria--inactiva': !categoria.activo }"
+        >
           <header class="categoria__encabezado">
-            <div>
+            <span class="categoria__icono" :class="`categoria__icono--${categoria.tipo}`" aria-hidden="true">
+              <svg v-if="categoria.tipo === 'fisico'" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6.5 9.5v.01M17.5 14.5v.01" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" />
+              </svg>
+            </span>
+            <div class="categoria__titulo">
               <h4>{{ categoria.nombre }}</h4>
-              <span>{{ categoria.tipo === 'fisico' ? 'Física' : 'Digital' }} · {{ categoria.activo ? 'Activa' : 'Inactiva' }}</span>
+              <p>
+                <span class="etiqueta">{{ etiquetaTipo(categoria.tipo) }}</span>
+                <span class="estado" :class="categoria.activo ? 'estado--si' : 'estado--no'">{{ categoria.activo ? 'Activa' : 'Desactivada' }}</span>
+              </p>
             </div>
-            <label class="interruptor">
-              <span class="solo-lectores">{{ categoria.activo ? 'Desactivar' : 'Activar' }} categoría {{ categoria.nombre }}</span>
-              <input type="checkbox" :checked="categoria.activo" :disabled="guardando" @change="cambiarEstadoCategoria(categoria, ($event.target as HTMLInputElement).checked)">
-            </label>
+            <button
+              type="button"
+              class="interruptor"
+              role="switch"
+              :aria-checked="categoria.activo"
+              :aria-label="`Categoría ${categoria.nombre}: ${categoria.activo ? 'activa' : 'desactivada'}`"
+              :disabled="guardando"
+              @click="cambiarEstadoCategoria(categoria, !categoria.activo)"
+            >
+              <span class="interruptor__pista"><span class="interruptor__pulgar" /></span>
+            </button>
           </header>
 
+          <ul class="metodos">
+            <li v-for="metodo in categoria.metodos" :key="metodo.idMetodo" :class="{ 'metodos__inactivo': !metodo.activo || !categoria.activo }">
+              <div class="metodos__nombre">
+                <strong>{{ metodo.nombre }}</strong>
+                <span>{{ visibilidad(categoria, metodo) }}</span>
+              </div>
+              <span v-if="metodo.esEfectivo" class="etiqueta etiqueta--efectivo">Efectivo para corte</span>
+              <label v-if="categoria.tipo === 'fisico'" class="casilla">
+                <input type="checkbox" :checked="metodo.esEfectivo" :disabled="guardando" @change="cambiarEfectivo(metodo, ($event.target as HTMLInputElement).checked)">
+                Efectivo
+              </label>
+              <button
+                type="button"
+                class="interruptor"
+                role="switch"
+                :aria-checked="metodo.activo"
+                :aria-label="`${metodo.nombre}: ${metodo.activo ? 'activo' : 'desactivado'}`"
+                :disabled="guardando"
+                @click="cambiarEstadoMetodo(metodo, !metodo.activo)"
+              >
+                <span class="interruptor__pista"><span class="interruptor__pulgar" /></span>
+              </button>
+            </li>
+            <li v-if="categoria.metodos.length === 0" class="metodos__vacio">
+              Aún no hay métodos aquí. Agrega uno abajo para que el mesero y el cajero puedan elegirlo.
+            </li>
+          </ul>
+
           <form class="nuevo-metodo" @submit.prevent="crearMetodo(categoria)">
-            <div class="campo">
-              <label :for="`nuevo-metodo-${categoria.idCategoriaMetodoPago}`">Agregar método</label>
+            <div class="campo nuevo-metodo__nombre">
+              <label :for="`nuevo-metodo-${categoria.idCategoriaMetodoPago}`">Agregar método a «{{ categoria.nombre }}»</label>
               <input
                 :id="`nuevo-metodo-${categoria.idCategoriaMetodoPago}`"
                 v-model="nombresMetodo[categoria.idCategoriaMetodoPago]"
@@ -201,33 +293,17 @@ onMounted(() => void cargar())
                 autocomplete="off"
                 required
                 :disabled="guardando"
-                placeholder="Ej.: Tarjeta"
+                :placeholder="categoria.tipo === 'fisico' ? 'Ej.: Vales de despensa' : 'Ej.: Tarjeta'"
               >
             </div>
-            <label v-if="categoria.tipo === 'fisico'" class="opcion-efectivo">
+            <label v-if="categoria.tipo === 'fisico'" class="casilla">
               <input v-model="metodoEfectivo[categoria.idCategoriaMetodoPago]" type="checkbox" :disabled="guardando">
               Cuenta como efectivo
             </label>
-            <button class="btn btn--secundario" type="submit" :disabled="guardando || !(nombresMetodo[categoria.idCategoriaMetodoPago] ?? '').trim()">Agregar</button>
+            <button class="btn btn--secundario" type="submit" :disabled="guardando || !(nombresMetodo[categoria.idCategoriaMetodoPago] ?? '').trim()">
+              Agregar
+            </button>
           </form>
-
-          <ul class="metodos">
-            <li v-for="metodo in categoria.metodos" :key="metodo.idMetodo">
-              <div>
-                <strong>{{ metodo.nombre }}</strong>
-                <span>{{ metodo.activo ? 'Activo' : 'Inactivo' }}<template v-if="metodo.esEfectivo"> · efectivo para corte</template></span>
-              </div>
-              <label v-if="categoria.tipo === 'fisico'" class="opcion-efectivo">
-                <input type="checkbox" :checked="metodo.esEfectivo" :disabled="guardando" @change="cambiarEfectivo(metodo, ($event.target as HTMLInputElement).checked)">
-                Efectivo
-              </label>
-              <label class="interruptor">
-                <span class="solo-lectores">{{ metodo.activo ? 'Desactivar' : 'Activar' }} {{ metodo.nombre }}</span>
-                <input type="checkbox" :checked="metodo.activo" :disabled="guardando" @change="cambiarEstadoMetodo(metodo, ($event.target as HTMLInputElement).checked)">
-              </label>
-            </li>
-            <li v-if="categoria.metodos.length === 0" class="metodos__vacio">Aún no hay métodos en esta categoría.</li>
-          </ul>
         </article>
       </section>
     </template>
@@ -238,7 +314,7 @@ onMounted(() => void cargar())
 .pagina {
   display: grid;
   gap: var(--espacio-5);
-  max-width: 860px;
+  max-width: 880px;
 }
 
 .encabezado {
@@ -253,142 +329,385 @@ onMounted(() => void cargar())
   margin-top: var(--espacio-1);
 }
 
-.encabezado p {
+.encabezado__ayuda {
+  max-width: 46ch;
   margin: var(--espacio-1) 0 0;
   color: var(--color-muted);
 }
 
-.nuevo {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+/* Avisos (antes sin estilo): ícono por color + texto, nunca solo color */
+.aviso {
+  margin: 0;
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 1.5px solid;
+  border-radius: var(--radio-sm);
+  font-weight: 600;
+}
+
+.aviso--error {
+  border-color: var(--color-peligro);
+  background: var(--color-peligro-fondo);
+  color: var(--color-peligro-texto);
+}
+
+.aviso--exito {
+  border-color: var(--color-secondary);
+  background: var(--color-secondary-soft);
+  color: var(--color-secondary-dark);
+}
+
+/* Resumen */
+.resumen {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--espacio-3);
+  margin: 0;
 }
 
-.nuevo .campo {
-  flex: 1 1 16rem;
+.resumen > div {
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface);
 }
 
-.nuevo input {
-  width: 100%;
-}
-
-.lista__encabezado {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--espacio-3);
-}
-
-.lista__encabezado span,
-.lista__ayuda,
-.lista li span {
+.resumen dt {
   color: var(--color-muted);
   font-size: var(--texto-sm);
 }
 
-.lista__ayuda {
-  margin: var(--espacio-2) 0 var(--espacio-3);
+.resumen dd {
+  margin: 0;
+  font-size: var(--texto-xl);
+  font-weight: 700;
+  line-height: 1.2;
 }
 
-.lista ul {
+.resumen dd small {
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 500;
+}
+
+/* Nueva categoría */
+.nueva h3 {
+  margin: 0 0 var(--espacio-3);
+}
+
+.nueva__fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--espacio-4);
+  align-items: end;
+}
+
+.nueva__nombre input {
+  width: 100%;
+}
+
+.tipos {
+  min-width: 0;
   margin: 0;
   padding: 0;
-  list-style: none;
+  border: none;
+  grid-column: 1 / -1;
 }
 
-.categoria {
-  margin-top: var(--espacio-4);
-  padding: var(--espacio-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radio-md);
+.tipos legend {
+  padding: 0;
+  margin-bottom: var(--espacio-2);
+  font-weight: 650;
 }
 
-.categoria__encabezado,
-.metodos li {
-  display: flex;
+.tipos__opciones {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espacio-3);
+}
+
+.tipo {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  column-gap: var(--espacio-3);
   align-items: center;
-  justify-content: space-between;
+  min-height: 60px;
+  padding: var(--espacio-2) var(--espacio-4);
+  border: 1.5px solid var(--color-borde-control);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.tipo input {
+  grid-row: 1 / span 2;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--color-primary-dark);
+}
+
+.tipo small {
+  color: var(--color-muted);
+}
+
+.tipo--elegido {
+  border-color: var(--color-primary-dark);
+  background: var(--color-primary-suave);
+  box-shadow: inset 0 0 0 1px var(--color-primary-dark);
+}
+
+.tipo:has(input:focus-visible) {
+  outline: 3px solid var(--color-primary-dark);
+  outline-offset: 2px;
+}
+
+.nueva__boton {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* Lista */
+.lista {
+  display: grid;
   gap: var(--espacio-4);
 }
 
-.categoria__encabezado h4 {
+.lista h3 {
   margin: 0;
 }
 
-.categoria__encabezado span,
-.metodos li span {
+.categoria {
+  display: grid;
+  gap: var(--espacio-4);
+  padding: var(--espacio-5);
+}
+
+.categoria--inactiva {
+  background: var(--color-deshabilitado-fondo);
+}
+
+.categoria__encabezado {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-4);
+}
+
+.categoria__icono {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radio-sm);
+}
+
+.categoria__icono--fisico {
+  background: var(--color-maiz-fondo);
+  color: var(--color-maiz-texto);
+}
+
+.categoria__icono--digital {
+  background: var(--color-secondary-soft);
+  color: var(--color-secondary-dark);
+}
+
+.categoria__titulo {
+  flex: 1;
+  min-width: 0;
+}
+
+.categoria__titulo h4 {
+  margin: 0;
+  font-size: var(--texto-lg);
+}
+
+.categoria__titulo p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+  margin: var(--espacio-1) 0 0;
+}
+
+.etiqueta,
+.estado {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--espacio-3);
+  border-radius: var(--radio-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: var(--texto-sm);
+  font-weight: 650;
+}
+
+.estado--si {
+  background: var(--color-secondary-soft);
+  color: var(--color-secondary-dark);
+}
+
+.estado--no {
+  background: var(--color-deshabilitado-borde);
+  color: var(--color-deshabilitado-texto);
+}
+
+.etiqueta--efectivo {
+  background: var(--color-maiz-fondo);
+  color: var(--color-maiz-texto);
+}
+
+/* Métodos */
+.metodos {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radio-sm);
+  overflow: hidden;
+}
+
+.metodos li {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-4);
+  min-height: 60px;
+  padding: var(--espacio-2) var(--espacio-4);
+  background: var(--color-surface);
+}
+
+.metodos li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.metodos__nombre {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.metodos__nombre span {
   color: var(--color-muted);
   font-size: var(--texto-sm);
 }
 
-.nuevo-metodo {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--espacio-3);
-  margin-top: var(--espacio-3);
-  padding-bottom: var(--espacio-3);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.nuevo-metodo .campo {
-  flex: 1 1 14rem;
-}
-
-.nuevo-metodo input[type='text'] {
-  width: 100%;
-}
-
-.opcion-efectivo {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--espacio-2);
-  min-height: 44px;
-}
-
-.opcion-efectivo input {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--color-primary);
-}
-
-.metodos {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.metodos li {
-  min-height: 56px;
-  border-top: 1px solid var(--color-border);
-}
-
-.metodos li > div {
-  display: grid;
+.metodos__inactivo .metodos__nombre strong {
+  color: var(--color-muted);
 }
 
 .metodos .metodos__vacio {
   color: var(--color-muted);
-  justify-content: flex-start;
+  background: var(--color-bg);
 }
 
+/* Alta de método */
+.nuevo-metodo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espacio-3) var(--espacio-4);
+}
+
+.nuevo-metodo__nombre {
+  flex: 1 1 15rem;
+}
+
+.nuevo-metodo__nombre input {
+  width: 100%;
+}
+
+.casilla {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  min-height: 48px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.casilla input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--color-primary-dark);
+}
+
+/* Interruptor propio (reemplaza al checkbox nativo que se veía recortado) */
 .interruptor {
   display: grid;
+  flex: none;
   place-items: center;
-  min-width: 48px;
+  min-width: 56px;
   min-height: 48px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
 }
 
-.interruptor input {
-  width: 24px;
-  height: 24px;
-  accent-color: var(--color-primary);
+.interruptor__pista {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  border-radius: var(--radio-pill);
+  background: var(--color-borde-control);
+  transition: background 0.15s;
 }
 
-@media (max-width: 30em) {
-  .nuevo .btn {
+.interruptor__pulgar {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+  transition: transform 0.15s;
+}
+
+.interruptor[aria-checked='true'] .interruptor__pista {
+  background: var(--color-secondary);
+}
+
+.interruptor[aria-checked='true'] .interruptor__pulgar {
+  transform: translateX(20px);
+}
+
+.interruptor:focus-visible .interruptor__pista {
+  outline: 3px solid var(--color-primary-dark);
+  outline-offset: 3px;
+}
+
+.interruptor:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interruptor__pista,
+  .interruptor__pulgar {
+    transition: none;
+  }
+}
+
+@media (max-width: 40em) {
+  .nueva__fila {
+    grid-template-columns: 1fr;
+  }
+
+  .nueva__boton {
+    grid-column: 1;
+    grid-row: auto;
     width: 100%;
+  }
+
+  .tipos__opciones {
+    grid-template-columns: 1fr;
+  }
+
+  .metodos li {
+    flex-wrap: wrap;
   }
 }
 </style>

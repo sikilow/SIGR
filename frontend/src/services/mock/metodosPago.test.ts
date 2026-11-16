@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { crearCatalogoMock } from './adminMock'
+import { crearCajaMock } from './cajaMock'
 
 describe('métodos de pago administrables', () => {
   it('administra categorías y métodos, respetando la disponibilidad de ambos niveles', async () => {
@@ -27,5 +28,23 @@ describe('métodos de pago administrables', () => {
     }
     await catalogo.actualizarMetodoPago(nuevo.idMetodo, { activo: true })
     expect((await catalogo.listarMetodosPagoDisponibles()).some((metodo) => metodo.idCategoriaMetodoPago === categoria.idCategoriaMetodoPago)).toBe(true)
+  })
+})
+
+// Va después de la otra suite: los datos del mock son compartidos y esa espera el catálogo inicial.
+describe('métodos de pago nuevos llegan al mesero y al cajero', () => {
+  it('un método físico no efectivo aparece en «disponibles» (mesero) y en el estado de Caja, y se oculta al desactivarlo', async () => {
+    const catalogo = crearCatalogoMock()
+    const caja = crearCajaMock()
+    const categoria = await catalogo.crearCategoriaMetodoPago('Vales de despensa', 'fisico')
+    const vale = await catalogo.crearMetodoPago('Vale Sodexo', categoria.idCategoriaMetodoPago, false)
+
+    const paraMesero = await catalogo.listarMetodosPagoDisponibles()
+    expect(paraMesero.find((m) => m.idMetodo === vale.idMetodo)).toMatchObject({ tipo: 'fisico', categoria: 'Vales de despensa' })
+    expect((await caja.obtenerEstado()).metodosPago.map((m) => m.idMetodo)).toContain(vale.idMetodo)
+
+    await catalogo.actualizarMetodoPago(vale.idMetodo, { activo: false })
+    expect((await catalogo.listarMetodosPagoDisponibles()).map((m) => m.idMetodo)).not.toContain(vale.idMetodo)
+    expect((await caja.obtenerEstado()).metodosPago.map((m) => m.idMetodo)).not.toContain(vale.idMetodo)
   })
 })

@@ -44,6 +44,8 @@
 |---|---|
 | [Incrementos](incrementos.md) | Observaciones de revisión, avances relacionados y objetivos por entrega |
 | [Transcripción del Incremento 1](incrementos_audios_transcritos/incremento-1-2026-10-31.md) | Transcripción automática con marcas de tiempo del audio de la presentación |
+| [Transcripción del Incremento 2](incrementos_audios_transcritos/incremento-2-2026-11-03.md) | Transcripción automática del audio de la revisión del 3 de noviembre |
+| [Transcripción del Incremento 3](incrementos_audios_transcritos/incremento-3-2026-11-15.md) | Transcripción automática del audio de la revisión del 15 de noviembre |
 | [Pendientes y faltantes](PENDIENTES_Y_FALTANTES.md) | Hallazgos verificados, pendientes por confirmar y decisiones propuestas |
 | [Diseño v2](diseno-v2.md) | Referencia del rediseño visual |
 | [Capturas](capturas/) | Evidencia visual de pantallas en resoluciones documentadas |

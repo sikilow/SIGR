@@ -31,15 +31,9 @@ const emit = defineEmits<{
   solicitada: [cuenta: Cuenta]
 }>()
 
-const OPCIONES: ReadonlyArray<{ valor: TipoPago; ayuda: string }> = [
-  { valor: 'fisico', ayuda: 'El cajero cobra en persona.' },
-  { valor: 'digital', ayuda: 'El cajero cobra por medios digitales.' },
-]
-
 const anuncios = useAnunciosStore()
 const claves = crearClaveIdempotencia()
 
-const tipo = ref<TipoPago | null>(null)
 const metodosDisponibles = ref<MetodoPagoAdmin[]>([])
 const idMetodoPagoSolicitado = ref<number | null>(null)
 const cargandoMetodos = ref(false)
@@ -55,31 +49,30 @@ const vigentes = computed(() => (props.cuenta?.pedidos ?? []).filter(sumaAlTotal
 const sinEntregar = computed(() => vigentes.value.filter((p) => estaSinEntregar(p.estado)))
 /** Sin pedidos vigentes no hay nada que cobrar. */
 const sinPedidosActivos = computed(() => (props.cuenta?.total ?? 0) === 0 || vigentes.value.length === 0)
-const errorTipo = computed(() => {
-  if (!intentado.value) return ''
-  if (tipo.value === null) return 'Elige una forma de pago para continuar.'
-  if (tipo.value !== null && idMetodoPagoSolicitado.value === null) return 'Elige un método de pago de la categoría seleccionada.'
-  return ''
-})
+/** El mesero elige el método; la forma de pago (físico o digital) la define la categoría de ese método. */
+const metodoSeleccionado = computed(() => metodosDisponibles.value.find((m) => m.idMetodo === idMetodoPagoSolicitado.value) ?? null)
+const tipo = computed<TipoPago | null>(() => metodoSeleccionado.value?.tipo ?? null)
+const errorTipo = computed(() => (intentado.value && idMetodoPagoSolicitado.value === null ? 'Elige un método de pago para continuar.' : ''))
+/** Todas las categorías activas con sus métodos activos (las físicas primero). */
 const categoriasDisponibles = computed(() => {
-  const grupos = new Map<number, { id: number; nombre: string; metodos: MetodoPagoAdmin[] }>()
-  for (const metodo of metodosDisponibles.value.filter((item) => item.tipo === tipo.value)) {
+  const grupos = new Map<number, { id: number; nombre: string; tipo: TipoPago; metodos: MetodoPagoAdmin[] }>()
+  for (const metodo of metodosDisponibles.value) {
     const grupo = grupos.get(metodo.idCategoriaMetodoPago) ?? {
       id: metodo.idCategoriaMetodoPago,
       nombre: metodo.categoria,
+      tipo: metodo.tipo,
       metodos: [],
     }
     grupo.metodos.push(metodo)
     grupos.set(metodo.idCategoriaMetodoPago, grupo)
   }
-  return [...grupos.values()]
+  return [...grupos.values()].sort((a, b) => (a.tipo === b.tipo ? a.id - b.id : a.tipo === 'fisico' ? -1 : 1))
 })
 
 watch(
   () => props.abierto,
   (abierto) => {
     if (!abierto) return
-    tipo.value = null
     intentado.value = false
     enCurso.value = false
     errorReintentable.value = ''
@@ -88,23 +81,28 @@ watch(
     idMetodoPagoSolicitado.value = null
     errorMetodos.value = ''
     claves.soltar()
+    // Se consultan al abrir (no solo al elegir la forma de pago) para ver de inmediato lo que Gerencia acaba de agregar.
+    void cargarMetodos()
   },
 )
 
-watch(tipo, async (elegido) => {
-  idMetodoPagoSolicitado.value = null
+/** Trae los métodos activos del servidor. Conserva el método elegido si sigue disponible. */
+async function cargarMetodos() {
   errorMetodos.value = ''
-  if (elegido === null) return
-
   cargandoMetodos.value = true
   try {
-    metodosDisponibles.value = await servicios.catalogo.listarMetodosPagoDisponibles()
+    const actuales = await servicios.catalogo.listarMetodosPagoDisponibles()
+    metodosDisponibles.value = actuales
+    if (idMetodoPagoSolicitado.value !== null && !actuales.some((m) => m.idMetodo === idMetodoPagoSolicitado.value)) {
+      idMetodoPagoSolicitado.value = null
+    }
   } catch (e) {
-    errorMetodos.value = e instanceof Error ? e.message : 'No se pudieron cargar los métodos digitales.'
+    errorMetodos.value = e instanceof Error ? e.message : 'No se pudieron cargar los métodos de pago.'
   } finally {
     cargandoMetodos.value = false
   }
-})
+}
+
 
 watch(rechazo, async (texto) => {
   if (!texto) return
@@ -186,7 +184,7 @@ async function solicitar() {
     <form v-if="cuenta" class="solicitar" novalidate @submit.prevent="solicitar">
       <header>
         <h2 id="solicitar-titulo">Solicitar cuenta · Mesa {{ mesaNumero }}</h2>
-        <p class="solicitar__sub">El cajero hará el cobro; aquí eliges la categoría y el método de pago.</p>
+        <p class="solicitar__sub">El cajero hará el cobro; aquí eliges con qué método pagará el cliente.</p>
       </header>
 
       <p class="solicitar__total">
@@ -239,54 +237,47 @@ async function solicitar() {
 
         <template v-else>
           <fieldset ref="grupoPago" class="pago" :aria-describedby="errorTipo ? 'pago-error' : undefined">
-            <legend>Forma de pago <span class="solicitar__requerido">(obligatorio)</span></legend>
-            <label
-              v-for="opcion in OPCIONES"
-              :key="opcion.valor"
-              class="pago__opcion"
-              :class="{ 'pago__opcion--elegida': tipo === opcion.valor }"
-            >
-              <input
-                v-model="tipo"
-                type="radio"
-                name="tipo-pago"
-                :value="opcion.valor"
-                :disabled="enCurso"
-                :aria-invalid="errorTipo ? 'true' : undefined"
-              />
-              <span class="pago__texto">
-                <strong>{{ ETIQUETA_TIPO_PAGO[opcion.valor] }}</strong>
-                <small>{{ opcion.ayuda }}</small>
-              </span>
-              <svg v-if="tipo === opcion.valor" class="pago__marca" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m5 12 5 5 9-10" />
-              </svg>
-            </label>
+            <legend>Método de pago <span class="solicitar__requerido">(obligatorio)</span></legend>
+
+            <p v-if="cargandoMetodos && categoriasDisponibles.length === 0" class="campo__ayuda" role="status">Cargando métodos disponibles…</p>
+            <div v-else-if="errorMetodos" class="texto-error" role="alert">
+              <p>{{ errorMetodos }}</p>
+              <button type="button" class="btn btn--secundario" @click="cargarMetodos">Reintentar</button>
+            </div>
+            <p v-else-if="categoriasDisponibles.length === 0" class="campo__ayuda">
+              Gerencia aún no ha activado ningún método de pago.
+            </p>
+
+            <section v-for="categoria in categoriasDisponibles" :key="categoria.id" class="pago__categoria" :aria-label="categoria.nombre">
+              <h3 class="pago__categoria-titulo">
+                {{ categoria.nombre }}
+                <span class="pago__tipo">{{ ETIQUETA_TIPO_PAGO[categoria.tipo] }}</span>
+              </h3>
+              <label
+                v-for="metodo in categoria.metodos"
+                :key="metodo.idMetodo"
+                class="pago__opcion"
+                :class="{ 'pago__opcion--elegida': idMetodoPagoSolicitado === metodo.idMetodo }"
+              >
+                <input
+                  v-model.number="idMetodoPagoSolicitado"
+                  type="radio"
+                  name="metodo-pago"
+                  :value="metodo.idMetodo"
+                  :disabled="enCurso"
+                  :aria-invalid="errorTipo ? 'true' : undefined"
+                />
+                <span class="pago__texto">
+                  <strong>{{ metodo.nombre }}</strong>
+                  <small>{{ categoria.tipo === 'fisico' ? 'El cajero cobra en persona.' : 'El cajero cobra por medios digitales.' }}</small>
+                </span>
+                <svg v-if="idMetodoPagoSolicitado === metodo.idMetodo" class="pago__marca" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m5 12 5 5 9-10" />
+                </svg>
+              </label>
+            </section>
             <p v-if="errorTipo" id="pago-error" class="texto-error" role="alert">{{ errorTipo }}</p>
           </fieldset>
-
-          <div v-if="tipo" class="campo">
-            <label for="metodo-pago-solicitado">Método {{ tipo === 'fisico' ? 'físico' : 'digital' }}</label>
-            <select
-              id="metodo-pago-solicitado"
-              v-model.number="idMetodoPagoSolicitado"
-              :disabled="enCurso || cargandoMetodos || categoriasDisponibles.length === 0"
-              :aria-invalid="errorTipo ? 'true' : undefined"
-              :aria-describedby="errorTipo ? 'pago-error' : undefined"
-            >
-              <option :value="null" disabled>Elige un método</option>
-              <optgroup v-for="categoria in categoriasDisponibles" :key="categoria.id" :label="categoria.nombre">
-                <option v-for="metodo in categoria.metodos" :key="metodo.idMetodo" :value="metodo.idMetodo">
-                  {{ metodo.nombre }}
-                </option>
-              </optgroup>
-            </select>
-            <p v-if="cargandoMetodos" class="campo__ayuda" role="status">Cargando métodos disponibles…</p>
-            <p v-else-if="errorMetodos" class="texto-error" role="alert">{{ errorMetodos }}</p>
-            <p v-else-if="categoriasDisponibles.length === 0" class="campo__ayuda">
-              Gerencia aún no ha activado métodos para esta categoría.
-            </p>
-          </div>
         </template>
 
         <div v-if="errorReintentable" class="solicitar__alerta" role="alert">
@@ -468,6 +459,33 @@ async function solicitar() {
 .pago__marca {
   flex: none;
   color: var(--color-primary-dark);
+}
+
+.pago__categoria {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+}
+
+.pago__categoria-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin: var(--espacio-2) 0 0;
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pago__tipo {
+  padding: 0 var(--espacio-2);
+  border-radius: var(--radio-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: var(--texto-sm);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 </style>
