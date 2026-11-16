@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { requiereAuth } from "../utils/auth";
-import { actualizarConfiguracionReservacion, obtenerConfiguracionReservacion, listarCategorias, crearCategoria, editarCategoria, borrarCategoria, listarProductos, crearProducto, editarProducto, listarSeccionesAdmin, crearSeccionAdmin, editarSeccionAdmin, borrarSeccionAdmin, listarMesasAdmin, crearMesaAdmin, editarMesaAdmin, listarMetodosPago, listarMetodosPagoDisponibles, crearCategoriaMetodoPago, actualizarCategoriaMetodoPago, crearMetodoPago, actualizarMetodoPago } from "../controllers/catalogo";
+import { actualizarConfiguracionReservacion, obtenerConfiguracionReservacion, listarCategorias, crearCategoria, editarCategoria, borrarCategoria, listarProductos, crearProducto, editarProducto, listarSeccionesAdmin, crearSeccionAdmin, editarSeccionAdmin, borrarSeccionAdmin, listarMesasAdmin, crearMesaAdmin, editarMesaAdmin, listarMetodosPago, listarMetodosPagoDisponibles, listarCanales, listarCanalesDisponibles, crearCanal, actualizarCanal, crearCategoriaMetodoPago, actualizarCategoriaMetodoPago, crearMetodoPago, actualizarMetodoPago } from "../controllers/catalogo";
 
 export const catalogoRouter = Router();
 
 catalogoRouter.get("/metodos-pago/disponibles", requiereAuth(), listarMetodosPagoDisponibles);
+catalogoRouter.get("/canales/disponibles", requiereAuth(), listarCanalesDisponibles);
 catalogoRouter.use(requiereAuth("gerente"));
 
 catalogoRouter.get("/categorias", listarCategorias);
@@ -26,5 +27,8 @@ catalogoRouter.patch("/configuracion-reservacion", actualizarConfiguracionReserv
 catalogoRouter.get("/metodos-pago", listarMetodosPago);
 catalogoRouter.post("/metodos-pago/categorias", crearCategoriaMetodoPago);
 catalogoRouter.patch("/metodos-pago/categorias/:id", actualizarCategoriaMetodoPago);
+catalogoRouter.get("/canales", listarCanales);
+catalogoRouter.post("/canales", crearCanal);
+catalogoRouter.patch("/canales/:id", actualizarCanal);
 catalogoRouter.post("/metodos-pago", crearMetodoPago);
 catalogoRouter.patch("/metodos-pago/:id", actualizarMetodoPago);

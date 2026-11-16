@@ -2,13 +2,17 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AvisoGlobal from '../components/AvisoGlobal.vue'
+import AlertaSolicitudes from '../components/hostess/AlertaSolicitudes.vue'
 import FranjaDemo from '../components/FranjaDemo.vue'
 import LogoMarca from '../components/LogoMarca.vue'
+import { usePolling } from '../composables/usePolling'
 import { usandoMock } from '../services'
 import { useSesionStore } from '../stores/sesion'
+import { useSolicitudesStore } from '../stores/solicitudes'
 import { ETIQUETA_ROL } from '../types'
 
 const sesion = useSesionStore()
+const solicitudes = useSolicitudesStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -29,6 +33,10 @@ watch(
 // se dispara la primera vez: se enfoca el contenido también al montarse.
 onMounted(() => contenido.value?.focus({ preventScroll: true }))
 
+// Revisa cada pocos segundos si llegó una solicitud de reservación nueva (alerta + insignia del menú).
+const polling = usePolling(() => solicitudes.cargar())
+onMounted(polling.iniciar)
+
 
 const rolVisible = computed(() => (sesion.rol ? ETIQUETA_ROL[sesion.rol] : ''))
 
@@ -43,6 +51,7 @@ async function salir() {
     <a class="saltar-contenido" href="#contenido-principal">Saltar al contenido</a>
     <FranjaDemo />
     <AvisoGlobal />
+    <AlertaSolicitudes />
     <header class="barra">
       <div class="barra__marca">
         <LogoMarca :tamano="40" invertido />
@@ -80,6 +89,11 @@ async function salir() {
           <path d="M4 10h16M8 3v4M16 3v4M9 15l2 2 4-4" />
         </svg>
         <span>Reservaciones</span>
+        <span
+          v-if="solicitudes.pendientes.length > 0"
+          class="nav__insignia"
+          :aria-label="`${solicitudes.pendientes.length} por confirmar`"
+        >{{ solicitudes.pendientes.length }}</span>
       </RouterLink>
       <RouterLink class="nav__enlace" :to="{ name: 'hostess-espera' }">
         <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
@@ -267,5 +281,27 @@ async function salir() {
 
 .nav .nav__enlace.router-link-active svg {
   background: var(--color-primary-suave);
+}
+
+.nav__enlace {
+  position: relative;
+}
+
+/* Cantidad de reservaciones por confirmar: número + color (no solo color) */
+.nav__insignia {
+  position: absolute;
+  top: var(--espacio-1);
+  right: calc(50% - 2.4rem);
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--radio-pill);
+  background: var(--color-peligro);
+  color: var(--color-on-primary);
+  font-size: var(--texto-sm);
+  font-weight: 700;
+  line-height: 1;
 }
 </style>

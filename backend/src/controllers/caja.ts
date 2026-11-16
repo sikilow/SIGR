@@ -174,7 +174,7 @@ export const abrirCorte = async (req: Request, res: Response) => {
   const corte = await transaccion(async (cx) => {
     await bloquearCajero(cx, idCajero);
     if (await corteAbierto(cx, idCajero)) {
-      throw new ErrorApi(409, "estado_invalido", "Ya tienes un corte de caja abierto.");
+      throw new ErrorApi(409, "estado_invalido", "Ya iniciaste caja: cierra el corte actual antes de iniciar otro.");
     }
     const { insertId } = await ejecutar(
       cx,
@@ -200,7 +200,7 @@ export const cerrarCorte = async (req: Request, res: Response) => {
   const corte = await transaccion(async (cx) => {
     await bloquearCajero(cx, idCajero);
     const abierto = await corteAbierto(cx, idCajero);
-    if (!abierto) throw new ErrorApi(409, "estado_invalido", "No tienes un corte de caja abierto.");
+    if (!abierto) throw new ErrorApi(409, "estado_invalido", "No has iniciado caja.");
     const idCorte = Number(abierto.id_corte);
     const [fondo] = await filas(cx, "SELECT fondo_inicial FROM corte_caja WHERE id_corte = ?", [idCorte]);
     const cuadre = cuadrarCorte(Number(fondo?.fondo_inicial ?? 0), await desgloseCorte(cx, idCorte), efectivo_contado);
@@ -274,7 +274,7 @@ export const cobrarCuenta = async (req: Request, res: Response) => {
     transaccion(async (cx) => {
       await bloquearCajero(cx, idCajero);
       const corte = await corteAbierto(cx, idCajero);
-      if (!corte) throw new ErrorApi(409, "estado_invalido", "Abre un corte de caja antes de cobrar.");
+      if (!corte) throw new ErrorApi(409, "estado_invalido", "Inicia caja antes de cobrar.");
 
       const [fila] = await filas(
         cx,

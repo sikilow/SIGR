@@ -27,8 +27,14 @@ vi.mock("../src/services/idempotencia", () => ({
 vi.mock("../src/services/correo", () => ({
   esCorreoValido: (correo: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim()),
 }));
-vi.mock("../src/services/notificacionesReservacion", () => ({
+// Se conserva el encolado real (lo que se prueba aquí) y solo se simula el disparo del procesador.
+vi.mock("../src/services/notificacionesReservacion", async (original) => ({
+  ...(await original<typeof import("../src/services/notificacionesReservacion")>()),
   solicitarProcesamientoReservaciones: solicitarProcesamientoMock,
+}));
+// La comprobación de mesas disponibles tiene sus propias pruebas (disponibilidadReservacion.test.ts).
+vi.mock("../src/services/disponibilidadReservacion", () => ({
+  exigirMesaDisponible: vi.fn(async () => {}),
 }));
 
 import { crearReservacion, editarReservacion } from "../src/controllers/hostess";

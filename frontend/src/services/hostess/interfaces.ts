@@ -25,6 +25,11 @@ export interface HostessService {
    */
   listarReservaciones(dia?: string): Promise<Reservacion[]>
   /**
+   * GET /reservaciones/pendientes: las reservaciones que siguen `pendiente` (sin confirmar), de cualquier día.
+   * Con ellas la hostess recibe la alerta de «solicitud nueva».
+   */
+  listarReservacionesPendientes(): Promise<Reservacion[]>
+  /**
    * GET /lista-espera (CAMBIO PROPUESTO). Sin argumento, los grupos que siguen `esperando` (`?estado=esperando`).
    * `'todas'`: todos los estados de HOY más los que siguen esperando (la API omite `estado`).
    */

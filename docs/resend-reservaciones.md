@@ -107,3 +107,14 @@ Si falla el envío:
 - En Gmail, confirma que la contraseña es una contraseña de aplicación y que `SMTP_USER` coincide con el correo de `CORREO_REMITENTE`.
 - Revisa `ultimo_error`, `intentos` y `creada_en` de la notificación, además de los logs (los destinatarios se enmascaran).
 - Nunca imprimas `SMTP_PASS` ni `RESEND_API_KEY`.
+
+## Qué dice cada correo de reservación
+
+| Aviso | Cuándo sale | Qué dice |
+| --- | --- | --- |
+| **Solicitud recibida** (`confirmacion`, evento `creada`) | Al registrar una reservación (hostess o portal) | «Recibimos tu solicitud de reservación». Está pendiente; **no hay mesa asegurada** hasta la confirmación |
+| **Reservación confirmada** (`confirmacion`, evento `confirmada`) | Cuando la hostess confirma (antes se comprueba que haya mesa) | Fecha, hora, personas y mesa (o «te asignaremos una mesa al llegar») |
+| **Recordatorio** | Los minutos configurados antes de la hora, solo reservaciones **confirmadas** | «Tu mesa te espera» |
+| **Vencida** | Al pasar la tolerancia sin llegada (solicitud o reservación) | La solicitud o reservación venció y la mesa quedó liberada |
+| **Cancelación** | Al cancelar una solicitud o reservación vigente | Fue cancelada |
+

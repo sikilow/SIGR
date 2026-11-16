@@ -241,6 +241,20 @@ La actualización requiere los tres campos enteros: tolerancia de 5–180 minuto
 `CORREO_PROVEEDOR`, `CORREO_REMITENTE` y las credenciales de Resend o SMTP en `backend/.env`; el detalle está en
 [`resend-reservaciones.md`](resend-reservaciones.md).
 
+### `GET /api/reservaciones/pendientes`
+
+Las reservaciones que siguen en estado `pendiente` (sin confirmar), de **cualquier día**, ordenadas por fecha y hora (máximo 200). Tienen la misma forma que `GET /api/reservaciones`. La pantalla de la hostess lo consulta cada pocos segundos: una reservación `pendiente` que no conocía es una **solicitud nueva** y se le avisa con una alerta en pantalla (`AlertaSolicitudes.vue`, `stores/solicitudes.ts`); además el menú «Reservaciones» muestra cuántas hay por confirmar. Roles: `hostess` y `gerente`.
+
+### Mesa disponible al registrar y al confirmar
+
+`POST /api/reservaciones`, `PATCH /api/reservaciones/{id}` con `{ "estado": "confirmada" }` y `POST /api/reservaciones-clientes` (portal) comprueban que haya una mesa **del salón** (no las virtuales de «Para llevar») con capacidad para el grupo a esa hora, descontando las reservaciones `confirmada` o `llego` que se traslapan (cada una ocupa su mesa 90 minutos; las que ya tienen mesa ocupan esa mesa y las demás, la más chica que les alcance). Si no hay, responden `409 mesa_no_disponible`: «No tenemos mesas para N personas.» o «No hay mesa disponible para N personas a esa hora… Elige otro horario.». Las solicitudes `pendiente` todavía no comprometen mesa. Código: `backend/src/services/disponibilidadReservacion.ts`.
+
+### Correos de la reservación
+
+- Al **registrar** (hostess o portal) se encola `confirmacion` con evento `creada`: «Recibimos tu solicitud de reservación». **No promete mesa**: dice que está pendiente y que se avisará al confirmar.
+- Al **confirmar** se encola `confirmacion` con evento `confirmada`: «Reservación confirmada».
+- El recordatorio solo se manda a reservaciones `confirmada`.
+
 ### `PATCH /api/reservaciones/{id}`
 
 O **cambia el estado** o **edita datos**, nunca las dos cosas (si vienen juntas → `422 estado_invalido`). Solo viajan los

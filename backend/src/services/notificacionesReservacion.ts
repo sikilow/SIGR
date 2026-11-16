@@ -1,4 +1,4 @@
-import { consumirErrorEnvioCorreo, enviarCorreo } from "./correo";
+import { consumirErrorEnvioCorreo, enviarCorreo, esCorreoValido } from "./correo";
 import { ejecutar, filas, pool, transaccion } from "./db";
 import {
   plantillaCancelacion,
@@ -9,6 +9,7 @@ import {
   type DatosReservacion,
 } from "./plantillasCorreo";
 import type { RowDataPacket } from "mysql2/promise";
+import type { Ejecutor } from "./db";
 
 const INTERVALO_PROCESAMIENTO_MS = 30_000;
 const LIMITE_NOTIFICACIONES = 20;
@@ -26,6 +27,34 @@ interface AvisoReservacion extends RowDataPacket {
   tolerancia_minutos: number;
 }
 
+/**
+ * Encola un correo de la reservación dentro de la transacción que la crea, confirma o cancela. `creada` es el aviso de
+ * «solicitud recibida» (no promete mesa); `confirmada`, el de reservación confirmada. Sin correo válido no hace nada.
+ */
+export async function encolarNotificacionReservacion(
+  cx: Ejecutor,
+  reservacion: RowDataPacket,
+  tipo: "confirmacion" | "cancelacion",
+  evento: "creada" | "confirmada" | "",
+): Promise<void> {
+  if (typeof reservacion.cliente_correo !== "string" || !esCorreoValido(reservacion.cliente_correo)) {
+    return;
+  }
+  // `tipo` sale de una unión cerrada (no de la petición), por eso puede ir literal en el SQL.
+  await ejecutar(
+    cx,
+    `INSERT INTO notificacion_reservacion (id_reservacion, tipo, evento, destinatario)
+     SELECT r.id_reservacion, '${tipo}', ?, c.correo
+       FROM reservacion r
+       JOIN cliente c ON c.id_cliente = r.id_cliente
+      WHERE r.id_reservacion = ?
+        AND c.correo IS NOT NULL
+        AND TRIM(c.correo) <> ''
+     ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion`,
+    [evento, reservacion.id_reservacion],
+  );
+}
+
 async function programarRecordatorios(): Promise<void> {
   await ejecutar(
     pool,
@@ -34,7 +63,7 @@ async function programarRecordatorios(): Promise<void> {
        FROM reservacion r
        JOIN cliente c ON c.id_cliente = r.id_cliente
        JOIN configuracion_reservacion cr ON cr.id = 1
-      WHERE r.estado IN ('pendiente', 'confirmada')
+      WHERE r.estado = 'confirmada'
         AND c.correo IS NOT NULL AND TRIM(c.correo) <> ''
         AND r.fecha_hora > NOW()
         AND r.fecha_hora <= DATE_ADD(NOW(), INTERVAL cr.recordatorio_minutos MINUTE)

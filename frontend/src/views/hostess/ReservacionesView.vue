@@ -37,7 +37,7 @@ function cambiarFiltro(filtro: FiltroReservaciones) {
 
 const MENSAJE_VACIO: Record<FiltroReservaciones, string> = {
   todas: 'No hay reservaciones este día',
-  pendiente: 'No hay reservaciones pendientes',
+  pendiente: 'No hay solicitudes por confirmar',
   confirmada: 'No hay reservaciones confirmadas',
   llego: 'Todavía no llega ninguna reservación',
   cancelada: 'No hay reservaciones canceladas',

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { servicios } from '../services'
-import type { EstadoMesa, Mesa } from '../types'
+import type { AperturaParaLlevar, EstadoMesa, Mesa } from '../types'
 import {
   TODAS_LAS_SECCIONES,
   agruparPorSeccion,
@@ -26,6 +26,8 @@ export function filtroDesdeConsulta(valor: unknown): FiltroMesas {
 
 export const useMesasStore = defineStore('mesas', () => {
   const mesas = ref<Mesa[]>([])
+  /** Mesas virtuales de «Para llevar» que están libres: son un banco para abrir pedidos, no se muestran como tarjetas. */
+  const paraLlevarLibres = ref(0)
   /** `true` solo mientras llega la PRIMERA carga (sin datos que mostrar todavía). */
   const cargando = ref(false)
   /** `true` durante cualquier petición, incluida la actualización automática. */
@@ -91,7 +93,9 @@ export const useMesasStore = defineStore('mesas', () => {
     try {
       const recibidas = await servicios.mesas.listar()
       const nuevas = primeraCarga ? [] : detectarNuevasListas(mesas.value, recibidas)
-      mesas.value = recibidas
+      const esLibreParaLlevar = (m: Mesa) => m.esParaLlevar === true && m.estado === 'libre'
+      paraLlevarLibres.value = recibidas.filter(esLibreParaLlevar).length
+      mesas.value = recibidas.filter((m) => !esLibreParaLlevar(m))
       nuevasListas.value = nuevas.map((m) => m.idMesa)
       anuncio.value = nuevas.map((m) => `Mesa ${m.numero}: pedido listo`).join('. ')
       ultimaActualizacion.value = Date.now()
@@ -123,6 +127,24 @@ export const useMesasStore = defineStore('mesas', () => {
     await cargar()
   }
 
+  /** Abre un pedido para llevar (ocupa una mesa virtual) y recarga el panel. */
+  async function abrirParaLlevar(idCanal: number, referencia: string | null, clave?: string): Promise<AperturaParaLlevar> {
+    try {
+      return await servicios.mesas.abrirParaLlevar(idCanal, referencia, clave)
+    } finally {
+      await invalidar()
+    }
+  }
+
+  /** Libera una mesa virtual sin pedidos y recarga el panel. */
+  async function liberarParaLlevar(idMesa: number): Promise<void> {
+    try {
+      await servicios.mesas.liberarParaLlevar(idMesa)
+    } finally {
+      await invalidar()
+    }
+  }
+
   function mostrarAviso(texto: string) {
     aviso.value = texto
   }
@@ -133,6 +155,9 @@ export const useMesasStore = defineStore('mesas', () => {
 
   return {
     mesas,
+    paraLlevarLibres,
+    abrirParaLlevar,
+    liberarParaLlevar,
     cargando,
     actualizando,
     error,

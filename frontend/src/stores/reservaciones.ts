@@ -12,6 +12,7 @@ import type {
 } from '../types'
 import { aDiaISO, filtrarReservaciones, type FiltroReservaciones } from '../utils/reservaciones'
 import { useSalonStore } from './salon'
+import { useSolicitudesStore } from './solicitudes'
 
 /** Convierte un valor de la URL (?estado=) en un filtro válido; si no lo es, `todas`. */
 export function filtroReservacionesDesdeConsulta(valor: unknown): FiltroReservaciones {
@@ -120,7 +121,10 @@ export const useReservacionesStore = defineStore('reservaciones', () => {
 
   async function crear(reservacion: NuevaReservacion, clave: string): Promise<Reservacion> {
     try {
-      return await servicios.hostess.crearReservacion(reservacion, clave)
+      const creada = await servicios.hostess.crearReservacion(reservacion, clave)
+      // La hostess ya sabe de la que acaba de crear: no se le avisa como «solicitud nueva».
+      useSolicitudesStore().marcarVista(creada.idReservacion)
+      return creada
     } finally {
       await refrescarTodo()
     }

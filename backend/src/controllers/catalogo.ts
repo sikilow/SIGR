@@ -245,6 +245,50 @@ export const actualizarMetodoPago = async (req: Request, res: Response) => {
   res.json(metodoPagoDto(fila));
 };
 
+// ---------- Canales de pedido (para llevar): mostrador, teléfono, plataformas… ----------
+const NombreCanal = z.string().trim().min(1, "es obligatorio").max(40, "máximo 40 caracteres");
+const NuevoCanal = z.object({ nombre: NombreCanal }).strict();
+const CambioCanal = z.object({ activo: z.boolean() }).strict();
+
+function canalDto(fila: Record<string, unknown>) {
+  return { id_canal: Number(fila.id_canal), nombre: String(fila.nombre), activo: Boolean(fila.activo) };
+}
+
+/** GET /api/catalogo/canales: todos los canales, para Gerencia. */
+export const listarCanales = async (_req: Request, res: Response) => {
+  res.json((await filas(pool, "SELECT id_canal, nombre, activo FROM canal_pedido ORDER BY id_canal")).map(canalDto));
+};
+
+/** GET /api/catalogo/canales/disponibles: los canales activos, para el mesero. */
+export const listarCanalesDisponibles = async (_req: Request, res: Response) => {
+  res.json((await filas(pool, "SELECT id_canal, nombre, activo FROM canal_pedido WHERE activo = TRUE ORDER BY id_canal")).map(canalDto));
+};
+
+/** POST /api/catalogo/canales */
+export const crearCanal = async (req: Request, res: Response) => {
+  const { nombre } = validar(NuevoCanal, req.body);
+  let id: number;
+  try {
+    id = (await ejecutar(pool, "INSERT INTO canal_pedido (nombre) VALUES (?)", [nombre])).insertId;
+  } catch (error) {
+    if (esDuplicado(error)) throw new ErrorApi(409, "estado_invalido", "Ya existe un canal con ese nombre.");
+    throw error;
+  }
+  const [fila] = await filas(pool, "SELECT id_canal, nombre, activo FROM canal_pedido WHERE id_canal = ?", [id]);
+  if (!fila) throw new ErrorApi(500, "desconocido", "No se pudo recuperar el canal creado.");
+  res.status(201).json(canalDto(fila));
+};
+
+/** PATCH /api/catalogo/canales/:id: activa o desactiva el canal (no se borra: las cuentas anteriores lo conservan). */
+export const actualizarCanal = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const { activo } = validar(CambioCanal, req.body);
+  const r = await ejecutar(pool, "UPDATE canal_pedido SET activo = ? WHERE id_canal = ?", [activo, id]);
+  const [fila] = await filas(pool, "SELECT id_canal, nombre, activo FROM canal_pedido WHERE id_canal = ?", [id]);
+  if (!fila || (r.affectedRows === 0 && !fila)) throw new ErrorApi(404, "no_encontrado", "El canal no existe.");
+  res.json(canalDto(fila));
+};
+
 const Texto = (max: number) => z.string().trim().min(1, "es obligatorio").max(max, `máximo ${max} caracteres`);
 const DescripcionProducto = Texto(255).refine(
   (descripcion) => descripcion.toLocaleLowerCase() !== "detalle pendiente de completar",

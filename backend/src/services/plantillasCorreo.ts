@@ -260,9 +260,31 @@ export function plantillaConfirmacion(
   datos: DatosReservacion & { evento: "creada" | "confirmada" },
 ): CorreoReservacion {
   const confirmada = datos.evento === "confirmada";
-  const asunto = confirmada ? "Reservación confirmada" : "Reservación registrada";
-  const texto = `Hola ${datos.nombre}, tu reservación en La Madalena quedó ${confirmada ? "confirmada" : "registrada"} para el ${fechaTexto(datos.fechaHora)}, para ${datos.personas} persona(s).${textoMesa(datos)} ¡Te esperamos!`;
   const fecha = fechaLegible(datos.fechaHora);
+
+  // Una solicitud recién hecha NO promete mesa: el restaurante todavía tiene que confirmarla.
+  if (!confirmada) {
+    const asunto = "Recibimos tu solicitud de reservación";
+    return {
+      asunto,
+      texto: `Hola ${datos.nombre}, recibimos tu solicitud de reservación en La Madalena para el ${fechaTexto(datos.fechaHora)}, para ${datos.personas} persona(s). Todavía no está confirmada: en cuanto el restaurante la confirme te avisaremos por correo. Hasta entonces no tienes una mesa asegurada.`,
+      html: construirHtml({
+        asunto,
+        preheader: `Recibimos tu solicitud para el ${fecha}. Te confirmaremos en un momento.`,
+        etiqueta: "Solicitud recibida",
+        titulo: "Recibimos tu solicitud",
+        saludo: `Hola ${datos.nombre},`,
+        parrafo: "Tu solicitud quedó pendiente. En un momento el restaurante la revisará y te confirmaremos por este mismo medio.",
+        panel: panelReservacion(datos, MARCA.maiz, metaReservacion(datos, { mesa: false })),
+        nota: "Esto aún no es una confirmación: la mesa depende de la disponibilidad. Te avisaremos en cuanto esté confirmada.",
+        cierre: "Gracias por elegirnos.",
+        acento: MARCA.maiz,
+      }),
+    };
+  }
+
+  const asunto = "Reservación confirmada";
+  const texto = `Hola ${datos.nombre}, tu reservación en La Madalena quedó confirmada para el ${fechaTexto(datos.fechaHora)}, para ${datos.personas} persona(s).${textoMesa(datos)} ¡Te esperamos!`;
   const mesa =
     datos.mesaNumero == null
       ? "Te asignaremos una mesa al llegar."
@@ -273,11 +295,11 @@ export function plantillaConfirmacion(
     texto,
     html: construirHtml({
       asunto,
-      preheader: `Tu reservación para el ${fecha} quedó ${confirmada ? "confirmada" : "registrada"}.`,
-      etiqueta: confirmada ? "Reservación confirmada" : "Reservación registrada",
-      titulo: confirmada ? "Todo listo para tu visita" : "Tu mesa está apartada",
+      preheader: `Tu reservación para el ${fecha} quedó confirmada.`,
+      etiqueta: "Reservación confirmada",
+      titulo: "Todo listo para tu visita",
       saludo: `Hola ${datos.nombre},`,
-      parrafo: `Tu reservación quedó ${confirmada ? "confirmada" : "registrada"}. Te guardamos los detalles.`,
+      parrafo: "Tu reservación quedó confirmada. Te guardamos los detalles.",
       panel: panelReservacion(datos, MARCA.terracota, metaReservacion(datos, { mesa: true })),
       nota: `${mesa} Llega dentro de los ${datos.toleranciaMinutos} minutos de tolerancia.`,
       cierre: "Te esperamos.",
@@ -312,7 +334,7 @@ export function plantillaRecordatorio(datos: DatosReservacion): CorreoReservacio
 
 export function plantillaVencida(datos: DatosReservacion): CorreoReservacion {
   const asunto = "Tu reservación venció";
-  const texto = `Hola ${datos.nombre}, no registramos tu llegada a La Madalena dentro de los ${datos.toleranciaMinutos} minutos de tolerancia. Tu reservación del ${fechaTexto(datos.fechaHora)} para ${datos.personas} persona(s) venció y la mesa quedó liberada. Si tienes dudas o deseas visitarnos, contacta al restaurante para consultar disponibilidad.`;
+  const texto = `Hola ${datos.nombre}, tu solicitud o reservación en La Madalena del ${fechaTexto(datos.fechaHora)} para ${datos.personas} persona(s) venció: no se registró tu llegada dentro de los ${datos.toleranciaMinutos} minutos de tolerancia y la mesa quedó liberada. Si tienes dudas o deseas visitarnos, contacta al restaurante para consultar disponibilidad.`;
   return {
     asunto,
     texto,

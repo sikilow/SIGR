@@ -11,17 +11,21 @@ import { conIdempotencia } from "../services/idempotencia";
  * quedan fuera del panel y del salón. Las primeras cinco son columnas de `mesa`. El resto es el resumen CALCULADO de su cuenta activa (la que no
  * está cerrada), que el Panel de mesas necesita: estado_cuenta, pedidos_activos (no cancelados ni pagados),
  * total_cuenta (sin cancelados) y pedidos_listos. tipo_pago_solicitado es la columna de `cuenta`.
+ * es_para_llevar (de la sección) marca las mesas virtuales de pedidos para llevar; canal y referencia son de su cuenta.
  */
 export const listarMesas = async (_req: Request, res: Response) => {
   const rows = await filas(
     pool,
     `SELECT m.id_mesa, m.numero, m.capacidad, m.zona, m.planta_baja, m.espacio_carriola, m.sin_escaleras, m.estado,
+            s.es_para_llevar, cn.nombre AS canal, c.referencia,
             c.estado AS estado_cuenta, c.tipo_pago_solicitado,
             COALESCE(pa.pedidos_activos, 0) AS pedidos_activos,
             COALESCE(pa.pedidos_listos, 0)  AS pedidos_listos,
             COALESCE(t.total, 0)            AS total_cuenta
        FROM mesa m
+       JOIN seccion s ON s.nombre = m.zona AND s.activa = TRUE
        LEFT JOIN cuenta c ON c.id_mesa = m.id_mesa AND c.estado <> 'cerrada'
+       LEFT JOIN canal_pedido cn ON cn.id_canal = c.id_canal
        LEFT JOIN (
               SELECT p.id_cuenta,
                      SUM(ep.nombre NOT IN ('Cancelado', 'Pagado')) AS pedidos_activos,
@@ -38,7 +42,6 @@ export const listarMesas = async (_req: Request, res: Response) => {
                GROUP BY p.id_cuenta
             ) t ON t.id_cuenta = c.id_cuenta
       WHERE m.activa = TRUE
-        AND EXISTS (SELECT 1 FROM seccion s WHERE s.nombre = m.zona AND s.activa = TRUE)
       ORDER BY m.numero`,
   );
 
@@ -51,6 +54,9 @@ export const listarMesas = async (_req: Request, res: Response) => {
       planta_baja: Number(r.planta_baja) === 1,
       espacio_carriola: Number(r.espacio_carriola) === 1,
       sin_escaleras: Number(r.sin_escaleras) === 1,
+      es_para_llevar: Number(r.es_para_llevar) === 1,
+      canal: (r.canal as string | null) ?? null,
+      referencia: (r.referencia as string | null) ?? null,
       estado: r.estado as string,
       estado_cuenta: (r.estado_cuenta as string | null) ?? null,
       tipo_pago_solicitado: (r.tipo_pago_solicitado as string | null) ?? null,
@@ -114,7 +120,7 @@ export const asignarMesa = async (req: Request, res: Response) => {
 
       const [disponibilidad] = await filas(
         cx,
-        `SELECT m.numero, m.activa, s.activa AS seccion_activa
+        `SELECT m.numero, m.activa, (s.activa AND NOT s.es_para_llevar) AS seccion_activa
            FROM mesa m JOIN seccion s ON s.nombre = m.zona
           WHERE m.id_mesa = ? FOR UPDATE`,
         [mesaId],
@@ -129,13 +135,13 @@ export const asignarMesa = async (req: Request, res: Response) => {
         `UPDATE mesa AS m
             SET estado = 'ocupada'
           WHERE m.id_mesa = ? AND m.activa = TRUE AND m.estado IN ('libre', 'reservada')
-            AND EXISTS (SELECT 1 FROM seccion s WHERE s.nombre = m.zona AND s.activa = TRUE)`,
+            AND EXISTS (SELECT 1 FROM seccion s WHERE s.nombre = m.zona AND s.activa = TRUE AND s.es_para_llevar = FALSE)`,
         [mesaId],
       );
       if (cambioMesa.affectedRows === 0) {
         const [mesaExistente] = await filas(
           cx,
-          `SELECT m.numero, m.activa, s.activa AS seccion_activa
+          `SELECT m.numero, m.activa, (s.activa AND NOT s.es_para_llevar) AS seccion_activa
              FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
             WHERE m.id_mesa = ?`,
           [mesaId],
@@ -206,7 +212,7 @@ export const cambiarEstadoMesa = async (req: Request, res: Response) => {
   await transaccion(async (cx) => {
     const [mesa] = await filas(
       cx,
-      `SELECT m.id_mesa, m.numero, m.activa, s.activa AS seccion_activa
+      `SELECT m.id_mesa, m.numero, m.activa, (s.activa AND NOT s.es_para_llevar) AS seccion_activa
          FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
         WHERE m.id_mesa = ? FOR UPDATE`,
       [mesaId],
@@ -222,4 +228,104 @@ export const cambiarEstadoMesa = async (req: Request, res: Response) => {
     await ejecutar(cx, "UPDATE mesa SET estado = ? WHERE id_mesa = ?", [estado, mesaId]);
   });
   res.json({ id_mesa: mesaId, estado });
+};
+
+const NuevoParaLlevar = z
+  .object({
+    id_canal: z.number().int().positive(),
+    /** Nombre o folio para entregar el pedido (opcional). */
+    referencia: z.string().trim().max(60).optional(),
+  })
+  .strict();
+
+/**
+ * POST /api/mesas/para-llevar  { id_canal, referencia? }   (acepta Idempotency-Key)
+ * Abre un pedido para llevar: ocupa la primera mesa virtual libre de la sección «Para llevar» y le abre su cuenta con el
+ * canal elegido. Después se piden los productos como en cualquier mesa (POST /api/pedidos con el id_mesa devuelto).
+ */
+export const abrirParaLlevar = async (req: Request, res: Response) => {
+  const { id_canal, referencia } = validar(NuevoParaLlevar, req.body);
+
+  await conIdempotencia(req, res, 201, () =>
+    transaccion(async (cx) => {
+      const [canal] = await filas(cx, "SELECT nombre, activo FROM canal_pedido WHERE id_canal = ?", [id_canal]);
+      if (!canal || !Boolean(canal.activo)) {
+        throw new ErrorApi(422, "estado_invalido", "Elige un canal de pedido activo.");
+      }
+
+      const [mesa] = await filas(
+        cx,
+        `SELECT m.id_mesa, m.numero
+           FROM mesa m JOIN seccion s ON s.nombre = m.zona
+          WHERE s.es_para_llevar = TRUE AND s.activa = TRUE AND m.activa = TRUE AND m.estado = 'libre'
+            AND NOT EXISTS (SELECT 1 FROM cuenta c WHERE c.id_mesa = m.id_mesa AND c.estado <> 'cerrada')
+          ORDER BY m.numero
+          LIMIT 1
+          FOR UPDATE`,
+      );
+      if (!mesa) {
+        throw new ErrorApi(
+          409,
+          "mesa_no_disponible",
+          "No hay mesas para llevar libres. Libera una sin pedidos o pide a Gerencia que agregue más en la sección «Para llevar».",
+        );
+      }
+
+      await ejecutar(cx, "UPDATE mesa SET estado = 'ocupada' WHERE id_mesa = ?", [mesa.id_mesa]);
+      const { insertId } = await ejecutar(cx, "INSERT INTO cuenta (id_mesa, id_canal, referencia) VALUES (?, ?, ?)", [
+        mesa.id_mesa,
+        id_canal,
+        referencia || null,
+      ]);
+      return {
+        id_mesa: mesa.id_mesa as number,
+        numero: mesa.numero as number,
+        id_cuenta: insertId,
+        id_canal,
+        canal: canal.nombre as string,
+        referencia: referencia || null,
+      };
+    }),
+  );
+};
+
+/**
+ * POST /api/mesas/:id/liberar-para-llevar
+ * Libera una mesa virtual que se abrió por error o cuyo pedido se canceló por completo. Solo si la cuenta no tiene
+ * pedidos vigentes (todos cancelados o ninguno); si ya hay algo que cobrar, se cobra en Caja.
+ */
+export const liberarParaLlevar = async (req: Request, res: Response) => {
+  const mesaId = idDeRuta(req.params.id);
+
+  await conIdempotencia(req, res, 200, () =>
+    transaccion(async (cx) => {
+      const [mesa] = await filas(
+        cx,
+        `SELECT m.id_mesa, m.numero, s.es_para_llevar
+           FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
+          WHERE m.id_mesa = ? FOR UPDATE`,
+        [mesaId],
+      );
+      if (!mesa) throw new ErrorApi(404, "no_encontrado", `La mesa ${mesaId} no existe.`);
+      if (!Boolean(mesa.es_para_llevar)) {
+        throw new ErrorApi(409, "estado_invalido", `La mesa ${mesa.numero} no es una mesa para llevar.`);
+      }
+
+      const [cuenta] = await filas(cx, "SELECT id_cuenta, estado FROM cuenta WHERE id_mesa = ? AND estado <> 'cerrada' FOR UPDATE", [mesaId]);
+      if (cuenta) {
+        const [vigentes] = await filas(
+          cx,
+          `SELECT COUNT(*) AS n FROM pedido p JOIN estado_pedido ep ON ep.id_estado = p.id_estado
+            WHERE p.id_cuenta = ? AND ep.nombre <> 'Cancelado'`,
+          [cuenta.id_cuenta],
+        );
+        if (Number(vigentes?.n ?? 0) > 0) {
+          throw new ErrorApi(409, "estado_invalido", "El pedido tiene productos: cancélalos o cóbralo en Caja.");
+        }
+        await ejecutar(cx, "UPDATE cuenta SET estado = 'cerrada', cerrada_en = NOW() WHERE id_cuenta = ?", [cuenta.id_cuenta]);
+      }
+      await ejecutar(cx, "UPDATE mesa SET estado = 'libre' WHERE id_mesa = ?", [mesaId]);
+      return { id_mesa: mesaId, estado: "libre" };
+    }),
+  );
 };

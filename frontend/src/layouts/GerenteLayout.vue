@@ -38,6 +38,7 @@ const enlaces = [
   { nombre: 'gerente-mesas', texto: 'Mesas', icono: 'mesas' },
   { nombre: 'gerente-reservaciones', texto: 'Reservaciones', icono: 'reservaciones' },
   { nombre: 'gerente-metodos-pago', texto: 'Métodos de pago', icono: 'pagos' },
+  { nombre: 'gerente-canales', texto: 'Canales de pedido', icono: 'canales' },
   { nombre: 'gerente-pedidos', texto: 'Pedidos', icono: 'pedidos' },
   { nombre: 'gerente-cortes', texto: 'Cortes', icono: 'cortes' },
 ] as const
@@ -83,6 +84,10 @@ async function salir() {
           <svg v-else-if="enlace.icono === 'pagos'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="5" width="20" height="14" rx="2" />
             <path d="M2 10h20M6 15h4" />
+          </svg>
+          <svg v-else-if="enlace.icono === 'canales'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 8h12l-1 12H7L6 8Z" />
+            <path d="M9 8V6a3 3 0 0 1 6 0v2" />
           </svg>
           <svg v-else-if="enlace.icono === 'cortes'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="6" width="20" height="12" rx="2" />
@@ -176,6 +181,10 @@ async function salir() {
           <svg v-else-if="enlace.icono === 'pagos'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="5" width="20" height="14" rx="2" />
             <path d="M2 10h20M6 15h4" />
+          </svg>
+          <svg v-else-if="enlace.icono === 'canales'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 8h12l-1 12H7L6 8Z" />
+            <path d="M9 8V6a3 3 0 0 1 6 0v2" />
           </svg>
           <svg v-else-if="enlace.icono === 'cortes'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="6" width="20" height="12" rx="2" />

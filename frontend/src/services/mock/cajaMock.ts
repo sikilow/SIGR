@@ -70,7 +70,7 @@ export function crearCajaMock(): CajaService {
     },
     abrirCorte(fondoInicial) {
       return conRetraso(() => {
-        if (corte) throw new ErrorServicio('estado_invalido', 'Ya tienes un corte de caja abierto.', 409)
+        if (corte) throw new ErrorServicio('estado_invalido', 'Ya iniciaste caja: cierra el corte actual antes de iniciar otro.', 409)
         if (!Number.isFinite(fondoInicial) || fondoInicial < 0) {
           throw new ErrorServicio('estado_invalido', 'El fondo inicial debe ser un importe de 0 o más.', 422)
         }
@@ -82,7 +82,7 @@ export function crearCajaMock(): CajaService {
     },
     cerrarCorte(efectivoContado) {
       return conRetraso(() => {
-        if (!corte) throw new ErrorServicio('estado_invalido', 'No tienes un corte de caja abierto.', 409)
+        if (!corte) throw new ErrorServicio('estado_invalido', 'No has iniciado caja.', 409)
         if (!Number.isFinite(efectivoContado) || efectivoContado < 0) {
           throw new ErrorServicio('estado_invalido', 'El efectivo contado debe ser un importe de 0 o más.', 422)
         }
@@ -126,7 +126,7 @@ export function crearCajaMock(): CajaService {
     },
     cobrar(idCuenta, pagos, claveIdempotencia) {
       return conRetrasoIdempotente(claveIdempotencia, () => {
-        if (!corte) throw new ErrorServicio('estado_invalido', 'Abre un corte de caja antes de cobrar.', 409)
+        if (!corte) throw new ErrorServicio('estado_invalido', 'Inicia caja antes de cobrar.', 409)
         const cuenta = baseDatos.cuentas.find((item) => item.idCuenta === idCuenta)
         if (!cuenta || cuenta.estado !== 'por_pagar') {
           throw new ErrorServicio('estado_invalido', 'Solo se pueden cobrar cuentas solicitadas por el mesero.', 409)

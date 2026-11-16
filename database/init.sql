@@ -64,10 +64,12 @@ CREATE TABLE cliente_credencial (
 
 CREATE TABLE seccion (
   nombre VARCHAR(40) PRIMARY KEY,
-  activa BOOLEAN NOT NULL DEFAULT TRUE
+  activa BOOLEAN NOT NULL DEFAULT TRUE,
+  es_para_llevar BOOLEAN NOT NULL DEFAULT FALSE
 ) ENGINE=InnoDB;
 
 INSERT INTO seccion (nombre) VALUES ('General'), ('Salón'), ('Terraza'), ('Barra');
+INSERT INTO seccion (nombre, es_para_llevar) VALUES ('Para llevar', TRUE);
 
 CREATE TABLE mesa (
   id_mesa INT AUTO_INCREMENT PRIMARY KEY,
@@ -163,6 +165,12 @@ CREATE TABLE lista_espera (
   CONSTRAINT fk_lista_espera_id_cliente FOREIGN KEY (id_cliente) REFERENCES cliente (id_cliente) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+CREATE TABLE canal_pedido (
+  id_canal INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(40) NOT NULL UNIQUE,
+  activo BOOLEAN NOT NULL DEFAULT TRUE
+) ENGINE=InnoDB;
+
 CREATE TABLE cuenta (
   id_cuenta INT AUTO_INCREMENT PRIMARY KEY,
   id_mesa INT NOT NULL,
@@ -171,6 +179,9 @@ CREATE TABLE cuenta (
   estado VARCHAR(20) NOT NULL DEFAULT 'abierta' CONSTRAINT chk_cuenta_estado CHECK (estado IN ('abierta', 'por_pagar', 'cerrada')),
   tipo_pago_solicitado VARCHAR(10) NULL CONSTRAINT chk_cuenta_tipo_pago CHECK (tipo_pago_solicitado IS NULL OR tipo_pago_solicitado IN ('fisico', 'digital')),
   id_metodo_pago_solicitado INT NULL,
+  id_canal INT NULL,
+  referencia VARCHAR(60) NULL,
+  CONSTRAINT fk_cuenta_id_canal FOREIGN KEY (id_canal) REFERENCES canal_pedido (id_canal) ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT fk_cuenta_id_mesa FOREIGN KEY (id_mesa) REFERENCES mesa (id_mesa) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -340,6 +351,12 @@ INSERT INTO mesa (numero, capacidad, zona) VALUES
   (1,2,'Salón'),(2,2,'Salón'),(3,4,'Salón'),(4,4,'Salón'),(5,6,'Salón'),(6,8,'Salón');
 
 INSERT INTO categoria_menu (nombre) VALUES ('Entradas'),('Platos fuertes'),('Postres'),('Bebidas');
+
+-- Pedidos para llevar: mesas virtuales 101 a 110 en la sección «Para llevar» y canales de pedido.
+INSERT INTO mesa (numero, capacidad, zona) VALUES
+  (101,1,'Para llevar'),(102,1,'Para llevar'),(103,1,'Para llevar'),(104,1,'Para llevar'),(105,1,'Para llevar'),
+  (106,1,'Para llevar'),(107,1,'Para llevar'),(108,1,'Para llevar'),(109,1,'Para llevar'),(110,1,'Para llevar');
+INSERT INTO canal_pedido (nombre) VALUES ('Mostrador'), ('Teléfono'), ('Rappi'), ('Uber Eats'), ('DiDi Food'), ('Mandadito');
 
 -- controla_existencia = FALSE: se prepara al momento (no hay existencia que contar).
 -- TRUE: viene ya hecho o embotellado (postre, refresco, cerveza) y su existencia sí se controla.
@@ -1070,5 +1087,63 @@ BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
   VALUES (@sigr_actor_id, 'categoria_metodo_pago', 'DELETE', JSON_OBJECT('id_categoria_metodo_pago', OLD.`id_categoria_metodo_pago`),
           JSON_OBJECT('id_categoria_metodo_pago', OLD.`id_categoria_metodo_pago`, 'nombre', OLD.`nombre`, 'tipo', OLD.`tipo`, 'activo', OLD.`activo`), USER());
+END$$
+DELIMITER ;
+
+-- Triggers de seccion, cuenta y canal_pedido (migracion 019).
+DELIMITER $$
+DROP TRIGGER IF EXISTS `trg_aud_seccion_ai`$$
+DROP TRIGGER IF EXISTS `trg_aud_seccion_au`$$
+DROP TRIGGER IF EXISTS `trg_aud_seccion_ad`$$
+CREATE TRIGGER `trg_aud_seccion_ai` AFTER INSERT ON `seccion` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'seccion', 'INSERT', JSON_OBJECT('nombre', NEW.`nombre`), JSON_OBJECT('nombre', NEW.`nombre`, 'activa', NEW.`activa`, 'es_para_llevar', NEW.`es_para_llevar`), USER());
+END$$
+CREATE TRIGGER `trg_aud_seccion_au` AFTER UPDATE ON `seccion` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'seccion', 'UPDATE', JSON_OBJECT('nombre', NEW.`nombre`), JSON_OBJECT('nombre', OLD.`nombre`, 'activa', OLD.`activa`, 'es_para_llevar', OLD.`es_para_llevar`), JSON_OBJECT('nombre', NEW.`nombre`, 'activa', NEW.`activa`, 'es_para_llevar', NEW.`es_para_llevar`), USER());
+END$$
+CREATE TRIGGER `trg_aud_seccion_ad` AFTER DELETE ON `seccion` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
+  VALUES (@sigr_actor_id, 'seccion', 'DELETE', JSON_OBJECT('nombre', OLD.`nombre`), JSON_OBJECT('nombre', OLD.`nombre`, 'activa', OLD.`activa`, 'es_para_llevar', OLD.`es_para_llevar`), USER());
+END$$
+DROP TRIGGER IF EXISTS `trg_aud_cuenta_ai`$$
+DROP TRIGGER IF EXISTS `trg_aud_cuenta_au`$$
+DROP TRIGGER IF EXISTS `trg_aud_cuenta_ad`$$
+CREATE TRIGGER `trg_aud_cuenta_ai` AFTER INSERT ON `cuenta` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'cuenta', 'INSERT', JSON_OBJECT('id_cuenta', NEW.`id_cuenta`), JSON_OBJECT('id_cuenta', NEW.`id_cuenta`, 'id_mesa', NEW.`id_mesa`, 'abierta_en', NEW.`abierta_en`, 'cerrada_en', NEW.`cerrada_en`, 'estado', NEW.`estado`, 'tipo_pago_solicitado', NEW.`tipo_pago_solicitado`, 'id_metodo_pago_solicitado', NEW.`id_metodo_pago_solicitado`, 'id_canal', NEW.`id_canal`, 'referencia', NEW.`referencia`), USER());
+END$$
+CREATE TRIGGER `trg_aud_cuenta_au` AFTER UPDATE ON `cuenta` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'cuenta', 'UPDATE', JSON_OBJECT('id_cuenta', NEW.`id_cuenta`), JSON_OBJECT('id_cuenta', OLD.`id_cuenta`, 'id_mesa', OLD.`id_mesa`, 'abierta_en', OLD.`abierta_en`, 'cerrada_en', OLD.`cerrada_en`, 'estado', OLD.`estado`, 'tipo_pago_solicitado', OLD.`tipo_pago_solicitado`, 'id_metodo_pago_solicitado', OLD.`id_metodo_pago_solicitado`, 'id_canal', OLD.`id_canal`, 'referencia', OLD.`referencia`), JSON_OBJECT('id_cuenta', NEW.`id_cuenta`, 'id_mesa', NEW.`id_mesa`, 'abierta_en', NEW.`abierta_en`, 'cerrada_en', NEW.`cerrada_en`, 'estado', NEW.`estado`, 'tipo_pago_solicitado', NEW.`tipo_pago_solicitado`, 'id_metodo_pago_solicitado', NEW.`id_metodo_pago_solicitado`, 'id_canal', NEW.`id_canal`, 'referencia', NEW.`referencia`), USER());
+END$$
+CREATE TRIGGER `trg_aud_cuenta_ad` AFTER DELETE ON `cuenta` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
+  VALUES (@sigr_actor_id, 'cuenta', 'DELETE', JSON_OBJECT('id_cuenta', OLD.`id_cuenta`), JSON_OBJECT('id_cuenta', OLD.`id_cuenta`, 'id_mesa', OLD.`id_mesa`, 'abierta_en', OLD.`abierta_en`, 'cerrada_en', OLD.`cerrada_en`, 'estado', OLD.`estado`, 'tipo_pago_solicitado', OLD.`tipo_pago_solicitado`, 'id_metodo_pago_solicitado', OLD.`id_metodo_pago_solicitado`, 'id_canal', OLD.`id_canal`, 'referencia', OLD.`referencia`), USER());
+END$$
+DROP TRIGGER IF EXISTS `trg_aud_canal_pedido_ai`$$
+DROP TRIGGER IF EXISTS `trg_aud_canal_pedido_au`$$
+DROP TRIGGER IF EXISTS `trg_aud_canal_pedido_ad`$$
+CREATE TRIGGER `trg_aud_canal_pedido_ai` AFTER INSERT ON `canal_pedido` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'canal_pedido', 'INSERT', JSON_OBJECT('id_canal', NEW.`id_canal`), JSON_OBJECT('id_canal', NEW.`id_canal`, 'nombre', NEW.`nombre`, 'activo', NEW.`activo`), USER());
+END$$
+CREATE TRIGGER `trg_aud_canal_pedido_au` AFTER UPDATE ON `canal_pedido` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'canal_pedido', 'UPDATE', JSON_OBJECT('id_canal', NEW.`id_canal`), JSON_OBJECT('id_canal', OLD.`id_canal`, 'nombre', OLD.`nombre`, 'activo', OLD.`activo`), JSON_OBJECT('id_canal', NEW.`id_canal`, 'nombre', NEW.`nombre`, 'activo', NEW.`activo`), USER());
+END$$
+CREATE TRIGGER `trg_aud_canal_pedido_ad` AFTER DELETE ON `canal_pedido` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
+  VALUES (@sigr_actor_id, 'canal_pedido', 'DELETE', JSON_OBJECT('id_canal', OLD.`id_canal`), JSON_OBJECT('id_canal', OLD.`id_canal`, 'nombre', OLD.`nombre`, 'activo', OLD.`activo`), USER());
 END$$
 DELIMITER ;

@@ -17,6 +17,7 @@ import {
   describirMinutos,
   esFechaPasada,
   faltaAnticipacion,
+  hayMesaParaReservacion,
   esVigente,
   mesaPermitidaEnFecha,
   mesaSeLibera,
@@ -25,7 +26,7 @@ import {
   validarPersonasReservacion,
 } from '../../utils/reservaciones'
 import { ErrorServicio } from '../errores'
-import { baseDatos, type EsperaGuardada, type ReservacionGuardada } from '../mock/baseDatos'
+import { baseDatos, esMesaParaLlevar, type EsperaGuardada, type ReservacionGuardada } from '../mock/baseDatos'
 import { conRetraso, conRetrasoIdempotente } from '../mock/utiles'
 import type { HostessService } from './interfaces'
 
@@ -115,6 +116,27 @@ function validarFechaNueva(fecha: Date): void {
   }
 }
 
+/** Misma comprobación que la API: debe haber una mesa del salón para el grupo a esa hora (solo cuentan las confirmadas). */
+function exigirMesaDisponible(fecha: Date, personas: number, exceptoId?: number): void {
+  const mesas = baseDatos.mesas
+    .filter((m) => m.activa && !esMesaParaLlevar(m) && baseDatos.secciones.some((s) => s.nombre === m.zona && s.activa))
+    .map((m) => ({ idMesa: m.idMesa, capacidad: m.capacidad }))
+  const quienes = personas === 1 ? 'persona' : 'personas'
+  if (!mesas.some((m) => m.capacidad >= personas)) {
+    throw new ErrorServicio('mesa_no_disponible', `No tenemos mesas para ${personas} ${quienes}.`, 409)
+  }
+  const comprometidas = baseDatos.reservaciones
+    .filter((r) => r.idReservacion !== exceptoId && (r.estado === 'confirmada' || r.estado === 'llego'))
+    .map((r) => ({ idMesa: r.idMesa, personas: r.personas, fechaHora: r.fechaHora }))
+  if (!hayMesaParaReservacion(mesas, comprometidas, fecha, personas)) {
+    throw new ErrorServicio(
+      'mesa_no_disponible',
+      `No hay mesa disponible para ${personas} ${quienes} a esa hora (cada reservación ocupa su mesa 1 hora 30 minutos). Elige otro horario.`,
+      409,
+    )
+  }
+}
+
 function validarPersonasNuevas(personas: number): void {
   const mensaje = validarPersonasReservacion(personas)
   if (mensaje) throw new ErrorServicio('estado_invalido', mensaje, 422)
@@ -172,6 +194,8 @@ function cambiarEstado(r: ReservacionGuardada, estado: 'confirmada' | 'cancelada
     if (r.estado !== 'pendiente') {
       throw new ErrorServicio('estado_invalido', 'Solo una reservación pendiente se puede confirmar.', 409)
     }
+    // Confirmar compromete una mesa: antes se comprueba que todavía haya una para ese grupo a esa hora.
+    exigirMesaDisponible(r.fechaHora, r.personas, r.idReservacion)
     r.estado = 'confirmada'
     return
   }
@@ -210,7 +234,7 @@ export function crearHostessMock(): HostessService {
   return {
     listarMesas() {
       return conRetraso(() => baseDatos.mesas
-        .filter((m) => m.activa && baseDatos.secciones.some((s) => s.nombre === m.zona && s.activa))
+        .filter((m) => !esMesaParaLlevar(m) && m.activa && baseDatos.secciones.some((s) => s.nombre === m.zona && s.activa))
         .map((m) => aMesaSalon(m.idMesa)))
     },
 
@@ -221,6 +245,16 @@ export function crearHostessMock(): HostessService {
         const buscado = dia ?? aDiaISO(new Date())
         return baseDatos.reservaciones
           .filter((r) => aDiaISO(r.fechaHora) === buscado)
+          .sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
+          .map(conCliente)
+      })
+    },
+
+    listarReservacionesPendientes() {
+      return conRetraso(() => {
+        vencerReservacionesSinLlegada()
+        return baseDatos.reservaciones
+          .filter((r) => r.estado === 'pendiente')
           .sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
           .map(conCliente)
       })
@@ -328,6 +362,7 @@ export function crearHostessMock(): HostessService {
         if (!cliente.correo) throw new ErrorServicio('estado_invalido', 'Agrega un correo al cliente antes de crear la reservación.', 422)
         validarPersonasNuevas(reservacion.personas)
         validarFechaNueva(reservacion.fechaHora)
+        exigirMesaDisponible(reservacion.fechaHora, reservacion.personas)
         if (reservacion.idMesa !== null) {
           if (!mesaPermitidaEnFecha(reservacion.fechaHora, new Date())) {
             throw new ErrorServicio('estado_invalido', 'La mesa solo se reserva para reservaciones de hoy.', 422)

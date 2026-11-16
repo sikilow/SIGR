@@ -16,6 +16,8 @@ export interface Mesa {
   plantaBaja: boolean
   espacioCarriola: boolean
   sinEscaleras: boolean
+  /** Mesa virtual de la sección «Para llevar» (seccion.es_para_llevar): no se sienta ni se reserva. */
+  esParaLlevar?: boolean
 
   // --- Campos CALCULADOS por la API (no son columnas de `mesa`) ---
   /** Estado de la cuenta activa de la mesa; `null` si no hay cuenta activa. */
@@ -29,4 +31,26 @@ export interface Mesa {
 
   /** cuenta.tipo_pago_solicitado de la cuenta activa (columna de `cuenta`, no de `mesa`). `null` si no se solicitó o la API no lo envía. */
   tipoPagoSolicitado: TipoPago | null
+  /** Canal del pedido para llevar de la cuenta activa (calculado); solo en mesas virtuales ocupadas. */
+  canal?: string | null
+  /** cuenta.referencia: nombre o folio para entregar el pedido para llevar. */
+  referencia?: string | null
+}
+
+/** Canal de un pedido para llevar (`canal_pedido`): mostrador, teléfono, plataformas… Lo administra Gerencia. */
+export interface CanalPedido {
+  /** canal_pedido.id_canal */
+  idCanal: number
+  nombre: string
+  activo: boolean
+}
+
+/** Resultado de abrir un pedido para llevar: la mesa virtual ocupada y su cuenta. */
+export interface AperturaParaLlevar {
+  idMesa: number
+  numero: number
+  idCuenta: number
+  idCanal: number
+  canal: string
+  referencia: string | null
 }

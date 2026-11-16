@@ -45,6 +45,8 @@ export interface MesaSalonDto {
   planta_baja?: boolean | number | string
   espacio_carriola?: boolean | number | string
   sin_escaleras?: boolean | number | string
+  /** seccion.es_para_llevar: mesa virtual de pedidos para llevar (la hostess no la ve). */
+  es_para_llevar?: boolean | number | string
 }
 
 export interface ReservacionDto {

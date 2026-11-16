@@ -101,6 +101,7 @@ export function crearPedidosMock(): PedidosService {
           idPedido: baseDatos.siguienteIdPedido++,
           idMesa: mesa.idMesa,
           mesaNumero: mesa.numero,
+          ...(cuenta.canal ? { canal: cuenta.canal } : {}),
           idCuenta: cuenta.idCuenta,
           idMesero: mesero.idUsuario,
           nombreMesero: mesero.nombre,

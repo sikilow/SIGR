@@ -5,7 +5,8 @@ import { exigirAnticipacionMinima, idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 import { conIdempotencia } from "../services/idempotencia";
 import { esCorreoValido } from "../services/correo";
-import { solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
+import { encolarNotificacionReservacion, solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
+import { exigirMesaDisponible } from "../services/disponibilidadReservacion";
 import type { RowDataPacket } from "mysql2/promise";
 
 const FiltroReservaciones = z.object({ fecha: z.string().optional() });
@@ -104,30 +105,6 @@ async function cargarEspera(ex: Ejecutor, id: number) {
 function exigirRegistro<T>(registro: T | null, nombre: string): T {
   if (!registro) throw new ErrorApi(500, "desconocido", `No se pudo recuperar el registro recién creado (${nombre}).`);
   return registro;
-}
-
-async function encolarNotificacionReservacion(
-  cx: Ejecutor,
-  reservacion: RowDataPacket,
-  tipo: "confirmacion" | "cancelacion",
-  evento: "creada" | "confirmada" | "",
-): Promise<void> {
-  if (typeof reservacion.cliente_correo !== "string" || !esCorreoValido(reservacion.cliente_correo)) {
-    return;
-  }
-  // `tipo` sale de una unión cerrada (no de la petición), por eso puede ir literal en el SQL.
-  await ejecutar(
-    cx,
-    `INSERT INTO notificacion_reservacion (id_reservacion, tipo, evento, destinatario)
-     SELECT r.id_reservacion, '${tipo}', ?, c.correo
-       FROM reservacion r
-       JOIN cliente c ON c.id_cliente = r.id_cliente
-      WHERE r.id_reservacion = ?
-        AND c.correo IS NOT NULL
-        AND TRIM(c.correo) <> ''
-     ON DUPLICATE KEY UPDATE id_notificacion = id_notificacion`,
-    [evento, reservacion.id_reservacion],
-  );
 }
 
 function esFechaISOValida(fecha: string): boolean {
@@ -266,6 +243,26 @@ export const listarReservaciones = async (req: Request, res: Response) => {
   res.json(rows);
 };
 
+/**
+ * GET /api/reservaciones/pendientes: las reservaciones que siguen `pendiente` (sin confirmar), de cualquier día.
+ * La pantalla de la hostess las consulta cada pocos segundos para avisarle cuando llega una solicitud nueva
+ * (por ejemplo, desde el portal de clientes). Las que vencen dejan de ser `pendiente` solas.
+ */
+export const listarReservacionesPendientes = async (_req: Request, res: Response) => {
+  const rows = await filas(
+    pool,
+    `SELECT r.id_reservacion, r.id_cliente, r.id_mesa, r.fecha_hora, r.personas, r.estado, r.llegada_en,
+            c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.correo AS cliente_correo, m.numero AS mesa_numero
+       FROM reservacion r
+       JOIN cliente c ON c.id_cliente = r.id_cliente
+       LEFT JOIN mesa m ON m.id_mesa = r.id_mesa
+      WHERE r.estado = 'pendiente'
+      ORDER BY r.fecha_hora, r.id_reservacion
+      LIMIT 200`,
+  );
+  res.json(rows);
+};
+
 /** POST /api/reservaciones: registra una reservación pendiente y, si aplica, reserva una mesa libre. */
 export const crearReservacion = async (req: Request, res: Response) => {
   const datos = validar(ReservacionNueva, req.body);
@@ -288,6 +285,7 @@ export const crearReservacion = async (req: Request, res: Response) => {
         throw new ErrorApi(422, "estado_invalido", "La fecha debe ser desde ahora y no puede superar un año.");
       }
       await exigirAnticipacionMinima(cx, datos.fecha_hora);
+      await exigirMesaDisponible(cx, { fechaHora: datos.fecha_hora, personas: datos.personas });
       if (datos.id_mesa !== undefined && datos.id_mesa !== null && Number(fecha.es_hoy) !== 1) {
         throw new ErrorApi(422, "estado_invalido", "Solo se puede asignar una mesa a una reservación de hoy.");
       }
@@ -298,7 +296,7 @@ export const crearReservacion = async (req: Request, res: Response) => {
       if (datos.id_mesa !== undefined && datos.id_mesa !== null) {
         const [mesa] = await filas(
           cx,
-          `SELECT m.numero, m.estado, m.activa, s.activa AS seccion_activa
+          `SELECT m.numero, m.estado, m.activa, (s.activa AND NOT s.es_para_llevar) AS seccion_activa
              FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
             WHERE m.id_mesa = ? FOR UPDATE`,
           [datos.id_mesa],
@@ -352,6 +350,12 @@ export const editarReservacion = async (req: Request, res: Response) => {
           if (reservacion.estado !== "pendiente") {
             throw new ErrorApi(409, "estado_invalido", "Solo una reservación pendiente se puede confirmar.");
           }
+          // Confirmar compromete una mesa: antes se comprueba que todavía haya una para ese grupo a esa hora.
+          await exigirMesaDisponible(cx, {
+            idReservacion: id,
+            fechaHora: String(reservacion.fecha_hora),
+            personas: Number(reservacion.personas),
+          });
           await ejecutar(cx, "UPDATE reservacion SET estado = 'confirmada' WHERE id_reservacion = ?", [id]);
         } else {
           await ejecutar(cx, "UPDATE reservacion SET estado = 'cancelada', id_mesa = NULL WHERE id_reservacion = ?", [id]);
@@ -394,7 +398,7 @@ export const editarReservacion = async (req: Request, res: Response) => {
         if (mesaFinal !== null && mesaFinal !== mesaAnterior) {
           const [mesa] = await filas(
             cx,
-            `SELECT m.numero, m.estado, m.activa, s.activa AS seccion_activa
+            `SELECT m.numero, m.estado, m.activa, (s.activa AND NOT s.es_para_llevar) AS seccion_activa
                FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
               WHERE m.id_mesa = ? FOR UPDATE`,
             [mesaFinal],
@@ -465,7 +469,7 @@ export const registrarLlegada = async (req: Request, res: Response) => {
       }
       const [mesa] = await filas(
         cx,
-        `SELECT m.id_mesa, m.numero, m.capacidad, m.estado, m.activa, s.activa AS seccion_activa
+        `SELECT m.id_mesa, m.numero, m.capacidad, m.estado, m.activa, (s.activa AND NOT s.es_para_llevar) AS seccion_activa
            FROM mesa m LEFT JOIN seccion s ON s.nombre = m.zona
           WHERE m.id_mesa = ? FOR UPDATE`,
         [mesaId],

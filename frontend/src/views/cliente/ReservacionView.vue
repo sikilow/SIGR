@@ -95,8 +95,9 @@ async function solicitarReservacion() {
       datos.reservacion.id_reservacion
 
     mensaje.value =
-      'Tu solicitud fue registrada correctamente. ' +
-      'Está pendiente de confirmación por Hostess.'
+      'Recibimos tu solicitud. Todavía no está confirmada: ' +
+      'te avisaremos por correo cuando el restaurante la confirme. ' +
+      'Hasta entonces no tienes una mesa asegurada.'
 
     fecha.value = ''
     hora.value = ''

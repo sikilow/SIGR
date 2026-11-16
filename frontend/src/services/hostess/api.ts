@@ -26,12 +26,18 @@ export function crearHostessApi(): HostessService {
   return {
     async listarMesas() {
       const r = await solicitar<MesaSalonDto[]>('GET', '/mesas')
-      return r.map(aMesaSalon)
+      // Las mesas virtuales de «Para llevar» no se sientan ni se reservan: no existen para la hostess.
+      return r.filter((m) => !(m.es_para_llevar === true || m.es_para_llevar === 1 || m.es_para_llevar === '1')).map(aMesaSalon)
     },
 
     async listarReservaciones(dia) {
       // Sin día, hoy en hora local (lo que espera `?fecha=`).
       const r = await solicitar<ReservacionDto[]>('GET', '/reservaciones', { consulta: { fecha: dia ?? aDiaISO(new Date()) } })
+      return r.map(aReservacion)
+    },
+
+    async listarReservacionesPendientes() {
+      const r = await solicitar<ReservacionDto[]>('GET', '/reservaciones/pendientes')
       return r.map(aReservacion)
     },
 

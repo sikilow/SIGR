@@ -3,6 +3,8 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { ejecutar, filas, pool, transaccion } from "../services/db";
 import { exigirAnticipacionMinima, validar } from "../models/dominio";
+import { exigirMesaDisponible } from "../services/disponibilidadReservacion";
+import { encolarNotificacionReservacion, solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
 import { ErrorApi } from "../utils/errores";
 
 // Validaciones del formulario
@@ -95,6 +97,8 @@ export const crearReservacionCliente = async (
       );
     }
     await exigirAnticipacionMinima(cx, datos.fecha_hora);
+    // Una solicitud solo se acepta si hay una mesa posible para ese grupo a esa hora.
+    await exigirMesaDisponible(cx, { fechaHora: datos.fecha_hora, personas: datos.personas });
 
     // No permitir la misma solicitud activa duplicada
     const [duplicada] = await filas(
@@ -134,8 +138,18 @@ export const crearReservacionCliente = async (
       [resultado.insertId]
     );
 
+    // Aviso de «solicitud recibida»: no promete mesa, la confirma después la hostess.
+    const [cliente] = await filas(cx, "SELECT correo FROM cliente WHERE id_cliente = ?", [idCliente]);
+    await encolarNotificacionReservacion(
+      cx,
+      { id_reservacion: resultado.insertId, cliente_correo: (cliente?.correo as string | null) ?? null } as never,
+      "confirmacion",
+      "creada",
+    );
+
     return nueva;
   });
+  solicitarProcesamientoReservaciones();
 
   res.status(201).json({
     mensaje: "Solicitud de reservación registrada. Pendiente de confirmación.",

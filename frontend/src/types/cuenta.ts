@@ -28,4 +28,11 @@ export interface Cuenta {
   tipoPagoSolicitado: TipoPago | null
   /** cuenta.id_metodo_pago_solicitado; se define cuando el mesero elige un método. */
   idMetodoPagoSolicitado: number | null
+
+  /** cuenta.id_canal: de dónde viene un pedido para llevar (ausente en cuentas de mesa). */
+  idCanal?: number | null
+  /** Calculado: nombre del canal (canal_pedido.nombre). */
+  canal?: string | null
+  /** cuenta.referencia: nombre o folio para entregar el pedido. */
+  referencia?: string | null
 }

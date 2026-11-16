@@ -332,6 +332,7 @@ onBeforeRouteUpdate((a, b) =>
       <aside v-if="!compacto" class="editor__pedido tarjeta" aria-label="Pedido actual">
         <PedidoActual
           :mesa-numero="mesa.numero"
+          :canal="mesa.canal"
           :lineas="lineas"
           :total="total"
           :agotados="agotados"
@@ -370,6 +371,7 @@ onBeforeRouteUpdate((a, b) =>
       <div class="pedido-dialogo">
         <PedidoActual
           :mesa-numero="mesa.numero"
+          :canal="mesa.canal"
           :lineas="lineas"
           :total="total"
           :agotados="agotados"

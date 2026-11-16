@@ -6,6 +6,51 @@ export const MAX_PERSONAS_RESERVACION = 20
 /** Hasta cuántos días por delante se acepta una reservación. */
 export const MAX_DIAS_ADELANTE = 365
 
+// ---------- Mesas disponibles para una reservación ----------
+
+/** Cuánto tiempo ocupa una reservación su mesa (igual que en la API). */
+export const DURACION_RESERVACION_MINUTOS = 90
+
+export interface MesaConCapacidad {
+  idMesa: number
+  capacidad: number
+}
+
+/** Reservación ya comprometida (confirmada o con llegada). */
+export interface ReservacionComprometida {
+  idMesa: number | null
+  personas: number
+  fechaHora: Date
+}
+
+/**
+ * ¿Queda una mesa con capacidad para `personas` a esa hora, descontando las reservaciones comprometidas que se
+ * traslapan (a menos de 1 h 30 min)? Las que ya tienen mesa ocupan esa mesa; las demás, la más chica que les alcance.
+ * Misma regla que `hayMesaParaReservacion` de la API.
+ */
+export function hayMesaParaReservacion(
+  mesas: MesaConCapacidad[],
+  comprometidas: ReservacionComprometida[],
+  fecha: Date,
+  personas: number,
+  duracionMinutos: number = DURACION_RESERVACION_MINUTOS,
+): boolean {
+  const libres = [...mesas].sort((a, b) => a.capacidad - b.capacidad)
+  const traslapadas = comprometidas.filter(
+    (r) => Math.abs(r.fechaHora.getTime() - fecha.getTime()) < duracionMinutos * 60_000,
+  )
+  for (const r of traslapadas) {
+    if (r.idMesa === null) continue
+    const i = libres.findIndex((m) => m.idMesa === r.idMesa)
+    if (i >= 0) libres.splice(i, 1)
+  }
+  for (const r of traslapadas.filter((x) => x.idMesa === null).sort((a, b) => b.personas - a.personas)) {
+    const i = libres.findIndex((m) => m.capacidad >= r.personas)
+    if (i >= 0) libres.splice(i, 1)
+  }
+  return libres.some((m) => m.capacidad >= personas)
+}
+
 // ---------- Estados y transiciones ----------
 
 /** Estados en los que la reservación sigue «viva»: se puede editar, confirmar, cancelar o registrar su llegada. */

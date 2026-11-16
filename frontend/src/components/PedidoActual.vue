@@ -11,6 +11,8 @@ const SUGERENCIAS = ['Sin cebolla', 'Extra queso', 'Sin picante']
 
 const props = defineProps<{
   mesaNumero: number
+  /** Canal de un pedido para llevar: el título dice «Para llevar» en lugar de «Mesa». */
+  canal?: string | null
   lineas: LineaCarrito[]
   total: number
   /** Ids de los productos del pedido que ahora están agotados (se marcan en su línea). */
@@ -91,7 +93,7 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
 <template>
   <section class="pedido" aria-labelledby="pedido-titulo">
     <header class="pedido__cabecera">
-      <h2 id="pedido-titulo" ref="titulo" tabindex="-1">Mesa {{ mesaNumero }}</h2>
+      <h2 id="pedido-titulo" ref="titulo" tabindex="-1">{{ canal ? `Para llevar ${mesaNumero} · ${canal}` : `Mesa ${mesaNumero}` }}</h2>
       <InsigniaEstado v-if="editandoId !== null" tono="carrito" :texto="`Editando pedido #${editandoId}`" />
     </header>
 

@@ -17,10 +17,23 @@ const datos: DatosReservacion = {
 };
 
 describe("plantillas de correo de reservaciones", () => {
-  it("compone la confirmación como una tarjeta con fecha, hora y mesa", () => {
+  it("la solicitud recién hecha NO promete mesa: avisa que está pendiente de confirmar", () => {
     const correo = plantillaConfirmacion({ ...datos, evento: "creada" });
 
-    expect(correo.asunto).toBe("Reservación registrada");
+    expect(correo.asunto).toBe("Recibimos tu solicitud de reservación");
+    expect(correo.texto).toContain("Todavía no está confirmada");
+    expect(correo.texto).toContain("no tienes una mesa asegurada");
+    expect(correo.texto).not.toContain("Te esperamos");
+    expect(correo.html).toContain("Recibimos tu solicitud");
+    expect(correo.html).not.toContain("Tu mesa está apartada");
+    expect(correo.html).not.toContain("Mesa 12");
+    expect(correo.html).not.toContain("Ya tienes la mesa");
+  });
+
+  it("compone la confirmación como una tarjeta con fecha, hora y mesa", () => {
+    const correo = plantillaConfirmacion({ ...datos, evento: "confirmada" });
+
+    expect(correo.asunto).toBe("Reservación confirmada");
     expect(correo.texto).toContain("La mesa asignada es la 12.");
     expect(correo.html).toContain("<!doctype html>");
     expect(correo.html).toContain("max-width:600px");

@@ -121,8 +121,11 @@ function alSolicitarse() {
           Panel de mesas
         </RouterLink>
         <h2 ref="titulo" tabindex="-1">
-          <span class="cuenta__etiqueta">Cuenta ·</span> Mesa {{ mesa?.numero ?? idMesa }}
+          <span class="cuenta__etiqueta">Cuenta ·</span> {{ cuenta?.canal ? 'Para llevar' : 'Mesa' }} {{ mesa?.numero ?? idMesa }}
         </h2>
+        <p v-if="cuenta?.canal" class="cuenta__canal">
+          Canal: <strong>{{ cuenta.canal }}</strong><template v-if="cuenta.referencia"> · {{ cuenta.referencia }}</template>
+        </p>
         <p v-if="fase === 'listo'" class="cuenta__resumen">
           <InsigniaEstado v-if="cuenta && porPagar" tono="cuenta" :texto="`Por pagar · ${textoPago}`" />
           <InsigniaEstado v-else-if="cuenta" tono="cuenta_abierta" texto="Abierta" />
@@ -321,6 +324,11 @@ function alSolicitarse() {
 </template>
 
 <style scoped>
+.cuenta__canal {
+  margin: var(--espacio-1) 0 0;
+  color: var(--color-muted);
+}
+
 .cuenta {
   display: flex;
   flex-direction: column;

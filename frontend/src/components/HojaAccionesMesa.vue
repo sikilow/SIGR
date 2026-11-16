@@ -9,12 +9,14 @@ import DialogoModal from './DialogoModal.vue'
 import InsigniaEstado from './InsigniaEstado.vue'
 
 const props = defineProps<{ mesa: Mesa | null }>()
-const emit = defineEmits<{ cerrar: [] }>()
+const emit = defineEmits<{ cerrar: []; liberar: [mesa: Mesa] }>()
 
 const dialogo = ref<InstanceType<typeof DialogoModal> | null>(null)
 
 const ocupada = computed(() => props.mesa?.estado === 'ocupada')
 const cuentaSolicitada = computed(() => props.mesa?.estadoCuenta === 'por_pagar')
+/** Una mesa virtual abierta por error (o cuyos pedidos se cancelaron todos) se puede liberar. */
+const sePuedeLiberar = computed(() => props.mesa?.esParaLlevar === true && ocupada.value && !cuentaSolicitada.value && props.mesa.pedidosActivos === 0)
 
 /** Los botones "deshabilitados" siguen enfocables (para leer el motivo) pero no actúan. */
 function bloquear(evento: Event) {
@@ -26,16 +28,19 @@ function bloquear(evento: Event) {
   <DialogoModal ref="dialogo" :abierto="mesa !== null" etiqueta-id="hoja-titulo" variante="hoja" @cerrar="emit('cerrar')">
     <div v-if="mesa" class="hoja__contenido">
       <header class="hoja__cabecera">
-        <h2 id="hoja-titulo">Mesa {{ mesa.numero }}</h2>
+        <h2 id="hoja-titulo">{{ mesa.esParaLlevar ? 'Para llevar' : 'Mesa' }} {{ mesa.numero }}</h2>
         <InsigniaEstado :tono="mesa.estado" :texto="ETIQUETA_ESTADO_MESA[mesa.estado]" />
       </header>
 
-      <p v-if="mesa.zona" class="hoja__seccion">Sección: <strong>{{ mesa.zona }}</strong></p>
+      <p v-if="mesa.esParaLlevar" class="hoja__seccion">
+        Canal: <strong>{{ mesa.canal ?? 'sin canal' }}</strong><template v-if="mesa.referencia"> · {{ mesa.referencia }}</template>
+      </p>
+      <p v-else-if="mesa.zona" class="hoja__seccion">Sección: <strong>{{ mesa.zona }}</strong></p>
 
       <!-- Mesa ocupada: acciones de pedido -->
       <template v-if="ocupada">
         <p class="hoja__resumen">
-          {{ formatearCapacidad(mesa.capacidad) }} · {{ formatearPedidosActivos(mesa.pedidosActivos) }} ·
+          <template v-if="!mesa.esParaLlevar">{{ formatearCapacidad(mesa.capacidad) }} · </template>{{ formatearPedidosActivos(mesa.pedidosActivos) }} ·
           <strong class="numero">{{ formatearMoneda(mesa.totalCuenta) }}</strong>
         </p>
 
@@ -76,6 +81,9 @@ function bloquear(evento: Event) {
           >
             Pedidos de la mesa
           </RouterLink>
+          <button v-if="sePuedeLiberar" type="button" class="btn btn--peligro-suave btn--grande hoja__boton" @click="emit('liberar', mesa)">
+            Liberar mesa (sin pedidos)
+          </button>
         </div>
       </template>
 

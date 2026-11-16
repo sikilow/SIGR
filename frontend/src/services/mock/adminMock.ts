@@ -291,6 +291,37 @@ function exigirNumeroLibre(numero: number, exceptoId?: number): void {
 export function crearCatalogoMock(): CatalogoService {
   // Los productos agotados de la demo cuentan como "activos sin existencia" salvo que se indique otra cosa.
   return {
+    listarCanalesDisponibles() {
+      return conRetraso(() => structuredClone(baseDatos.canales.filter((c) => c.activo)))
+    },
+
+    listarCanales() {
+      return conRetraso(() => structuredClone(baseDatos.canales))
+    },
+
+    crearCanal(nombre) {
+      return conRetraso(() => {
+        const limpio = nombre.trim()
+        if (!limpio) throw new ErrorServicio('estado_invalido', 'El nombre del canal es obligatorio.', 422)
+        if (limpio.length > 40) throw new ErrorServicio('estado_invalido', 'El nombre del canal admite hasta 40 caracteres.', 422)
+        if (baseDatos.canales.some((c) => c.nombre.toLocaleLowerCase() === limpio.toLocaleLowerCase())) {
+          throw new ErrorServicio('estado_invalido', 'Ya existe un canal con ese nombre.', 409)
+        }
+        const canal = { idCanal: Math.max(0, ...baseDatos.canales.map((c) => c.idCanal)) + 1, nombre: limpio, activo: true }
+        baseDatos.canales.push(canal)
+        return { ...canal }
+      })
+    },
+
+    actualizarCanal(idCanal, cambio) {
+      return conRetraso(() => {
+        const canal = baseDatos.canales.find((c) => c.idCanal === idCanal)
+        if (!canal) throw noExiste('El canal')
+        canal.activo = cambio.activo
+        return { ...canal }
+      })
+    },
+
     listarMetodosPagoDisponibles() {
       return conRetraso(() => structuredClone(metodosPagoMock.filter((metodo) =>
         metodo.activo && categoriasMetodoPagoMock.some((categoria) =>

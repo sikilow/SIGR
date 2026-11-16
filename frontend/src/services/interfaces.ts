@@ -1,7 +1,9 @@
 // Contratos de la capa de servicios. Las vistas y stores dependen SOLO de estas
 // interfaces; `services/index.ts` decide si se usa el mock o la API real.
 import type {
+  AperturaParaLlevar,
   CambioMesa,
+  CanalPedido,
   CategoriaMetodoPagoAdmin,
   CorteCaja,
   CorteDetalle,
@@ -49,6 +51,13 @@ export interface AuthService {
 export interface MesasService {
   /** GET /mesas */
   listar(): Promise<Mesa[]>
+  /**
+   * POST /mesas/para-llevar: abre un pedido para llevar. Ocupa la primera mesa virtual libre de la sección «Para llevar»
+   * y le abre la cuenta con el canal. Sin mesas libres falla con `mesa_no_disponible`.
+   */
+  abrirParaLlevar(idCanal: number, referencia: string | null, claveIdempotencia?: string): Promise<AperturaParaLlevar>
+  /** POST /mesas/{id}/liberar-para-llevar: libera una mesa virtual cuya cuenta no tiene pedidos vigentes. */
+  liberarParaLlevar(idMesa: number): Promise<void>
 }
 
 export interface MenuService {
@@ -133,6 +142,14 @@ export interface UsuariosService {
 export interface CatalogoService {
   /** GET /catalogo/metodos-pago/disponibles. Categorías y métodos activos para el personal. */
   listarMetodosPagoDisponibles(): Promise<MetodoPagoAdmin[]>
+  /** GET /catalogo/canales/disponibles. Canales activos para un pedido para llevar (mesero). */
+  listarCanalesDisponibles(): Promise<CanalPedido[]>
+  /** GET /catalogo/canales. Todos los canales (Gerencia). */
+  listarCanales(): Promise<CanalPedido[]>
+  /** POST /catalogo/canales. Falla con `estado_invalido` si el nombre ya existe. */
+  crearCanal(nombre: string): Promise<CanalPedido>
+  /** PATCH /catalogo/canales/{id}. Los canales no se borran: se desactivan. */
+  actualizarCanal(idCanal: number, cambio: { activo: boolean }): Promise<CanalPedido>
   /** GET /catalogo/configuracion-reservacion */
   obtenerConfiguracionReservacion(): Promise<ConfiguracionReservacion>
   /** PATCH /catalogo/configuracion-reservacion */

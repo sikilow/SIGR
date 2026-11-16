@@ -1,16 +1,20 @@
 <script setup lang="ts">
-// «Próximas reservaciones» del Salón: solo lectura. Hora, nombre, personas y mesa (si ya tiene).
+// «Próximas reservaciones» (confirmadas) y «Solicitudes por confirmar» (pendientes) del Salón: solo lectura.
+// Hora, nombre, personas y mesa (si ya tiene).
 import { ETIQUETA_ESTADO_RESERVACION, type Reservacion } from '../../types'
 import { formatearCapacidad, formatearHora } from '../../utils/formato'
 
-defineProps<{ reservaciones: Reservacion[]; error?: boolean }>()
+withDefaults(defineProps<{ reservaciones: Reservacion[]; error?: boolean; titulo?: string; vacio?: string }>(), {
+  titulo: 'Próximas reservaciones',
+  vacio: 'No hay reservaciones confirmadas.',
+})
 </script>
 
 <template>
   <section class="panel" aria-labelledby="panel-reservaciones">
-    <h3 id="panel-reservaciones">Próximas reservaciones</h3>
+    <h3 id="panel-reservaciones">{{ titulo }}</h3>
     <p v-if="reservaciones.length === 0" class="panel__vacio">
-      {{ error ? 'No se pudieron cargar las reservaciones.' : 'No hay reservaciones pendientes.' }}
+      {{ error ? 'No se pudieron cargar las reservaciones.' : vacio }}
     </p>
     <ul v-else class="panel__lista">
       <li v-for="r in reservaciones" :key="r.idReservacion" class="item">

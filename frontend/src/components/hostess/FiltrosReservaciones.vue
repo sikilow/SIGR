@@ -12,7 +12,7 @@ defineEmits<{ 'update:modelValue': [filtro: FiltroReservaciones] }>()
 
 const opciones = computed<Array<{ valor: FiltroReservaciones; etiqueta: string }>>(() => [
   { valor: 'todas', etiqueta: 'Todas' },
-  { valor: 'pendiente', etiqueta: 'Pendientes' },
+  { valor: 'pendiente', etiqueta: 'Solicitudes' },
   { valor: 'confirmada', etiqueta: 'Confirmadas' },
   { valor: 'llego', etiqueta: 'Llegaron' },
   { valor: 'cancelada', etiqueta: 'Canceladas' },

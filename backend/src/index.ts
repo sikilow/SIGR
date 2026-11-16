@@ -84,6 +84,8 @@ async function iniciarAPI(): Promise<void> {
     { archivo: "016_metodo_pago_solicitado.sql", consulta: "SELECT id_metodo_pago_solicitado FROM cuenta LIMIT 0" },
     { archivo: "017_categorias_metodos_pago.sql", consulta: "SELECT mp.activo, mp.id_categoria_metodo_pago, mp.es_efectivo FROM metodo_pago mp JOIN categoria_metodo_pago cmp USING (id_categoria_metodo_pago) LIMIT 0" },
     { archivo: "018_telefono_unico_y_anticipacion_reserva.sql", consulta: "SELECT anticipacion_minutos FROM configuracion_reservacion LIMIT 0" },
+    { archivo: "019_pedidos_para_llevar.sql", consulta: "SELECT s.es_para_llevar, c.id_canal, c.referencia FROM seccion s JOIN cuenta c ON 1 = 0 LIMIT 0" },
+    { archivo: "019_pedidos_para_llevar.sql", consulta: "SELECT id_canal, nombre, activo FROM canal_pedido LIMIT 0" },
   ];
   for (const { archivo, consulta } of migraciones) {
     try {

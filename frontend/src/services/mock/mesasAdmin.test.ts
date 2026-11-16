@@ -85,12 +85,12 @@ describe('registrar mesas', () => {
 describe('mesas no disponibles', () => {
   it('una mesa creada como no disponible no aparece para la hostess ni para el mesero, pero sí para el gerente', async () => {
     const { catalogo, mesas, hostess } = await nuevoMock()
-    await resolver(catalogo.crearMesa({ numero: 101, capacidad: 6, zona: 'Barra', activa: false }))
+    await resolver(catalogo.crearMesa({ numero: 201, capacidad: 6, zona: 'Barra', activa: false }))
 
-    expect((await resolver(mesas.listar())).map((m) => m.numero)).not.toContain(101)
-    expect((await resolver(hostess.listarMesas())).map((m) => m.numero)).not.toContain(101)
+    expect((await resolver(mesas.listar())).map((m) => m.numero)).not.toContain(201)
+    expect((await resolver(hostess.listarMesas())).map((m) => m.numero)).not.toContain(201)
     const delGerente = await resolver(catalogo.listarMesas())
-    expect(delGerente.find((m) => m.numero === 101)).toMatchObject({ activa: false, zona: 'Barra' })
+    expect(delGerente.find((m) => m.numero === 201)).toMatchObject({ activa: false, zona: 'Barra' })
   })
 
   it('al desactivar una mesa libre desaparece del panel y del salón, y al reactivarla vuelve', async () => {
@@ -172,7 +172,7 @@ describe('editar mesas', () => {
 
   it('la lista del gerente viene ordenada por número', async () => {
     const { catalogo } = await nuevoMock()
-    await resolver(catalogo.crearMesa({ numero: 102, capacidad: 2, zona: 'General', activa: true }))
+    await resolver(catalogo.crearMesa({ numero: 202, capacidad: 2, zona: 'General', activa: true }))
     const numeros = (await resolver(catalogo.listarMesas())).map((m) => m.numero)
     expect(numeros).toEqual([...numeros].sort((a, b) => a - b))
   })

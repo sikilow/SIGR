@@ -69,8 +69,22 @@ export const useSalonStore = defineStore('salon', () => {
   /** Mesas visibles agrupadas por sección (alfabético, «Sin sección» al final; por número dentro de cada grupo). */
   const grupos = computed(() => agruparPorSeccion(mesasFiltradas.value, mesas.value))
 
-  /** «Próximas reservaciones»: las que aún no llegan ni se cancelaron, por hora. */
+  /** «Próximas reservaciones»: SOLO las confirmadas que aún no llegan, por hora. Una solicitud no es próxima hasta confirmarse. */
   const proximasReservaciones = computed(() =>
+    reservaciones.value
+      .filter((r) => r.estado === 'confirmada')
+      .sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime()),
+  )
+
+  /** «Solicitudes por confirmar»: las reservaciones pendientes del día, por hora. */
+  const solicitudesPendientes = computed(() =>
+    reservaciones.value
+      .filter((r) => r.estado === 'pendiente')
+      .sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime()),
+  )
+
+  /** Pendientes y confirmadas (las que pueden tener una mesa reservada), para saber para quién está reservada cada mesa. */
+  const reservacionesVigentes = computed(() =>
     reservaciones.value
       .filter((r) => r.estado === 'pendiente' || r.estado === 'confirmada')
       .sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime()),
@@ -157,6 +171,8 @@ export const useSalonStore = defineStore('salon', () => {
     mesasFiltradas,
     grupos,
     proximasReservaciones,
+    solicitudesPendientes,
+    reservacionesVigentes,
     enEspera,
     cargar,
     invalidar,

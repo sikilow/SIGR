@@ -8,6 +8,7 @@ import type { CategoriaMetodoPagoAdmin, MetodoPagoAdmin } from '../../types'
 import { solicitar } from './cliente'
 import { guardarToken, leerToken, limpiarToken } from './token'
 import {
+  aCanalPedido,
   aCategoriaAdmin,
   aConfiguracionReservacion,
   aSeccionAdmin,
@@ -39,6 +40,8 @@ import {
   type CuentaDto,
   type DisponibilidadDto,
   type MesaAdminDto,
+  type AperturaParaLlevarDto,
+  type CanalPedidoDto,
   type MesaDto,
   type PedidoDto,
   type ProductoAdminDto,
@@ -81,6 +84,25 @@ export function crearServiciosApi(): Servicios {
       async listar() {
         const r = await solicitar<MesaDto[]>('GET', '/mesas')
         return r.map(aMesa)
+      },
+
+      async abrirParaLlevar(idCanal, referencia, claveIdempotencia) {
+        const r = await solicitar<AperturaParaLlevarDto>('POST', '/mesas/para-llevar', {
+          cuerpo: { id_canal: idCanal, ...(referencia && referencia.trim() ? { referencia: referencia.trim() } : {}) },
+          claveIdempotencia,
+        })
+        return {
+          idMesa: Number(r.id_mesa),
+          numero: Number(r.numero),
+          idCuenta: Number(r.id_cuenta),
+          idCanal: Number(r.id_canal),
+          canal: r.canal,
+          referencia: r.referencia ?? null,
+        }
+      },
+
+      async liberarParaLlevar(idMesa) {
+        await solicitar<{ id_mesa: number }>('POST', `/mesas/${idMesa}/liberar-para-llevar`)
       },
     },
 
@@ -180,6 +202,24 @@ export function crearServiciosApi(): Servicios {
     },
 
     catalogo: {
+      async listarCanalesDisponibles() {
+        const r = await solicitar<CanalPedidoDto[]>('GET', '/catalogo/canales/disponibles')
+        return r.map(aCanalPedido)
+      },
+
+      async listarCanales() {
+        const r = await solicitar<CanalPedidoDto[]>('GET', '/catalogo/canales')
+        return r.map(aCanalPedido)
+      },
+
+      async crearCanal(nombre) {
+        return aCanalPedido(await solicitar<CanalPedidoDto>('POST', '/catalogo/canales', { cuerpo: { nombre: nombre.trim() } }))
+      },
+
+      async actualizarCanal(idCanal, cambio) {
+        return aCanalPedido(await solicitar<CanalPedidoDto>('PATCH', `/catalogo/canales/${idCanal}`, { cuerpo: { activo: cambio.activo } }))
+      },
+
       async listarMetodosPagoDisponibles() {
         const metodos = await solicitar<Array<{
           id_metodo: number | string

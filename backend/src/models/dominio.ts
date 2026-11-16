@@ -268,6 +268,8 @@ export interface PedidoDto {
   id_mesa: number;
   /** Calculado: mesa.numero (JOIN). */
   mesa_numero: number;
+  /** Calculado: canal del pedido para llevar (canal_pedido.nombre); NULL en pedidos de mesa. */
+  canal: string | null;
   /** Calculado: motivo_cancelacion.descripcion (JOIN); null si no está cancelado. */
   motivo_descripcion: string | null;
   /** Calculado: suma de cantidad × precio_unitario. */
@@ -278,9 +280,10 @@ export interface PedidoDto {
 const SELECT_PEDIDO = `
   SELECT p.id_pedido, p.id_cuenta, p.id_mesero, u.nombre AS nombre_mesero, p.id_estado,
          ep.nombre AS estado, p.fecha_hora, p.id_motivo,
-         c.id_mesa, m.numero AS mesa_numero, mc.descripcion AS motivo_descripcion
+         c.id_mesa, m.numero AS mesa_numero, cn.nombre AS canal, mc.descripcion AS motivo_descripcion
     FROM pedido p
     JOIN cuenta c ON c.id_cuenta = p.id_cuenta
+    LEFT JOIN canal_pedido cn ON cn.id_canal = c.id_canal
     JOIN mesa m ON m.id_mesa = c.id_mesa
     JOIN usuario u ON u.id_usuario = p.id_mesero
     JOIN estado_pedido ep ON ep.id_estado = p.id_estado
@@ -329,6 +332,7 @@ export async function cargarPedidos(ex: Ejecutor, condicion = "", params: unknow
       id_motivo: (p.id_motivo as number | null) ?? null,
       id_mesa: p.id_mesa as number,
       mesa_numero: p.mesa_numero as number,
+      canal: (p.canal as string | null) ?? null,
       motivo_descripcion: (p.motivo_descripcion as string | null) ?? null,
       // El total SIEMPRE se calcula aquí, nunca viene del cliente.
       total: redondear(detalle.reduce((suma, d) => suma + d.cantidad * d.precio_unitario, 0)),
@@ -352,6 +356,12 @@ export interface CuentaDto {
   /** cuenta.tipo_pago_solicitado ("fisico" | "digital"); NULL mientras no se solicite. */
   tipo_pago_solicitado: string | null;
   id_metodo_pago_solicitado: number | null;
+  /** cuenta.id_canal: de dónde viene un pedido para llevar (NULL en las cuentas de mesa). */
+  id_canal: number | null;
+  /** Calculado: nombre del canal (canal_pedido.nombre). */
+  canal: string | null;
+  /** cuenta.referencia: nombre o folio para entregar un pedido para llevar. */
+  referencia: string | null;
   /** Calculado: pedidos de la cuenta (pedido.id_cuenta). */
   pedidos: PedidoDto[];
   /** Calculado: suma de cantidad × precio_unitario de los pedidos NO cancelados. */
@@ -362,8 +372,10 @@ export interface CuentaDto {
 export async function cargarCuenta(ex: Ejecutor, idCuenta: number): Promise<CuentaDto | null> {
   const [c] = await filas(
     ex,
-    `SELECT id_cuenta, id_mesa, estado, abierta_en, cerrada_en, tipo_pago_solicitado, id_metodo_pago_solicitado
-       FROM cuenta WHERE id_cuenta = ?`,
+    `SELECT c.id_cuenta, c.id_mesa, c.estado, c.abierta_en, c.cerrada_en, c.tipo_pago_solicitado, c.id_metodo_pago_solicitado,
+            c.id_canal, cn.nombre AS canal, c.referencia
+       FROM cuenta c LEFT JOIN canal_pedido cn ON cn.id_canal = c.id_canal
+      WHERE c.id_cuenta = ?`,
     [idCuenta],
   );
   if (!c) return null;
@@ -376,6 +388,9 @@ export async function cargarCuenta(ex: Ejecutor, idCuenta: number): Promise<Cuen
     cerrada_en: (c.cerrada_en as string | null) ?? null,
     tipo_pago_solicitado: (c.tipo_pago_solicitado as string | null) ?? null,
     id_metodo_pago_solicitado: (c.id_metodo_pago_solicitado as number | null) ?? null,
+    id_canal: (c.id_canal as number | null) ?? null,
+    canal: (c.canal as string | null) ?? null,
+    referencia: (c.referencia as string | null) ?? null,
     pedidos,
     total: redondear(pedidos.filter((p) => p.estado !== ESTADO_PEDIDO_DB.cancelado).reduce((suma, p) => suma + p.total, 0)),
   };

@@ -7,6 +7,7 @@
 // Ver docs/equivalencias-bd.md y docs/contrato-api-mesero.md.
 import type {
   CambioMesa,
+  CanalPedido,
   CambioProducto,
   ConfiguracionReservacion,
   CambioUsuario,
@@ -75,7 +76,12 @@ export interface MesaDto {
   planta_baja?: Booleano
   espacio_carriola?: Booleano
   sin_escaleras?: Booleano
+  /** seccion.es_para_llevar: mesa virtual de pedidos para llevar. */
+  es_para_llevar?: Booleano
   // --- CALCULADOS por la API (no son columnas de `mesa`) ---
+  /** Canal y referencia del pedido para llevar de la cuenta activa. */
+  canal?: string | null
+  referencia?: string | null
   estado_cuenta: string | null
   pedidos_activos: Numerico | null
   total_cuenta: Numerico | null
@@ -138,6 +144,8 @@ export interface PedidoDto {
   mesa_numero: Numerico
   /** motivo_cancelacion.descripcion (JOIN). */
   motivo_descripcion: string | null
+  /** Canal del pedido para llevar (JOIN con canal_pedido). */
+  canal?: string | null
   total: Numerico
   detalle: DetallePedidoDto[]
 }
@@ -154,6 +162,24 @@ export interface CuentaDto {
   /** cuenta.tipo_pago_solicitado (fisico o digital); NULL mientras no se solicite. */
   tipo_pago_solicitado: string | null
   id_metodo_pago_solicitado: Numerico | null
+  id_canal?: Numerico | null
+  canal?: string | null
+  referencia?: string | null
+}
+
+export interface CanalPedidoDto {
+  id_canal: Numerico
+  nombre: string
+  activo: Booleano
+}
+
+export interface AperturaParaLlevarDto {
+  id_mesa: Numerico
+  numero: Numerico
+  id_cuenta: Numerico
+  id_canal: Numerico
+  canal: string
+  referencia: string | null
 }
 
 // ---------- API → frontend ----------
@@ -192,6 +218,9 @@ export function aMesa(dto: MesaDto): Mesa {
     totalCuenta: aNumeroONulo(dto.total_cuenta, 'total_cuenta') ?? 0,
     tipoPagoSolicitado: aTipoPago(dto.tipo_pago_solicitado),
     pedidosListos: aNumeroONulo(dto.pedidos_listos, 'pedidos_listos') ?? 0,
+    ...(dto.es_para_llevar !== undefined && aBooleano(dto.es_para_llevar, 'es_para_llevar')
+      ? { esParaLlevar: true, canal: dto.canal ?? null, referencia: dto.referencia ?? null }
+      : {}),
   }
 }
 
@@ -243,9 +272,14 @@ export function aPedido(dto: PedidoDto): Pedido {
     })),
     idMesa: aNumero(dto.id_mesa, 'id_mesa'),
     mesaNumero: aNumero(dto.mesa_numero, 'mesa_numero'),
+    ...(dto.canal ? { canal: dto.canal } : {}),
     motivoDescripcion: dto.motivo_descripcion ?? null,
     total: aNumero(dto.total, 'total'),
   }
+}
+
+export function aCanalPedido(dto: CanalPedidoDto): CanalPedido {
+  return { idCanal: aNumero(dto.id_canal, 'id_canal'), nombre: dto.nombre, activo: aBooleano(dto.activo, 'activo') }
 }
 
 export function aCuenta(dto: CuentaDto): Cuenta {
@@ -259,6 +293,7 @@ export function aCuenta(dto: CuentaDto): Cuenta {
     total: aNumero(dto.total, 'total'),
     tipoPagoSolicitado: aTipoPago(dto.tipo_pago_solicitado),
     idMetodoPagoSolicitado: aNumeroONulo(dto.id_metodo_pago_solicitado, 'id_metodo_pago_solicitado'),
+    ...(dto.canal ? { idCanal: aNumeroONulo(dto.id_canal, 'id_canal'), canal: dto.canal, referencia: dto.referencia ?? null } : {}),
   }
 }
 

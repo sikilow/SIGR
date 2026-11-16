@@ -470,3 +470,38 @@ calcula como `producto.disponible AND (controla_existencia = 0 OR existencia > 0
 **l) Faltan las rutas de la hostess.** El backend solo tiene `GET /mesas` y `PATCH /mesas/{id}/estado` para este rol; reservaciones, lista de espera, clientes y
 «asignar mesa» están **propuestos** en [`contrato-api-hostess.md`](contrato-api-hostess.md) y no implementados. Columnas relevantes: `cliente.telefono` y
 `cliente.correo` admiten `NULL`; `reservacion.id_mesa` y `reservacion.llegada_en` admiten `NULL`; `reservacion` **no tiene folio**.
+
+## Pedidos para llevar (mesas virtuales y canales)
+
+Un pedido para llevar usa una **mesa virtual** de la sección «Para llevar» (`seccion.es_para_llevar`). Las mesas virtuales aparecen en `GET /api/mesas` con `es_para_llevar: true` (y `canal` y `referencia` cuando están ocupadas); **la hostess no las ve** (no se sientan, no se reservan y `POST /mesas/:id/asignar` responde `409 mesa_no_disponible`). La cuenta, los pedidos, la cocina y el cobro funcionan igual que en una mesa.
+
+### `POST /api/mesas/para-llevar`
+
+Roles: `mesero` y `gerente`. Acepta `Idempotency-Key`. Ocupa la primera mesa virtual libre y abre su cuenta con el canal elegido.
+
+```json
+{ "id_canal": 3, "referencia": "Juan P." }
+```
+
+`referencia` es opcional (nombre o folio para entregar, hasta 60 caracteres). Respuesta `201`:
+
+```json
+{ "id_mesa": 7, "numero": 101, "id_cuenta": 1, "id_canal": 3, "canal": "Rappi", "referencia": "Juan P." }
+```
+
+Después se piden los productos con `POST /api/pedidos` usando ese `id_mesa`. Errores: `422 estado_invalido` (canal inexistente o desactivado) y `409 mesa_no_disponible` (no quedan mesas virtuales libres).
+
+### `POST /api/mesas/{id}/liberar-para-llevar`
+
+Libera una mesa virtual abierta por error o cuyos pedidos se cancelaron todos: cierra su cuenta y la deja `libre`. `409 estado_invalido` si la mesa no es virtual o si la cuenta aún tiene pedidos vigentes (se cobran en Caja).
+
+### Canales de pedido
+
+| Ruta | Roles | Para qué |
+| --- | --- | --- |
+| `GET /api/catalogo/canales/disponibles` | cualquiera con sesión | Canales activos para elegir al abrir el pedido |
+| `GET /api/catalogo/canales` | gerente | Todos los canales |
+| `POST /api/catalogo/canales` `{ "nombre" }` | gerente | Agrega un canal (`409` si el nombre ya existe) |
+| `PATCH /api/catalogo/canales/{id}` `{ "activo" }` | gerente | Activa o desactiva (no se borran: las cuentas anteriores los conservan) |
+
+La respuesta de una cuenta incluye `id_canal`, `canal` y `referencia` (nulos en cuentas de mesa), y cada pedido incluye `canal` (calculado) para que cocina lo identifique.

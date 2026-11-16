@@ -68,7 +68,7 @@ describe("procesador de la cola de reservaciones", () => {
     );
   });
 
-  it("incluye la mesa y el contenido requerido en la confirmación", async () => {
+  it("la solicitud recibida no incluye mesa ni promesa de reservación", async () => {
     filasMock.mockResolvedValue([{
       ...avisoBase,
       tipo: "confirmacion",
@@ -79,8 +79,24 @@ describe("procesador de la cola de reservaciones", () => {
 
     expect(enviarCorreoMock).toHaveBeenCalledWith(expect.objectContaining({
       para: "cliente@gmail.com",
-      asunto: "Reservación registrada",
-      texto: expect.stringContaining("Hola Ana, tu reservación en La Madalena quedó registrada para el 2026-11-01 a las 19:30, para 3 persona(s). La mesa asignada es la 12."),
+      asunto: "Recibimos tu solicitud de reservación",
+      texto: expect.stringContaining("recibimos tu solicitud de reservación en La Madalena para el 2026-11-01 a las 19:30, para 3 persona(s). Todavía no está confirmada"),
+    }));
+  });
+
+  it("incluye la mesa y el contenido requerido en la confirmación", async () => {
+    filasMock.mockResolvedValue([{
+      ...avisoBase,
+      tipo: "confirmacion",
+      evento: "confirmada",
+    }]);
+
+    await __pruebas.procesarNotificaciones();
+
+    expect(enviarCorreoMock).toHaveBeenCalledWith(expect.objectContaining({
+      para: "cliente@gmail.com",
+      asunto: "Reservación confirmada",
+      texto: expect.stringContaining("Hola Ana, tu reservación en La Madalena quedó confirmada para el 2026-11-01 a las 19:30, para 3 persona(s). La mesa asignada es la 12."),
     }));
   });
 
@@ -96,7 +112,7 @@ describe("procesador de la cola de reservaciones", () => {
 
     expect(enviarCorreoMock).toHaveBeenCalledWith(expect.objectContaining({
       asunto: "Tu reservación venció",
-      texto: expect.stringContaining("no registramos tu llegada a La Madalena dentro de los 25 minutos de tolerancia"),
+      texto: expect.stringContaining("no se registró tu llegada dentro de los 25 minutos de tolerancia"),
     }));
     expect(enviarCorreoMock).toHaveBeenCalledWith(expect.objectContaining({
       texto: expect.stringContaining("contacta al restaurante"),

@@ -119,6 +119,14 @@ una tarjeta editorial en HTML con texto plano alternativo y los fallos quedan re
 las migraciones `010_reservaciones_y_caracteristicas.sql`, `011_cola_unificada_resend.sql` y
 `012_correo_cancelacion.sql`. Consulta [resend-reservaciones.md](resend-reservaciones.md).
 
+## Solicitudes y reservaciones confirmadas
+
+Una reservación sin confirmar es una **solicitud** (estado `pendiente`, se muestra como «Solicitud pendiente»). El Salón tiene dos listas: **«Solicitudes por confirmar»** (solo aparece cuando hay) y **«Próximas reservaciones»**, que muestra únicamente las confirmadas. En Reservaciones, el filtro «Solicitudes» muestra las pendientes. Confirmar una solicitud comprueba que haya mesa para el grupo a esa hora; si no hay, avisa y no confirma.
+
+## Alerta de solicitudes nuevas
+
+En cualquier pantalla de la hostess aparece una **alerta persistente** cuando llega una solicitud de reservación nueva (por ejemplo, desde el portal de clientes): nombre, fecha y hora, personas y, si hay varias, «y N solicitudes más». Botones: **Ver solicitud** (abre el día de la solicitud con el filtro «Pendientes») y **Descartar**. La alerta no se quita sola y se anuncia a lectores de pantalla (`role="alert"`). El menú «Reservaciones» muestra además la cantidad de reservaciones **por confirmar**. La consulta es cada 10 s (`VITE_POLL_MS`) con `GET /api/reservaciones/pendientes`. No se avisa de lo que ya estaba al abrir la pantalla (la insignia lo cuenta) ni de las reservaciones que la propia hostess crea.
+
 ## Cómo funciona «Asignar mesa»
 
 1. Se toca una mesa **libre o reservada** → hoja de acciones → **Asignar mesa**. Una mesa **ocupada** no se asigna.

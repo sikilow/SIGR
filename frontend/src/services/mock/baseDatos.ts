@@ -3,7 +3,7 @@
 // el esquema de la BD (ids numéricos, `fechaHora`, `indicaciones`…). Ver docs/equivalencias-bd.md.
 import clientesJson from '../../mocks/clientes.json'
 import productosJson from '../../mocks/productos.json'
-import type { CategoriaMenu, Cliente, Cuenta, ListaEspera, Mesa, MotivoCancelacion, Pedido, Reservacion, Rol, Usuario } from '../../types'
+import type { CanalPedido, CategoriaMenu, Cliente, Cuenta, ListaEspera, Mesa, MotivoCancelacion, Pedido, Reservacion, Rol, Usuario } from '../../types'
 
 /** Usuario de demostración: además del perfil guarda el acceso (`credenciales.nombre_usuario` y su contraseña). */
 export interface UsuarioMock extends Omit<Usuario, 'rol' | 'activo'> {
@@ -29,6 +29,8 @@ export type MesaGuardada = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estad
 export interface SeccionGuardada {
   nombre: string
   activa: boolean
+  /** seccion.es_para_llevar: sus mesas son virtuales (pedidos para llevar); no se sientan ni se reservan. */
+  esParaLlevar?: boolean
 }
 
 /** Reservación tal como se guarda: nombre y teléfono del cliente y número de mesa se calculan al consultarla. */
@@ -41,6 +43,8 @@ export interface BaseDatosMock {
   usuarios: UsuarioMock[]
   mesas: MesaGuardada[]
   secciones: SeccionGuardada[]
+  /** Tabla `canal_pedido`: canales de los pedidos para llevar. */
+  canales: CanalPedido[]
   categorias: CategoriaMenu[]
   cuentas: CuentaGuardada[]
   pedidos: Pedido[]
@@ -86,7 +90,7 @@ function crearMesas(): MesaGuardada[] {
     ['libre', 2, 'Terraza'], ['libre', 2, 'Terraza'], ['libre', 4, 'Barra'], ['libre', 4, 'Barra'], ['libre', 6, 'Barra'],
     ['libre', 8, null],
   ]
-  return datos.map(([estado, capacidad, zona], i) => ({
+  const delSalon: MesaGuardada[] = datos.map(([estado, capacidad, zona], i) => ({
     idMesa: i + 1,
     numero: i + 1,
     capacidad,
@@ -97,6 +101,24 @@ function crearMesas(): MesaGuardada[] {
     sinEscaleras: [1, 2, 4, 6, 9, 13, 15].includes(i + 1),
     activa: true,
   }))
+  // Mesas virtuales 101 a 110 de la sección «Para llevar» (como la migración 019).
+  const paraLlevar: MesaGuardada[] = Array.from({ length: 10 }, (_, i) => ({
+    idMesa: 101 + i,
+    numero: 101 + i,
+    capacidad: 1,
+    estado: 'libre' as const,
+    zona: 'Para llevar',
+    plantaBaja: true,
+    espacioCarriola: false,
+    sinEscaleras: false,
+    activa: true,
+  }))
+  return [...delSalon, ...paraLlevar]
+}
+
+/** `true` si la mesa es virtual (su sección es «para llevar»): no existe para la hostess. */
+export function esMesaParaLlevar(mesa: Pick<MesaGuardada, 'zona'>): boolean {
+  return baseDatos.secciones.some((s) => s.nombre === mesa.zona && s.esParaLlevar === true)
 }
 
 function crearPedidos(): Pedido[] {
@@ -266,7 +288,11 @@ export const baseDatos: BaseDatosMock = {
     { idUsuario: 6, idRol: 3, nombre: 'Diego Cruz', correo: 'diego.cruz@lamadalena.example', activo: true, rol: 'cocinero', nombreUsuario: 'cocinero', contrasena: '1234' },
   ],
   mesas: crearMesas(),
-  secciones: ['General', 'Salón', 'Terraza', 'Barra'].map((nombre) => ({ nombre, activa: true })),
+  secciones: [
+    ...['General', 'Salón', 'Terraza', 'Barra'].map((nombre) => ({ nombre, activa: true })),
+    { nombre: 'Para llevar', activa: true, esParaLlevar: true },
+  ],
+  canales: ['Mostrador', 'Teléfono', 'Rappi', 'Uber Eats', 'DiDi Food', 'Mandadito'].map((nombre, i) => ({ idCanal: i + 1, nombre, activo: true })),
   categorias: crearCategorias(),
   cuentas: crearCuentas(),
   pedidos: crearPedidos(),

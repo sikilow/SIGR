@@ -1,6 +1,6 @@
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 interface Reservacion {
@@ -72,12 +72,43 @@ function mostrarHora(valor: string): string {
   return valor.slice(11, 16)
 }
 
+/**
+ * Una reservación sin confirmar es una SOLICITUD: todavía no tiene mesa asegurada, así que no aparece como «próxima».
+ *  - solicitudes: pendientes de confirmar por el restaurante.
+ *  - proximas: confirmadas que aún no pasan, por fecha.
+ *  - historial: todo lo demás (llegó, cancelada, vencida o ya pasada), lo más reciente primero.
+ */
+function aMilisegundos(valor: string): number {
+  // «AAAA-MM-DD HH:mm:ss» en hora local del restaurante.
+  return new Date(valor.replace(' ', 'T')).getTime()
+}
+
+const solicitudes = computed(() =>
+  reservaciones.value
+    .filter((r) => r.estado === 'pendiente')
+    .sort((a, b) => aMilisegundos(a.fecha_hora) - aMilisegundos(b.fecha_hora)),
+)
+
+const proximas = computed(() =>
+  reservaciones.value
+    .filter((r) => r.estado === 'confirmada' && aMilisegundos(r.fecha_hora) >= Date.now())
+    .sort((a, b) => aMilisegundos(a.fecha_hora) - aMilisegundos(b.fecha_hora)),
+)
+
+const historial = computed(() => {
+  const enOtrasListas = new Set([...solicitudes.value, ...proximas.value].map((r) => r.id_reservacion))
+  return reservaciones.value
+    .filter((r) => !enOtrasListas.has(r.id_reservacion))
+    .sort((a, b) => aMilisegundos(b.fecha_hora) - aMilisegundos(a.fecha_hora))
+})
+
 function estadoTexto(estado: string): string {
   const estados: Record<string, string> = {
-    pendiente: 'Pendiente de confirmación',
+    pendiente: 'Solicitud pendiente',
     confirmada: 'Confirmada',
     cancelada: 'Cancelada',
-    llego: 'Llegada registrada'
+    llego: 'Llegada registrada',
+    vencida: 'Vencida'
   }
 
   return estados[estado] ?? estado
@@ -160,75 +191,81 @@ onMounted(cargarReservaciones)
         </RouterLink>
       </div>
 
-      <div v-else class="lista-reservaciones">
-        <article
-          v-for="reservacion in reservaciones"
-          :key="reservacion.id_reservacion"
-          class="tarjeta"
-        >
-          <div class="tarjeta-superior">
-            <div>
-              <span class="folio">
-                RESERVACIÓN #{{ reservacion.id_reservacion }}
-              </span>
-              <h2>{{ mostrarFecha(reservacion.fecha_hora) }}</h2>
-            </div>
-
-            <span
-              class="estado"
-              :class="reservacion.estado"
-            >
-              {{ estadoTexto(reservacion.estado) }}
-            </span>
+      <template v-else>
+        <section v-if="solicitudes.length > 0" class="grupo" aria-labelledby="grupo-solicitudes">
+          <h2 id="grupo-solicitudes" class="grupo-titulo">Solicitudes en espera de confirmación</h2>
+          <p class="grupo-ayuda">
+            Todavía no tienes una mesa asegurada. Te avisaremos por correo cuando el restaurante confirme cada solicitud.
+          </p>
+          <div class="lista-reservaciones">
+            <article v-for="reservacion in solicitudes" :key="reservacion.id_reservacion" class="tarjeta">
+              <div class="tarjeta-superior">
+                <div>
+                  <span class="folio">SOLICITUD #{{ reservacion.id_reservacion }}</span>
+                  <h2>{{ mostrarFecha(reservacion.fecha_hora) }}</h2>
+                </div>
+                <span class="estado" :class="reservacion.estado">{{ estadoTexto(reservacion.estado) }}</span>
+              </div>
+              <div class="detalles">
+                <div><span>Hora</span><strong>{{ mostrarHora(reservacion.fecha_hora) }}</strong></div>
+                <div><span>Personas</span><strong>{{ reservacion.personas }}</strong></div>
+                <div><span>Mesa</span><strong>Se asigna al confirmar</strong></div>
+              </div>
+              <p class="nota">Recibimos tu solicitud. Está pendiente de confirmación por parte del restaurante.</p>
+            </article>
           </div>
+        </section>
 
-          <div class="detalles">
-            <div>
-              <span>Hora</span>
-              <strong>{{ mostrarHora(reservacion.fecha_hora) }}</strong>
-            </div>
-
-            <div>
-              <span>Personas</span>
-              <strong>{{ reservacion.personas }}</strong>
-            </div>
-
-            <div>
-              <span>Mesa</span>
-              <strong>
-                {{
-                  reservacion.mesa_numero
-                    ? `Mesa ${reservacion.mesa_numero}`
-                    : 'Por asignar'
-                }}
-              </strong>
-            </div>
+        <section class="grupo" aria-labelledby="grupo-proximas">
+          <h2 id="grupo-proximas" class="grupo-titulo">Próximas reservaciones</h2>
+          <p v-if="proximas.length === 0" class="grupo-ayuda">
+            Aún no tienes reservaciones confirmadas. Aquí aparecerán cuando el restaurante confirme tus solicitudes.
+          </p>
+          <div v-else class="lista-reservaciones">
+            <article v-for="reservacion in proximas" :key="reservacion.id_reservacion" class="tarjeta">
+              <div class="tarjeta-superior">
+                <div>
+                  <span class="folio">RESERVACIÓN #{{ reservacion.id_reservacion }}</span>
+                  <h2>{{ mostrarFecha(reservacion.fecha_hora) }}</h2>
+                </div>
+                <span class="estado" :class="reservacion.estado">{{ estadoTexto(reservacion.estado) }}</span>
+              </div>
+              <div class="detalles">
+                <div><span>Hora</span><strong>{{ mostrarHora(reservacion.fecha_hora) }}</strong></div>
+                <div><span>Personas</span><strong>{{ reservacion.personas }}</strong></div>
+                <div>
+                  <span>Mesa</span>
+                  <strong>{{ reservacion.mesa_numero ? `Mesa ${reservacion.mesa_numero}` : 'Por asignar al llegar' }}</strong>
+                </div>
+              </div>
+              <p class="nota">Tu reservación ha sido confirmada por el restaurante.</p>
+            </article>
           </div>
+        </section>
 
-          <p
-            v-if="reservacion.estado === 'pendiente'"
-            class="nota"
-          >
-            Tu solicitud fue recibida y está pendiente
-            de confirmación por parte de Hostess.
-          </p>
-
-          <p
-            v-else-if="reservacion.estado === 'confirmada'"
-            class="nota"
-          >
-            Tu reservación ha sido confirmada
-            por el restaurante.
-          </p>
-
-          <p
-            v-else-if="reservacion.estado === 'cancelada'"
-            class="nota"
-          >
-            Esta reservación fue cancelada.
-          </p>
-        </article>
-      </div>
+        <section v-if="historial.length > 0" class="grupo" aria-labelledby="grupo-historial">
+          <h2 id="grupo-historial" class="grupo-titulo">Historial</h2>
+          <div class="lista-reservaciones">
+            <article v-for="reservacion in historial" :key="reservacion.id_reservacion" class="tarjeta">
+              <div class="tarjeta-superior">
+                <div>
+                  <span class="folio">RESERVACIÓN #{{ reservacion.id_reservacion }}</span>
+                  <h2>{{ mostrarFecha(reservacion.fecha_hora) }}</h2>
+                </div>
+                <span class="estado" :class="reservacion.estado">{{ estadoTexto(reservacion.estado) }}</span>
+              </div>
+              <div class="detalles">
+                <div><span>Hora</span><strong>{{ mostrarHora(reservacion.fecha_hora) }}</strong></div>
+                <div><span>Personas</span><strong>{{ reservacion.personas }}</strong></div>
+              </div>
+              <p v-if="reservacion.estado === 'cancelada'" class="nota">Esta reservación fue cancelada.</p>
+              <p v-else-if="reservacion.estado === 'vencida'" class="nota">
+                Esta solicitud o reservación venció: no se confirmó o no se registró tu llegada a tiempo.
+              </p>
+            </article>
+          </div>
+        </section>
+      </template>
     </main>
   </div>
 </template>
@@ -395,6 +432,25 @@ onMounted(cargarReservaciones)
 .estado.confirmada {
   background: #e3f2e7;
   color: #257341;
+}
+
+.grupo {
+  margin-top: 28px;
+}
+
+.grupo-titulo {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+}
+
+.grupo-ayuda {
+  margin: 0 0 14px;
+  color: #6b5547;
+}
+
+.estado.vencida {
+  background: #fbeae8;
+  color: #7a1818;
 }
 
 .estado.cancelada {

@@ -125,7 +125,7 @@ onUnmounted(() => {
               <header class="pedido__encabezado">
                 <div>
                   <h4 class="pedido__numero">Pedido #{{ pedido.idPedido }}</h4>
-                  <p class="pedido__meta">Mesa {{ pedido.mesaNumero }} · {{ formatearHora(pedido.fechaHora) }}</p>
+                  <p class="pedido__meta">{{ pedido.canal ? `Para llevar · ${pedido.canal}` : `Mesa ${pedido.mesaNumero}` }} · {{ formatearHora(pedido.fechaHora) }}</p>
                 </div>
                 <div class="pedido__tiempo">
                   <span class="pedido__reloj numero">{{ textoMinutos(pedido) }}</span>
@@ -169,7 +169,7 @@ onUnmounted(() => {
               <header class="pedido__encabezado">
                 <div>
                   <h4 class="pedido__numero">Pedido #{{ pedido.idPedido }}</h4>
-                  <p class="pedido__meta">Mesa {{ pedido.mesaNumero }} · {{ formatearHora(pedido.fechaHora) }}</p>
+                  <p class="pedido__meta">{{ pedido.canal ? `Para llevar · ${pedido.canal}` : `Mesa ${pedido.mesaNumero}` }} · {{ formatearHora(pedido.fechaHora) }}</p>
                 </div>
                 <div class="pedido__tiempo">
                   <span class="pedido__reloj numero">{{ textoMinutos(pedido) }}</span>

@@ -9,10 +9,13 @@ import GruposMesas from '../../components/GruposMesas.vue'
 import HojaAccionesMesa from '../../components/HojaAccionesMesa.vue'
 import IndicadorActualizacion from '../../components/IndicadorActualizacion.vue'
 import MesaCard from '../../components/MesaCard.vue'
+import NuevoParaLlevarDialog from '../../components/NuevoParaLlevarDialog.vue'
 import ResumenMesas from '../../components/ResumenMesas.vue'
 import { usePolling } from '../../composables/usePolling'
 import { filtroDesdeConsulta, useMesasStore, type FiltroMesas } from '../../stores/mesas'
-import type { Mesa } from '../../types'
+import { useAnunciosStore } from '../../stores/anuncios'
+import { ErrorServicio } from '../../services'
+import type { AperturaParaLlevar, Mesa } from '../../types'
 import { TODAS_LAS_SECCIONES, describirFiltroMesas, seccionDesdeConsulta, sufijoSeccion } from '../../utils/secciones'
 
 const store = useMesasStore()
@@ -110,6 +113,28 @@ const mesaSeleccionada = computed<Mesa | null>(
   () => store.mesas.find((m) => m.idMesa === mesaSeleccionadaId.value) ?? null,
 )
 
+// ---------- Pedido para llevar ----------
+const anuncios = useAnunciosStore()
+const dialogoLlevar = ref(false)
+const botonLlevar = ref<HTMLButtonElement | null>(null)
+
+/** Mesa virtual abierta: se va directo a pedir los productos. */
+async function alAbrirParaLlevar(apertura: AperturaParaLlevar) {
+  dialogoLlevar.value = false
+  void anuncios.anunciar(`Pedido para llevar abierto en la mesa ${apertura.numero} · ${apertura.canal}`)
+  await router.push({ name: 'mesero-pedido-mesa', params: { idMesa: apertura.idMesa } })
+}
+
+async function liberarParaLlevar(mesa: Mesa) {
+  mesaSeleccionadaId.value = null
+  try {
+    await store.liberarParaLlevar(mesa.idMesa)
+    void anuncios.anunciar(`Mesa para llevar ${mesa.numero} liberada`)
+  } catch (e) {
+    store.mostrarAviso(e instanceof ErrorServicio ? e.message : 'No se pudo liberar la mesa para llevar.')
+  }
+}
+
 onMounted(iniciar)
 
 onBeforeUnmount(() => {
@@ -122,6 +147,19 @@ onBeforeUnmount(() => {
   <section class="panel" :aria-busy="store.cargando">
     <header class="panel__encabezado">
       <h2>Panel de mesas</h2>
+      <button
+        ref="botonLlevar"
+        type="button"
+        class="btn panel__llevar"
+        aria-haspopup="dialog"
+        @click="dialogoLlevar = true"
+      >
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 8h12l-1 12H7L6 8Z" />
+          <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+        </svg>
+        Pedido para llevar
+      </button>
       <IndicadorActualizacion :ultima="store.ultimaActualizacion" :actualizando="store.actualizando" @actualizar="ejecutarAhora()" />
     </header>
 
@@ -203,11 +241,16 @@ onBeforeUnmount(() => {
       </template>
     </GruposMesas>
 
-    <HojaAccionesMesa :mesa="mesaSeleccionada" @cerrar="mesaSeleccionadaId = null" />
+    <HojaAccionesMesa :mesa="mesaSeleccionada" @cerrar="mesaSeleccionadaId = null" @liberar="liberarParaLlevar" />
+    <NuevoParaLlevarDialog :abierto="dialogoLlevar" :origen-foco="botonLlevar" @cerrar="dialogoLlevar = false" @abierto="alAbrirParaLlevar" />
   </section>
 </template>
 
 <style scoped>
+.panel__llevar {
+  margin-left: auto;
+}
+
 .panel {
   display: flex;
   flex-direction: column;

@@ -94,6 +94,11 @@ export const router = createRouter({
           component: () => import('../views/gerente/MetodosPagoView.vue'),
         },
         {
+          path: 'canales',
+          name: 'gerente-canales',
+          component: () => import('../views/gerente/CanalesPedidoView.vue'),
+        },
+        {
           // Una sola ruta para la lista y el detalle: /gerente/pedidos y /gerente/pedidos/:idPedido
           path: String.raw`pedidos/:idPedido(\d+)?`,
           name: 'gerente-pedidos',

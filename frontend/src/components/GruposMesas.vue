@@ -15,6 +15,16 @@ defineProps<{
 }>()
 
 defineSlots<{ mesa(props: { mesa: T }): unknown }>()
+
+/**
+ * «2 libres de 6 mesas». En «Para llevar» las mesas libres no se muestran (son un banco de mesas virtuales), así que el
+ * encabezado cuenta los pedidos en curso: «1 en curso».
+ */
+function conteoDe(grupo: GrupoSeccion<T>): string {
+  const virtuales = grupo.mesas.length > 0 && grupo.mesas.every((m) => (m as { esParaLlevar?: boolean }).esParaLlevar === true)
+  if (!virtuales) return formatearLibresDe(grupo.libres, grupo.total)
+  return `${grupo.mesas.length} en curso`
+}
 </script>
 
 <template>
@@ -31,7 +41,7 @@ defineSlots<{ mesa(props: { mesa: T }): unknown }>()
       <h3 :id="`${idBase}-${i}`" class="grupo__titulo">
         <span class="grupo__nombre">{{ grupo.nombre }}</span>
         <span class="solo-lectores">,</span>
-        <span class="grupo__conteo numero">{{ formatearLibresDe(grupo.libres, grupo.total) }}</span>
+        <span class="grupo__conteo numero">{{ conteoDe(grupo) }}</span>
       </h3>
       <ul class="cuadricula">
         <li v-for="mesa in grupo.mesas" :key="mesa.idMesa">

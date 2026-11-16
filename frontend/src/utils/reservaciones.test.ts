@@ -7,6 +7,7 @@ import {
   aHoraISO,
   coincideBusqueda,
   describirMinutos,
+  hayMesaParaReservacion,
   faltaAnticipacion,
   combinarFechaHora,
   filtrarReservaciones,
@@ -281,5 +282,27 @@ describe('anticipación mínima de reservación', () => {
     expect(faltaAnticipacion(new Date(2026, 10, 15, 13, 59, 0), ahora, 60)).toBe(true)
     expect(faltaAnticipacion(new Date(2026, 10, 15, 14, 0, 0), ahora, 60)).toBe(false)
     expect(faltaAnticipacion(new Date(2026, 10, 15, 13, 0, 1), ahora, 0)).toBe(false)
+  })
+})
+
+describe('mesas disponibles para una reservación', () => {
+  const mesas = [
+    { idMesa: 1, capacidad: 2 },
+    { idMesa: 2, capacidad: 4 },
+    { idMesa: 3, capacidad: 8 },
+  ]
+  const a = (hora: number, minuto = 0) => new Date(2026, 10, 16, hora, minuto)
+
+  it('hay mesa sin otras reservaciones y no la hay si ninguna alcanza', () => {
+    expect(hayMesaParaReservacion(mesas, [], a(14), 8)).toBe(true)
+    expect(hayMesaParaReservacion(mesas, [], a(14), 9)).toBe(false)
+  })
+
+  it('descuenta las reservaciones comprometidas que se traslapan y las que ya tienen mesa', () => {
+    const otras = [{ idMesa: null, personas: 4, fechaHora: a(14, 30) }, { idMesa: 3, personas: 6, fechaHora: a(13) }]
+    expect(hayMesaParaReservacion(mesas, otras, a(14), 8)).toBe(false)
+    expect(hayMesaParaReservacion(mesas, otras, a(14), 2)).toBe(true)
+    // Fuera de la ventana de 1 h 30 min no estorban.
+    expect(hayMesaParaReservacion(mesas, otras, a(17), 8)).toBe(true)
   })
 })

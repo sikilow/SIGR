@@ -42,13 +42,15 @@ const textoCuenta = computed(() =>
         <span class="mesa__etiqueta">Mesa</span>
         <span class="mesa__numero">{{ mesa.numero }}</span>
       </span>
-      <span class="mesa__capacidad">{{ formatearCapacidad(mesa.capacidad) }}</span>
+      <span class="mesa__capacidad">{{ mesa.esParaLlevar ? (mesa.canal ?? 'Para llevar') : formatearCapacidad(mesa.capacidad) }}</span>
     </span>
 
     <span v-if="mostrarSeccion" class="mesa__seccion">
       <span v-if="mesa.zona" class="solo-lectores">Sección:</span>
       {{ mesa.zona ?? ETIQUETA_SIN_SECCION }}
     </span>
+
+    <span v-if="mesa.esParaLlevar && mesa.referencia" class="mesa__seccion">{{ mesa.referencia }}</span>
 
     <InsigniaEstado :tono="mesa.estado" :texto="ETIQUETA_ESTADO_MESA[mesa.estado]" />
 

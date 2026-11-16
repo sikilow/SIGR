@@ -55,7 +55,8 @@ export const ETIQUETA_ROL: Record<Rol, string> = {
 }
 
 export const ETIQUETA_ESTADO_RESERVACION: Record<EstadoReservacion, string> = {
-  pendiente: 'Pendiente',
+  // Una reservación sin confirmar es una SOLICITUD: el restaurante todavía no promete mesa.
+  pendiente: 'Solicitud pendiente',
   confirmada: 'Confirmada',
   llego: 'Llegó',
   cancelada: 'Cancelada',

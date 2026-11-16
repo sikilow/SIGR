@@ -131,6 +131,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `016_metodo_pago_solicitado.sql` | Método elegido por el mesero y control de entrega antes de cobrar | Tras 015; actualiza triggers de auditoría de cuenta |
 | `017_categorias_metodos_pago.sql` | Categorías físicas/digitales configurables y métodos asociados | Tras 016 |
 | `018_telefono_unico_y_anticipacion_reserva.sql` | Teléfono de usuarios solo con dígitos y único; anticipación mínima de reservación configurable | Tras 017; puede repetirse |
+| `019_pedidos_para_llevar.sql` | Sección «Para llevar» con mesas virtuales (101 a 110), catálogo `canal_pedido` y canal/referencia en la cuenta | Tras 018; puede repetirse |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
@@ -308,6 +309,19 @@ mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT * FROM configuracion_reser
 ```
 
 Si el índice no se puede crear («Duplicate entry»), dos usuarios tienen el mismo teléfono: corrige uno desde **Gerente → Usuarios** (o en SQL) y vuelve a ejecutar el archivo. La API no arranca sin esta migración.
+
+## Migración 019: pedidos para llevar
+
+Crea la sección **«Para llevar»** (`seccion.es_para_llevar = TRUE`) con las mesas virtuales 101 a 110, el catálogo `canal_pedido` (Mostrador, Teléfono, Rappi, Uber Eats, DiDi Food y Mandadito) y las columnas `cuenta.id_canal` y `cuenta.referencia`. También actualiza los triggers de auditoría de `seccion` y `cuenta` y crea los de `canal_pedido`. Puede repetirse. Si ya existe una mesa con alguno de los números 101 a 110, esa no se vuelve a crear.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-019.sql"
+Get-Content -Raw ".\database\migrations\019_pedidos_para_llevar.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT nombre, es_para_llevar FROM seccion; SELECT * FROM canal_pedido; SELECT numero, estado FROM mesa WHERE zona = 'Para llevar';"
+```
+
+La API no arranca sin esta migración. Para tener más pedidos para llevar a la vez, Gerencia agrega mesas en **Gerente → Mesas** dentro de la sección «Para llevar».
 
 ## Base nueva o entorno de demostración
 

@@ -108,7 +108,7 @@ const mesaSeleccionada = computed<MesaSalon | null>(
 /** Reservación vigente de cada mesa reservada (la más próxima), para mostrarla en la tarjeta. */
 const reservacionPorMesa = computed(() => {
   const mapa = new Map<number, Reservacion>()
-  for (const r of store.proximasReservaciones) {
+  for (const r of store.reservacionesVigentes) {
     if (r.idMesa !== null && !mapa.has(r.idMesa)) mapa.set(r.idMesa, r)
   }
   return mapa
@@ -224,6 +224,13 @@ onBeforeUnmount(() => {
         </svg>
         <p>{{ store.errorLateral }}</p>
       </div>
+      <PanelReservaciones
+        v-if="store.solicitudesPendientes.length > 0"
+        titulo="Solicitudes por confirmar"
+        vacio="No hay solicitudes por confirmar."
+        :reservaciones="store.solicitudesPendientes"
+        :error="!!store.errorLateral"
+      />
       <PanelReservaciones :reservaciones="store.proximasReservaciones" :error="!!store.errorLateral" />
       <PanelEspera :espera="store.enEspera" :ahora="ahora" :error="!!store.errorLateral" />
     </aside>

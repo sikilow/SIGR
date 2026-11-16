@@ -149,7 +149,7 @@ async function abrirCorte() {
     corteCerrado.value = null
     await cargar()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'No se pudo abrir el corte.'
+    error.value = e instanceof Error ? e.message : 'No se pudo iniciar la caja.'
   } finally {
     procesando.value = false
   }
@@ -264,11 +264,11 @@ onMounted(() => {
             <h3 id="corte-titulo">Corte de caja</h3>
             <InsigniaEstado
               :tono="estado.corte ? 'cuenta_abierta' : 'desconocido'"
-              :texto="estado.corte ? 'Abierto' : 'Sin abrir'"
+              :texto="estado.corte ? 'Caja iniciada' : 'Sin iniciar'"
             />
           </div>
-          <p v-if="estado.corte" class="corte__meta">Abierto desde {{ fecha(estado.corte.inicio) }}</p>
-          <p v-else class="corte__meta">Abre un corte para comenzar a registrar cobros del turno.</p>
+          <p v-if="estado.corte" class="corte__meta">Iniciada desde {{ fecha(estado.corte.inicio) }}</p>
+          <p v-else class="corte__meta">Inicia caja para comenzar a registrar cobros del turno.</p>
 
           <div class="corte__cifras">
             <template v-if="estado.corte">
@@ -295,13 +295,13 @@ onMounted(() => {
               <input id="fondo-inicial" v-model.number="fondoInicial" type="number" min="0" step="0.01" inputmode="decimal" required>
               <p class="campo__ayuda">Cuenta los billetes y monedas con los que empiezas el turno.</p>
             </div>
-            <button class="btn btn--grande" type="submit" :disabled="procesando">Inicio de caja</button>
+            <button class="btn btn--grande" type="submit" :disabled="procesando">Iniciar caja</button>
           </form>
           <form v-else-if="!confirmandoCierre" class="form-corte" @submit.prevent="pedirConfirmacionCierre">
             <div class="campo">
               <label for="efectivo-contado">Efectivo contado en caja</label>
               <input id="efectivo-contado" v-model.number="efectivoContado" type="number" min="0" step="0.01" inputmode="decimal" required>
-              <p class="campo__ayuda">Incluye el fondo inicial. La diferencia aparece después de cerrar.</p>
+              <p class="campo__ayuda">Incluye el fondo inicial. El faltante o sobrante aparece después de cerrar.</p>
             </div>
             <button class="btn" type="submit" :disabled="procesando">Cerrar corte</button>
           </form>
@@ -340,7 +340,7 @@ onMounted(() => {
                 @click="seleccionar(item)"
               >
                 <span class="cuenta__cabecera">
-                  <span class="cuenta__mesa">Mesa {{ item.mesaNumero }}</span>
+                  <span class="cuenta__mesa">{{ item.cuenta.canal ? `Para llevar · ${item.cuenta.canal}` : `Mesa ${item.mesaNumero}` }}</span>
                   <strong class="cuenta__total numero">{{ moneda(item.cuenta.total) }}</strong>
                 </span>
                 <span class="cuenta__meta">
@@ -371,7 +371,10 @@ onMounted(() => {
             <div class="detalle__cabecera">
               <div>
                 <p class="sobretitulo">Cuenta #{{ cuentaSeleccionada.cuenta.idCuenta }}</p>
-                <h4>Mesa {{ cuentaSeleccionada.mesaNumero }}</h4>
+                <h4>{{ cuentaSeleccionada.cuenta.canal ? 'Para llevar' : 'Mesa' }} {{ cuentaSeleccionada.mesaNumero }}</h4>
+                <p v-if="cuentaSeleccionada.cuenta.canal" class="detalle__meta">
+                  Canal: {{ cuentaSeleccionada.cuenta.canal }}<template v-if="cuentaSeleccionada.cuenta.referencia"> · {{ cuentaSeleccionada.cuenta.referencia }}</template>
+                </p>
                 <p class="detalle__meta">
                   <template v-if="cuentaSeleccionada.meseroNombre">Atendió: {{ cuentaSeleccionada.meseroNombre }}</template>
                   <template v-else>Sin mesero registrado</template>

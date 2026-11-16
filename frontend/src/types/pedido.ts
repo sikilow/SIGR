@@ -37,6 +37,8 @@ export interface Pedido {
   idMesa: number
   /** mesa.numero (JOIN): número visible de la mesa, para listar sin pedir las mesas. */
   mesaNumero: number
+  /** Canal del pedido para llevar (calculado); ausente en pedidos de mesa. */
+  canal?: string | null
   /** motivo_cancelacion.descripcion (JOIN); `null` si el pedido no está cancelado. */
   motivoDescripcion: string | null
   /** Suma de cantidad × precioUnitario, en MXN. */
