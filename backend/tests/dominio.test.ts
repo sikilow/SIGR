@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import type { PoolConnection } from "mysql2/promise";
 import {
+  describirMinutos,
   ESTADO_PEDIDO_DB,
   ESTADOS_PEDIDO,
+  exigirAnticipacionMinima,
   idDeRuta,
   nombreEstadoDeFiltro,
   normalizarCodigo,
@@ -112,5 +115,30 @@ describe("validar", () => {
 
   it("responde 422 si falta el cuerpo completo", () => {
     expect(errorDe(() => validar(Esquema, undefined)).estado).toBe(422);
+  });
+});
+
+describe("anticipación mínima de reservación", () => {
+  it("describe los minutos en horas y minutos", () => {
+    expect(describirMinutos(0)).toBe("sin anticipación");
+    expect(describirMinutos(45)).toBe("45 minutos");
+    expect(describirMinutos(60)).toBe("1 hora");
+    expect(describirMinutos(90)).toBe("1 hora 30 minutos");
+    expect(describirMinutos(180)).toBe("3 horas");
+  });
+
+  /** Conexión falsa: responde lo que diría MySQL a la consulta de anticipación. */
+  const conexion = (fila: { minutos: number; temprano: number }) =>
+    ({ query: async (sql: string) => (sql.startsWith("SET") ? [[], []] : [[fila], []]) }) as unknown as PoolConnection;
+
+  it("rechaza una reservación demasiado cercana y dice cuánta anticipación se exige", async () => {
+    const e = await exigirAnticipacionMinima(conexion({ minutos: 90, temprano: 1 }), "2026-11-15 14:00:00").catch((x) => x);
+    expect(e).toBeInstanceOf(ErrorApi);
+    expect((e as ErrorApi).codigo).toBe("estado_invalido");
+    expect((e as ErrorApi).message).toContain("1 hora 30 minutos");
+  });
+
+  it("acepta una reservación con tiempo suficiente", async () => {
+    await expect(exigirAnticipacionMinima(conexion({ minutos: 60, temprano: 0 }), "2026-11-15 18:00:00")).resolves.toBeUndefined();
   });
 });

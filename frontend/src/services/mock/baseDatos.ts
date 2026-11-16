@@ -50,7 +50,7 @@ export interface BaseDatosMock {
   clientes: Cliente[]
   reservaciones: ReservacionGuardada[]
   listaEspera: EsperaGuardada[]
-  configuracionReservacion: { toleranciaMinutos: number; recordatorioMinutos: number }
+  configuracionReservacion: { toleranciaMinutos: number; recordatorioMinutos: number; anticipacionMinutos: number }
   siguienteIdPedido: number
   siguienteIdCuenta: number
   siguienteIdMotivo: number
@@ -277,7 +277,7 @@ export const baseDatos: BaseDatosMock = {
   clientes: crearClientes(),
   reservaciones: crearReservaciones(),
   listaEspera: crearListaEspera(),
-  configuracionReservacion: { toleranciaMinutos: 15, recordatorioMinutos: 5 },
+  configuracionReservacion: { toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60 },
   siguienteIdPedido: 15,
   siguienteIdCuenta: 9,
   siguienteIdMotivo: 3,

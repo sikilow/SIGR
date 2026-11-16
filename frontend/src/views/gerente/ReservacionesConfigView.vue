@@ -5,6 +5,7 @@ import type { ConfiguracionReservacion } from '../../types'
 
 const tolerancia = ref('15')
 const recordatorio = ref('5')
+const anticipacion = ref('60')
 const cargando = ref(true)
 const cargado = ref(false)
 const guardando = ref(false)
@@ -19,6 +20,7 @@ async function cargar() {
     const config = await servicios.catalogo.obtenerConfiguracionReservacion()
     tolerancia.value = String(config.toleranciaMinutos)
     recordatorio.value = String(config.recordatorioMinutos)
+    anticipacion.value = String(config.anticipacionMinutos)
     cargado.value = true
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo cargar la configuración.'
@@ -32,6 +34,7 @@ async function guardar() {
   const config: ConfiguracionReservacion = {
     toleranciaMinutos: Number(tolerancia.value),
     recordatorioMinutos: Number(recordatorio.value),
+    anticipacionMinutos: Number(anticipacion.value),
   }
   if (!Number.isInteger(config.toleranciaMinutos) || config.toleranciaMinutos < 5 || config.toleranciaMinutos > 180) {
     error.value = 'La tolerancia debe estar entre 5 y 180 minutos.'
@@ -41,6 +44,10 @@ async function guardar() {
     error.value = 'El recordatorio debe estar entre 1 y 30 minutos.'
     return
   }
+  if (!Number.isInteger(config.anticipacionMinutos) || config.anticipacionMinutos < 0 || config.anticipacionMinutos > 1440) {
+    error.value = 'La anticipación debe estar entre 0 y 1440 minutos (24 horas).'
+    return
+  }
   guardando.value = true
   error.value = ''
   mensaje.value = ''
@@ -48,7 +55,8 @@ async function guardar() {
     const guardada = await servicios.catalogo.actualizarConfiguracionReservacion(config)
     tolerancia.value = String(guardada.toleranciaMinutos)
     recordatorio.value = String(guardada.recordatorioMinutos)
-    mensaje.value = 'Configuración guardada. Los próximos correos usarán estos tiempos.'
+    anticipacion.value = String(guardada.anticipacionMinutos)
+    mensaje.value = 'Configuración guardada. Los tiempos se aplican a las próximas reservaciones y correos.'
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo guardar la configuración.'
   } finally {
@@ -65,7 +73,7 @@ onMounted(() => void cargar())
       <div>
         <p class="sobretitulo">Gerencia</p>
         <h2>Reservaciones</h2>
-        <p>Define el tiempo de espera para la llegada y cuándo recordar al cliente.</p>
+        <p>Define con cuánta anticipación se reserva, el tiempo de espera para la llegada y cuándo recordar al cliente.</p>
       </div>
       <button class="btn btn--secundario" type="button" :disabled="cargando || guardando" @click="cargar">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -97,6 +105,14 @@ onMounted(() => void cargar())
         </div>
 
         <div class="config__campos">
+          <div class="campo">
+            <label for="anticipacion">Anticipación mínima para reservar (minutos)</label>
+            <input id="anticipacion" v-model="anticipacion" type="number" min="0" max="1440" step="5" required :disabled="cargando || guardando" />
+            <p class="campo__ayuda">
+              Tiempo que debe faltar, como mínimo, para la hora reservada. Aplica a la hostess y al portal de clientes.
+              De 0 (sin mínimo) a 1440 minutos; predeterminado: 60 (1 hora).
+            </p>
+          </div>
           <div class="campo">
             <label for="tolerancia">Tolerancia de llegada (minutos)</label>
             <input id="tolerancia" v-model="tolerancia" type="number" min="5" max="180" step="1" required :disabled="cargando || guardando" />

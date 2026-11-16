@@ -117,6 +117,8 @@ describe('mesas no disponibles', () => {
     const { catalogo, hostess } = await nuevoMock()
     const mesa1 = (await resolver(catalogo.listarMesas())).find((m) => m.numero === 1)!
     await resolver(catalogo.actualizarMesa(mesa1.idMesa, { activa: false }))
+    // Sin anticipación mínima: esta prueba solo quiere comprobar la regla de la mesa no disponible.
+    await resolver(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 0 }))
     const e = await errorDe(hostess.crearReservacion({ idCliente: 1, fechaHora: new Date(Date.now() + 60_000), personas: 2, idMesa: mesa1.idMesa }))
     expect(e.codigo).toBe('mesa_no_disponible')
   })

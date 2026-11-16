@@ -154,7 +154,7 @@ Las rutas de Salón, reservaciones, clientes y asignación descritas en esta sec
 
 | Concepto | Tabla.columna | Nombre JSON | Naturaleza |
 |---|---|---|---|
-| Configuración del restaurante | `configuracion_reservacion.tolerancia_minutos`, `recordatorio_minutos` | `tolerancia_minutos`, `recordatorio_minutos` | persistido; valores predeterminados: 15 y 5 minutos |
+| Configuración del restaurante | `configuracion_reservacion.tolerancia_minutos`, `recordatorio_minutos`, `anticipacion_minutos` | `tolerancia_minutos`, `recordatorio_minutos`, `anticipacion_minutos` | persistido; valores predeterminados: 15 y 5 minutos |
 | Notificación de correo | `notificacion_reservacion.id_reservacion`, `tipo`, `evento`, `destinatario`, `estado`, `intentos`, `ultimo_error`, `creada_en`, `enviada_en` | la cola no se expone al frontend | outbox del backend para confirmaciones, recordatorios, vencimientos y cancelaciones; Resend o SMTP procesan los envíos y los fallos se reintentan. El HTML y el texto se arman en `plantillasCorreo.ts` |
 
 La configuración se consulta y actualiza mediante `GET/PATCH /api/catalogo/configuracion-reservacion` (solo gerente). Consulta [`resend-reservaciones.md`](resend-reservaciones.md) para configurar el proveedor sin exponer su API key.

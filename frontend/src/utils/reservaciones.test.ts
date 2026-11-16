@@ -6,6 +6,8 @@ import {
   aDiaISO,
   aHoraISO,
   coincideBusqueda,
+  describirMinutos,
+  faltaAnticipacion,
   combinarFechaHora,
   filtrarReservaciones,
   mesaPermitidaEnFecha,
@@ -262,5 +264,22 @@ describe('reservaciones: búsqueda y filtros', () => {
     expect(filtrarReservaciones(lista, 'todas', 'gonzalez').map((r) => r.idReservacion)).toEqual([1])
     expect(filtrarReservaciones(lista, 'pendiente', 'medina')).toEqual([])
     expect(lista).toEqual(copia)
+  })
+})
+
+describe('anticipación mínima de reservación', () => {
+  it('describe los minutos en horas y minutos', () => {
+    expect(describirMinutos(0)).toBe('sin anticipación')
+    expect(describirMinutos(45)).toBe('45 minutos')
+    expect(describirMinutos(60)).toBe('1 hora')
+    expect(describirMinutos(90)).toBe('1 hora 30 minutos')
+    expect(describirMinutos(120)).toBe('2 horas')
+  })
+
+  it('detecta una hora reservada demasiado cercana', () => {
+    const ahora = new Date(2026, 10, 15, 13, 0, 0)
+    expect(faltaAnticipacion(new Date(2026, 10, 15, 13, 59, 0), ahora, 60)).toBe(true)
+    expect(faltaAnticipacion(new Date(2026, 10, 15, 14, 0, 0), ahora, 60)).toBe(false)
+    expect(faltaAnticipacion(new Date(2026, 10, 15, 13, 0, 1), ahora, 0)).toBe(false)
   })
 })

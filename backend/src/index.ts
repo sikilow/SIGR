@@ -83,6 +83,7 @@ async function iniciarAPI(): Promise<void> {
     { archivo: "015_corte_efectivo.sql", consulta: "SELECT fondo_inicial, efectivo_esperado, efectivo_contado FROM corte_caja LIMIT 0" },
     { archivo: "016_metodo_pago_solicitado.sql", consulta: "SELECT id_metodo_pago_solicitado FROM cuenta LIMIT 0" },
     { archivo: "017_categorias_metodos_pago.sql", consulta: "SELECT mp.activo, mp.id_categoria_metodo_pago, mp.es_efectivo FROM metodo_pago mp JOIN categoria_metodo_pago cmp USING (id_categoria_metodo_pago) LIMIT 0" },
+    { archivo: "018_telefono_unico_y_anticipacion_reserva.sql", consulta: "SELECT anticipacion_minutos FROM configuracion_reservacion LIMIT 0" },
   ];
   for (const { archivo, consulta } of migraciones) {
     try {
@@ -98,6 +99,16 @@ async function iniciarAPI(): Promise<void> {
       }
       throw error;
     }
+  }
+
+  const [telefonoUnico] = await filas(
+    pool,
+    `SELECT COUNT(*) AS total
+       FROM information_schema.statistics
+      WHERE table_schema = DATABASE() AND table_name = 'perfil_usuario' AND index_name = 'uq_perfil_usuario_telefono'`,
+  );
+  if (Number(telefonoUnico?.total ?? 0) === 0) {
+    throw new Error("Falta aplicar database/migrations/018_telefono_unico_y_anticipacion_reserva.sql (teléfono único de usuarios).");
   }
 
   const [auditoriaCuenta] = await filas(

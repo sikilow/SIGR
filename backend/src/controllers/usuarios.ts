@@ -86,7 +86,7 @@ async function idRol(ex: Ejecutor, rol: string): Promise<number> {
 function traducirDuplicado(error: unknown): never {
   if (typeof error === "object" && error !== null && "code" in error && error.code === "ER_DUP_ENTRY") {
     const texto = String((error as { sqlMessage?: string }).sqlMessage ?? "");
-    const campo = texto.includes("correo") ? "correo" : "nombre de usuario";
+    const campo = texto.includes("telefono") ? "teléfono" : texto.includes("correo") ? "correo" : "nombre de usuario";
     throw new ErrorApi(409, "estado_invalido", `Ya existe otro usuario con ese ${campo}.`);
   }
   throw error;
@@ -98,13 +98,23 @@ export const listarUsuarios = async (_req: Request, res: Response) => {
   res.json(rows.map(aDto));
 };
 
+/**
+ * Teléfono: opcional. Si se captura debe tener 10 dígitos (se aceptan espacios, guiones y paréntesis al escribirlo)
+ * y se guarda solo con dígitos; no puede repetirse entre usuarios (índice único uq_perfil_usuario_telefono).
+ */
+const Telefono = z
+  .string()
+  .trim()
+  .transform((t) => t.replace(/[\s().-]/g, ""))
+  .refine((t) => t === "" || /^\d{10}$/.test(t), "debe tener 10 dígitos");
+
 const Crear = z.object({
   nombre: Texto(100),
   correo: Correo,
   nombre_usuario: NombreUsuario,
   contrasena: Contrasena,
   rol: Rol,
-  telefono: z.string().trim().max(20).optional(),
+  telefono: Telefono.optional(),
 });
 
 /** POST /api/usuarios  →  201 con el usuario creado. La contraseña se guarda con bcrypt. */
@@ -146,7 +156,7 @@ const Editar = z
     nombre_usuario: NombreUsuario,
     rol: Rol,
     activo: z.boolean(),
-    telefono: z.string().trim().max(20).nullable(),
+    telefono: Telefono.nullable(),
   })
   .partial();
 

@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
-import { idDeRuta, validar } from "../models/dominio";
+import { exigirAnticipacionMinima, idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 import { conIdempotencia } from "../services/idempotencia";
 import { esCorreoValido } from "../services/correo";
@@ -287,6 +287,7 @@ export const crearReservacion = async (req: Request, res: Response) => {
       if (Number(fecha.pasada) === 1 || Number(fecha.lejana) === 1) {
         throw new ErrorApi(422, "estado_invalido", "La fecha debe ser desde ahora y no puede superar un año.");
       }
+      await exigirAnticipacionMinima(cx, datos.fecha_hora);
       if (datos.id_mesa !== undefined && datos.id_mesa !== null && Number(fecha.es_hoy) !== 1) {
         throw new ErrorApi(422, "estado_invalido", "Solo se puede asignar una mesa a una reservación de hoy.");
       }
@@ -378,6 +379,7 @@ export const editarReservacion = async (req: Request, res: Response) => {
             if (Number(fecha.pasada) === 1 || Number(fecha.lejana) === 1) {
               throw new ErrorApi(422, "estado_invalido", "La fecha debe ser desde ahora y no puede superar un año.");
             }
+            await exigirAnticipacionMinima(cx, cambio.fecha_hora);
           }
         }
 

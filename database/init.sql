@@ -41,6 +41,7 @@ CREATE TABLE perfil_usuario (
   id_usuario INT PRIMARY KEY,
   telefono VARCHAR(20) NULL,
   direccion VARCHAR(180) NULL,
+  CONSTRAINT uq_perfil_usuario_telefono UNIQUE (telefono),
   CONSTRAINT fk_perfil_usuario_id_usuario FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -125,6 +126,8 @@ CREATE TABLE configuracion_reservacion (
   id INT PRIMARY KEY CHECK (id = 1),
   tolerancia_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 15 CHECK (tolerancia_minutos BETWEEN 5 AND 180),
   recordatorio_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 5 CHECK (recordatorio_minutos BETWEEN 1 AND 30),
+  anticipacion_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 60,
+  CONSTRAINT chk_config_res_anticipacion CHECK (anticipacion_minutos BETWEEN 0 AND 1440),
   actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -682,17 +685,17 @@ DROP TRIGGER IF EXISTS `trg_aud_configuracion_reservacion_ad`$$
 CREATE TRIGGER `trg_aud_configuracion_reservacion_ai` AFTER INSERT ON `configuracion_reservacion` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'configuracion_reservacion', 'INSERT', JSON_OBJECT('id', NEW.`id`), JSON_OBJECT('id', NEW.`id`, 'tolerancia_minutos', NEW.`tolerancia_minutos`, 'recordatorio_minutos', NEW.`recordatorio_minutos`, 'actualizado_en', NEW.`actualizado_en`), USER());
+  VALUES (@sigr_actor_id, 'configuracion_reservacion', 'INSERT', JSON_OBJECT('id', NEW.`id`), JSON_OBJECT('id', NEW.`id`, 'tolerancia_minutos', NEW.`tolerancia_minutos`, 'recordatorio_minutos', NEW.`recordatorio_minutos`, 'anticipacion_minutos', NEW.`anticipacion_minutos`, 'actualizado_en', NEW.`actualizado_en`), USER());
 END$$
 CREATE TRIGGER `trg_aud_configuracion_reservacion_au` AFTER UPDATE ON `configuracion_reservacion` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'configuracion_reservacion', 'UPDATE', JSON_OBJECT('id', NEW.`id`), JSON_OBJECT('id', OLD.`id`, 'tolerancia_minutos', OLD.`tolerancia_minutos`, 'recordatorio_minutos', OLD.`recordatorio_minutos`, 'actualizado_en', OLD.`actualizado_en`), JSON_OBJECT('id', NEW.`id`, 'tolerancia_minutos', NEW.`tolerancia_minutos`, 'recordatorio_minutos', NEW.`recordatorio_minutos`, 'actualizado_en', NEW.`actualizado_en`), USER());
+  VALUES (@sigr_actor_id, 'configuracion_reservacion', 'UPDATE', JSON_OBJECT('id', NEW.`id`), JSON_OBJECT('id', OLD.`id`, 'tolerancia_minutos', OLD.`tolerancia_minutos`, 'recordatorio_minutos', OLD.`recordatorio_minutos`, 'anticipacion_minutos', OLD.`anticipacion_minutos`, 'actualizado_en', OLD.`actualizado_en`), JSON_OBJECT('id', NEW.`id`, 'tolerancia_minutos', NEW.`tolerancia_minutos`, 'recordatorio_minutos', NEW.`recordatorio_minutos`, 'anticipacion_minutos', NEW.`anticipacion_minutos`, 'actualizado_en', NEW.`actualizado_en`), USER());
 END$$
 CREATE TRIGGER `trg_aud_configuracion_reservacion_ad` AFTER DELETE ON `configuracion_reservacion` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
-  VALUES (@sigr_actor_id, 'configuracion_reservacion', 'DELETE', JSON_OBJECT('id', OLD.`id`), JSON_OBJECT('id', OLD.`id`, 'tolerancia_minutos', OLD.`tolerancia_minutos`, 'recordatorio_minutos', OLD.`recordatorio_minutos`, 'actualizado_en', OLD.`actualizado_en`), USER());
+  VALUES (@sigr_actor_id, 'configuracion_reservacion', 'DELETE', JSON_OBJECT('id', OLD.`id`), JSON_OBJECT('id', OLD.`id`, 'tolerancia_minutos', OLD.`tolerancia_minutos`, 'recordatorio_minutos', OLD.`recordatorio_minutos`, 'anticipacion_minutos', OLD.`anticipacion_minutos`, 'actualizado_en', OLD.`actualizado_en`), USER());
 END$$
 DROP TRIGGER IF EXISTS `trg_aud_notificacion_reservacion_ai`$$
 DROP TRIGGER IF EXISTS `trg_aud_notificacion_reservacion_au`$$

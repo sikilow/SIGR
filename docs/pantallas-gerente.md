@@ -11,7 +11,7 @@ en [`capturas/`](capturas/) y se tomaron con el servidor de desarrollo en modo m
 | Usuarios | `/gerente/usuarios` | RF-USR-001 a 007 | Funcional; documentación visual pendiente |
 | Productos e inventario | `/gerente/productos` | RF-PRO-001 a 006 | Funcional; incluye descripción obligatoria, variantes y filtros de inventario |
 | Mesas y secciones | `/gerente/mesas` | RF-MES-002 a 007 | Funcional; administración de mesas y catálogo de secciones |
-| Reservas | `/gerente/reservaciones` | Configuración de tolerancia y recordatorio (migración 010) | Funcional; ruta protegida para gerente |
+| Reservas | `/gerente/reservaciones` | Configuración de anticipación mínima (migración 018), tolerancia y recordatorio (migración 010) | Funcional; ruta protegida para gerente |
 | Pedidos | `/gerente/pedidos` y `/gerente/pedidos/:idPedido` | RF-PED-002 (gerente), RF-PED-003, RF-PED-005 (parcial) | Documentada abajo |
 
 ## Productos, inventario y mesas

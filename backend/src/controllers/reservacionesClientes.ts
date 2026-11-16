@@ -2,7 +2,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { ejecutar, filas, pool, transaccion } from "../services/db";
-import { validar } from "../models/dominio";
+import { exigirAnticipacionMinima, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 
 // Validaciones del formulario
@@ -94,6 +94,7 @@ export const crearReservacionCliente = async (
         "La fecha debe ser futura y no superar un año."
       );
     }
+    await exigirAnticipacionMinima(cx, datos.fecha_hora);
 
     // No permitir la misma solicitud activa duplicada
     const [duplicada] = await filas(

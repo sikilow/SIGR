@@ -234,10 +234,10 @@ común. Los fallos quedan en `notificacion_reservacion` y se reintentan por Rese
 Solo Gerencia puede consultar y modificar `GET/PATCH /api/catalogo/configuracion-reservacion`:
 
 ```json
-{ "tolerancia_minutos": 15, "recordatorio_minutos": 5 }
+{ "tolerancia_minutos": 15, "recordatorio_minutos": 5, "anticipacion_minutos": 60 }
 ```
 
-La actualización requiere ambos campos enteros; tolerancia de 5–180 minutos y recordatorio de 1–30 minutos. Configura
+La actualización requiere los tres campos enteros: tolerancia de 5–180 minutos, recordatorio de 1–30 minutos y `anticipacion_minutos` de 0–1440 (0 = sin mínimo; predeterminado 60). La anticipación es el tiempo que debe faltar, como mínimo, para la hora reservada: `POST /api/reservaciones`, `PATCH /api/reservaciones/{id}` (al cambiar la fecha) y el portal de clientes responden `422 estado_invalido` («Las reservaciones se hacen con al menos 1 hora de anticipación.») si la hora queda más cerca. Configura
 `CORREO_PROVEEDOR`, `CORREO_REMITENTE` y las credenciales de Resend o SMTP en `backend/.env`; el detalle está en
 [`resend-reservaciones.md`](resend-reservaciones.md).
 

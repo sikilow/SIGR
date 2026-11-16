@@ -380,3 +380,40 @@ export async function cargarCuenta(ex: Ejecutor, idCuenta: number): Promise<Cuen
     total: redondear(pedidos.filter((p) => p.estado !== ESTADO_PEDIDO_DB.cancelado).reduce((suma, p) => suma + p.total, 0)),
   };
 }
+
+// ---------- Reservaciones: anticipación mínima configurable por Gerencia ----------
+
+/** Anticipación por defecto si la fila de configuración no existe (60 minutos). */
+export const ANTICIPACION_MINUTOS_POR_DEFECTO = 60;
+
+/** «60» → «1 hora», «90» → «1 hora 30 minutos», «45» → «45 minutos», «0» → «sin anticipación». */
+export function describirMinutos(minutos: number): string {
+  if (minutos <= 0) return "sin anticipación";
+  const horas = Math.floor(minutos / 60);
+  const resto = minutos % 60;
+  const h = horas === 0 ? "" : `${horas} ${horas === 1 ? "hora" : "horas"}`;
+  const m = resto === 0 ? "" : `${resto} ${resto === 1 ? "minuto" : "minutos"}`;
+  return [h, m].filter(Boolean).join(" ");
+}
+
+/**
+ * Rechaza una reservación que empieza antes de «ahora + anticipación mínima» (configuracion_reservacion.anticipacion_minutos).
+ * Se compara contra la hora de MySQL, igual que el resto de validaciones de fecha.
+ */
+export async function exigirAnticipacionMinima(cx: Ejecutor, fechaHora: string): Promise<void> {
+  const [fila] = await filas(
+    cx,
+    `SELECT COALESCE(cr.anticipacion_minutos, ?) AS minutos,
+            ? < DATE_ADD(NOW(), INTERVAL COALESCE(cr.anticipacion_minutos, ?) MINUTE) AS temprano
+       FROM (SELECT 1) AS base
+       LEFT JOIN configuracion_reservacion cr ON cr.id = 1`,
+    [ANTICIPACION_MINUTOS_POR_DEFECTO, fechaHora, ANTICIPACION_MINUTOS_POR_DEFECTO],
+  );
+  if (fila && Number(fila.temprano) === 1) {
+    throw new ErrorApi(
+      422,
+      "estado_invalido",
+      `Las reservaciones se hacen con al menos ${describirMinutos(Number(fila.minutos))} de anticipación.`,
+    );
+  }
+}

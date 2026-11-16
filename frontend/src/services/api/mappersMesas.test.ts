@@ -4,8 +4,8 @@ import { aConfiguracionReservacion, aMesaAdmin, aSeccionAdmin, deCambioMesa, deN
 
 describe('aConfiguracionReservacion', () => {
   it('convierte los minutos enviados por MySQL', () => {
-    expect(aConfiguracionReservacion({ tolerancia_minutos: '15', recordatorio_minutos: 5 }))
-      .toEqual({ toleranciaMinutos: 15, recordatorioMinutos: 5 })
+    expect(aConfiguracionReservacion({ tolerancia_minutos: '15', recordatorio_minutos: 5, anticipacion_minutos: '60' }))
+      .toEqual({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60 })
   })
 })
 

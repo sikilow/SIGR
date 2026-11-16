@@ -130,6 +130,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `015_corte_efectivo.sql` | Fondo inicial, efectivo esperado y contado en el corte de caja | Una vez, tras 014 |
 | `016_metodo_pago_solicitado.sql` | Método elegido por el mesero y control de entrega antes de cobrar | Tras 015; actualiza triggers de auditoría de cuenta |
 | `017_categorias_metodos_pago.sql` | Categorías físicas/digitales configurables y métodos asociados | Tras 016 |
+| `018_telefono_unico_y_anticipacion_reserva.sql` | Teléfono de usuarios solo con dígitos y único; anticipación mínima de reservación configurable | Tras 017; puede repetirse |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
@@ -294,6 +295,19 @@ mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT cmp.nombre, cmp.tipo, mp.n
 ```
 
 Gerencia puede crear categorías nuevas indicando si son físicas o digitales, agregarles métodos y desactivar cada categoría o método por separado. El personal solo recibe categorías y métodos activos. Los métodos ya solicitados para una cuenta siguen disponibles en Caja aunque luego se desactiven.
+
+## Migración 018: teléfono único y anticipación de reservaciones
+
+Deja el teléfono de los usuarios solo con dígitos (por ejemplo `311 116 5727` pasa a `3111165727`), agrega el índice único `uq_perfil_usuario_telefono` y crea `configuracion_reservacion.anticipacion_minutos` (por defecto 60, rango 0 a 1440) con su `CHECK`. También recrea los triggers de auditoría de `configuracion_reservacion` para que registren la columna nueva. Puede repetirse. Haz un respaldo antes.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-018.sql"
+Get-Content -Raw ".\database\migrations8_telefono_unico_y_anticipacion_reserva.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT * FROM configuracion_reservacion; SHOW INDEX FROM perfil_usuario WHERE Key_name = 'uq_perfil_usuario_telefono';"
+```
+
+Si el índice no se puede crear («Duplicate entry»), dos usuarios tienen el mismo teléfono: corrige uno desde **Gerente → Usuarios** (o en SQL) y vuelve a ejecutar el archivo. La API no arranca sin esta migración.
 
 ## Base nueva o entorno de demostración
 

@@ -4,6 +4,7 @@
 // "Cambiar contraseña"). La validación del front es una ayuda: el servidor vuelve a validar todo.
 import { computed, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
+import { normalizarTelefono } from '../utils/reservaciones'
 import {
   CONTRASENA_MAX,
   CONTRASENA_MIN,
@@ -72,7 +73,7 @@ const errores = computed(() => {
   if (!u) e.usuario = 'Escribe el nombre de usuario.'
   else if (u.length < 3) e.usuario = 'Mínimo 3 caracteres.'
   else if (!REGEX_USUARIO.test(u)) e.usuario = 'Solo letras, números, punto, guion y guion bajo (sin espacios).'
-  if (telefono.value.trim().length > 20) e.telefono = 'Máximo 20 caracteres.'
+  if (telefono.value.trim() !== '' && normalizarTelefono(telefono.value).length !== 10) e.telefono = 'Escribe un teléfono de 10 dígitos.'
   if (!editando.value) {
     if (contrasena.value.length < CONTRASENA_MIN) e.contrasena = `Mínimo ${CONTRASENA_MIN} caracteres.`
     else if (contrasena.value.length > CONTRASENA_MAX) e.contrasena = `Máximo ${CONTRASENA_MAX} caracteres.`
@@ -91,7 +92,7 @@ function cambios(): CambioUsuario {
   if (correo.value.trim() !== u.correo) c.correo = correo.value
   if (usuarioLogin.value.trim() !== u.nombreUsuario) c.nombreUsuario = usuarioLogin.value
   if (rol.value !== u.rol) c.rol = rol.value
-  if (telefono.value.trim() !== (u.telefono ?? '')) c.telefono = telefono.value
+  if (normalizarTelefono(telefono.value) !== normalizarTelefono(u.telefono ?? '')) c.telefono = telefono.value
   return c
 }
 
@@ -182,7 +183,7 @@ async function guardar() {
 
       <div class="campo">
         <label for="usr-telefono">Teléfono <span class="form__opcional">(opcional)</span></label>
-        <input id="usr-telefono" v-model="telefono" type="tel" autocomplete="off" maxlength="20"
+        <input id="usr-telefono" v-model="telefono" type="tel" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="10 dígitos"
           :aria-invalid="campoErr('telefono') ? 'true' : undefined" :aria-describedby="campoErr('telefono') ? 'usr-telefono-e' : undefined" />
         <p v-if="campoErr('telefono')" id="usr-telefono-e" class="texto-error form__error">{{ campoErr('telefono') }}</p>
       </div>

@@ -240,6 +240,21 @@ export interface ErroresCliente {
   correo?: string
 }
 
+/** «60» → «1 hora», «90» → «1 hora 30 minutos», «45» → «45 minutos», «0» → «sin anticipación». */
+export function describirMinutos(minutos: number): string {
+  if (minutos <= 0) return 'sin anticipación'
+  const horas = Math.floor(minutos / 60)
+  const resto = minutos % 60
+  const h = horas === 0 ? '' : `${horas} ${horas === 1 ? 'hora' : 'horas'}`
+  const m = resto === 0 ? '' : `${resto} ${resto === 1 ? 'minuto' : 'minutos'}`
+  return [h, m].filter(Boolean).join(' ')
+}
+
+/** `true` si la reservación empieza antes de «ahora + anticipación mínima» que configura Gerencia. */
+export function faltaAnticipacion(fecha: Date, ahora: Date, anticipacionMinutos: number): boolean {
+  return fecha.getTime() < ahora.getTime() + anticipacionMinutos * 60_000
+}
+
 /** Deja solo los dígitos de un teléfono («(311) 555-0201» → «3115550201»). */
 export function normalizarTelefono(texto: string): string {
   return texto.replace(/\D/g, '')

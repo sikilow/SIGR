@@ -32,12 +32,14 @@ beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
 describe('catálogo e inventario de productos', () => {
-  it('permite consultar y actualizar la tolerancia y el recordatorio de reservaciones', async () => {
+  it('permite consultar y actualizar la tolerancia, el recordatorio y la anticipación mínima de reservaciones', async () => {
     const catalogo = await nuevoCatalogo()
-    expect(await resolver(catalogo.obtenerConfiguracionReservacion())).toEqual({ toleranciaMinutos: 15, recordatorioMinutos: 5 })
-    expect(await resolver(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 20, recordatorioMinutos: 10 })))
-      .toEqual({ toleranciaMinutos: 20, recordatorioMinutos: 10 })
-    expect((await errorDe(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 2, recordatorioMinutos: 10 }))).codigo)
+    expect(await resolver(catalogo.obtenerConfiguracionReservacion())).toEqual({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60 })
+    expect(await resolver(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 20, recordatorioMinutos: 10, anticipacionMinutos: 90 })))
+      .toEqual({ toleranciaMinutos: 20, recordatorioMinutos: 10, anticipacionMinutos: 90 })
+    expect((await errorDe(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 2, recordatorioMinutos: 10, anticipacionMinutos: 90 }))).codigo)
+      .toBe('estado_invalido')
+    expect((await errorDe(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 20, recordatorioMinutos: 10, anticipacionMinutos: -1 }))).codigo)
       .toBe('estado_invalido')
   })
 

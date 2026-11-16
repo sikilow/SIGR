@@ -51,6 +51,8 @@ export interface SeccionAdmin {
 export interface ConfiguracionReservacion {
   toleranciaMinutos: number
   recordatorioMinutos: number
+  /** Con cuánto tiempo mínimo antes de la hora se puede reservar (0 = sin mínimo). */
+  anticipacionMinutos: number
 }
 
 export interface ProductoAdmin {

@@ -380,7 +380,11 @@ export function crearServiciosApi(): Servicios {
       async actualizarConfiguracionReservacion(cambio) {
         return aConfiguracionReservacion(
           await solicitar<ConfiguracionReservacionDto>('PATCH', '/catalogo/configuracion-reservacion', {
-            cuerpo: { tolerancia_minutos: cambio.toleranciaMinutos, recordatorio_minutos: cambio.recordatorioMinutos },
+            cuerpo: {
+              tolerancia_minutos: cambio.toleranciaMinutos,
+              recordatorio_minutos: cambio.recordatorioMinutos,
+              anticipacion_minutos: cambio.anticipacionMinutos,
+            },
           }),
         )
       },

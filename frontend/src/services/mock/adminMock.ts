@@ -32,6 +32,18 @@ function datosExtra(id: number, usuario: string): DatosExtra {
   return d
 }
 
+/** Misma regla que la API: teléfono opcional; si viene, 10 dígitos (acepta espacios, guiones y paréntesis) y no se repite. */
+function telefonoValido(texto: string | null | undefined, idPropio?: number): string | null {
+  const limpio = (texto ?? '').trim().replace(/[\s().-]/g, '')
+  if (limpio === '') return null
+  if (!/^\d{10}$/.test(limpio)) throw new ErrorServicio('estado_invalido', 'El teléfono debe tener 10 dígitos.', 422)
+  const repetido = baseDatos.usuarios.some(
+    (u) => u.idUsuario !== idPropio && datosExtra(u.idUsuario, u.nombreUsuario).telefono === limpio,
+  )
+  if (repetido) throw duplicado('teléfono')
+  return limpio
+}
+
 function aAdmin(id: number): UsuarioAdmin {
   const u = baseDatos.usuarios.find((x) => x.idUsuario === id)
   if (!u) throw noExiste('El usuario')
@@ -73,6 +85,7 @@ export function crearUsuariosMock(): UsuariosService {
         if (baseDatos.usuarios.some((u) => u.nombreUsuario.toLowerCase() === n.nombreUsuario.trim().toLowerCase())) throw duplicado('nombre de usuario')
         if (baseDatos.usuarios.some((u) => datosExtra(u.idUsuario, u.nombreUsuario).correo.toLowerCase() === n.correo.trim().toLowerCase())) throw duplicado('correo')
         const id = Math.max(0, ...baseDatos.usuarios.map((u) => u.idUsuario)) + 1
+        const telefono = telefonoValido(n.telefono)
         baseDatos.usuarios.push({
           idUsuario: id,
           idRol: ROL_ID[n.rol],
@@ -83,7 +96,7 @@ export function crearUsuariosMock(): UsuariosService {
           contrasena: n.contrasena,
           activo: true,
         })
-        extra.set(id, { correo: n.correo.trim(), telefono: n.telefono?.trim() || null, creadoEn: new Date(), ultimoAcceso: null })
+        extra.set(id, { correo: n.correo.trim(), telefono, creadoEn: new Date(), ultimoAcceso: null })
         return aAdmin(id)
       })
     },
@@ -115,7 +128,7 @@ export function crearUsuariosMock(): UsuariosService {
         if (c.rol !== undefined) u.rol = c.rol
         if (c.activo !== undefined) u.activo = c.activo
         if (c.correo !== undefined) e.correo = c.correo.trim()
-        if (c.telefono !== undefined) e.telefono = c.telefono?.trim() || null
+        if (c.telefono !== undefined) e.telefono = telefonoValido(c.telefono, id)
         return aAdmin(id)
       })
     },
@@ -376,6 +389,9 @@ export function crearCatalogoMock(): CatalogoService {
         }
         if (!Number.isInteger(cambio.recordatorioMinutos) || cambio.recordatorioMinutos < 1 || cambio.recordatorioMinutos > 30) {
           throw new ErrorServicio('estado_invalido', 'El recordatorio debe estar entre 1 y 30 minutos.', 422)
+        }
+        if (!Number.isInteger(cambio.anticipacionMinutos) || cambio.anticipacionMinutos < 0 || cambio.anticipacionMinutos > 1440) {
+          throw new ErrorServicio('estado_invalido', 'La anticipación debe estar entre 0 y 1440 minutos.', 422)
         }
         baseDatos.configuracionReservacion = { ...cambio }
         return { ...baseDatos.configuracionReservacion }

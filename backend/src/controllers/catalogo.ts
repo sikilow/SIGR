@@ -10,7 +10,7 @@ import { ErrorApi } from "../utils/errores";
 export const obtenerConfiguracionReservacion = async (_req: Request, res: Response) => {
   const [configuracion] = await filas(
     pool,
-    "SELECT tolerancia_minutos, recordatorio_minutos FROM configuracion_reservacion WHERE id = 1",
+    "SELECT tolerancia_minutos, recordatorio_minutos, anticipacion_minutos FROM configuracion_reservacion WHERE id = 1",
   );
   if (!configuracion) throw new ErrorApi(500, "desconocido", "No existe la configuración de reservaciones. Ejecuta la migración 010.");
   res.json(configuracion);
@@ -19,6 +19,8 @@ export const obtenerConfiguracionReservacion = async (_req: Request, res: Respon
 const ConfiguracionReservacion = z.object({
   tolerancia_minutos: z.number().int().min(5).max(180),
   recordatorio_minutos: z.number().int().min(1).max(30),
+  /** Con cuánto tiempo mínimo antes de la hora se puede reservar (0 = sin mínimo; hasta 24 h). */
+  anticipacion_minutos: z.number().int().min(0).max(1440),
 }).strict();
 
 /** PATCH /api/catalogo/configuracion-reservacion */
@@ -26,12 +28,12 @@ export const actualizarConfiguracionReservacion = async (req: Request, res: Resp
   const datos = validar(ConfiguracionReservacion, req.body);
   await ejecutar(
     pool,
-    "UPDATE configuracion_reservacion SET tolerancia_minutos = ?, recordatorio_minutos = ? WHERE id = 1",
-    [datos.tolerancia_minutos, datos.recordatorio_minutos],
+    "UPDATE configuracion_reservacion SET tolerancia_minutos = ?, recordatorio_minutos = ?, anticipacion_minutos = ? WHERE id = 1",
+    [datos.tolerancia_minutos, datos.recordatorio_minutos, datos.anticipacion_minutos],
   );
   const [configuracion] = await filas(
     pool,
-    "SELECT tolerancia_minutos, recordatorio_minutos FROM configuracion_reservacion WHERE id = 1",
+    "SELECT tolerancia_minutos, recordatorio_minutos, anticipacion_minutos FROM configuracion_reservacion WHERE id = 1",
   );
   if (!configuracion) throw new ErrorApi(500, "desconocido", "No existe la configuración de reservaciones. Ejecuta la migración 010.");
   res.json(configuracion);

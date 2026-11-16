@@ -337,12 +337,14 @@ export interface SeccionAdminDto {
 export interface ConfiguracionReservacionDto {
   tolerancia_minutos: Numerico
   recordatorio_minutos: Numerico
+  anticipacion_minutos: Numerico
 }
 
 export function aConfiguracionReservacion(dto: ConfiguracionReservacionDto): ConfiguracionReservacion {
   return {
     toleranciaMinutos: aNumero(dto.tolerancia_minutos, 'tolerancia_minutos'),
     recordatorioMinutos: aNumero(dto.recordatorio_minutos, 'recordatorio_minutos'),
+    anticipacionMinutos: aNumero(dto.anticipacion_minutos, 'anticipacion_minutos'),
   }
 }
 

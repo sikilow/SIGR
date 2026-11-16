@@ -14,7 +14,9 @@ import { mesaAsignable, reservacionAsignable, validarPersonas } from '../../util
 import {
   aDiaISO,
   coincideBusqueda,
+  describirMinutos,
   esFechaPasada,
+  faltaAnticipacion,
   esVigente,
   mesaPermitidaEnFecha,
   mesaSeLibera,
@@ -105,7 +107,12 @@ function mesaLibreParaReservar(idMesa: number): void {
 
 function validarFechaNueva(fecha: Date): void {
   if (Number.isNaN(fecha.getTime())) throw new ErrorServicio('estado_invalido', 'La fecha no es válida.', 422)
-  if (esFechaPasada(fecha, new Date())) throw new ErrorServicio('estado_invalido', 'No se puede reservar en una fecha pasada.', 422)
+  const ahora = new Date()
+  if (esFechaPasada(fecha, ahora)) throw new ErrorServicio('estado_invalido', 'No se puede reservar en una fecha pasada.', 422)
+  const minutos = baseDatos.configuracionReservacion.anticipacionMinutos
+  if (faltaAnticipacion(fecha, ahora, minutos)) {
+    throw new ErrorServicio('estado_invalido', `Las reservaciones se hacen con al menos ${describirMinutos(minutos)} de anticipación.`, 422)
+  }
 }
 
 function validarPersonasNuevas(personas: number): void {

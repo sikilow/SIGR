@@ -66,3 +66,40 @@ describe('mock: protecciones de usuarios', () => {
     expect(baseDatos.usuarios.find((usuario) => usuario.idUsuario === 1)?.contrasena).toBe('restablecida123')
   })
 })
+
+describe('mock: teléfono de usuarios', () => {
+  const nuevo = (telefono?: string) => ({
+    nombre: 'Prueba Teléfono',
+    correo: `t${Math.random().toString(36).slice(2, 8)}@correo.com`,
+    nombreUsuario: `tel${Math.random().toString(36).slice(2, 8)}`,
+    contrasena: 'clave1234',
+    rol: 'mesero' as const,
+    telefono,
+  })
+
+  it('es opcional, acepta 10 dígitos con espacios o guiones y los guarda solo como dígitos', async () => {
+    const { usuarios } = await nuevoMock()
+    iniciarSesionGerente()
+    expect((await resolver(usuarios.crear(nuevo()))).telefono).toBeNull()
+    expect((await resolver(usuarios.crear(nuevo('311 555 0101')))).telefono).toBe('3115550101')
+    expect((await resolver(usuarios.crear(nuevo('(311) 555-0102')))).telefono).toBe('3115550102')
+  })
+
+  it('rechaza teléfonos que no tienen 10 dígitos', async () => {
+    const { usuarios } = await nuevoMock()
+    iniciarSesionGerente()
+    expect(await codigoDeError(usuarios.crear(nuevo('31155501')))).toBe('estado_invalido')
+    expect(await codigoDeError(usuarios.crear(nuevo('311555010123')))).toBe('estado_invalido')
+    expect(await codigoDeError(usuarios.crear(nuevo('311555abcd')))).toBe('estado_invalido')
+  })
+
+  it('no permite repetir el teléfono de otro usuario, pero sí conservar el propio', async () => {
+    const { usuarios } = await nuevoMock()
+    iniciarSesionGerente()
+    const primero = await resolver(usuarios.crear(nuevo('3115550199')))
+    expect(await codigoDeError(usuarios.crear(nuevo('311 555 0199')))).toBe('estado_invalido')
+    expect((await resolver(usuarios.actualizar(primero.idUsuario, { telefono: '3115550199' }))).telefono).toBe('3115550199')
+    const segundo = await resolver(usuarios.crear(nuevo('3115550198')))
+    expect(await codigoDeError(usuarios.actualizar(segundo.idUsuario, { telefono: '3115550199' }))).toBe('estado_invalido')
+  })
+})
