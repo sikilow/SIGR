@@ -132,6 +132,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `017_categorias_metodos_pago.sql` | Categorías físicas/digitales configurables y métodos asociados | Tras 016 |
 | `018_telefono_unico_y_anticipacion_reserva.sql` | Teléfono de usuarios solo con dígitos y único; anticipación mínima de reservación configurable | Tras 017; puede repetirse |
 | `019_pedidos_para_llevar.sql` | Sección «Para llevar» con mesas virtuales (101 a 110), catálogo `canal_pedido` y canal/referencia en la cuenta | Tras 018; puede repetirse |
+| `020_acceso_google_clientes.sql` | `cliente_credencial.google_sub` único y contraseña opcional (acceso de clientes con Google) | Tras 019; puede repetirse |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
@@ -322,6 +323,19 @@ mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT nombre, es_para_llevar FRO
 ```
 
 La API no arranca sin esta migración. Para tener más pedidos para llevar a la vez, Gerencia agrega mesas en **Gerente → Mesas** dentro de la sección «Para llevar».
+
+## Migración 020: acceso de clientes con Google
+
+Agrega `cliente_credencial.google_sub` (único) y hace opcional `password_hash`: quien entra con Google no tiene contraseña. No cambia los datos existentes. Puede repetirse. Haz un respaldo antes.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-020.sql"
+Get-Content -Raw ".\database\migrations\020_acceso_google_clientes.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW COLUMNS FROM cliente_credencial;"
+```
+
+La API no arranca sin esta migración. Configuración del botón de Google: [`google-clientes.md`](google-clientes.md).
 
 ## Base nueva o entorno de demostración
 

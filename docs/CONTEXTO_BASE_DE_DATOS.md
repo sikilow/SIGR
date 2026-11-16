@@ -116,10 +116,11 @@ Migraciones y dónde viven sus efectos en `init.sql`:
 | 017 | `categoria_metodo_pago`, `metodo_pago.activo/es_efectivo` y sus triggers | `CREATE TABLE` + datos base + triggers al final |
 | 018 | `perfil_usuario.telefono` único (`uq_perfil_usuario_telefono`) y `configuracion_reservacion.anticipacion_minutos` (+ triggers de auditoría de esa tabla) | `CREATE TABLE perfil_usuario` / `configuracion_reservacion` + triggers al final |
 | 019 | `seccion.es_para_llevar`, tabla `canal_pedido`, `cuenta.id_canal/referencia`, sección «Para llevar» con las mesas 101–110 y triggers de auditoría de `seccion`, `cuenta` y `canal_pedido` | `CREATE TABLE` + datos base + triggers al final |
+| 020 | `cliente_credencial.google_sub` (único) y `password_hash` opcional | En el `CREATE TABLE cliente_credencial` (sin triggers nuevos: esa tabla no se audita) |
 
 Notas importantes:
 
-- **Hay dos archivos con número 014.** `014_clientes_web.sql` es la vigente. La `014_caja_inicio_y_cortes_parciales.sql` quedó de una rama anterior; no la apliques en bases nuevas. No renombres archivos de migración sin avisar: la documentación y las bases de otros equipos los citan por nombre. Para el próximo cambio usa el número **020**.
+- **Hay dos archivos con número 014.** `014_clientes_web.sql` es la vigente. La `014_caja_inicio_y_cortes_parciales.sql` quedó de una rama anterior; no la apliques en bases nuevas. No renombres archivos de migración sin avisar: la documentación y las bases de otros equipos los citan por nombre. Para el próximo cambio usa el número **021**.
 - El `init.sql` anterior estaba mezclado de dos ramas: tenía `efectivo_inicial`, `tipo_cierre` y la columna `efectivo_contado` duplicada, por lo que **fallaba en una base nueva**. Ya está corregido y verificado. Si vuelves a ver un error `Duplicate column name` al ejecutar `init.sql`, hubo otro mal merge: compara con la base real.
 - Los nombres de `CHECK` con significado (`chk_mesa_estado`, `chk_cuenta_estado`, `chk_cuenta_tipo_pago`, `chk_pago_cambio`, `chk_corte_fondo_inicial`, `chk_corte_efectivo_contado`) están nombrados en `init.sql` igual que en la base real. Las migraciones 011 y 012 buscan `chk_notificacion_tipo`/`chk_notificacion_evento` por nombre.
 - En Docker, `init.sql` solo corre la primera vez, cuando el volumen está vacío (`database/docker-compose.yml`). Para volver a correrlo hay que borrar el volumen: eso **destruye los datos**, hazlo solo con permiso.
@@ -130,7 +131,7 @@ Notas importantes:
 ## 7. Lista de comprobación rápida
 
 - [ ] Hice respaldo antes de aplicar la migración.
-- [ ] Migración nueva con el siguiente número (020 o más) y repetible si fue posible.
+- [ ] Migración nueva con el siguiente número (021 o más) y repetible si fue posible.
 - [ ] La apliqué a la base de desarrollo y la API sigue funcionando.
 - [ ] `init.sql` tiene el mismo cambio en su forma final (tablas, datos base y triggers de auditoría).
 - [ ] `node database/verificar_init.mjs` termina con `exit 0`.

@@ -86,6 +86,7 @@ async function iniciarAPI(): Promise<void> {
     { archivo: "018_telefono_unico_y_anticipacion_reserva.sql", consulta: "SELECT anticipacion_minutos FROM configuracion_reservacion LIMIT 0" },
     { archivo: "019_pedidos_para_llevar.sql", consulta: "SELECT s.es_para_llevar, c.id_canal, c.referencia FROM seccion s JOIN cuenta c ON 1 = 0 LIMIT 0" },
     { archivo: "019_pedidos_para_llevar.sql", consulta: "SELECT id_canal, nombre, activo FROM canal_pedido LIMIT 0" },
+    { archivo: "020_acceso_google_clientes.sql", consulta: "SELECT google_sub FROM cliente_credencial LIMIT 0" },
   ];
   for (const { archivo, consulta } of migraciones) {
     try {

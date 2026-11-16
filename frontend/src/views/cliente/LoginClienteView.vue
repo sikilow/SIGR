@@ -3,6 +3,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import AccesoGoogle from '../../components/cliente/AccesoGoogle.vue'
 
 const router = useRouter()
 
@@ -119,6 +120,8 @@ async function iniciarSesion() {
             {{ cargando ? 'Ingresando...' : 'Iniciar sesión' }}
           </button>
         </form>
+
+        <AccesoGoogle modo="login" />
 
         <p class="registro">
           ¿Aún no tienes una cuenta?

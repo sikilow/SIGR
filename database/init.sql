@@ -54,11 +54,14 @@ CREATE TABLE cliente (
 ) ENGINE=InnoDB;
 -- correo: único y en minúsculas; lo usa el portal de clientes para iniciar sesión.
 
--- Contraseñas de los clientes del portal web (migración 014).
+-- Acceso de los clientes del portal web (migraciones 014 y 020): contraseña propia (password_hash) o cuenta de Google
+-- (google_sub; entonces no hay contraseña).
 CREATE TABLE cliente_credencial (
   id_credencial INT AUTO_INCREMENT PRIMARY KEY,
   id_cliente INT NOT NULL UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NULL,
+  google_sub VARCHAR(64) NULL,
+  CONSTRAINT uq_credencial_google_sub UNIQUE (google_sub),
   CONSTRAINT fk_credencial_cliente FOREIGN KEY (id_cliente) REFERENCES cliente (id_cliente) ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB;
 

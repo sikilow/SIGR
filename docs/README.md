@@ -25,6 +25,7 @@
 | Esquema y nombres | [Equivalencias frontend–BD](equivalencias-bd.md) | Correspondencia entre tablas, columnas, JSON y tipos TypeScript |
 | Cambios de base de datos | [Actualizar la base](actualizar-base-datos.md) | Respaldo, orden, aplicación y verificación de migraciones |
 | Contexto de BD para IA | [Contexto de la base de datos](CONTEXTO_BASE_DE_DATOS.md) | Reglas de `init.sql` + migraciones, flujo de cambios, verificación con `verificar_init.mjs` y errores a evitar |
+| Acceso de clientes con Google | [Google en el portal de clientes](google-clientes.md) | Cómo funciona, cómo crear el ID de cliente de Google y configurar `GOOGLE_CLIENT_ID` |
 | Seguridad y auditoría | [Protección de usuarios y auditoría](auditoria-seguridad.md) | Gerente inicial protegido, cambio de contraseña, triggers y consulta de auditoría |
 | Correo de reservaciones | [Resend y SMTP](resend-reservaciones.md) | Configuración, cola, reintentos, plantillas y diagnóstico |
 | Revisión de código | [Guía de estudio](guia-codigo/00_INDICE_Y_RECURSOS.md) | Recorrido pedagógico por áreas; identifica qué explicaciones de código línea por línea siguen pendientes |

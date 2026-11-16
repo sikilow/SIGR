@@ -4,7 +4,9 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { JWT_SECRET } from "../utils/config";
-import { filas, pool } from "../services/db";
+import { ejecutar, filas, pool, transaccion } from "../services/db";
+import { googleHabilitado, verificarTokenGoogle } from "../services/google";
+import { GOOGLE_CLIENT_ID } from "../utils/config";
 import { validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 
@@ -167,6 +169,15 @@ export const iniciarSesionCliente = async (
     [datos.correo.toLowerCase()]
   );
 
+  // Una cuenta creada con Google no tiene contraseña: se le indica el camino correcto.
+  if (cliente && !cliente.password_hash) {
+    throw new ErrorApi(
+      401,
+      "credenciales_invalidas",
+      "Esta cuenta se creó con Google. Usa el botón «Iniciar sesión con Google»."
+    );
+  }
+
   if (
     !cliente ||
     !(await bcrypt.compare(
@@ -181,21 +192,183 @@ export const iniciarSesionCliente = async (
     );
   }
 
-  const token = jwt.sign(
-    {
-      id: cliente.id_cliente,
-      tipo: "cliente",
-    },
-    JWT_SECRET,
-    { expiresIn: "8h" }
-  );
+  res.json(sesionCliente(cliente));
+};
 
-  res.json({
+/** Sesión del portal: el mismo token de 8 horas para contraseña y para Google. */
+function sesionCliente(cliente: Record<string, unknown>) {
+  const token = jwt.sign({ id: cliente.id_cliente, tipo: "cliente" }, JWT_SECRET, { expiresIn: "8h" });
+  return {
     token,
     cliente: {
       id_cliente: cliente.id_cliente,
       nombre: cliente.nombre,
       correo: cliente.correo,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// ACCESO CON GOOGLE
+// ---------------------------------------------------------------------------------------------------------------
+
+/** GET /api/auth-clientes/google/config: el ID de cliente (público) para dibujar el botón; null = desactivado. */
+export const configuracionGoogle = (_req: Request, res: Response) => {
+  res.json({ habilitado: googleHabilitado(), client_id: googleHabilitado() ? GOOGLE_CLIENT_ID : null });
+};
+
+const CredencialGoogle = z.object({ credential: z.string().min(20).max(4000) }).strict();
+
+/**
+ * POST /api/auth-clientes/google  { credential }
+ * La persona eligió su cuenta de Google. El servidor verifica el token con Google y:
+ *  - si esa cuenta de Google ya está ligada a un cliente → inicia sesión;
+ *  - si ya hay un cliente con ese correo y contraseña propia → liga la cuenta de Google (el correo está verificado por
+ *    Google, así que es la misma persona) e inicia sesión;
+ *  - si es nueva (o la registró la hostess sin cuenta) → pide el teléfono: responde `requiere_telefono` con un
+ *    `token_registro` de 15 minutos para el siguiente paso.
+ */
+export const iniciarSesionConGoogle = async (req: Request, res: Response) => {
+  const { credential } = validar(CredencialGoogle, req.body ?? {});
+  const identidad = await verificarTokenGoogle(credential);
+  if (!identidad.correoVerificado) {
+    throw new ErrorApi(401, "credenciales_invalidas", "Tu cuenta de Google no tiene el correo verificado.");
+  }
+
+  // 1) Cuenta de Google ya ligada.
+  const [ligada] = await filas(
+    pool,
+    `SELECT c.id_cliente, c.nombre, c.correo
+       FROM cliente_credencial cc JOIN cliente c ON c.id_cliente = cc.id_cliente
+      WHERE cc.google_sub = ?`,
+    [identidad.sub]
+  );
+  if (ligada) {
+    res.json(sesionCliente(ligada));
+    return;
+  }
+
+  // 2) Mismo correo con cuenta de contraseña: se liga Google a esa cuenta.
+  const [conCuenta] = await filas(
+    pool,
+    `SELECT c.id_cliente, c.nombre, c.correo, cc.id_credencial, cc.google_sub
+       FROM cliente c JOIN cliente_credencial cc ON cc.id_cliente = c.id_cliente
+      WHERE c.correo = ?`,
+    [identidad.correo]
+  );
+  if (conCuenta) {
+    if (conCuenta.google_sub) {
+      throw new ErrorApi(409, "estado_invalido", "Este correo ya está ligado a otra cuenta de Google.");
+    }
+    await ejecutar(pool, "UPDATE cliente_credencial SET google_sub = ? WHERE id_credencial = ?", [
+      identidad.sub,
+      conCuenta.id_credencial,
+    ]);
+    res.json(sesionCliente(conCuenta));
+    return;
+  }
+
+  // 3) Cuenta nueva (o cliente que solo tiene registro de la hostess): falta el teléfono.
+  const tokenRegistro = jwt.sign(
+    { tipo: "registro_google", sub: identidad.sub, correo: identidad.correo, nombre: identidad.nombre },
+    JWT_SECRET,
+    { expiresIn: "15m" }
+  );
+  res.json({
+    requiere_telefono: true,
+    token_registro: tokenRegistro,
+    nombre: identidad.nombre,
+    correo: identidad.correo,
   });
+};
+
+const CompletarGoogle = z
+  .object({
+    token_registro: z.string().min(20).max(4000),
+    telefono: z.string().trim().regex(/^\d{10}$/, "el teléfono debe tener 10 dígitos"),
+    nombre: z.string().trim().min(2).max(100).optional(),
+  })
+  .strict();
+
+/**
+ * POST /api/auth-clientes/google/completar  { token_registro, telefono, nombre? }
+ * Segundo paso de una cuenta nueva con Google: guarda el teléfono y crea la cuenta (sin contraseña). Si la hostess ya
+ * había registrado a la persona con ese correo, solo se liga si el teléfono coincide con el que dio en el restaurante.
+ */
+export const completarRegistroGoogle = async (req: Request, res: Response) => {
+  const datos = validar(CompletarGoogle, req.body ?? {});
+
+  let registro: { sub: string; correo: string; nombre: string };
+  try {
+    const payload = jwt.verify(datos.token_registro, JWT_SECRET);
+    if (
+      typeof payload === "string" ||
+      payload.tipo !== "registro_google" ||
+      typeof payload.sub !== "string" ||
+      typeof payload.correo !== "string"
+    ) {
+      throw new Error("token de otro tipo");
+    }
+    registro = { sub: payload.sub, correo: payload.correo, nombre: String(payload.nombre ?? payload.correo) };
+  } catch {
+    throw new ErrorApi(401, "no_autenticado", "El registro con Google venció. Vuelve a elegir tu cuenta.");
+  }
+
+  const nombre = datos.nombre ?? registro.nombre;
+
+  const cliente = await transaccion(async (cx) => {
+    const [existente] = await filas(
+      cx,
+      `SELECT c.id_cliente, c.nombre, c.telefono, cc.id_credencial
+         FROM cliente c LEFT JOIN cliente_credencial cc ON cc.id_cliente = c.id_cliente
+        WHERE c.correo = ? FOR UPDATE`,
+      [registro.correo]
+    );
+    if (existente?.id_credencial) {
+      throw new ErrorApi(409, "estado_invalido", "Este correo ya tiene una cuenta. Inicia sesión.");
+    }
+    if (existente?.telefono && existente.telefono !== datos.telefono) {
+      throw new ErrorApi(
+        409,
+        "estado_invalido",
+        "Ya tienes un registro en el restaurante con este correo. Usa el teléfono que diste ahí."
+      );
+    }
+    const [otroConTelefono] = await filas(
+      cx,
+      "SELECT id_cliente FROM cliente WHERE telefono = ? AND id_cliente <> ? LIMIT 1",
+      [datos.telefono, existente?.id_cliente ?? 0]
+    );
+    if (otroConTelefono) {
+      throw new ErrorApi(409, "estado_invalido", "Este teléfono ya está registrado con otro correo.");
+    }
+
+    let idCliente: number;
+    let nombreFinal = nombre;
+    if (existente) {
+      // Reutiliza el cliente que capturó la hostess y conserva su historial.
+      idCliente = existente.id_cliente as number;
+      nombreFinal = String(existente.nombre);
+      await ejecutar(cx, "UPDATE cliente SET telefono = ? WHERE id_cliente = ?", [datos.telefono, idCliente]);
+    } else {
+      idCliente = (
+        await ejecutar(cx, "INSERT INTO cliente (nombre, correo, telefono) VALUES (?, ?, ?)", [
+          nombre,
+          registro.correo,
+          datos.telefono,
+        ])
+      ).insertId;
+    }
+    try {
+      await ejecutar(cx, "INSERT INTO cliente_credencial (id_cliente, google_sub) VALUES (?, ?)", [idCliente, registro.sub]);
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "ER_DUP_ENTRY") {
+        throw new ErrorApi(409, "estado_invalido", "Esta cuenta de Google ya está registrada. Inicia sesión.");
+      }
+      throw error;
+    }
+    return { id_cliente: idCliente, nombre: nombreFinal, correo: registro.correo };
+  });
+
+  res.status(201).json(sesionCliente(cliente));
 };

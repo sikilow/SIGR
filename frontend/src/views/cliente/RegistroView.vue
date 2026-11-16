@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import AccesoGoogle from '../../components/cliente/AccesoGoogle.vue'
 
 const router = useRouter()
 
@@ -163,6 +164,8 @@ async function registrarCliente() {
             {{ cargando ? 'Creando cuenta...' : 'Crear cuenta →' }}
           </button>
         </form>
+
+        <AccesoGoogle modo="registro" />
 
         <p class="acceso">
           ¿Ya tienes una cuenta?

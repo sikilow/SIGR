@@ -5,6 +5,9 @@ if (!JWT_SECRET) {
   throw new Error("Falta JWT_SECRET en backend/.env");
 }
 
+/** ID de cliente de OAuth de Google (público). Vacío = el acceso con Google queda desactivado. Ver docs/google-clientes.md. */
+export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim() ?? "";
+
 export const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim() ?? "";
 export const CORREO_REMITENTE = process.env.CORREO_REMITENTE?.trim() ?? "";
 
