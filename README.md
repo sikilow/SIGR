@@ -476,8 +476,7 @@ cd backend
 npm install
 cp .env.example .env        # edita DB_PASSWORD (con Docker: sigr1234) y JWT_SECRET
 npx tsx src/utils/seed.ts         # crea los usuarios de prueba
-# (obligatorio, después del seed) instala protección del gerente inicial y auditoría:
-Get-Content -Raw "..\database\migrations\013_auditoria_seguridad.sql" | mysql -u root -p SIGR
+# init.sql ya incluye la protección del gerente inicial y la auditoría: en una base nueva NO se aplican migraciones
 npm run dev                 # http://localhost:3000
 # (opcional, base recién creada) datos de demostración, ver el encabezado de database/seed_demo.sql:
 # mysql --default-character-set=utf8mb4 -u root -p SIGR < ../database/seed_demo.sql   (crea además a mesero2)

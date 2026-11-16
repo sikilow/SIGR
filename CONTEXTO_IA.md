@@ -11,7 +11,7 @@
 3. El equipo prefiere **entregables completos y listos para usar**: archivos completos, comandos para copiar y pegar, scripts terminados, en lugar de explicaciones o ayudas parciales.
 4. El entorno de trabajo es **Windows con PowerShell**. Los comandos de ejemplo deben funcionar ahí (no uses sintaxis solo de bash sin avisar).
 5. Respeta los códigos de requisito (`RF-…`, `RNF-…`). Cuando propongas algo nuevo, dale un código del patrón existente y márcalo como **propuesto**.
-6. No cambies un contrato JSON, un nombre de columna ni un estado sin decirlo explícitamente. Si cambia la base de datos: crea `database/migrations/00N_*.sql` y actualiza `database/init.sql` en el mismo cambio.
+6. No cambies un contrato JSON, un nombre de columna ni un estado sin decirlo explícitamente. Si cambia la base de datos: crea `database/migrations/0NN_*.sql` y actualiza `database/init.sql` (estado final, con los triggers de auditoría) **en el mismo cambio**, y comprueba con `node database/verificar_init.mjs` que quede idéntica a la base que ya funciona. Antes de tocar `database/`, lee [`docs/CONTEXTO_BASE_DE_DATOS.md`](docs/CONTEXTO_BASE_DE_DATOS.md): nunca ejecutes `init.sql` sobre una base con datos ni borres la base de desarrollo.
 7. No subas ni imprimas secretos: `.env`, `.env.local`, `JWT_SECRET`, contraseñas reales.
 8. Mantén el estilo del código existente (TypeScript estricto, nombres en español, comentarios que explican el porqué).
 
@@ -480,7 +480,7 @@ Antes de entregar: `npm run build` y `npm test` en `backend/`, y `npm run check`
 
 ## 10. Flujo de trabajo con Git
 
-`main` siempre compila y pasa las pruebas. Cada cambio va en una rama (`feature/cocina`, `fix/login`…) y entra por Pull Request. Cambios en la BD: nueva `migrations/00N_*.sql` y `init.sql` actualizado en el mismo PR. Nunca se suben `.env`, `.env.local` ni `node_modules`.
+`main` siempre compila y pasa las pruebas. Cada cambio va en una rama (`feature/cocina`, `fix/login`…) y entra por Pull Request. Cambios en la BD: nueva `migrations/0NN_*.sql` y `init.sql` actualizado en el mismo PR, verificado con `node database/verificar_init.mjs` (ver `docs/CONTEXTO_BASE_DE_DATOS.md`). Nunca se suben `.env`, `.env.local` ni `node_modules`.
 
 ## 11. Pendientes (en el orden más útil)
 
@@ -528,7 +528,7 @@ Esta sección existe para que una IA (o una persona nueva) pueda explicar y repe
 | Configuración, errores, permisos o un script auxiliar | `backend/src/utils/` |
 | Datos falsos para probar la API | `backend/src/mocks/<recurso>.mock.ts` |
 | Una prueba del backend | `backend/tests/<tema>.test.ts` |
-| Una tabla o columna nueva | `database/migrations/00N_<nombre>.sql` **y** `database/init.sql` |
+| Una tabla o columna nueva | `database/migrations/0NN_<nombre>.sql` **y** `database/init.sql` (con sus triggers de auditoría), y luego `node database/verificar_init.mjs`. Guía: `docs/CONTEXTO_BASE_DE_DATOS.md` |
 | Una pantalla nueva | `frontend/src/views/<rol>/` más su ruta en `frontend/src/router/index.ts` |
 | Un componente reutilizable | `frontend/src/components/` |
 | Una llamada nueva a la API | interfaz en `services/interfaces.ts`, versión real en `services/api/`, versión simulada en `services/mock/` |
@@ -1249,6 +1249,14 @@ Al terminar, dame el BLOQUE DE ACTUALIZACIÓN de la sección 15.
 ## 16. Registro de cambios y decisiones
 
 Más reciente primero. Cada IA agrega aquí su bloque de actualización.
+
+### 2026-11-15 · `init.sql` completo y verificado contra la base que funciona
+- Qué se hizo: `database/init.sql` fallaba en una base nueva (error `Duplicate column name 'efectivo_contado'` en `corte_caja`, por un mal merge entre dos ramas de caja) y no traía la auditoría. Se corrigió `corte_caja` (sin `efectivo_inicial` ni `tipo_cierre`, que el código no usa), se agregó al final la sección de seguridad y auditoría (estado final de 013, 015, 016 y 017: gerente protegido, `sigr_auditoria`, 92 triggers y `sp_consultar_auditoria`) y se nombraron los `CHECK` como en la base real. Se creó `database/verificar_init.mjs` (crea una base temporal desde `init.sql`, la compara con la base real —solo lectura— y la borra) y `npm run bd:verificar` en `backend/`.
+- Archivos nuevos o cambiados: `database/init.sql`, `database/verificar_init.mjs`, `backend/package.json`, `docs/CONTEXTO_BASE_DE_DATOS.md` (nuevo), `docs/actualizar-base-datos.md`, `docs/README.md`, `README.md`, `CONTEXTO_IA.md`.
+- Decisiones tomadas: una base nueva ya no necesita aplicar migraciones; todo cambio de BD va en migración **y** en `init.sql` y se verifica con el script. La `014_caja_inicio_y_cortes_parciales.sql` se considera obsoleta (la reemplazó la 015) y no se incorpora; el próximo número es 018.
+- Verificación: `node database/verificar_init.mjs` → idéntico a `SIGR` (415 elementos); backend arrancó sobre una base creada solo con `init.sql` y pasó todas sus comprobaciones de migraciones; el gerente inicial quedó protegido y la auditoría registró cambios. La base `SIGR` no se modificó.
+- Pendiente o por verificar: probar `docker compose` con el `init.sql` nuevo en un volumen vacío; decidir si se renombra o se retira la 014 obsoleta; aplicar 015–017 en la base compartida del servidor.
+- Secciones de este archivo actualizadas: 0, 10, 14.1 y 16.
 
 ### 2026-10-31 · Cola unificada de correo, diseño HTML, Gmail SMTP y cancelaciones (RF-COR-001)
 - Qué se hizo: las confirmaciones `creada`/`confirmada`, recordatorios, vencimientos y cancelaciones comparten `notificacion_reservacion` y el servicio `enviarCorreo` con transporte Resend o Gmail SMTP. La confirmación y la cancelación se insertan dentro de la transacción y el ciclo se dispara tras el commit sin esperar el envío; el correo del cliente es opcional para guardar la reservación. Las cuatro plantillas se rediseñaron como una tarjeta editorial: papel cálido, marco agave, filete dorado y un acento distinto por aviso; el texto plano se conserva como alternativa.

@@ -297,7 +297,7 @@ Gerencia puede crear categorías nuevas indicando si son físicas o digitales, a
 
 ## Base nueva o entorno de demostración
 
-- **Base nueva y vacía:** ejecuta `database/init.sql` y el seed de usuarios iniciales; aplica `013_auditoria_seguridad.sql` después del seed, luego 016 y 017 para actualizar los triggers de cuenta y de métodos. `init.sql` ya incluye la estructura y los datos iniciales de categorías y métodos.
+- **Base nueva y vacía:** ejecuta `database/init.sql` y el seed de usuarios iniciales. `init.sql` ya es el estado final de las migraciones 001 a 017 (tablas, categorías y métodos de pago, gerente inicial protegido, bitácora y triggers de auditoría), así que **no hay que aplicar ninguna migración**. Para comprobarlo: `node database/verificar_init.mjs` (ver [`CONTEXTO_BASE_DE_DATOS.md`](CONTEXTO_BASE_DE_DATOS.md)).
 - **Base de desarrollo en Docker que ya contiene datos:** no uses `docker compose down -v`, ya que elimina el volumen de la base. Con el contenedor activo y el puerto 3306 publicado, los comandos `mysql` anteriores la actualizan igual que una instalación local.
 - Guarda el respaldo de forma segura. No lo agregues al repositorio ni lo compartas: contiene los datos de la base.
 

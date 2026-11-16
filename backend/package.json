@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bd:verificar": "node ../database/verificar_init.mjs"
   },
   "keywords": [],
   "author": "",
