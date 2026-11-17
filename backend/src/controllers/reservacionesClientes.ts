@@ -6,6 +6,7 @@ import { exigirAnticipacionMinima, validar } from "../models/dominio";
 import { exigirMesaDisponible } from "../services/disponibilidadReservacion";
 import { encolarNotificacionReservacion, solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
 import { ErrorApi } from "../utils/errores";
+import { CamposPreferencias, normalizarPreferencias } from "./hostess";
 
 // Validaciones del formulario
 const NuevaReservacionCliente = z.object({
@@ -14,6 +15,8 @@ const NuevaReservacionCliente = z.object({
     "Formato de fecha y hora incorrecto."
   ),
   personas: z.number().int().min(1).max(20),
+  // Preferencias de mesa (opcionales): la hostess las ve al confirmar y al sentar al grupo.
+  ...CamposPreferencias,
 }).strict();
 
 
@@ -121,18 +124,22 @@ export const crearReservacionCliente = async (
     }
 
     // La mesa sera asignada por Hostess.
+    const pref = normalizarPreferencias(datos);
     const resultado = await ejecutar(
       cx,
       `INSERT INTO reservacion
-       (id_cliente, id_mesa, fecha_hora, personas, estado)
-       VALUES (?, NULL, ?, ?, 'pendiente')`,
-      [idCliente, datos.fecha_hora, datos.personas]
+       (id_cliente, id_mesa, fecha_hora, personas, estado,
+        pref_zona, pref_planta_baja, pref_carriola, pref_sin_escaleras)
+       VALUES (?, NULL, ?, ?, 'pendiente', ?, ?, ?, ?)`,
+      [idCliente, datos.fecha_hora, datos.personas,
+       pref.pref_zona, pref.pref_planta_baja, pref.pref_carriola, pref.pref_sin_escaleras]
     );
 
     const [nueva] = await filas(
       cx,
       `SELECT id_reservacion, id_cliente,
-              fecha_hora, personas, estado
+              fecha_hora, personas, estado,
+              pref_zona, pref_planta_baja, pref_carriola, pref_sin_escaleras
        FROM reservacion
        WHERE id_reservacion = ?`,
       [resultado.insertId]
@@ -179,6 +186,10 @@ export const listarMisReservaciones = async (
        r.fecha_hora,
        r.personas,
        r.estado,
+       r.pref_zona,
+       r.pref_planta_baja,
+       r.pref_carriola,
+       r.pref_sin_escaleras,
        m.numero AS mesa_numero
      FROM reservacion r
      LEFT JOIN mesa m
@@ -189,4 +200,38 @@ export const listarMisReservaciones = async (
   );
 
   res.json(reservaciones);
+};
+
+/**
+ * GET /api/reservaciones-clientes/opciones-mesa: lo que el cliente puede pedir al reservar. Por cada sección del
+ * salón que esté activa (no las de «para llevar»), cuántas mesas tiene, para cuántas personas es la más grande y si
+ * alguna mesa está en planta baja, tiene espacio para carriola o se llega sin escaleras. No dice qué mesas están
+ * libres ni reserva ninguna: la mesa la asigna la hostess.
+ */
+export const opcionesMesaCliente = async (_req: Request, res: Response) => {
+  const secciones = await filas(
+    pool,
+    `SELECT s.nombre AS seccion,
+            COUNT(m.id_mesa) AS mesas,
+            MAX(m.capacidad) AS capacidad_maxima,
+            MAX(m.planta_baja) AS planta_baja,
+            MAX(m.espacio_carriola) AS espacio_carriola,
+            MAX(m.sin_escaleras) AS sin_escaleras
+       FROM seccion s
+       JOIN mesa m ON m.zona = s.nombre AND m.activa = 1
+      WHERE s.activa = 1 AND s.es_para_llevar = 0
+      GROUP BY s.nombre
+      ORDER BY s.nombre`,
+  );
+  const verdadero = (v: unknown) => v === true || Number(v) === 1;
+  res.json(
+    secciones.map((s) => ({
+      seccion: s.seccion as string,
+      mesas: Number(s.mesas),
+      capacidad_maxima: Number(s.capacidad_maxima),
+      planta_baja: verdadero(s.planta_baja),
+      espacio_carriola: verdadero(s.espacio_carriola),
+      sin_escaleras: verdadero(s.sin_escaleras),
+    })),
+  );
 };

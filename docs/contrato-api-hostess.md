@@ -18,7 +18,8 @@
 | `GET /api/reservaciones?fecha=AAAA-MM-DD` | **Ya existe** | `requiereAuth("hostess", "gerente")` |
 | `GET /api/lista-espera?estado=esperando` | **Ya existe** | `requiereAuth("hostess", "gerente")` |
 | `POST /api/lista-espera` | **Ya existe** (acepta `Idempotency-Key`) | `requiereAuth("hostess", "gerente")` |
-| `PATCH /api/lista-espera/{id}` | **CAMBIO PROPUESTO** (H3) | `requiereAuth("hostess", "gerente")` |
+| `PATCH /api/lista-espera/{id}` | **Ya existe** (acepta `Idempotency-Key`) | `requiereAuth("hostess", "gerente")` |
+| `GET /api/reservaciones-clientes/opciones-mesa` | **Ya existe** (portal; sesión de cliente) | `requiereCliente` |
 | `POST /api/mesas/{id}/asignar` | **Ya existe** (acepta `Idempotency-Key`) | `requiereAuth("hostess", "gerente")` |
 | `POST /api/reservaciones` | **Ya existe** (acepta `Idempotency-Key`) | `requiereAuth("hostess", "gerente")` |
 | `PATCH /api/reservaciones/{id}` | **Ya existe** (acepta `Idempotency-Key`) | `requiereAuth("hostess", "gerente")` |
@@ -205,8 +206,14 @@ filas de `cliente`, ordenado por `nombre`.
 Cuerpo (todas son columnas de `reservacion`):
 
 ```json
-{ "id_cliente": 6, "fecha_hora": "2026-10-16 21:00:00", "personas": 4, "id_mesa": null }
+{ "id_cliente": 6, "fecha_hora": "2026-10-16 21:00:00", "personas": 4, "id_mesa": null,
+  "pref_zona": "Terraza", "pref_planta_baja": false, "pref_carriola": true, "pref_sin_escaleras": false }
 ```
+
+Los campos `pref_*` (migración 021) son **opcionales**: lo que pidió el cliente (sección y acceso). `pref_zona` vacío o
+`null` = cualquier sección; los demás son `true`/`false` (ausentes = `false`). No apartan una mesa: la hostess los ve en la
+tarjeta («Pidió: …»), al editar y al registrar la llegada, donde las mesas que coinciden se sugieren primero. `GET` y las
+respuestas de reservaciones los devuelven siempre.
 
 Respuesta `201`: la reservación con los mismos campos que `GET /reservaciones` (incluidos `cliente_nombre`,
 `cliente_telefono`, `cliente_correo` y `mesa_numero`, **calculados**). El correo del cliente es opcional: si existe y es
@@ -265,6 +272,7 @@ campos que cambian.
 | `{ "estado": "confirmada" }` | Solo desde `pendiente`. |
 | `{ "estado": "cancelada" }` | Desde `pendiente` o `confirmada`. Libera la mesa según la regla de arriba. |
 | `{ "fecha_hora": "…", "personas": 5, "id_mesa": 4 }` | Edita lo que venga. `id_mesa: null` **quita** la mesa; si se mueve la fecha a un día que no es hoy, el frontend manda también `id_mesa: null`. |
+| `{ "pref_zona": null, "pref_planta_baja": true, … }` | Edita las preferencias de mesa (se pueden mandar junto con los demás datos). |
 
 Respuesta `200`: la reservación actualizada. Errores como en el alta, más `404 no_encontrado` y `409 estado_invalido`
 (la reservación ya no es `pendiente`/`confirmada`, o se quiere confirmar una que no está `pendiente`).
@@ -323,17 +331,34 @@ Errores: `404 no_encontrado` (cliente), `409 estado_invalido` (el cliente ya esp
 El frontend crea primero al cliente (si es nuevo, `POST /clientes`) y después el grupo; si la segunda llamada falla, el cliente
 ya existe y **no se vuelve a crear** al reintentar.
 
-### `PATCH /api/lista-espera/{id}`
+### `GET /api/reservaciones-clientes/opciones-mesa` (portal de clientes)
 
-Hoy solo **quitar de la lista** (el grupo se fue):
+Lo que el cliente puede pedir al reservar: por cada sección **activa** del salón (no las de «Para llevar») con mesas
+disponibles, cuántas mesas tiene, la capacidad de la más grande y si alguna está en planta baja, tiene espacio para carriola
+o se llega sin escaleras. No dice qué mesas están libres ni reserva ninguna.
 
 ```json
-{ "estado": "cancelada" }
+[{ "seccion": "Terraza", "mesas": 4, "capacidad_maxima": 6, "planta_baja": true, "espacio_carriola": true, "sin_escaleras": false }]
 ```
 
+El portal muestra cada sección con sus características y desactiva las casillas que ninguna mesa cumple. `POST
+/api/reservaciones-clientes` acepta los mismos campos `pref_*` que `POST /api/reservaciones`, y `GET
+/api/reservaciones-clientes/mis-reservaciones` los devuelve («Pediste: …»). Para que el cliente vea características, el
+gerente debe marcarlas en cada mesa (Gerente → Mesas).
+
+### `PATCH /api/lista-espera/{id}`
+
+Cambia un grupo que **sigue esperando**. Una cosa a la vez:
+
+| Cuerpo | Efecto |
+|---|---|
+| `{ "estado": "cancelada" }` | **Quitar de la lista** (el grupo se fue). La fila no se borra. |
+| `{ "personas": 6 }` | **Cambiar personas** (llegaron más o se fueron algunos), de 1 a 20. Conserva su `registrado_en`, o sea, su lugar en la lista. |
+
 Respuesta `200`: el grupo actualizado. Errores: `404 no_encontrado`; `409 estado_invalido` si el grupo **no está `esperando`**
-(ya se sentó o ya se quitó); `422 estado_invalido` si `estado` trae cualquier otro valor (no se puede «asignar» por aquí).
-No toca ninguna mesa.
+(ya se sentó o ya se quitó); `422 estado_invalido` si `estado` trae otro valor, si `personas` está fuera de 1 a 20 o si
+vienen los dos campos juntos (no se puede «asignar» por aquí). No toca ninguna mesa. Código: `editarEspera` en
+`backend/src/controllers/hostess.ts`.
 
 ### Qué muestra la pantalla Espera
 

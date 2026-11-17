@@ -11,7 +11,7 @@ import type { Reservacion } from '../../types'
 import { mesaAsignable, motivoMesaNoAsignable } from '../../utils/asignacion'
 import { formatearCapacidad, formatearHora } from '../../utils/formato'
 import { crearClaveIdempotencia, esFalloReintentable } from '../../utils/idempotencia'
-import { advertenciaCapacidadMesa, mesasParaReservacion } from '../../utils/reservaciones'
+import { advertenciaCapacidadMesa, aPreferenciasMesa, mesasParaReservacion, textoCaracteristicasMesa, textoPreferencias } from '../../utils/reservaciones'
 
 const props = defineProps<{ reservacion: Reservacion }>()
 
@@ -38,7 +38,11 @@ const errorReintentable = ref('')
 const rechazo = ref('')
 const grupo = ref<HTMLFieldSetElement | null>(null)
 
-const opciones = computed(() => mesasParaReservacion(store.mesas, props.reservacion.personas, props.reservacion.idMesa))
+// Primero las mesas que coinciden con lo que pidió el cliente (sección y acceso).
+const opciones = computed(() =>
+  mesasParaReservacion(store.mesas, props.reservacion.personas, props.reservacion.idMesa, aPreferenciasMesa(props.reservacion.preferencias)),
+)
+const pidio = computed(() => textoPreferencias(props.reservacion.preferencias))
 const mesaDestino = computed(() => {
   if (!eligiendo.value) return mesaPropia.value
   return store.mesas.find((m) => String(m.idMesa) === seleccion.value) ?? null
@@ -111,6 +115,7 @@ async function confirmar() {
       <strong>{{ reservacion.clienteNombre }}</strong> · {{ formatearCapacidad(reservacion.personas) }} · reservó para las
       {{ formatearHora(reservacion.fechaHora) }}
     </p>
+    <p v-if="pidio" class="pidio"><span class="pidio__etiqueta">El cliente pidió:</span> <strong>{{ pidio }}</strong></p>
 
     <!-- La mesa que ya tenía la reservación -->
     <template v-if="!eligiendo && mesaPropia">
@@ -138,7 +143,7 @@ async function confirmar() {
         <span class="opcion__texto">
           <strong>Mesa {{ o.mesa.numero }} · para {{ o.mesa.capacidad }}</strong>
           <span class="opcion__detalle">
-            {{ o.mesa.zona }} · {{ o.mesa.estado === 'reservada' ? 'Reservada para esta reservación' : 'Libre' }}{{ o.alcanza ? '' : ' · no alcanza para el grupo' }}{{ o.mesa.plantaBaja ? ' · planta baja' : '' }}{{ o.mesa.espacioCarriola ? ' · carriola' : '' }}{{ o.mesa.sinEscaleras ? ' · sin escaleras' : '' }}
+            {{ o.mesa.zona }} · {{ o.mesa.estado === 'reservada' ? 'Reservada para esta reservación' : 'Libre' }}{{ o.alcanza ? '' : ' · no alcanza para el grupo' }}{{ textoCaracteristicasMesa(o.mesa) ? ` · ${textoCaracteristicasMesa(o.mesa)}` : '' }}
           </span>
         </span>
       </label>
@@ -178,6 +183,19 @@ async function confirmar() {
   display: flex;
   flex-direction: column;
   gap: var(--espacio-4);
+}
+
+.pidio {
+  margin: 0;
+  padding: var(--espacio-2) var(--espacio-3);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radio-sm);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+}
+
+.pidio__etiqueta {
+  font-weight: 600;
 }
 
 .llegada__resumen,

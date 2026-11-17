@@ -12,6 +12,7 @@ import type {
   NuevaEspera,
   NuevaReservacion,
   NuevoCliente,
+  PreferenciasReservacion,
   Reservacion,
   ResultadoAsignacion,
 } from '../../types'
@@ -66,6 +67,11 @@ export interface ReservacionDto {
   cliente_correo?: string | null
   /** mesa.numero (JOIN); NULL si la reservación no tiene mesa. */
   mesa_numero: Numerico | null
+  /** Preferencias de mesa (migración 021). Una API anterior no las envía: ausentes = sin preferencias. */
+  pref_zona?: string | null
+  pref_planta_baja?: boolean | number | string
+  pref_carriola?: boolean | number | string
+  pref_sin_escaleras?: boolean | number | string
 }
 
 export interface ListaEsperaDto {
@@ -103,6 +109,33 @@ function aTelefono(valor: unknown): string | null {
   return texto === '' ? null : texto
 }
 
+/** BOOLEAN de MySQL tal como puede llegar: `true`, `1` o `"1"`. */
+function aBooleano(valor: unknown): boolean {
+  return valor === true || valor === 1 || valor === '1'
+}
+
+/** Preferencias de una fila de `reservacion` (columnas `pref_*`). */
+export function aPreferencias(dto: Pick<ReservacionDto, 'pref_zona' | 'pref_planta_baja' | 'pref_carriola' | 'pref_sin_escaleras'>): PreferenciasReservacion {
+  const zona = aTexto(dto.pref_zona).trim()
+  return {
+    zona: zona === '' ? null : zona,
+    plantaBaja: aBooleano(dto.pref_planta_baja),
+    espacioCarriola: aBooleano(dto.pref_carriola),
+    sinEscaleras: aBooleano(dto.pref_sin_escaleras),
+  }
+}
+
+/** Columnas `pref_*` para POST/PATCH de reservaciones. Una sección vacía viaja como `null` («cualquiera»). */
+export function dePreferencias(p: PreferenciasReservacion): Record<string, string | boolean | null> {
+  const zona = p.zona?.trim() ?? ''
+  return {
+    pref_zona: zona === '' ? null : zona,
+    pref_planta_baja: p.plantaBaja,
+    pref_carriola: p.espacioCarriola,
+    pref_sin_escaleras: p.sinEscaleras,
+  }
+}
+
 export function aMesaSalon(dto: MesaSalonDto): MesaSalon {
   return {
     idMesa: aNumero(dto.id_mesa, 'id_mesa'),
@@ -129,6 +162,7 @@ export function aReservacion(dto: ReservacionDto): Reservacion {
     clienteTelefono: aTelefono(dto.cliente_telefono),
     clienteCorreo: aTelefono(dto.cliente_correo),
     mesaNumero: aNumeroONulo(dto.mesa_numero, 'mesa_numero'),
+    preferencias: aPreferencias(dto),
   }
 }
 
@@ -183,22 +217,24 @@ export function deNuevoCliente(c: NuevoCliente): Record<string, string | null> {
 }
 
 /** Cuerpo de POST /reservaciones. */
-export function deNuevaReservacion(r: NuevaReservacion): Record<string, string | number | null> {
+export function deNuevaReservacion(r: NuevaReservacion): Record<string, string | number | boolean | null> {
   return {
     id_cliente: r.idCliente,
     fecha_hora: aFechaMySQL(r.fechaHora),
     personas: r.personas,
     id_mesa: r.idMesa,
+    ...(r.preferencias ? dePreferencias(r.preferencias) : {}),
   }
 }
 
 /** Cuerpo de PATCH /reservaciones/{id}: solo viajan los campos que cambian (`id_mesa: null` quita la mesa). */
-export function deCambioReservacion(c: CambioReservacion): Record<string, string | number | null> {
-  const cuerpo: Record<string, string | number | null> = {}
+export function deCambioReservacion(c: CambioReservacion): Record<string, string | number | boolean | null> {
+  const cuerpo: Record<string, string | number | boolean | null> = {}
   if (c.estado !== undefined) cuerpo.estado = c.estado
   if (c.fechaHora !== undefined) cuerpo.fecha_hora = aFechaMySQL(c.fechaHora)
   if (c.personas !== undefined) cuerpo.personas = c.personas
   if (c.idMesa !== undefined) cuerpo.id_mesa = c.idMesa
+  if (c.preferencias !== undefined) Object.assign(cuerpo, dePreferencias(c.preferencias))
   return cuerpo
 }
 
@@ -207,9 +243,9 @@ export function deNuevaEspera(e: NuevaEspera): Record<string, number> {
   return { id_cliente: e.idCliente, personas: e.personas }
 }
 
-/** Cuerpo de PATCH /lista-espera/{id}: hoy solo `{ estado: 'cancelada' }`. */
-export function deCambioEspera(c: CambioEspera): Record<string, string> {
-  return { estado: c.estado }
+/** Cuerpo de PATCH /lista-espera/{id}: `{ estado: 'cancelada' }` (quitar) o `{ personas }` (corregir el grupo). */
+export function deCambioEspera(c: CambioEspera): Record<string, string | number> {
+  return 'estado' in c ? { estado: c.estado } : { personas: c.personas }
 }
 
 /** Cuerpo de POST /reservaciones/{id}/llegada: `id_mesa` solo si se elige una mesa. */

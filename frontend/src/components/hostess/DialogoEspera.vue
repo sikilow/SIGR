@@ -1,22 +1,23 @@
 <script setup lang="ts">
 // Diálogo de la lista de espera, sobre DialogoModal (foco atrapado, Escape, foco de regreso a la tarjeta). Un solo
 // diálogo con pasos, para que el foco no salte entre diálogos: «acciones» (datos y qué se puede hacer), «nueva»
-// (agregar un grupo), «asignar» (elegir mesa) y «quitar» (confirmación). Qué acciones se ofrecen lo decide
+// (agregar un grupo), «asignar» (elegir mesa), «personas» (corregir cuántos son) y «quitar» (confirmación). Qué acciones se ofrecen lo decide
 // `utils/espera.ts` según el estado: solo quien sigue esperando se asigna o se quita (nunca se borra la fila).
 import { computed, nextTick, ref, watch } from 'vue'
 import { ErrorServicio } from '../../services'
 import { useAnunciosStore } from '../../stores/anuncios'
 import { useEsperaStore } from '../../stores/espera'
-import type { ListaEspera } from '../../types'
+import type { CambioEspera, ListaEspera } from '../../types'
 import { puedeAsignarEspera, puedeQuitarEspera, textoHaceCuanto, esperaLarga, UMBRAL_ESPERA_LARGA_MIN } from '../../utils/espera'
 import { formatearCapacidad, formatearHora } from '../../utils/formato'
+import { MAX_PERSONAS_RESERVACION, MIN_PERSONAS_RESERVACION, validarPersonasReservacion } from '../../utils/reservaciones'
 import { crearClaveIdempotencia, esFalloReintentable } from '../../utils/idempotencia'
 import DialogoModal from '../DialogoModal.vue'
 import FormularioAsignarEspera from './FormularioAsignarEspera.vue'
 import FormularioEspera from './FormularioEspera.vue'
 import InsigniaEspera from './InsigniaEspera.vue'
 
-type Paso = 'acciones' | 'nueva' | 'asignar' | 'quitar'
+type Paso = 'acciones' | 'nueva' | 'asignar' | 'personas' | 'quitar'
 
 const props = defineProps<{
   abierto: boolean
@@ -73,6 +74,8 @@ const tituloPaso = computed(() => {
       return 'Asignar mesa'
     case 'quitar':
       return 'Quitar de la lista'
+    case 'personas':
+      return 'Cambiar personas'
     default:
       return props.espera ? props.espera.clienteNombre : 'Grupo en espera'
   }
@@ -108,15 +111,60 @@ function mensajeDeRechazo(e: unknown): string {
 /** Quitar de la lista: el grupo pasa a «cancelada» (se fue). La fila no se borra. */
 async function quitar() {
   const e = props.espera
-  if (!e || trabajando.value) return
+  if (!e) return
+  await guardarCambio({ estado: 'cancelada' }, `quitar|${e.idEspera}`, `${e.clienteNombre} quitado de la lista de espera`)
+}
+
+// ---------- Cambiar personas (llegaron más o se fueron algunas) ----------
+
+const personasTexto = ref('')
+const intentoPersonas = ref(false)
+const errorPersonas = computed(() => {
+  if (!intentoPersonas.value) return ''
+  const error = validarPersonasReservacion(personasTexto.value)
+  if (error) return error
+  return Number(personasTexto.value) === props.espera?.personas ? 'Es el mismo número de personas: escribe el nuevo.' : ''
+})
+
+function abrirPersonas() {
+  personasTexto.value = String(props.espera?.personas ?? '')
+  intentoPersonas.value = false
+  void irA('personas')
+}
+
+function cambiarPersonasEn(delta: number) {
+  const actual = Number.parseInt(personasTexto.value, 10)
+  const base = Number.isInteger(actual) ? actual : (props.espera?.personas ?? MIN_PERSONAS_RESERVACION)
+  personasTexto.value = String(Math.min(MAX_PERSONAS_RESERVACION, Math.max(MIN_PERSONAS_RESERVACION, base + delta)))
+}
+
+async function guardarPersonas() {
+  const e = props.espera
+  intentoPersonas.value = true
+  if (!e || errorPersonas.value) return
+  const personas = Number(personasTexto.value)
+  const guardado = await guardarCambio(
+    { personas },
+    `personas|${e.idEspera}|${personas}`,
+    `${e.clienteNombre}: ahora son ${formatearCapacidad(personas)}`,
+    false,
+  )
+  if (guardado) await irA('acciones')
+}
+
+/** PATCH del grupo con Idempotency-Key. Devuelve `true` si se guardó. */
+async function guardarCambio(cambio: CambioEspera, clave: string, anuncio: string, cerrarAlTerminar = true): Promise<boolean> {
+  const e = props.espera
+  if (!e || trabajando.value) return false
   trabajando.value = true
   rechazo.value = ''
   errorReintentable.value = ''
   try {
-    await store.actualizar(e.idEspera, { estado: 'cancelada' }, claves.para(`quitar|${e.idEspera}`))
+    await store.actualizar(e.idEspera, cambio, claves.para(clave))
     claves.soltar()
-    void anuncios.anunciar(`${e.clienteNombre} quitado de la lista de espera`)
-    cerrar()
+    void anuncios.anunciar(anuncio)
+    if (cerrarAlTerminar) cerrar()
+    return true
   } catch (error) {
     if (esFalloReintentable(error)) {
       errorReintentable.value =
@@ -127,6 +175,7 @@ async function quitar() {
       claves.soltar()
       rechazo.value = mensajeDeRechazo(error)
     }
+    return false
   } finally {
     trabajando.value = false
   }
@@ -185,6 +234,7 @@ async function quitar() {
 
         <div class="acciones">
           <button v-if="puedeAsignar" type="button" class="btn btn--grande acciones__boton" autofocus @click="irA('asignar')">Asignar mesa</button>
+          <button v-if="esperando" type="button" class="btn btn--secundario btn--grande acciones__boton" @click="abrirPersonas">Cambiar personas</button>
           <button v-if="puedeQuitar" type="button" class="btn btn--peligro-suave btn--grande acciones__boton" @click="irA('quitar')">Quitar de la lista</button>
           <button type="button" class="btn btn--secundario btn--grande acciones__boton" :autofocus="!puedeAsignar" @click="cerrar">Cerrar</button>
         </div>
@@ -201,6 +251,49 @@ async function quitar() {
         @hecho="cerrar"
         @ocupado="ocupadoHijo = $event"
       />
+
+      <!-- Cambiar personas: el grupo creció o se fueron algunos (conserva su lugar en la lista) -->
+      <form v-else-if="paso === 'personas' && espera" class="quitar" novalidate @submit.prevent="guardarPersonas">
+        <p>
+          <strong>{{ espera.clienteNombre }}</strong> está anotado con {{ formatearCapacidad(espera.personas) }}. Conserva su lugar
+          en la lista.
+        </p>
+        <div class="personas">
+          <label for="esp-cambio-personas">Personas ({{ MIN_PERSONAS_RESERVACION }} a {{ MAX_PERSONAS_RESERVACION }})</label>
+          <div class="personas__control">
+            <button type="button" class="btn btn--secundario personas__paso" aria-label="Una persona menos" :disabled="trabajando" @click="cambiarPersonasEn(-1)">−</button>
+            <input
+              id="esp-cambio-personas"
+              v-model="personasTexto"
+              class="personas__campo numero"
+              type="number"
+              inputmode="numeric"
+              :min="MIN_PERSONAS_RESERVACION"
+              :max="MAX_PERSONAS_RESERVACION"
+              autofocus
+              :disabled="trabajando"
+              :aria-invalid="errorPersonas ? 'true' : undefined"
+              :aria-describedby="errorPersonas ? 'error-esp-cambio-personas' : undefined"
+            />
+            <button type="button" class="btn btn--secundario personas__paso" aria-label="Una persona más" :disabled="trabajando" @click="cambiarPersonasEn(1)">+</button>
+          </div>
+          <p v-if="errorPersonas" id="error-esp-cambio-personas" class="texto-error">{{ errorPersonas }}</p>
+        </div>
+
+        <p v-if="errorReintentable" class="texto-error" role="alert">{{ errorReintentable }}</p>
+        <div v-if="rechazo" class="aviso" role="alert">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v6M12 16.5v.01" />
+          </svg>
+          <p>{{ rechazo }}</p>
+        </div>
+
+        <div class="fila-botones quitar__acciones">
+          <button type="button" class="btn btn--secundario btn--grande" :disabled="trabajando" @click="irA('acciones')">Volver</button>
+          <button type="submit" class="btn btn--grande" :disabled="trabajando">{{ trabajando ? 'Guardando…' : 'Guardar personas' }}</button>
+        </div>
+      </form>
 
       <!-- Quitar de la lista (acción destructiva: pide confirmación) -->
       <div v-else-if="paso === 'quitar' && espera" class="quitar">
@@ -317,6 +410,34 @@ async function quitar() {
 
 .quitar p {
   margin: 0;
+}
+
+.personas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+}
+
+.personas label {
+  font-weight: 700;
+}
+
+.personas__control {
+  display: flex;
+  align-items: stretch;
+  gap: var(--espacio-2);
+}
+
+.personas__paso {
+  min-width: 56px;
+  font-size: var(--texto-lg);
+}
+
+.personas__campo {
+  width: 6rem;
+  min-height: 56px;
+  text-align: center;
+  font-size: var(--texto-lg);
 }
 
 .quitar__nota {

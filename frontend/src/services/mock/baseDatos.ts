@@ -262,7 +262,11 @@ function crearReservaciones(): ReservacionGuardada[] {
   return [
     { idReservacion: 1, idCliente: 1, idMesa: 7, fechaHora: hoyEn(90), personas: 4, estado: 'confirmada', llegadaEn: null },
     { idReservacion: 2, idCliente: 2, idMesa: 10, fechaHora: hoyEn(120), personas: 2, estado: 'confirmada', llegadaEn: null },
-    { idReservacion: 3, idCliente: 3, idMesa: null, fechaHora: hoyEn(150), personas: 6, estado: 'pendiente', llegadaEn: null },
+    {
+      idReservacion: 3, idCliente: 3, idMesa: null, fechaHora: hoyEn(150), personas: 6, estado: 'pendiente', llegadaEn: null,
+      // Solicitud con necesidades de acceso: la hostess las ve al confirmar y al sentar al grupo.
+      preferencias: { zona: null, plantaBaja: true, espacioCarriola: true, sinEscaleras: false },
+    },
     { idReservacion: 4, idCliente: 4, idMesa: 8, fechaHora: hoyEn(-100), personas: 5, estado: 'llego', llegadaEn: hoyEn(-95) },
     { idReservacion: 5, idCliente: 5, idMesa: null, fechaHora: hace(24 * 60), personas: 3, estado: 'cancelada', llegadaEn: null },
   ]

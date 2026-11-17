@@ -10,7 +10,7 @@ import { useReservacionesStore } from '../../stores/reservaciones'
 import type { Reservacion } from '../../types'
 import { formatearCapacidad, formatearHora } from '../../utils/formato'
 import { crearClaveIdempotencia, esFalloReintentable } from '../../utils/idempotencia'
-import { accionesDisponibles } from '../../utils/reservaciones'
+import { accionesDisponibles, textoPreferencias } from '../../utils/reservaciones'
 import DialogoModal from '../DialogoModal.vue'
 import FormularioLlegada from './FormularioLlegada.vue'
 import FormularioReservacion from './FormularioReservacion.vue'
@@ -169,6 +169,7 @@ async function cambiarEstado(estado: 'confirmada' | 'cancelada') {
           <div><dt>Teléfono</dt><dd>{{ reservacion.clienteTelefono ?? 'Sin teléfono' }}</dd></div>
           <div><dt>Personas</dt><dd>{{ formatearCapacidad(reservacion.personas) }}</dd></div>
           <div><dt>Mesa</dt><dd>{{ reservacion.mesaNumero === null ? 'Sin mesa' : `Mesa ${reservacion.mesaNumero}` }}</dd></div>
+          <div v-if="textoPreferencias(reservacion.preferencias)"><dt>Pidió</dt><dd>{{ textoPreferencias(reservacion.preferencias) }}</dd></div>
           <div v-if="reservacion.llegadaEn"><dt>Llegó a las</dt><dd class="numero">{{ formatearHora(reservacion.llegadaEn) }}</dd></div>
         </dl>
 

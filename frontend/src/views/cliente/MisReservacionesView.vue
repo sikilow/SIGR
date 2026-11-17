@@ -9,6 +9,23 @@ interface Reservacion {
   personas: number
   estado: string
   mesa_numero: number | null
+  pref_zona?: string | null
+  pref_planta_baja?: boolean | number
+  pref_carriola?: boolean | number
+  pref_sin_escaleras?: boolean | number
+}
+
+/** Lo que pidió el cliente al reservar: «Terraza · planta baja · carriola». Vacío si no pidió nada. */
+function textoPreferencias(r: Reservacion): string {
+  const si = (v: boolean | number | undefined) => v === true || v === 1
+  return [
+    r.pref_zona,
+    si(r.pref_planta_baja) && 'planta baja',
+    si(r.pref_carriola) && 'espacio para carriola',
+    si(r.pref_sin_escaleras) && 'sin escaleras'
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 const router = useRouter()
@@ -210,6 +227,7 @@ onMounted(cargarReservaciones)
                 <div><span>Hora</span><strong>{{ mostrarHora(reservacion.fecha_hora) }}</strong></div>
                 <div><span>Personas</span><strong>{{ reservacion.personas }}</strong></div>
                 <div><span>Mesa</span><strong>Se asigna al confirmar</strong></div>
+                <div v-if="textoPreferencias(reservacion)" class="detalles__pidio"><span>Pediste</span><strong>{{ textoPreferencias(reservacion) }}</strong></div>
               </div>
               <p class="nota">Recibimos tu solicitud. Está pendiente de confirmación por parte del restaurante.</p>
             </article>
@@ -237,6 +255,7 @@ onMounted(cargarReservaciones)
                   <span>Mesa</span>
                   <strong>{{ reservacion.mesa_numero ? `Mesa ${reservacion.mesa_numero}` : 'Por asignar al llegar' }}</strong>
                 </div>
+                <div v-if="textoPreferencias(reservacion)" class="detalles__pidio"><span>Pediste</span><strong>{{ textoPreferencias(reservacion) }}</strong></div>
               </div>
               <p class="nota">Tu reservación ha sido confirmada por el restaurante.</p>
             </article>
@@ -470,6 +489,10 @@ onMounted(cargarReservaciones)
   border-top: 1px solid #eadbd1;
   margin-top: 18px;
   padding-top: 22px;
+}
+
+.detalles .detalles__pidio {
+  grid-column: 1 / -1;
 }
 
 .detalles div {

@@ -1,6 +1,6 @@
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -9,6 +9,72 @@ const router = useRouter()
 const fecha = ref('')
 const hora = ref('')
 const personas = ref(2)
+
+// PREFERENCIAS DE MESA (opcionales): el cliente ve las secciones del salón y sus características y elige lo que
+// necesita. No aparta una mesa: la hostess lo ve al confirmar y al sentar al grupo.
+interface OpcionSeccion {
+  seccion: string
+  mesas: number
+  capacidad_maxima: number
+  planta_baja: boolean
+  espacio_carriola: boolean
+  sin_escaleras: boolean
+}
+
+type Caracteristica = 'planta_baja' | 'espacio_carriola' | 'sin_escaleras'
+
+const CARACTERISTICAS: { clave: Caracteristica; texto: string }[] = [
+  { clave: 'planta_baja', texto: 'Planta baja' },
+  { clave: 'espacio_carriola', texto: 'Espacio para carriola' },
+  { clave: 'sin_escaleras', texto: 'Sin escaleras' }
+]
+
+const secciones = ref<OpcionSeccion[]>([])
+const opcionesCargadas = ref(false)
+const prefZona = ref('')
+const prefCaracteristicas = ref<Record<Caracteristica, boolean>>({
+  planta_baja: false,
+  espacio_carriola: false,
+  sin_escaleras: false
+})
+
+/** ¿Hay alguna mesa con esa característica en la sección elegida (o en cualquiera)? */
+function hayCaracteristica(clave: Caracteristica): boolean {
+  // Si no se pudieron cargar las opciones, se ofrecen todas: la hostess decide.
+  if (!opcionesCargadas.value) return true
+  const elegidas = prefZona.value
+    ? secciones.value.filter((s) => s.seccion === prefZona.value)
+    : secciones.value
+  return elegidas.some((s) => s[clave])
+}
+
+function textoCaracteristicas(s: OpcionSeccion): string[] {
+  return CARACTERISTICAS.filter((c) => s[c.clave]).map((c) => c.texto)
+}
+
+// Si la sección elegida no tiene una característica marcada, se desmarca.
+watch(prefZona, () => {
+  for (const c of CARACTERISTICAS) {
+    if (!hayCaracteristica(c.clave)) prefCaracteristicas.value[c.clave] = false
+  }
+})
+
+async function cargarOpciones() {
+  const token = sessionStorage.getItem('cliente_token')
+  if (!token) return
+  try {
+    const respuesta = await fetch('/api/reservaciones-clientes/opciones-mesa', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!respuesta.ok) return
+    secciones.value = await respuesta.json()
+    opcionesCargadas.value = true
+  } catch {
+    // Sin opciones el formulario sigue funcionando: solo no se muestran las secciones.
+  }
+}
+
+onMounted(cargarOpciones)
 
 const cargando = ref(false)
 const error = ref('')
@@ -70,7 +136,11 @@ async function solicitarReservacion() {
         },
         body: JSON.stringify({
           fecha_hora: fechaHora,
-          personas: personas.value
+          personas: personas.value,
+          pref_zona: prefZona.value || null,
+          pref_planta_baja: prefCaracteristicas.value.planta_baja,
+          pref_carriola: prefCaracteristicas.value.espacio_carriola,
+          pref_sin_escaleras: prefCaracteristicas.value.sin_escaleras
         })
       }
     )
@@ -102,6 +172,8 @@ async function solicitarReservacion() {
     fecha.value = ''
     hora.value = ''
     personas.value = 2
+    prefZona.value = ''
+    prefCaracteristicas.value = { planta_baja: false, espacio_carriola: false, sin_escaleras: false }
 
   } catch (err) {
     error.value = err instanceof Error
@@ -217,6 +289,66 @@ async function solicitarReservacion() {
               {{ cantidad === 1 ? 'persona' : 'personas' }}
             </option>
           </select>
+
+          <fieldset class="preferencias">
+            <legend>¿Dónde te gustaría sentarte? (opcional)</legend>
+            <p class="preferencias__ayuda">
+              Elige una sección o lo que necesites. Lo tomaremos en cuenta al asignar tu mesa,
+              según disponibilidad.
+            </p>
+
+            <div
+              v-if="secciones.length"
+              class="secciones"
+              role="radiogroup"
+              aria-label="Sección preferida"
+            >
+              <label
+                class="seccion"
+                :class="{ 'seccion--activa': prefZona === '' }"
+              >
+                <input v-model="prefZona" type="radio" name="pref-zona" value="" />
+                <span class="seccion__nombre">Cualquier sección</span>
+                <span class="seccion__detalle">La que esté disponible</span>
+              </label>
+              <label
+                v-for="s in secciones"
+                :key="s.seccion"
+                class="seccion"
+                :class="{ 'seccion--activa': prefZona === s.seccion }"
+              >
+                <input v-model="prefZona" type="radio" name="pref-zona" :value="s.seccion" />
+                <span class="seccion__nombre">{{ s.seccion }}</span>
+                <span class="seccion__detalle">
+                  {{ s.mesas }} {{ s.mesas === 1 ? 'mesa' : 'mesas' }} · hasta {{ s.capacidad_maxima }} personas
+                </span>
+                <span v-if="textoCaracteristicas(s).length" class="seccion__chips">
+                  <span v-for="c in textoCaracteristicas(s)" :key="c" class="chip">{{ c }}</span>
+                </span>
+              </label>
+            </div>
+
+            <div class="caracteristicas">
+              <label
+                v-for="c in CARACTERISTICAS"
+                :key="c.clave"
+                class="caracteristica"
+                :class="{ 'caracteristica--no': !hayCaracteristica(c.clave) }"
+              >
+                <input
+                  v-model="prefCaracteristicas[c.clave]"
+                  type="checkbox"
+                  :disabled="!hayCaracteristica(c.clave)"
+                />
+                <span>
+                  {{ c.texto }}
+                  <small v-if="!hayCaracteristica(c.clave)">
+                    {{ prefZona ? 'No disponible en esta sección' : 'No disponible' }}
+                  </small>
+                </span>
+              </label>
+            </div>
+          </fieldset>
 
           <p class="aviso">
             La solicitud estará sujeta a disponibilidad
@@ -437,6 +569,112 @@ select:focus {
   border-color: #b9390b;
 }
 
+.preferencias {
+  margin: 0 0 23px;
+  padding: 16px;
+  border: 1px solid #ddcfc5;
+  border-radius: 10px;
+  min-width: 0;
+}
+.preferencias legend {
+  padding: 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #443229;
+}
+.preferencias__ayuda {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #806d62;
+}
+.secciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.seccion {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #ddcfc5;
+  border-radius: 9px;
+  background: #fffaf6;
+  cursor: pointer;
+}
+.seccion input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+.seccion:has(input:focus-visible) {
+  outline: 3px solid #b9390b;
+  outline-offset: 2px;
+}
+.seccion--activa {
+  border: 2px solid #b9390b;
+  background: #fbeee6;
+}
+.seccion__nombre {
+  font-weight: bold;
+  color: #2c1b14;
+}
+.seccion__detalle {
+  font-size: 12px;
+  font-weight: normal;
+  color: #806d62;
+}
+.seccion__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f3e2d7;
+  color: #7b260e;
+  font-size: 11px;
+  font-weight: 600;
+}
+.caracteristicas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.caracteristica {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+.caracteristica input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  accent-color: #b9390b;
+}
+.caracteristica small {
+  display: block;
+  font-size: 12px;
+  font-weight: normal;
+  color: #806d62;
+}
+.caracteristica--no {
+  color: #a8968b;
+  cursor: not-allowed;
+}
 .aviso {
   font-size: 13px;
   color: #806d62;

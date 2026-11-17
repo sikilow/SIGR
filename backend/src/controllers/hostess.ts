@@ -17,21 +17,38 @@ const ClienteNuevo = z.object({
   telefono: z.string().trim().regex(/^\d{10}$/, "el teléfono debe tener 10 dígitos"),
   correo: z.union([z.string().trim().email().max(120), z.literal("")]).nullable().optional(),
 }).strict();
+/** Preferencias de mesa de una reservación (columnas `pref_*`, migración 021). Todas opcionales. */
+export const CamposPreferencias = {
+  pref_zona: z.string().trim().max(40).nullable().optional(),
+  pref_planta_baja: z.boolean().optional(),
+  pref_carriola: z.boolean().optional(),
+  pref_sin_escaleras: z.boolean().optional(),
+};
 const ReservacionNueva = z.object({
   id_cliente: z.number().int().positive(),
   fecha_hora: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
   personas: z.number().int().min(1).max(20),
   id_mesa: z.number().int().positive().nullable().optional(),
+  ...CamposPreferencias,
 }).strict();
 const EsperaNueva = z.object({
   id_cliente: z.number().int().positive(),
   personas: z.number().int().min(1).max(20),
 }).strict();
+/** PATCH /lista-espera/:id: quitar de la lista (`estado: 'cancelada'`) o corregir cuántas personas son. */
+const CambioEspera = z.object({
+  estado: z.literal("cancelada").optional(),
+  personas: z.number().int().min(1).max(20).optional(),
+}).strict().refine(
+  (cambio) => (cambio.estado !== undefined) !== (cambio.personas !== undefined),
+  "indica el estado o las personas (solo uno de los dos)",
+);
 const CambioReservacion = z.object({
   estado: z.enum(["confirmada", "cancelada"]).optional(),
   fecha_hora: z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/).optional(),
   personas: z.number().int().min(1).max(20).optional(),
   id_mesa: z.number().int().positive().nullable().optional(),
+  ...CamposPreferencias,
 }).strict().refine(
   (cambio) => Object.values(cambio).some((valor) => valor !== undefined),
   "debe indicar al menos un campo para cambiar",
@@ -39,6 +56,22 @@ const CambioReservacion = z.object({
 const LlegadaReservacion = z.object({
   id_mesa: z.number().int().positive().optional(),
 }).strict();
+
+/** Valores listos para guardar: una sección vacía es «cualquiera» (`NULL`) y lo ausente es `false`. */
+export function normalizarPreferencias(datos: {
+  pref_zona?: string | null | undefined;
+  pref_planta_baja?: boolean | undefined;
+  pref_carriola?: boolean | undefined;
+  pref_sin_escaleras?: boolean | undefined;
+}) {
+  const zona = datos.pref_zona?.trim() ?? "";
+  return {
+    pref_zona: zona === "" ? null : zona,
+    pref_planta_baja: datos.pref_planta_baja ?? false,
+    pref_carriola: datos.pref_carriola ?? false,
+    pref_sin_escaleras: datos.pref_sin_escaleras ?? false,
+  };
+}
 
 function esDuplicado(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ER_DUP_ENTRY";
@@ -79,6 +112,7 @@ async function cargarReservacion(ex: Ejecutor, id: number) {
   const [reservacion] = await filas(
     ex,
     `SELECT r.id_reservacion, r.id_cliente, r.id_mesa, r.fecha_hora, r.personas, r.estado, r.llegada_en,
+            r.pref_zona, r.pref_planta_baja, r.pref_carriola, r.pref_sin_escaleras,
             c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.correo AS cliente_correo, m.numero AS mesa_numero
        FROM reservacion r
        JOIN cliente c ON c.id_cliente = r.id_cliente
@@ -232,6 +266,7 @@ export const listarReservaciones = async (req: Request, res: Response) => {
   const rows = await filas(
     pool,
     `SELECT r.id_reservacion, r.id_cliente, r.id_mesa, r.fecha_hora, r.personas, r.estado, r.llegada_en,
+            r.pref_zona, r.pref_planta_baja, r.pref_carriola, r.pref_sin_escaleras,
             c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.correo AS cliente_correo, m.numero AS mesa_numero
        FROM reservacion r
        JOIN cliente c ON c.id_cliente = r.id_cliente
@@ -252,6 +287,7 @@ export const listarReservacionesPendientes = async (_req: Request, res: Response
   const rows = await filas(
     pool,
     `SELECT r.id_reservacion, r.id_cliente, r.id_mesa, r.fecha_hora, r.personas, r.estado, r.llegada_en,
+            r.pref_zona, r.pref_planta_baja, r.pref_carriola, r.pref_sin_escaleras,
             c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.correo AS cliente_correo, m.numero AS mesa_numero
        FROM reservacion r
        JOIN cliente c ON c.id_cliente = r.id_cliente
@@ -309,10 +345,12 @@ export const crearReservacion = async (req: Request, res: Response) => {
         await ejecutar(cx, "UPDATE mesa SET estado = 'reservada' WHERE id_mesa = ?", [datos.id_mesa]);
       }
 
+      const pref = normalizarPreferencias(datos);
       const insertado = await ejecutar(
         cx,
-        "INSERT INTO reservacion (id_cliente, id_mesa, fecha_hora, personas) VALUES (?, ?, ?, ?)",
-        [datos.id_cliente, datos.id_mesa ?? null, datos.fecha_hora, datos.personas],
+        `INSERT INTO reservacion (id_cliente, id_mesa, fecha_hora, personas, pref_zona, pref_planta_baja, pref_carriola, pref_sin_escaleras)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [datos.id_cliente, datos.id_mesa ?? null, datos.fecha_hora, datos.personas, pref.pref_zona, pref.pref_planta_baja, pref.pref_carriola, pref.pref_sin_escaleras],
       );
       const reservacion = exigirRegistro(await cargarReservacion(cx, insertado.insertId), "reservación");
       await encolarNotificacionReservacion(cx, reservacion, "confirmacion", "creada");
@@ -424,6 +462,11 @@ export const editarReservacion = async (req: Request, res: Response) => {
         if (cambio.id_mesa !== undefined) {
           columnas.push("id_mesa = ?");
           valores.push(cambio.id_mesa);
+        }
+        for (const clave of ["pref_zona", "pref_planta_baja", "pref_carriola", "pref_sin_escaleras"] as const) {
+          if (cambio[clave] === undefined) continue;
+          columnas.push(`${clave} = ?`);
+          valores.push(clave === "pref_zona" ? normalizarPreferencias(cambio).pref_zona : cambio[clave]);
         }
         await ejecutar(cx, `UPDATE reservacion SET ${columnas.join(", ")} WHERE id_reservacion = ?`, [...valores, id]);
         if (mesaFinal !== mesaAnterior) await liberarMesaSiCorresponde(cx, mesaAnterior, id);
@@ -556,6 +599,32 @@ export const agregarEspera = async (req: Request, res: Response) => {
         [datos.id_cliente, datos.personas],
       );
       return exigirRegistro(await cargarEspera(cx, insertado.insertId), "grupo de espera");
+    }),
+  );
+};
+
+/**
+ * PATCH /api/lista-espera/:id: cambia un grupo que sigue esperando.
+ *   - `{ estado: 'cancelada' }`: el grupo se fue (quitar de la lista). La fila no se borra.
+ *   - `{ personas }`: llegaron más personas o se fueron algunas (1 a 20).
+ * Un grupo ya `asignada` o `cancelada` no cambia (`409 estado_invalido`).
+ */
+export const editarEspera = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const cambio = validar(CambioEspera, req.body);
+  await conIdempotencia(req, res, 200, () =>
+    transaccion(async (cx) => {
+      const [espera] = await filas(cx, "SELECT id_espera, estado FROM lista_espera WHERE id_espera = ? FOR UPDATE", [id]);
+      if (!espera) throw new ErrorApi(404, "no_encontrado", "El grupo en espera no existe.");
+      if (espera.estado !== "esperando") {
+        throw new ErrorApi(409, "estado_invalido", "Este grupo ya no está esperando: no se puede cambiar.");
+      }
+      if (cambio.estado !== undefined) {
+        await ejecutar(cx, "UPDATE lista_espera SET estado = 'cancelada' WHERE id_espera = ?", [id]);
+      } else {
+        await ejecutar(cx, "UPDATE lista_espera SET personas = ? WHERE id_espera = ?", [cambio.personas, id]);
+      }
+      return exigirRegistro(await cargarEspera(cx, id), "grupo de espera");
     }),
   );
 };

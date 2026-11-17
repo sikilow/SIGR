@@ -123,6 +123,11 @@ CREATE TABLE reservacion (
   personas INT NOT NULL CHECK (personas > 0),
   estado VARCHAR(25) NOT NULL DEFAULT 'pendiente',
   llegada_en DATETIME NULL,
+  -- Preferencias de mesa que pidió el cliente (migración 021). pref_zona NULL = cualquier sección.
+  pref_zona VARCHAR(40) NULL,
+  pref_planta_baja BOOLEAN NOT NULL DEFAULT FALSE,
+  pref_carriola BOOLEAN NOT NULL DEFAULT FALSE,
+  pref_sin_escaleras BOOLEAN NOT NULL DEFAULT FALSE,
   CONSTRAINT fk_reservacion_id_cliente FOREIGN KEY (id_cliente) REFERENCES cliente (id_cliente) ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT fk_reservacion_id_mesa FOREIGN KEY (id_mesa) REFERENCES mesa (id_mesa) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;

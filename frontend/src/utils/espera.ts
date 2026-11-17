@@ -1,7 +1,7 @@
 // Reglas de la lista de espera (rol hostess). Funciones puras: las usan la pantalla Espera, el mock y las pruebas.
 import type { EstadoEspera, ListaEspera, MesaSalon } from '../types'
 import { formatearEspera } from './formato'
-import { type OpcionMesa, mesasParaReservacion } from './reservaciones'
+import { type OpcionMesa, type PreferenciasMesa, mesasParaReservacion } from './reservaciones'
 
 /**
  * Minutos de espera a partir de los cuales un grupo se marca como «espera larga». Es una constante para poder
@@ -95,6 +95,6 @@ export { coincideBusqueda } from './reservaciones'
  * Mesas que se sugieren para sentar a un grupo de `personas`: solo las LIBRES, primero las que alcanzan (de la más
  * justa a la más grande) y al final las que no alcanzan, marcadas para avisar (sin bloquear).
  */
-export function mesasSugeridasParaEspera(mesas: MesaSalon[], personas: number): OpcionMesa[] {
-  return mesasParaReservacion(mesas, personas, null)
+export function mesasSugeridasParaEspera(mesas: MesaSalon[], personas: number, preferencias: PreferenciasMesa = {}): OpcionMesa[] {
+  return mesasParaReservacion(mesas, personas, null, preferencias)
 }

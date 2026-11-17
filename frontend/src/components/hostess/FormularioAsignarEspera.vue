@@ -1,17 +1,19 @@
 <script setup lang="ts">
 // Sentar a un grupo de la lista de espera (paso del diálogo de Espera). Es el flujo de «Asignar mesa» del Salón con el grupo
-// ya elegido: aquí solo se escoge la mesa. Se sugieren las mesas LIBRES, primero las que alcanzan (de la más justa a
-// la más grande); si las personas no caben se avisa, sin bloquear. Efecto: la mesa queda ocupada y el grupo pasa a
+// ya elegido: aquí solo se escoge la mesa. Se sugieren las mesas LIBRES, primero las que alcanzan y, entre ellas, las
+// que coinciden con lo que necesita el grupo (sección, planta baja, carriola, sin escaleras); después de la más justa a
+// la más grande. Cada mesa muestra su sección y características. Si las personas no caben se avisa, sin bloquear. Efecto: la mesa queda ocupada y el grupo pasa a
 // «asignada». Lleva Idempotency-Key (el mismo `POST /mesas/{id}/asignar` del Salón).
 import { computed, nextTick, ref } from 'vue'
 import { ErrorServicio } from '../../services'
 import { useAnunciosStore } from '../../stores/anuncios'
 import { useEsperaStore } from '../../stores/espera'
-import type { ListaEspera } from '../../types'
+import type { ListaEspera, PreferenciasReservacion } from '../../types'
 import { mesasSugeridasParaEspera } from '../../utils/espera'
 import { formatearCapacidad, formatearEspera } from '../../utils/formato'
 import { crearClaveIdempotencia, esFalloReintentable } from '../../utils/idempotencia'
-import { advertenciaCapacidadMesa } from '../../utils/reservaciones'
+import { advertenciaCapacidadMesa, aPreferenciasMesa, textoCaracteristicasMesa } from '../../utils/reservaciones'
+import PreferenciasMesaCampos from './PreferenciasMesaCampos.vue'
 
 const props = defineProps<{ espera: ListaEspera }>()
 
@@ -25,7 +27,22 @@ const store = useEsperaStore()
 const anuncios = useAnunciosStore()
 const claves = crearClaveIdempotencia()
 
-const opciones = computed(() => mesasSugeridasParaEspera(store.mesas, props.espera.personas))
+/** Lo que necesita el grupo: solo ordena las sugerencias (no se guarda en la lista de espera). */
+const preferencias = ref<PreferenciasReservacion>({ zona: null, plantaBaja: false, espacioCarriola: false, sinEscaleras: false })
+const zonas = computed(() => [...new Set(store.mesas.map((m) => m.zona).filter((z): z is string => z !== null))].sort())
+const opciones = computed(() => mesasSugeridasParaEspera(store.mesas, props.espera.personas, aPreferenciasMesa(preferencias.value)))
+/** ¿La mesa cumple todo lo que se pidió? (para marcarla). Sin preferencias, ninguna se marca. */
+function cumple(mesa: (typeof store.mesas)[number]): boolean {
+  const p = preferencias.value
+  const algo = p.zona !== null || p.plantaBaja || p.espacioCarriola || p.sinEscaleras
+  return (
+    algo &&
+    (p.zona === null || mesa.zona === p.zona) &&
+    (!p.plantaBaja || mesa.plantaBaja) &&
+    (!p.espacioCarriola || mesa.espacioCarriola) &&
+    (!p.sinEscaleras || mesa.sinEscaleras)
+  )
+}
 /** La mejor opción: la primera que alcanza (la más justa). */
 const idSugerida = computed(() => opciones.value.find((o) => o.alcanza)?.mesa.idMesa ?? null)
 
@@ -97,6 +114,14 @@ async function confirmar() {
       <strong>{{ espera.clienteNombre }}</strong> · {{ formatearCapacidad(espera.personas) }} · espera {{ formatearEspera(espera.registradoEn, new Date(store.ahora)) }}
     </p>
 
+    <PreferenciasMesaCampos
+      v-model="preferencias"
+      id-prefijo="esp-pref"
+      :zonas="zonas"
+      :deshabilitado="enCurso"
+      leyenda="¿Qué necesita el grupo? (opcional)"
+    />
+
     <fieldset ref="grupo" class="mesas" :disabled="enCurso" :aria-describedby="errorMesa ? 'error-asignar-espera' : undefined">
       <legend class="mesas__leyenda">Elige la mesa en la que se sienta</legend>
 
@@ -110,7 +135,11 @@ async function confirmar() {
         <span class="opcion__texto">
           <strong>Mesa {{ o.mesa.numero }} · para {{ o.mesa.capacidad }}</strong>
           <span class="opcion__detalle">
-            Libre<template v-if="o.mesa.idMesa === idSugerida"> · <strong class="opcion__sugerida">Sugerida</strong></template
+            {{ o.mesa.zona ?? 'Sin sección' }}<template v-if="textoCaracteristicasMesa(o.mesa)"> · {{ textoCaracteristicasMesa(o.mesa) }}</template>
+          </span>
+          <span class="opcion__detalle">
+            Libre<template v-if="cumple(o.mesa)"> · <strong class="opcion__sugerida">Cumple lo que pidió</strong></template
+            ><template v-if="o.mesa.idMesa === idSugerida"> · <strong class="opcion__sugerida">Sugerida</strong></template
             ><template v-if="!o.alcanza"> · no alcanza para el grupo</template>
           </span>
         </span>

@@ -1,5 +1,5 @@
 // Reglas de las reservaciones (rol hostess). Funciones puras: las usan la pantalla Reservaciones, el mock y las pruebas.
-import type { Cliente, EstadoReservacion, MesaSalon, Reservacion } from '../types'
+import type { Cliente, EstadoReservacion, MesaSalon, PreferenciasReservacion, Reservacion } from '../types'
 
 export const MIN_PERSONAS_RESERVACION = 1
 export const MAX_PERSONAS_RESERVACION = 20
@@ -249,6 +249,30 @@ export function mesasParaReservacion(
       if (diferenciaCaracteristicas !== 0) return diferenciaCaracteristicas
       return a.mesa.capacidad - b.mesa.capacidad || a.mesa.numero - b.mesa.numero
     })
+}
+
+/** Características de acceso de una mesa, en texto: «planta baja · carriola · sin escaleras» (vacío si no tiene). */
+export function textoCaracteristicasMesa(mesa: Pick<MesaSalon, 'plantaBaja' | 'espacioCarriola' | 'sinEscaleras'>): string {
+  return [mesa.plantaBaja && 'planta baja', mesa.espacioCarriola && 'carriola', mesa.sinEscaleras && 'sin escaleras']
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/** Lo que pidió el cliente, en texto: «Terraza · planta baja · carriola». Vacío si no pidió nada. */
+export function textoPreferencias(p: PreferenciasReservacion | undefined | null): string {
+  if (!p) return ''
+  return [p.zona, textoCaracteristicasMesa(p)].filter(Boolean).join(' · ')
+}
+
+/** ¿Pidió alguna sección o característica? */
+export function tienePreferencias(p: PreferenciasReservacion | undefined | null): boolean {
+  return textoPreferencias(p) !== ''
+}
+
+/** Las preferencias guardadas, en el formato que usa `mesasParaReservacion` para ordenar. */
+export function aPreferenciasMesa(p: PreferenciasReservacion | undefined | null): PreferenciasMesa {
+  if (!p) return {}
+  return { zona: p.zona ?? '', plantaBaja: p.plantaBaja, espacioCarriola: p.espacioCarriola, sinEscaleras: p.sinEscaleras }
 }
 
 /** Aviso (no bloquea) cuando las personas no caben en la mesa elegida; `null` si caben. */

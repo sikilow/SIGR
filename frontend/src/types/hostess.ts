@@ -48,6 +48,21 @@ export interface Reservacion {
   clienteCorreo: string | null
   /** mesa.numero (JOIN); `null` si la reservación no tiene mesa. */
   mesaNumero: number | null
+  /** reservacion.pref_*: lo que pidió el cliente (sección y acceso). La API siempre lo envía; ausente = sin preferencias. */
+  preferencias?: PreferenciasReservacion
+}
+
+/**
+ * Preferencias de mesa de una reservación (columnas `pref_zona`, `pref_planta_baja`, `pref_carriola` y
+ * `pref_sin_escaleras`, migración 021). Las captura el cliente en el portal o la hostess; no reservan una mesa: solo
+ * ordenan las mesas sugeridas y se muestran al confirmar y al sentar al grupo.
+ */
+export interface PreferenciasReservacion {
+  /** Sección preferida; `null` = cualquiera. */
+  zona: string | null
+  plantaBaja: boolean
+  espacioCarriola: boolean
+  sinEscaleras: boolean
 }
 
 /** lista_espera. */
@@ -99,10 +114,11 @@ export interface NuevaEspera {
   personas: number
 }
 
-/** Cambio a un grupo que sigue esperando. Hoy solo se puede quitar de la lista (el grupo se fue): pasa a `cancelada`. */
-export interface CambioEspera {
-  estado: 'cancelada'
-}
+/**
+ * Cambio a un grupo que sigue esperando: quitarlo de la lista (el grupo se fue, pasa a `cancelada`) o corregir
+ * cuántas personas son (de 1 a 20). Una cosa a la vez.
+ */
+export type CambioEspera = { estado: 'cancelada' } | { personas: number }
 
 /** Datos para crear una reservación. Nace en estado `pendiente`. */
 export interface NuevaReservacion {
@@ -112,6 +128,8 @@ export interface NuevaReservacion {
   personas: number
   /** Solo se puede reservar mesa para reservaciones de HOY; `null` = sin mesa (se elige al llegar). */
   idMesa: number | null
+  /** Ausente = sin preferencias. */
+  preferencias?: PreferenciasReservacion
 }
 
 /**
@@ -123,4 +141,6 @@ export interface CambioReservacion {
   fechaHora?: Date
   personas?: number
   idMesa?: number | null
+  /** Reemplaza todas las preferencias de mesa. */
+  preferencias?: PreferenciasReservacion
 }

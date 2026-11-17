@@ -68,7 +68,7 @@ El actor autenticado se establece en la sesión MySQL que ejecuta la transacció
 | P-04 | **Sin protecciones básicas de la API** | El backend no usa límite de peticiones (contra fuerza bruta) ni cabeceras de seguridad. No hay HTTPS configurado en el proyecto. | Verificado en `package.json`; el HTTPS es por validar |
 | P-05 | **Las pruebas del backend son mínimas** | `backend/tests/` cubre dominio, mocks, importes, transporte, plantillas y cola de correo (64 pruebas en 9 archivos), pero no las rutas ni las reglas que requieren base de datos. El frontend sí tiene pruebas unitarias y de rutas, pero falta una prueba integral contra MySQL. | Verificado |
 | P-06 | **Pantallas pendientes** | Caja ya está disponible en `/cajero/caja`; facturación fiscal aún no tiene proveedor, API ni pantalla. | Parcial |
-| P-07 | **Falta `PATCH /api/lista-espera/:id`** | Quitar o editar un grupo de la lista de espera. | Verificado |
+| P-07 | **Resuelto: `PATCH /api/lista-espera/:id`** | Quita a un grupo de la lista (`estado: cancelada`) o cambia cuántas personas son, solo mientras sigue esperando. | Resuelto |
 
 ### 2.2 Reglas del dominio que el servidor no aplica o que chocan con el diseño
 

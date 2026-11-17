@@ -4,11 +4,13 @@
 import { computed } from 'vue'
 import type { Reservacion } from '../../types'
 import { formatearCapacidad, formatearHora } from '../../utils/formato'
+import { textoPreferencias } from '../../utils/reservaciones'
 import InsigniaReservacion from './InsigniaReservacion.vue'
 
 const props = defineProps<{ reservacion: Reservacion; resaltada?: boolean }>()
 defineEmits<{ seleccionar: [reservacion: Reservacion] }>()
 
+const pidio = computed(() => textoPreferencias(props.reservacion.preferencias))
 const textoMesa = computed(() => (props.reservacion.mesaNumero === null ? 'Sin mesa' : `Mesa ${props.reservacion.mesaNumero}`))
 const finalizada = computed(() => props.reservacion.estado === 'llego' || props.reservacion.estado === 'cancelada')
 </script>
@@ -30,6 +32,7 @@ const finalizada = computed(() => props.reservacion.estado === 'llego' || props.
         <span>{{ formatearCapacidad(reservacion.personas) }}</span>
         <span class="reserva__mesa" :class="{ 'reserva__mesa--sin': reservacion.mesaNumero === null }">{{ textoMesa }}</span>
       </span>
+      <span v-if="pidio" class="reserva__pidio">Pidió: {{ pidio }}</span>
     </span>
 
     <InsigniaReservacion class="reserva__estado" :estado="reservacion.estado" />
@@ -37,6 +40,13 @@ const finalizada = computed(() => props.reservacion.estado === 'llego' || props.
 </template>
 
 <style scoped>
+.reserva__pidio {
+  color: var(--color-primary-dark);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .reserva {
   --estado: var(--color-muted);
 

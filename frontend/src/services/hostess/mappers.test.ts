@@ -5,6 +5,9 @@ import {
   aReservacion,
   aResultadoAsignacion,
   deAsignacion,
+  deCambioEspera,
+  deCambioReservacion,
+  deNuevaReservacion,
   type ListaEsperaDto,
   type MesaSalonDto,
   type ReservacionDto,
@@ -225,5 +228,28 @@ describe('deAsignacion (cuerpo de POST /mesas/{id}/asignar)', () => {
     expect(deAsignacion({ tipo: 'reservacion', idReservacion: 3 })).toEqual({ id_reservacion: 3 })
     expect(deAsignacion({ tipo: 'espera', idEspera: 1 })).toEqual({ id_espera: 1 })
     expect(deAsignacion({ tipo: 'sinRegistro', personas: 5 })).toEqual({ personas: 5 })
+  })
+})
+
+describe('preferencias de mesa (columnas pref_*)', () => {
+  it('aReservacion las lee; sin columnas, quedan vacías', () => {
+    const r = aReservacion({ ...reservacionDto, pref_zona: 'Terraza', pref_planta_baja: 1, pref_carriola: '1', pref_sin_escaleras: 0 })
+    expect(r.preferencias).toEqual({ zona: 'Terraza', plantaBaja: true, espacioCarriola: true, sinEscaleras: false })
+    expect(aReservacion(reservacionDto).preferencias).toEqual({ zona: null, plantaBaja: false, espacioCarriola: false, sinEscaleras: false })
+  })
+
+  it('viajan en POST y PATCH de reservaciones; la sección vacía es null', () => {
+    const preferencias = { zona: '', plantaBaja: false, espacioCarriola: true, sinEscaleras: true }
+    const cuerpo = deNuevaReservacion({ idCliente: 1, fechaHora: new Date(2026, 9, 16, 21, 0), personas: 2, idMesa: null, preferencias })
+    expect(cuerpo).toMatchObject({ pref_zona: null, pref_planta_baja: false, pref_carriola: true, pref_sin_escaleras: true })
+    expect(deCambioReservacion({ preferencias })).toEqual({ pref_zona: null, pref_planta_baja: false, pref_carriola: true, pref_sin_escaleras: true })
+    expect(deCambioReservacion({ personas: 3 })).toEqual({ personas: 3 })
+  })
+})
+
+describe('deCambioEspera', () => {
+  it('quitar de la lista o cambiar personas', () => {
+    expect(deCambioEspera({ estado: 'cancelada' })).toEqual({ estado: 'cancelada' })
+    expect(deCambioEspera({ personas: 5 })).toEqual({ personas: 5 })
   })
 })

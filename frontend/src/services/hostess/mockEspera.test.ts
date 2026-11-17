@@ -152,6 +152,31 @@ describe('mock espera: quitar de la lista', () => {
   })
 })
 
+describe('mock espera: cambiar personas (PATCH /lista-espera/{id})', () => {
+  it('un grupo que sigue esperando cambia de personas y conserva su lugar', async () => {
+    const { hostess, baseDatos } = await nuevoMock()
+    const antes = baseDatos.listaEspera.find((x) => x.idEspera === 1)!
+    const registrado = antes.registradoEn.getTime()
+    const r = await resolver(hostess.actualizarEspera(1, { personas: 5 }))
+    expect(r.personas).toBe(5)
+    expect(r.estado).toBe('esperando')
+    expect(r.registradoEn.getTime()).toBe(registrado)
+  })
+
+  it('rechaza personas fuera de 1 a 20', async () => {
+    const { hostess, baseDatos } = await nuevoMock()
+    expect(await codigoDeError(hostess.actualizarEspera(1, { personas: 0 }))).toBe('estado_invalido')
+    expect(await codigoDeError(hostess.actualizarEspera(1, { personas: 21 }))).toBe('estado_invalido')
+    expect(baseDatos.listaEspera.find((x) => x.idEspera === 1)?.personas).toBe(3)
+  })
+
+  it('un grupo que ya no espera no cambia', async () => {
+    const { hostess } = await nuevoMock()
+    // El grupo 3 ya está «asignada» en los datos de ejemplo.
+    expect(await codigoDeError(hostess.actualizarEspera(3, { personas: 2 }))).toBe('estado_invalido')
+  })
+})
+
 describe('mock espera: asignar mesa (POST /mesas/{id}/asignar)', () => {
   it('la mesa pasa a ocupada y el grupo a asignada; el grupo sale de la lista de quienes esperan', async () => {
     const { hostess, baseDatos } = await nuevoMock()

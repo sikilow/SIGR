@@ -61,6 +61,8 @@ function conCliente(r: ReservacionGuardada): Reservacion {
   }
 }
 
+const SIN_PREFERENCIAS = { zona: null, plantaBaja: false, espacioCarriola: false, sinEscaleras: false }
+
 function esperaConCliente(e: EsperaGuardada): ListaEspera {
   const cliente = baseDatos.clientes.find((c) => c.idCliente === e.idCliente)
   return { ...e, clienteNombre: cliente?.nombre ?? '', clienteTelefono: cliente?.telefono ?? null }
@@ -223,6 +225,7 @@ function editar(r: ReservacionGuardada, cambio: CambioReservacion): void {
   r.fechaHora = fecha
   r.personas = personas
   r.idMesa = mesaFinal
+  if (cambio.preferencias !== undefined) r.preferencias = { ...cambio.preferencias }
   if (mesaFinal !== null && mesaFinal !== mesaAnterior) {
     const mesa = baseDatos.mesas.find((m) => m.idMesa === mesaFinal)
     if (mesa) mesa.estado = 'reservada'
@@ -295,14 +298,20 @@ export function crearHostessMock(): HostessService {
       return conRetrasoIdempotente(claveIdempotencia, () => {
         const e = baseDatos.listaEspera.find((x) => x.idEspera === id)
         if (!e) throw new ErrorServicio('no_encontrado', 'El grupo en espera no existe.', 404)
-        if (cambio.estado !== 'cancelada') {
-          throw new ErrorServicio('estado_invalido', 'Solo se puede quitar al grupo de la lista (cancelada).', 422)
-        }
-        // Solo quien sigue esperando se puede quitar: asignada y cancelada son finales. La fila nunca se borra.
+        // Solo quien sigue esperando cambia: asignada y cancelada son finales. La fila nunca se borra.
         if (e.estado !== 'esperando') {
-          throw new ErrorServicio('estado_invalido', 'Ese grupo ya no está esperando: no se puede quitar.', 409)
+          throw new ErrorServicio('estado_invalido', 'Este grupo ya no está esperando: no se puede cambiar.', 409)
         }
-        e.estado = 'cancelada'
+        if ('estado' in cambio) {
+          // Como la API: solo se acepta `cancelada` (asignar mesa va por `asignarMesa`).
+          if (cambio.estado !== 'cancelada') {
+            throw new ErrorServicio('estado_invalido', 'Solo se puede quitar al grupo de la lista (cancelada).', 422)
+          }
+          e.estado = 'cancelada'
+        } else {
+          validarPersonasNuevas(cambio.personas)
+          e.personas = cambio.personas
+        }
         return esperaConCliente(e)
       })
     },
@@ -378,6 +387,7 @@ export function crearHostessMock(): HostessService {
           personas: reservacion.personas,
           estado: 'pendiente',
           llegadaEn: null,
+          preferencias: { ...(reservacion.preferencias ?? SIN_PREFERENCIAS) },
         }
         baseDatos.reservaciones.push(nueva)
         if (nueva.idMesa !== null) {
@@ -393,7 +403,7 @@ export function crearHostessMock(): HostessService {
         const r = reservacionVigente(id)
         if (cambio.estado !== undefined) {
           // Un cambio de estado no se mezcla con la edición de campos.
-          if (cambio.fechaHora !== undefined || cambio.personas !== undefined || cambio.idMesa !== undefined) {
+          if (cambio.fechaHora !== undefined || cambio.personas !== undefined || cambio.idMesa !== undefined || cambio.preferencias !== undefined) {
             throw new ErrorServicio('estado_invalido', 'Cambia el estado o edita los datos, no las dos cosas a la vez.', 422)
           }
           cambiarEstado(r, cambio.estado)

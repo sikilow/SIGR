@@ -117,6 +117,7 @@ Migraciones y dónde viven sus efectos en `init.sql`:
 | 018 | `perfil_usuario.telefono` único (`uq_perfil_usuario_telefono`) y `configuracion_reservacion.anticipacion_minutos` (+ triggers de auditoría de esa tabla) | `CREATE TABLE perfil_usuario` / `configuracion_reservacion` + triggers al final |
 | 019 | `seccion.es_para_llevar`, tabla `canal_pedido`, `cuenta.id_canal/referencia`, sección «Para llevar» con las mesas 101–110 y triggers de auditoría de `seccion`, `cuenta` y `canal_pedido` | `CREATE TABLE` + datos base + triggers al final |
 | 020 | `cliente_credencial.google_sub` (único) y `password_hash` opcional | En el `CREATE TABLE cliente_credencial` (sin triggers nuevos: esa tabla no se audita) |
+| 021 | `reservacion.pref_zona/pref_planta_baja/pref_carriola/pref_sin_escaleras` (preferencias de mesa del cliente) | En el `CREATE TABLE reservacion` (los triggers de auditoría no cambian) |
 
 Notas importantes:
 

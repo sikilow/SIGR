@@ -183,7 +183,8 @@ describe("confirmaciones encoladas por la hostess", () => {
     expect(ejecutarMock).toHaveBeenCalledWith(
       cxPrueba,
       expect.stringContaining("INSERT INTO reservacion"),
-      [7, null, "2026-11-01 19:30:00", 3],
+      // Sin preferencias: sección NULL («cualquiera») y sin necesidades de acceso.
+      [7, null, "2026-11-01 19:30:00", 3, null, false, false, false],
     );
     expect(ejecutarMock.mock.calls.some((llamada) => String(llamada[1]).includes("notificacion_reservacion"))).toBe(false);
     expect(avisosConfirmados).toHaveLength(0);

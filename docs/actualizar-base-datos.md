@@ -133,6 +133,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `018_telefono_unico_y_anticipacion_reserva.sql` | Teléfono de usuarios solo con dígitos y único; anticipación mínima de reservación configurable | Tras 017; puede repetirse |
 | `019_pedidos_para_llevar.sql` | Sección «Para llevar» con mesas virtuales (101 a 110), catálogo `canal_pedido` y canal/referencia en la cuenta | Tras 018; puede repetirse |
 | `020_acceso_google_clientes.sql` | `cliente_credencial.google_sub` único y contraseña opcional (acceso de clientes con Google) | Tras 019; puede repetirse |
+| `021_preferencias_reservacion.sql` | Preferencias de mesa en la reservación (`pref_zona`, `pref_planta_baja`, `pref_carriola`, `pref_sin_escaleras`) | Tras 020; puede repetirse |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
@@ -336,6 +337,19 @@ mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW COLUMNS FROM cliente_credenc
 ```
 
 La API no arranca sin esta migración. Configuración del botón de Google: [`google-clientes.md`](google-clientes.md).
+
+## Migración 021: preferencias de mesa en la reservación
+
+Agrega a `reservacion` las columnas `pref_zona` (texto, `NULL` = cualquier sección), `pref_planta_baja`, `pref_carriola` y `pref_sin_escaleras` (`FALSE` por defecto). Las llenan el portal de clientes y la hostess; no cambian los datos existentes. Puede repetirse. Haz un respaldo antes.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-021.sql"
+Get-Content -Raw ".\database\migrations\021_preferencias_reservacion.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW COLUMNS FROM reservacion LIKE 'pref%';"
+```
+
+La API de reservaciones falla (`Unknown column 'r.pref_zona'`) sin esta migración. Los triggers de auditoría de `reservacion` no registran estas columnas.
 
 ## Base nueva o entorno de demostración
 

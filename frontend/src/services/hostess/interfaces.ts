@@ -78,8 +78,9 @@ export interface HostessService {
    */
   crearEspera(espera: NuevaEspera, claveIdempotencia?: string): Promise<ListaEspera>
   /**
-   * PATCH /lista-espera/{id} (CAMBIO PROPUESTO). Quitar de la lista: `{ estado: 'cancelada' }` solo desde `esperando`
-   * (si no, `estado_invalido`). Nunca se borra la fila. Asignar mesa NO pasa por aquí: usa `asignarMesa`.
+   * PATCH /lista-espera/{id}. Quitar de la lista: `{ estado: 'cancelada' }`; corregir el grupo: `{ personas }` (1 a 20).
+   * Solo desde `esperando` (si no, `estado_invalido`). Nunca se borra la fila. Asignar mesa NO pasa por aquí: usa
+   * `asignarMesa`.
    */
   actualizarEspera(id: number, cambio: CambioEspera, claveIdempotencia?: string): Promise<ListaEspera>
 }

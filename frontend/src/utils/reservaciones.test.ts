@@ -24,6 +24,10 @@ import {
   validarCliente,
   validarFechaHora,
   validarPersonasReservacion,
+  aPreferenciasMesa,
+  textoCaracteristicasMesa,
+  textoPreferencias,
+  tienePreferencias,
 } from './reservaciones'
 
 // «Ahora» fijo para las pruebas: viernes 16 de octubre de 2026, 20:00:30.
@@ -304,5 +308,34 @@ describe('mesas disponibles para una reservación', () => {
     expect(hayMesaParaReservacion(mesas, otras, a(14), 2)).toBe(true)
     // Fuera de la ventana de 1 h 30 min no estorban.
     expect(hayMesaParaReservacion(mesas, otras, a(17), 8)).toBe(true)
+  })
+})
+
+describe('reservaciones: preferencias de mesa del cliente', () => {
+  const sinNada = { zona: null, plantaBaja: false, espacioCarriola: false, sinEscaleras: false }
+
+  it('describe lo que pidió y lo que tiene cada mesa', () => {
+    expect(textoPreferencias({ zona: 'Terraza', plantaBaja: true, espacioCarriola: true, sinEscaleras: false })).toBe(
+      'Terraza · planta baja · carriola',
+    )
+    expect(textoPreferencias(sinNada)).toBe('')
+    expect(textoPreferencias(undefined)).toBe('')
+    expect(tienePreferencias(sinNada)).toBe(false)
+    expect(textoCaracteristicasMesa({ ...mesa(1, 4), sinEscaleras: true })).toBe('sin escaleras')
+  })
+
+  it('las mesas que coinciden con lo que pidió se sugieren primero (entre las que alcanzan)', () => {
+    const mesas = [
+      mesa(1, 4),
+      { ...mesa(2, 6), plantaBaja: true, espacioCarriola: true },
+      { ...mesa(3, 4), zona: 'Terraza' },
+      mesa(4, 2),
+    ]
+    const conCarriola = mesasParaReservacion(mesas, 4, null, aPreferenciasMesa({ ...sinNada, espacioCarriola: true }))
+    expect(conCarriola[0]!.mesa.idMesa).toBe(2)
+    const enTerraza = mesasParaReservacion(mesas, 4, null, aPreferenciasMesa({ ...sinNada, zona: 'Terraza' }))
+    expect(enTerraza[0]!.mesa.idMesa).toBe(3)
+    // La de 2 no alcanza: queda al final aunque se pidan preferencias.
+    expect(conCarriola.at(-1)!.mesa.idMesa).toBe(4)
   })
 })
