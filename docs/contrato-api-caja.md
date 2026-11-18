@@ -82,6 +82,36 @@ Detalle de un corte cerrado: los mismos campos del historial más `desglose`, co
 }
 ```
 
+## `GET /api/caja/reportes/ventas?desde=AAAA-MM-DD&hasta=AAAA-MM-DD`
+
+Reporte e historial de ventas por periodo (RF-VEN-003 y RF-VEN-004). **Solo gerente** (`403 sin_permiso` para otros roles). Las dos fechas son obligatorias y se incluyen completas; el rango máximo es de dos años (731 días). Cuenta las ventas por la fecha del cobro (`venta.fecha_hora`); los pedidos cancelados no suman. Errores: `422 estado_invalido` si falta una fecha, si `desde > hasta` o si el rango es mayor a dos años.
+
+```json
+{
+  "desde": "2026-11-01",
+  "hasta": "2026-11-30",
+  "resumen": { "ventas": 5, "total": 2325 },
+  "por_dia": [{ "dia": "2026-11-10", "ventas": 4, "total": 1958 }],
+  "por_hora": [{ "hora": 13, "ventas": 1, "total": 367 }],
+  "por_metodo": [{ "metodo": "Tarjeta", "pagos": 3, "total": 1486 }],
+  "por_mesero": [{ "mesero": "Luis Mesero", "cuentas": 5, "total": 2325 }],
+  "por_producto": [{ "producto": "A las Papas", "presentacion": "", "categoria": "Entradas", "cantidad": 10, "total": 670 }],
+  "por_categoria": [{ "categoria": "Entradas", "cantidad": 32, "total": 2200 }],
+  "por_seccion": [{ "seccion": "General", "ventas": 5, "total": 2325 }],
+  "ventas": [{
+    "id_venta": 11, "id_cuenta": 12, "fecha_hora": "2026-11-10 07:03:01", "total": 679,
+    "mesa_numero": 13, "seccion": "General", "canal": null, "cajero": "Marta Caja", "meseros": "Luis Mesero",
+    "pagos": [{ "metodo": "Tarjeta", "monto": 679 }]
+  }],
+  "ventas_truncadas": false
+}
+```
+
+- `por_dia` y `por_hora` solo traen días u horas con ventas; la pantalla rellena con cero y agrupa por semana o mes.
+- `por_mesero`, `por_producto` y `por_categoria` suman `cantidad × precio_unitario` de los pedidos no cancelados (el mesero es el de cada pedido, por eso una cuenta puede contar para dos meseros).
+- `ventas` es el historial, de la más reciente a la más antigua, con un máximo de 20,000. Si el periodo tiene más, `ventas_truncadas` es `true`; los totales y desgloses siempre cuentan todas.
+- Código: `backend/src/controllers/reporteVentas.ts`.
+
 ## `POST /api/caja/cuentas/:id/cobrar`
 
 Solo permite cuentas solicitadas por el mesero (`por_pagar`), con todos los pedidos en `Entregado` o `Cancelado`, un corte abierto y una suma aplicada que cubra exactamente el total calculado por el servidor. La operación es transaccional y acepta `Idempotency-Key`.

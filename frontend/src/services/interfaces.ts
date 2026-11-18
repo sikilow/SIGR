@@ -29,6 +29,7 @@ import type {
   NuevoProducto,
   NuevoUsuario,
   PagoCajaEntrada,
+  ReporteVentas,
   Pedido,
   ProductoAdmin,
   SeccionAdmin,
@@ -124,6 +125,8 @@ export interface CajaService {
   obtenerCorte(idCorte: number): Promise<CorteDetalle>
   /** POST /caja/cuentas/{id}/cobrar */
   cobrar(idCuenta: number, pagos: PagoCajaEntrada[], claveIdempotencia?: string): Promise<VentaCaja>
+  /** GET /caja/reportes/ventas?desde&hasta (solo gerente). Fechas AAAA-MM-DD; máximo dos años. */
+  reporteVentas(desde: string, hasta: string): Promise<ReporteVentas>
 }
 
 /** Administración de usuarios. Solo el gerente (la API lo valida con 403 `sin_permiso`). */

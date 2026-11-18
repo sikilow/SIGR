@@ -107,3 +107,45 @@ export interface EstadoCaja {
   cuentas: CuentaCaja[]
   metodosPago: MetodoPago[]
 }
+
+// ---------- Reporte e historial de ventas (RF-VEN-003 y RF-VEN-004) ----------
+
+/** Una venta cobrada, para el historial del reporte. */
+export interface VentaReporte {
+  idVenta: number
+  idCuenta: number
+  fechaHora: Date
+  total: number
+  mesaNumero: number
+  /** mesa.zona; `null` si la mesa no tiene sección. */
+  seccion: string | null
+  /** canal_pedido.nombre en pedidos para llevar; `null` en el salón. */
+  canal: string | null
+  cajero: string
+  /** Meseros que tomaron pedidos de la cuenta, separados por coma. */
+  meseros: string
+  pagos: Array<{ metodo: string; monto: number }>
+}
+
+/** GET /caja/reportes/ventas: totales y desgloses del periodo [desde, hasta] (fechas del cobro). */
+export interface ReporteVentas {
+  /** AAAA-MM-DD */
+  desde: string
+  /** AAAA-MM-DD */
+  hasta: string
+  resumen: { ventas: number; total: number }
+  /** Solo los días con ventas, en orden. */
+  porDia: Array<{ dia: string; ventas: number; total: number }>
+  /** Hora del cobro (0 a 23), solo las horas con ventas. */
+  porHora: Array<{ hora: number; ventas: number; total: number }>
+  porMetodo: Array<{ metodo: string; pagos: number; total: number }>
+  /** Importe de los productos que pidió cada mesero (sin pedidos cancelados). */
+  porMesero: Array<{ mesero: string; cuentas: number; total: number }>
+  porProducto: Array<{ producto: string; presentacion: string; categoria: string; cantidad: number; total: number }>
+  porCategoria: Array<{ categoria: string; cantidad: number; total: number }>
+  porSeccion: Array<{ seccion: string; ventas: number; total: number }>
+  /** Historial, de la más reciente a la más antigua. */
+  ventas: VentaReporte[]
+  /** `true` si el periodo tiene más ventas de las que caben en el historial (los totales sí cuentan todas). */
+  ventasTruncadas: boolean
+}

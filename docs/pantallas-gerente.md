@@ -14,6 +14,8 @@ en [`capturas/`](capturas/) y se tomaron con el servidor de desarrollo en modo m
 | Canales de pedido | `/gerente/canales` | Canales de los pedidos para llevar: agregar y activar o desactivar (migración 019) | Funcional |
 | Reservas | `/gerente/reservaciones` | Configuración de anticipación mínima (migración 018), tolerancia y recordatorio (migración 010) | Funcional; ruta protegida para gerente |
 | Pedidos | `/gerente/pedidos` y `/gerente/pedidos/:idPedido` | RF-PED-002 (gerente), RF-PED-003, RF-PED-005 (parcial) | Documentada abajo |
+| Cortes y ventas → Cortes de caja | `/gerente/cortes` | Cierres de turno por cajero, cuadre de efectivo | Funcional |
+| Cortes y ventas → Reporte de ventas | `/gerente/ventas` | RF-VEN-003 (historial) y RF-VEN-004 (reporte con exportación) | Documentada abajo |
 
 ## Productos, inventario y mesas
 
@@ -103,3 +105,27 @@ Con Chrome sin interfaz (protocolo DevTools) sobre el modo mock:
 - `prefers-reduced-motion: reduce`: sin transición en las filas.
 - Limitación: en el campo de fecha nativo, el ícono del calendario recibe el foco con el recuadro propio de Chrome
   (más delgado que el de la app); el CSS de la página no puede alcanzarlo. Mismo componente que en Reservaciones.
+
+## Reporte de ventas (RF-VEN-003 y RF-VEN-004)
+
+Menú **Cortes y ventas** → pestaña **Reporte de ventas** (`/gerente/ventas`). La otra pestaña es **Cortes de caja**.
+
+- **Periodo con botones:** Día, Semana, Mes, Trimestre, Semestre, Año o Personalizado (dos fechas, hasta dos años). Las
+  flechas ◀ ▶ van al periodo anterior o siguiente del mismo tipo (no se avanza a uno que todavía no empieza) y el botón
+  «Este mes / Este año…» regresa al actual. Al abrir la pantalla se ve el mes en curso.
+- **Resumen:** total vendido, cuentas cobradas, ticket promedio y el producto que más vendió.
+- **Ventas en el tiempo:** gráfica de barras por día, semana o mes (se elige; la pantalla sugiere la que conviene según el
+  largo del periodo). Al pasar el puntero o enfocar una barra con el teclado se ve el total y las cuentas. «Ver como tabla»
+  muestra los mismos datos en una tabla.
+- **Desgloses:** métodos de pago, meseros, productos más vendidos (los 10 primeros y «Ver todas»), categorías, secciones
+  y horas con más venta, cada uno con su importe y su porcentaje del total.
+- **Historial de ventas:** cada cobro con venta, cuenta, fecha y hora, cajero, mesa y sección (o canal si es para llevar),
+  meseros, forma de pago y total. Se filtra por número de venta, cuenta o mesa, por método de pago y por mesero, y se
+  muestran 50 a la vez («Mostrar más»).
+- **Descargar Excel:** genera `ventas-AAAA-MM-DD-a-AAAA-MM-DD.xlsx` con una hoja **Resumen** y, según lo que se marque en
+  «Elegir qué incluye el Excel», las hojas Ventas en el tiempo (con la misma agrupación de la gráfica), Métodos de pago,
+  Meseros, Productos, Categorías, Secciones, Horas e Historial de ventas (una columna por método de pago). Cada hoja trae
+  encabezados fijos, filtros y formato de moneda.
+
+En modo demo (`npm run dev:demo`) el reporte usa ventas de ejemplo generadas para cada día hasta hoy (siempre las mismas
+para el mismo día). Código: `frontend/src/views/gerente/VentasView.vue`, `utils/periodos.ts` y `utils/ventasExcel.ts`.

@@ -110,6 +110,12 @@ export const router = createRouter({
           component: () => import('../views/gerente/CortesView.vue'),
         },
         {
+          // Reporte e historial de ventas por periodo (RF-VEN-003 y RF-VEN-004); pestaña junto a Cortes de caja.
+          path: 'ventas',
+          name: 'gerente-ventas',
+          component: () => import('../views/gerente/VentasView.vue'),
+        },
+        {
           path: 'sistema',
           name: 'gerente-sistema',
           component: () => import('../views/gerente/SistemaView.vue'),

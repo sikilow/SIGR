@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { cerrarCorte, cobrarCuenta, estadoCaja, abrirCorte, listarCortes, obtenerCorte } from "../controllers/caja";
+import { reporteVentas } from "../controllers/reporteVentas";
 import { requiereAuth } from "../utils/auth";
 
 export const cajaRouter = Router();
@@ -13,3 +14,6 @@ cajaRouter.post("/cuentas/:id/cobrar", requiereAuth("cajero"), cobrarCuenta);
 // Consulta de cortes cerrados: el gerente ve todos; el cajero, solo los suyos.
 cajaRouter.get("/cortes", requiereAuth("cajero", "gerente"), listarCortes);
 cajaRouter.get("/cortes/:id", requiereAuth("cajero", "gerente"), obtenerCorte);
+
+// Reporte e historial de ventas por periodo (RF-VEN-003 y RF-VEN-004): solo el gerente.
+cajaRouter.get("/reportes/ventas", requiereAuth("gerente"), reporteVentas);

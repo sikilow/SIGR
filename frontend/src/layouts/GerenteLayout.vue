@@ -40,8 +40,13 @@ const enlaces = [
   { nombre: 'gerente-metodos-pago', texto: 'Métodos de pago', icono: 'pagos' },
   { nombre: 'gerente-canales', texto: 'Canales de pedido', icono: 'canales' },
   { nombre: 'gerente-pedidos', texto: 'Pedidos', icono: 'pedidos' },
-  { nombre: 'gerente-cortes', texto: 'Cortes', icono: 'cortes' },
+  { nombre: 'gerente-cortes', texto: 'Cortes y ventas', icono: 'cortes' },
 ] as const
+
+/** «Cortes y ventas» sigue marcado en la pestaña Reporte de ventas (es la misma sección). */
+function enlaceActivo(nombre: string): boolean {
+  return nombre === 'gerente-cortes' && route.name === 'gerente-ventas'
+}
 
 async function salir() {
   await sesion.cerrarSesion()
@@ -64,7 +69,7 @@ async function salir() {
       </div>
 
       <nav class="sidebar__nav" aria-label="Secciones de gerencia">
-        <RouterLink v-for="enlace in enlaces" :key="enlace.nombre" class="nav__enlace" :to="{ name: enlace.nombre }">
+        <RouterLink v-for="enlace in enlaces" :key="enlace.nombre" class="nav__enlace" :to="{ name: enlace.nombre }" :class="{ 'router-link-active': enlaceActivo(enlace.nombre) }">
           <svg v-if="enlace.icono === 'usuarios'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="9" cy="8" r="3.5" />
             <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 5a3.5 3.5 0 0 1 0 7M18 14.5c2.2.7 3.5 2.6 3.5 5.5" />
@@ -161,7 +166,7 @@ async function salir() {
       </main>
 
       <nav v-if="compacto" class="nav" aria-label="Navegación principal">
-        <RouterLink v-for="enlace in enlaces" :key="enlace.nombre" class="nav__enlace" :to="{ name: enlace.nombre }">
+        <RouterLink v-for="enlace in enlaces" :key="enlace.nombre" class="nav__enlace" :to="{ name: enlace.nombre }" :class="{ 'router-link-active': enlaceActivo(enlace.nombre) }">
           <svg v-if="enlace.icono === 'usuarios'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="9" cy="8" r="3.5" />
             <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 5a3.5 3.5 0 0 1 0 7M18 14.5c2.2.7 3.5 2.6 3.5 5.5" />

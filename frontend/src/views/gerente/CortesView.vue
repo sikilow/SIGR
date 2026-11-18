@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import CajaPestanas from '../../components/CajaPestanas.vue'
 import ResumenCorte from '../../components/ResumenCorte.vue'
 import { ErrorServicio, servicios } from '../../services'
 import type { CorteDetalle, CorteResumen } from '../../types'
@@ -87,6 +88,8 @@ onMounted(() => void cargar())
         <p>Revisa cada cierre de turno: lo vendido por método de pago y si el efectivo cuadró.</p>
       </div>
     </header>
+
+    <CajaPestanas />
 
     <form class="filtros panel no-imprimir" role="search" aria-label="Filtrar cortes" @submit.prevent="cargar">
       <div class="campo">

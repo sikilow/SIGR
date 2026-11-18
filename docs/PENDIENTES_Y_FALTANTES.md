@@ -136,7 +136,7 @@ Son sugerencias mías, **no requisitos**. Solo valen si el restaurante las neces
 1. Confirmar las decisiones D-3 a D-5 de las mesas; D-1 y D-2 ya se resolvieron con el catálogo de secciones.
 2. Aplicar y probar la migración 013 en cada base; prueba operativa de secciones/mesas en el entorno compartido (RF-MES-007).
 3. Implementar los controles de seguridad del ERS aún pendientes (P-03 y P-04); RF-USR-008 ya está implementado.
-4. Facturación fiscal (RF-VEN-002), historial de ventas (RF-VEN-003) e informes (RF-VEN-004).
+4. Facturación fiscal (RF-VEN-002). El historial de ventas (RF-VEN-003) y los informes (RF-VEN-004) ya están en Gerente → Cortes y ventas → Reporte de ventas.
 5. Pruebas de rutas del backend contra una base de datos (P-05).
 6. Actualizar el ERS y documentación cuando se validen las reglas pendientes.
 

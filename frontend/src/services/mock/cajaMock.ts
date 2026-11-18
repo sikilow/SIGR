@@ -3,6 +3,7 @@ import type { CobroPorMetodo, CorteCaja, CorteDetalle, VentaCaja } from '../../t
 import { ErrorServicio } from '../errores'
 import { baseDatos } from './baseDatos'
 import { categoriasMetodoPagoMock, metodosPagoMock } from './metodosPago'
+import { reporteVentasMock } from './reporteVentasMock'
 import { conRetraso, conRetrasoIdempotente } from './utiles'
 
 let corte: CorteCaja | null = null
@@ -181,6 +182,12 @@ export function crearCajaMock(): CajaService {
         ventasDelCorte += 1
         pagosDelCorte.push(...pagos.map((pago) => ({ idMetodo: pago.idMetodo, monto: pago.monto })))
         return venta
+      })
+    },
+    reporteVentas(desde, hasta) {
+      return conRetraso(() => {
+        if (desde > hasta) throw new ErrorServicio('estado_invalido', 'La fecha inicial no puede ser posterior a la final.', 422)
+        return reporteVentasMock(desde, hasta)
       })
     },
   }

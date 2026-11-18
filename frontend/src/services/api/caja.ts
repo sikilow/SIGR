@@ -3,7 +3,7 @@ import type { CuentaDto } from './mappers'
 import { aCuenta } from './mappers'
 import { parseFechaMySQL } from './conversion'
 import { solicitar } from './cliente'
-import type { CorteCaja, CorteDetalle, CorteResumen, EstadoCaja, VentaCaja } from '../../types'
+import type { CorteCaja, CorteDetalle, CorteResumen, EstadoCaja, ReporteVentas, VentaCaja } from '../../types'
 
 interface CorteDto {
   id_corte: number | string
@@ -118,6 +118,69 @@ function aVenta(dto: VentaDto): VentaCaja {
   }
 }
 
+type Numero = number | string
+
+/** Respuesta de GET /caja/reportes/ventas (snake_case, como la base). */
+export interface ReporteVentasDto {
+  desde: string
+  hasta: string
+  resumen: { ventas: Numero; total: Numero }
+  por_dia: Array<{ dia: string; ventas: Numero; total: Numero }>
+  por_hora: Array<{ hora: Numero; ventas: Numero; total: Numero }>
+  por_metodo: Array<{ metodo: string; pagos: Numero; total: Numero }>
+  por_mesero: Array<{ mesero: string; cuentas: Numero; total: Numero }>
+  por_producto: Array<{ producto: string; presentacion: string | null; categoria: string; cantidad: Numero; total: Numero }>
+  por_categoria: Array<{ categoria: string; cantidad: Numero; total: Numero }>
+  por_seccion: Array<{ seccion: string; ventas: Numero; total: Numero }>
+  ventas: Array<{
+    id_venta: Numero
+    id_cuenta: Numero
+    fecha_hora: string
+    total: Numero
+    mesa_numero: Numero
+    seccion: string | null
+    canal: string | null
+    cajero: string
+    meseros: string | null
+    pagos: Array<{ metodo: string; monto: Numero }>
+  }>
+  ventas_truncadas: boolean
+}
+
+export function aReporteVentas(dto: ReporteVentasDto): ReporteVentas {
+  return {
+    desde: dto.desde,
+    hasta: dto.hasta,
+    resumen: { ventas: Number(dto.resumen.ventas), total: Number(dto.resumen.total) },
+    porDia: dto.por_dia.map((f) => ({ dia: f.dia, ventas: Number(f.ventas), total: Number(f.total) })),
+    porHora: dto.por_hora.map((f) => ({ hora: Number(f.hora), ventas: Number(f.ventas), total: Number(f.total) })),
+    porMetodo: dto.por_metodo.map((f) => ({ metodo: f.metodo, pagos: Number(f.pagos), total: Number(f.total) })),
+    porMesero: dto.por_mesero.map((f) => ({ mesero: f.mesero, cuentas: Number(f.cuentas), total: Number(f.total) })),
+    porProducto: dto.por_producto.map((f) => ({
+      producto: f.producto,
+      presentacion: f.presentacion ?? '',
+      categoria: f.categoria,
+      cantidad: Number(f.cantidad),
+      total: Number(f.total),
+    })),
+    porCategoria: dto.por_categoria.map((f) => ({ categoria: f.categoria, cantidad: Number(f.cantidad), total: Number(f.total) })),
+    porSeccion: dto.por_seccion.map((f) => ({ seccion: f.seccion, ventas: Number(f.ventas), total: Number(f.total) })),
+    ventas: dto.ventas.map((v) => ({
+      idVenta: Number(v.id_venta),
+      idCuenta: Number(v.id_cuenta),
+      fechaHora: parseFechaMySQL(v.fecha_hora, 'venta.fecha_hora'),
+      total: Number(v.total),
+      mesaNumero: Number(v.mesa_numero),
+      seccion: v.seccion,
+      canal: v.canal,
+      cajero: v.cajero,
+      meseros: v.meseros ?? '',
+      pagos: v.pagos.map((p) => ({ metodo: p.metodo, monto: Number(p.monto) })),
+    })),
+    ventasTruncadas: Boolean(dto.ventas_truncadas),
+  }
+}
+
 export function crearCajaApi(): CajaService {
   return {
     async obtenerEstado(): Promise<EstadoCaja> {
@@ -174,6 +237,9 @@ export function crearCajaApi(): CajaService {
         claveIdempotencia,
       })
       return aVenta(dto.venta)
+    },
+    async reporteVentas(desde, hasta) {
+      return aReporteVentas(await solicitar<ReporteVentasDto>('GET', '/caja/reportes/ventas', { consulta: { desde, hasta } }))
     },
   }
 }

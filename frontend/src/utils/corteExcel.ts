@@ -108,6 +108,11 @@ export async function crearLibroCorte(corte: CorteCajaExportable): Promise<Excel
 
 export async function descargarCorteExcel(corte: CorteCajaExportable): Promise<void> {
   const workbook = await crearLibroCorte(corte)
+  await descargarLibro(workbook, `corte-caja-${corte.idCorte}-${corte.inicio.toISOString().slice(0, 10)}.xlsx`)
+}
+
+/** Descarga un libro de Excel en el navegador con el nombre indicado. */
+export async function descargarLibro(workbook: ExcelJS.Workbook, nombreArchivo: string): Promise<void> {
   const contenido = await workbook.xlsx.writeBuffer()
   const archivo = new Blob([new Uint8Array(contenido)], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -115,7 +120,7 @@ export async function descargarCorteExcel(corte: CorteCajaExportable): Promise<v
   const url = URL.createObjectURL(archivo)
   const enlace = document.createElement('a')
   enlace.href = url
-  enlace.download = `corte-caja-${corte.idCorte}-${corte.inicio.toISOString().slice(0, 10)}.xlsx`
+  enlace.download = nombreArchivo
   document.body.appendChild(enlace)
   enlace.click()
   enlace.remove()
