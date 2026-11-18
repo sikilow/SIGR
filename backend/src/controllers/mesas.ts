@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { caracteristicasDeMesas, conCaracteristicasDeMesa, conCaracteristicasPedidas } from "../models/caracteristicasMesa";
 import { z } from "zod";
 import { ejecutar, filas, pool, transaccion } from "../services/db";
 import { cargarCuenta, idDeRuta, validar } from "../models/dominio";
@@ -16,7 +17,7 @@ import { conIdempotencia } from "../services/idempotencia";
 export const listarMesas = async (_req: Request, res: Response) => {
   const rows = await filas(
     pool,
-    `SELECT m.id_mesa, m.numero, m.capacidad, m.zona, m.planta_baja, m.espacio_carriola, m.sin_escaleras, m.estado,
+    `SELECT m.id_mesa, m.numero, m.capacidad, m.zona, m.estado,
             s.es_para_llevar, cn.nombre AS canal, c.referencia,
             c.estado AS estado_cuenta, c.tipo_pago_solicitado,
             COALESCE(pa.pedidos_activos, 0) AS pedidos_activos,
@@ -45,15 +46,15 @@ export const listarMesas = async (_req: Request, res: Response) => {
       ORDER BY m.numero`,
   );
 
+  const caracteristicas = await caracteristicasDeMesas(pool);
   res.json(
     rows.map((r) => ({
       id_mesa: r.id_mesa as number,
       numero: r.numero as number,
       capacidad: r.capacidad as number,
       zona: (r.zona as string | null) ?? null,
-      planta_baja: Number(r.planta_baja) === 1,
-      espacio_carriola: Number(r.espacio_carriola) === 1,
-      sin_escaleras: Number(r.sin_escaleras) === 1,
+      // Características activas del catálogo de Gerencia (migración 023).
+      caracteristicas: caracteristicas.get(Number(r.id_mesa)) ?? [],
       es_para_llevar: Number(r.es_para_llevar) === 1,
       canal: (r.canal as string | null) ?? null,
       referencia: (r.referencia as string | null) ?? null,
@@ -166,15 +167,15 @@ export const asignarMesa = async (req: Request, res: Response) => {
         esperaId = grupo.id_espera;
       }
 
-      const [mesa] = await filas(
+      const [mesa] = await conCaracteristicasDeMesa(
         cx,
-        "SELECT id_mesa, numero, capacidad, zona, planta_baja, espacio_carriola, sin_escaleras, estado FROM mesa WHERE id_mesa = ?",
-        [mesaId],
+        await filas(cx, "SELECT id_mesa, numero, capacidad, zona, estado FROM mesa WHERE id_mesa = ?", [mesaId]),
       );
       const [reservacion] = reservacionId
         ? await filas(
             cx,
             `SELECT r.id_reservacion, r.id_cliente, r.id_mesa, r.fecha_hora, r.personas, r.estado, r.llegada_en,
+                    r.pref_zona,
                     c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.correo AS cliente_correo, m.numero AS mesa_numero
                FROM reservacion r
                JOIN cliente c ON c.id_cliente = r.id_cliente
@@ -195,7 +196,8 @@ export const asignarMesa = async (req: Request, res: Response) => {
           )
         : [null];
 
-      return { mesa, reservacion, espera };
+      const [reservacionCompleta] = reservacion ? await conCaracteristicasPedidas(cx, [reservacion]) : [null];
+      return { mesa, reservacion: reservacionCompleta ?? null, espera };
     }),
   );
 };

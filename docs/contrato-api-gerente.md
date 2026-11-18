@@ -85,3 +85,21 @@ se requiere una migración adicional.
 - `GET /api/mesas/:id/cuenta` solo devuelve la cuenta **activa**. Para un pedido de una cuenta ya cobrada no hay forma
   de consultar esa cuenta; la pantalla lo dice en lugar de mostrar la cuenta nueva de la mesa. Un
   `GET /api/cuentas/:id` (solo gerente y cajero) lo resolvería: **propuesta, no implementado**.
+
+
+## Características de mesa (migración 023)
+
+Catálogo que administra Gerencia en **Gerente → Mesas → Características** («Planta baja», «Junto a la ventana»…). Todas las
+rutas son solo del gerente.
+
+| Método y ruta | Cuerpo | Respuesta |
+|---|---|---|
+| `GET /api/catalogo/caracteristicas` | — | `[{ "id_caracteristica", "nombre", "activa", "total_mesas", "total_reservaciones" }]` (activas e inactivas) |
+| `POST /api/catalogo/caracteristicas` | `{ "nombre" }` (1 a 40 caracteres, único) | `201` con la característica; `409` si el nombre ya existe |
+| `PATCH /api/catalogo/caracteristicas/:id` | `{ "nombre" }` o `{ "activa": false }` | la característica actualizada |
+| `DELETE /api/catalogo/caracteristicas/:id` | — | `{ "ok": true }`; `409` si alguna mesa o reservación la usa (entonces se desactiva) |
+
+Desactivar una característica la deja de ofrecer en el portal, en la hostess y para nuevas asignaciones, pero las mesas que
+ya la tenían la conservan. En `POST/PATCH /api/catalogo/mesas`, `caracteristicas` es la lista de ids (activos) de la mesa y
+`GET /api/catalogo/mesas` la devuelve con los ids de todas sus características (también las desactivadas). Las columnas fijas
+`mesa.planta_baja`, `espacio_carriola` y `sin_escaleras` se eliminaron: sus valores pasaron al catálogo.

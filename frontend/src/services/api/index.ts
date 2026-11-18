@@ -10,7 +10,10 @@ import { guardarToken, leerToken, limpiarToken } from './token'
 import {
   aCanalPedido,
   aCategoriaAdmin,
+  aCaracteristicaAdmin,
+  type CaracteristicaAdminDto,
   aConfiguracionReservacion,
+  deHorarioReservacion,
   aSeccionAdmin,
   aCategoriaMenu,
   aCuenta,
@@ -407,6 +410,23 @@ export function crearServiciosApi(): Servicios {
         await solicitar<{ ok: boolean }>('DELETE', `/catalogo/categorias/${id}`)
       },
 
+      async listarCaracteristicas() {
+        return (await solicitar<CaracteristicaAdminDto[]>('GET', '/catalogo/caracteristicas')).map(aCaracteristicaAdmin)
+      },
+
+      async crearCaracteristica(nombre) {
+        return aCaracteristicaAdmin(await solicitar<CaracteristicaAdminDto>('POST', '/catalogo/caracteristicas', { cuerpo: { nombre: nombre.trim() } }))
+      },
+
+      async actualizarCaracteristica(id, cambio) {
+        const cuerpo = 'nombre' in cambio ? { nombre: cambio.nombre.trim() } : { activa: cambio.activa }
+        return aCaracteristicaAdmin(await solicitar<CaracteristicaAdminDto>('PATCH', `/catalogo/caracteristicas/${id}`, { cuerpo }))
+      },
+
+      async eliminarCaracteristica(id) {
+        await solicitar<unknown>('DELETE', `/catalogo/caracteristicas/${id}`)
+      },
+
       async listarSecciones() {
         return (await solicitar<SeccionAdminDto[]>('GET', '/catalogo/secciones')).map(aSeccionAdmin)
       },
@@ -424,6 +444,8 @@ export function crearServiciosApi(): Servicios {
               tolerancia_minutos: cambio.toleranciaMinutos,
               recordatorio_minutos: cambio.recordatorioMinutos,
               anticipacion_minutos: cambio.anticipacionMinutos,
+              duracion_reservacion_minutos: cambio.duracionReservacionMinutos,
+              ...deHorarioReservacion(cambio),
             },
           }),
         )

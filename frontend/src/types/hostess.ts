@@ -1,6 +1,6 @@
 // Tipos del rol hostess (tablas `cliente`, `reservacion` y `lista_espera`). Ver docs/contrato-api-hostess.md.
 import type { EstadoEspera, EstadoReservacion } from './estados'
-import type { Mesa } from './mesa'
+import type { CaracteristicaMesa, Mesa } from './mesa'
 
 /** cliente (el mock lo guarda; la pantalla Salón solo muestra su nombre y teléfono). */
 export interface Cliente {
@@ -19,7 +19,7 @@ export interface Cliente {
  */
 export type MesaSalon = Pick<
   Mesa,
-  'idMesa' | 'numero' | 'capacidad' | 'estado' | 'zona' | 'plantaBaja' | 'espacioCarriola' | 'sinEscaleras'
+  'idMesa' | 'numero' | 'capacidad' | 'estado' | 'zona' | 'caracteristicas'
 >
 
 /** reservacion. La tabla NO tiene folio. */
@@ -53,16 +53,14 @@ export interface Reservacion {
 }
 
 /**
- * Preferencias de mesa de una reservación (columnas `pref_zona`, `pref_planta_baja`, `pref_carriola` y
- * `pref_sin_escaleras`, migración 021). Las captura el cliente en el portal o la hostess; no reservan una mesa: solo
- * ordenan las mesas sugeridas y se muestran al confirmar y al sentar al grupo.
+ * Preferencias de mesa de una reservación: sección (`pref_zona`, migración 021) y características del catálogo de
+ * Gerencia (`reservacion_caracteristica`, migración 023). Las captura el cliente en el portal o la hostess; no reservan
+ * una mesa: solo ordenan las mesas sugeridas y se muestran al confirmar y al sentar al grupo.
  */
 export interface PreferenciasReservacion {
   /** Sección preferida; `null` = cualquiera. */
   zona: string | null
-  plantaBaja: boolean
-  espacioCarriola: boolean
-  sinEscaleras: boolean
+  caracteristicas: CaracteristicaMesa[]
 }
 
 /** lista_espera. */

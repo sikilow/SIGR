@@ -1,6 +1,7 @@
 // Servicios de hostess simulados en memoria. Comparten `baseDatos.mesas` con el mock del mesero: la mesa que
 // la hostess ocupa aquí se ve ocupada en el Panel de mesas. Aplican las mismas reglas que `utils/asignacion.ts` y
 // `utils/reservaciones.ts`.
+import { motivoFueraDeHorario } from '../../utils/horarioReservacion'
 import type {
   CambioReservacion,
   Cliente,
@@ -13,6 +14,7 @@ import type {
 import { mesaAsignable, reservacionAsignable, validarPersonas } from '../../utils/asignacion'
 import {
   aDiaISO,
+  aHoraISO,
   coincideBusqueda,
   describirMinutos,
   esFechaPasada,
@@ -26,7 +28,7 @@ import {
   validarPersonasReservacion,
 } from '../../utils/reservaciones'
 import { ErrorServicio } from '../errores'
-import { baseDatos, esMesaParaLlevar, type EsperaGuardada, type ReservacionGuardada } from '../mock/baseDatos'
+import { baseDatos, caracteristicasDeMesa, esMesaParaLlevar, type EsperaGuardada, type ReservacionGuardada } from '../mock/baseDatos'
 import { conRetraso, conRetrasoIdempotente } from '../mock/utiles'
 import type { HostessService } from './interfaces'
 
@@ -42,9 +44,7 @@ function aMesaSalon(idMesa: number): MesaSalon {
     capacidad: mesa.capacidad,
     estado: mesa.estado,
     zona: mesa.zona,
-    plantaBaja: mesa.plantaBaja,
-    espacioCarriola: mesa.espacioCarriola,
-    sinEscaleras: mesa.sinEscaleras,
+    caracteristicas: caracteristicasDeMesa(mesa),
   }
 }
 
@@ -61,7 +61,7 @@ function conCliente(r: ReservacionGuardada): Reservacion {
   }
 }
 
-const SIN_PREFERENCIAS = { zona: null, plantaBaja: false, espacioCarriola: false, sinEscaleras: false }
+const SIN_PREFERENCIAS = { zona: null, caracteristicas: [] }
 
 function esperaConCliente(e: EsperaGuardada): ListaEspera {
   const cliente = baseDatos.clientes.find((c) => c.idCliente === e.idCliente)
@@ -116,6 +116,9 @@ function validarFechaNueva(fecha: Date): void {
   if (faltaAnticipacion(fecha, ahora, minutos)) {
     throw new ErrorServicio('estado_invalido', `Las reservaciones se hacen con al menos ${describirMinutos(minutos)} de anticipación.`, 422)
   }
+  // Como la API: día abierto y dentro del horario (la hostess puede anotar cualquier minuto).
+  const fueraDeHorario = motivoFueraDeHorario(baseDatos.configuracionReservacion, aDiaISO(fecha), aHoraISO(fecha), false)
+  if (fueraDeHorario) throw new ErrorServicio('estado_invalido', fueraDeHorario, 422)
 }
 
 /** Misma comprobación que la API: debe haber una mesa del salón para el grupo a esa hora (solo cuentan las confirmadas). */
@@ -239,6 +242,13 @@ export function crearHostessMock(): HostessService {
       return conRetraso(() => baseDatos.mesas
         .filter((m) => !esMesaParaLlevar(m) && m.activa && baseDatos.secciones.some((s) => s.nombre === m.zona && s.activa))
         .map((m) => aMesaSalon(m.idMesa)))
+    },
+
+    obtenerHorario() {
+      return conRetraso(() => {
+        const { horaApertura, horaUltima, intervaloMinutos, diasAbiertos, anticipacionMinutos } = baseDatos.configuracionReservacion
+        return { horaApertura, horaUltima, intervaloMinutos, diasAbiertos, anticipacionMinutos }
+      })
     },
 
     listarReservaciones(dia) {

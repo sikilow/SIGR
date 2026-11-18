@@ -1,14 +1,18 @@
 <script setup lang="ts">
-// Preferencias de mesa de un grupo: sección preferida y necesidades de acceso (planta baja, espacio para carriola, sin
-// escaleras). Lo usan Nueva/Editar reservación y Asignar mesa de la lista de espera. No bloquea nada: solo ordena las
-// mesas sugeridas (primero las que coinciden) y, en una reservación, se guarda para verlo al confirmar y al sentar.
-import type { PreferenciasReservacion } from '../../types'
+// Preferencias de mesa de un grupo: sección preferida y características del catálogo que administra Gerencia
+// («Planta baja», «Junto a la ventana»…). Lo usan Nueva/Editar reservación y Asignar mesa de la lista de espera. No
+// bloquea nada: solo ordena las mesas sugeridas (primero las que coinciden) y, en una reservación, se guarda para verlo
+// al confirmar y al sentar al grupo.
+import { computed } from 'vue'
+import type { CaracteristicaMesa, PreferenciasReservacion } from '../../types'
 
-defineProps<{
+const props = defineProps<{
   /** Prefijo de los `id` (hay más de un formulario en la app). */
   idPrefijo: string
   /** Secciones que se pueden elegir. */
   zonas: string[]
+  /** Características que se pueden pedir (las que tienen las mesas). */
+  opciones: CaracteristicaMesa[]
   deshabilitado?: boolean
   /** Texto de la leyenda. */
   leyenda?: string
@@ -16,52 +20,52 @@ defineProps<{
 
 const modelo = defineModel<PreferenciasReservacion>({ required: true })
 
-function cambiar<K extends keyof PreferenciasReservacion>(clave: K, valor: PreferenciasReservacion[K]) {
-  modelo.value = { ...modelo.value, [clave]: valor }
+/**
+ * Lo que se ofrece: las características de las mesas y, además, las que ya estaban pedidas aunque ninguna mesa las
+ * tenga ahora (así no se pierden al editar).
+ */
+const visibles = computed(() => {
+  const mapa = new Map(props.opciones.map((c) => [c.idCaracteristica, c]))
+  for (const c of modelo.value.caracteristicas) if (!mapa.has(c.idCaracteristica)) mapa.set(c.idCaracteristica, c)
+  return [...mapa.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+})
+
+function marcada(c: CaracteristicaMesa): boolean {
+  return modelo.value.caracteristicas.some((x) => x.idCaracteristica === c.idCaracteristica)
+}
+
+function alternar(c: CaracteristicaMesa, activa: boolean) {
+  const otras = modelo.value.caracteristicas.filter((x) => x.idCaracteristica !== c.idCaracteristica)
+  modelo.value = { ...modelo.value, caracteristicas: activa ? [...otras, c] : otras }
+}
+
+function cambiarZona(zona: string) {
+  modelo.value = { ...modelo.value, zona: zona || null }
 }
 </script>
 
 <template>
   <fieldset class="preferencias" :disabled="deshabilitado">
-    <legend>{{ leyenda ?? 'Preferencias de acceso' }}</legend>
+    <legend>{{ leyenda ?? 'Preferencias de mesa' }}</legend>
     <div class="preferencias__campo">
       <label :for="`${idPrefijo}-zona`">Sección preferida</label>
-      <select
-        :id="`${idPrefijo}-zona`"
-        :value="modelo.zona ?? ''"
-        @change="cambiar('zona', ($event.target as HTMLSelectElement).value || null)"
-      >
+      <select :id="`${idPrefijo}-zona`" :value="modelo.zona ?? ''" @change="cambiarZona(($event.target as HTMLSelectElement).value)">
         <option value="">Cualquier sección</option>
         <option v-for="zona in zonas" :key="zona" :value="zona">{{ zona }}</option>
       </select>
     </div>
-    <div class="preferencias__opciones">
-      <label class="opcion-acceso">
-        <input type="checkbox" :checked="modelo.plantaBaja" @change="cambiar('plantaBaja', ($event.target as HTMLInputElement).checked)" />
+    <div v-if="visibles.length" class="preferencias__opciones">
+      <label v-for="c in visibles" :key="c.idCaracteristica" class="opcion-acceso">
+        <input type="checkbox" :checked="marcada(c)" @change="alternar(c, ($event.target as HTMLInputElement).checked)" />
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 21V5a2 2 0 0 1 2-2h9M9 21h11M4 12h11M19 8v13" />
+          <path d="M20 6 9 17l-5-5" />
         </svg>
-        <span>Planta baja</span>
-      </label>
-      <label class="opcion-acceso">
-        <input type="checkbox" :checked="modelo.espacioCarriola" @change="cambiar('espacioCarriola', ($event.target as HTMLInputElement).checked)" />
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 4h2.2l1.6 9.5h10.5L20 7H6" />
-          <circle cx="9" cy="19" r="1.6" />
-          <circle cx="17" cy="19" r="1.6" />
-          <path d="M12 4v4" />
-        </svg>
-        <span>Espacio para carriola</span>
-      </label>
-      <label class="opcion-acceso">
-        <input type="checkbox" :checked="modelo.sinEscaleras" @change="cambiar('sinEscaleras', ($event.target as HTMLInputElement).checked)" />
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 20h4v-4h4v-4h4V8h4" />
-          <circle cx="6" cy="5" r="2" />
-        </svg>
-        <span>Sin escaleras</span>
+        <span>{{ c.nombre }}</span>
       </label>
     </div>
+    <p v-else class="preferencias__vacio">
+      Ninguna mesa tiene características registradas. Gerencia las asigna en Mesas.
+    </p>
   </fieldset>
 </template>
 
@@ -107,6 +111,12 @@ function cambiar<K extends keyof PreferenciasReservacion>(clave: K, valor: Prefe
   gap: var(--espacio-2);
 }
 
+.preferencias__vacio {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+}
+
 .opcion-acceso {
   display: flex;
   align-items: center;
@@ -128,9 +138,11 @@ function cambiar<K extends keyof PreferenciasReservacion>(clave: K, valor: Prefe
   accent-color: var(--color-primary);
 }
 
+/* La palomita solo se ve cuando está marcada (además de la casilla): no depende solo del color. */
 .opcion-acceso svg {
   flex: none;
-  color: var(--color-muted);
+  color: var(--color-primary-dark);
+  visibility: hidden;
 }
 
 .opcion-acceso:has(input:checked) {
@@ -140,7 +152,7 @@ function cambiar<K extends keyof PreferenciasReservacion>(clave: K, valor: Prefe
 }
 
 .opcion-acceso:has(input:checked) svg {
-  color: var(--color-primary-dark);
+  visibility: visible;
 }
 
 .opcion-acceso:has(input:focus-visible) {

@@ -2,6 +2,12 @@
 import type { TipoPago } from './cuenta'
 import type { EstadoCuentaActiva, EstadoMesa } from './estados'
 
+/** Característica de mesa del catálogo que administra Gerencia (caracteristica_mesa, migración 023). */
+export interface CaracteristicaMesa {
+  idCaracteristica: number
+  nombre: string
+}
+
 export interface Mesa {
   /** mesa.id_mesa */
   idMesa: number
@@ -13,9 +19,8 @@ export interface Mesa {
   estado: EstadoMesa
   /** mesa.zona: sección del salón (recortada); null se tolera para respuestas antiguas. */
   zona: string | null
-  plantaBaja: boolean
-  espacioCarriola: boolean
-  sinEscaleras: boolean
+  /** Características activas de la mesa («Planta baja», «Junto a la ventana»…), por nombre. */
+  caracteristicas: CaracteristicaMesa[]
   /** Mesa virtual de la sección «Para llevar» (seccion.es_para_llevar): no se sienta ni se reserva. */
   esParaLlevar?: boolean
 

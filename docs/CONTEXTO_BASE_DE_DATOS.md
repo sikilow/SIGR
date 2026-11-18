@@ -118,6 +118,8 @@ Migraciones y dónde viven sus efectos en `init.sql`:
 | 019 | `seccion.es_para_llevar`, tabla `canal_pedido`, `cuenta.id_canal/referencia`, sección «Para llevar» con las mesas 101–110 y triggers de auditoría de `seccion`, `cuenta` y `canal_pedido` | `CREATE TABLE` + datos base + triggers al final |
 | 020 | `cliente_credencial.google_sub` (único) y `password_hash` opcional | En el `CREATE TABLE cliente_credencial` (sin triggers nuevos: esa tabla no se audita) |
 | 021 | `reservacion.pref_zona/pref_planta_baja/pref_carriola/pref_sin_escaleras` (preferencias de mesa del cliente) | En el `CREATE TABLE reservacion` (los triggers de auditoría no cambian) |
+| 022 | `configuracion_reservacion.hora_apertura/hora_ultima_reservacion/intervalo_minutos/dias_abiertos` (horario de reservaciones) | En el `CREATE TABLE configuracion_reservacion` (los triggers de auditoría no cambian) |
+| 023 | Tablas `caracteristica_mesa`, `mesa_caracteristica` y `reservacion_caracteristica`; quita `mesa.planta_baja/espacio_carriola/sin_escaleras` y `reservacion.pref_planta_baja/pref_carriola/pref_sin_escaleras`; agrega `configuracion_reservacion.duracion_reservacion_minutos` | `CREATE TABLE` nuevos, datos base y triggers de `mesa` sin las columnas quitadas |
 
 Notas importantes:
 

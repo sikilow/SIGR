@@ -134,6 +134,8 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `019_pedidos_para_llevar.sql` | Sección «Para llevar» con mesas virtuales (101 a 110), catálogo `canal_pedido` y canal/referencia en la cuenta | Tras 018; puede repetirse |
 | `020_acceso_google_clientes.sql` | `cliente_credencial.google_sub` único y contraseña opcional (acceso de clientes con Google) | Tras 019; puede repetirse |
 | `021_preferencias_reservacion.sql` | Preferencias de mesa en la reservación (`pref_zona`, `pref_planta_baja`, `pref_carriola`, `pref_sin_escaleras`) | Tras 020; puede repetirse |
+| `022_horario_reservaciones.sql` | Horario de reservaciones en `configuracion_reservacion` (primera y última hora, intervalo y días abiertos) | Tras 021; puede repetirse |
+| `023_caracteristicas_mesa_y_duracion.sql` | Catálogo de características de mesa (`caracteristica_mesa`, `mesa_caracteristica`, `reservacion_caracteristica`), quita las columnas fijas de acceso y agrega `duracion_reservacion_minutos` | Tras 022; puede repetirse |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
@@ -350,6 +352,32 @@ mysql -h localhost -P 3306 -u root -p SIGR -e "SHOW COLUMNS FROM reservacion LIK
 ```
 
 La API de reservaciones falla (`Unknown column 'r.pref_zona'`) sin esta migración. Los triggers de auditoría de `reservacion` no registran estas columnas.
+
+## Migración 022: horario de reservaciones
+
+Agrega a `configuracion_reservacion` la primera y la última hora para reservar (13:00 y 21:00), el intervalo de las horas del portal (30 minutos) y los días que se reciben reservaciones (todos). Gerencia los cambia en **Gerente → Reservas**. No cambia los datos existentes. Puede repetirse. Haz un respaldo antes.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-022.sql"
+Get-Content -Raw ".\database\migrations\022_horario_reservaciones.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT hora_apertura, hora_ultima_reservacion, intervalo_minutos, dias_abiertos FROM configuracion_reservacion;"
+```
+
+La API no arranca sin las migraciones 021 y 022 (lo avisa al iniciar).
+
+## Migración 023: características de mesa y duración de la reservación
+
+Crea el catálogo de características que administra Gerencia (Gerente → Mesas → Características), pasa a él lo que tenían las columnas fijas `mesa.planta_baja/espacio_carriola/sin_escaleras` y `reservacion.pref_planta_baja/pref_carriola/pref_sin_escaleras`, **elimina esas columnas** y reemplaza los triggers de auditoría de `mesa`. También agrega `configuracion_reservacion.duracion_reservacion_minutos` (90 por defecto). Puede repetirse. Haz un respaldo antes: quita columnas.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-023.sql"
+Get-Content -Raw ".\database\migrations\023_caracteristicas_mesa_y_duracion.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT * FROM caracteristica_mesa; SELECT duracion_reservacion_minutos FROM configuracion_reservacion;"
+```
+
+La API no arranca sin esta migración (lo avisa al iniciar). Si el backend ya estaba encendido cuando la aplicaste, **reinícialo**.
 
 ## Base nueva o entorno de demostración
 

@@ -1,6 +1,7 @@
 // Contrato de la capa de servicios del rol hostess (Salón y Reservaciones). Las vistas y stores dependen SOLO de esta
 // interfaz; `services/index.ts` decide si se usa el mock o la API real.
 // CAMBIO PROPUESTO: el backend aún no tiene rutas de hostess (ver docs/contrato-api-hostess.md).
+import type { HorarioReservacion } from '../../utils/horarioReservacion'
 import type {
   CambioEspera,
   CambioReservacion,
@@ -29,6 +30,11 @@ export interface HostessService {
    * Con ellas la hostess recibe la alerta de «solicitud nueva».
    */
   listarReservacionesPendientes(): Promise<Reservacion[]>
+  /**
+   * GET /reservaciones/horario: horario de reservaciones (lo configura Gerencia) y anticipación mínima. La API rechaza
+   * reservaciones en días cerrados o fuera del horario; la hostess puede anotar cualquier minuto dentro de él.
+   */
+  obtenerHorario(): Promise<HorarioReservacion & { anticipacionMinutos: number }>
   /**
    * GET /lista-espera (CAMBIO PROPUESTO). Sin argumento, los grupos que siguen `esperando` (`?estado=esperando`).
    * `'todas'`: todos los estados de HOY más los que siguen esperando (la API omite `estado`).

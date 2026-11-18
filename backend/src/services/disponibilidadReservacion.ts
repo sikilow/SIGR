@@ -3,10 +3,18 @@ import { ErrorApi } from "../utils/errores";
 import { describirMinutos } from "../models/dominio";
 
 /**
- * Cuánto tiempo ocupa una reservación su mesa. Una mesa que se reserva a las 14:00 no puede darse a otro grupo
- * confirmado entre las 12:30 y las 15:30. Por ahora es fijo (pendiente: que Gerencia lo configure).
+ * Cuánto tiempo ocupa una reservación su mesa si no hay configuración: con 90, una mesa que se reserva a las 14:00 no
+ * puede darse a otro grupo confirmado entre las 12:30 y las 15:30. Gerencia lo cambia en Gerente → Reservas
+ * (configuracion_reservacion.duracion_reservacion_minutos, migración 023).
  */
 export const DURACION_RESERVACION_MINUTOS = 90;
+
+/** Duración configurada por Gerencia (30 a 360 minutos); sin fila, la predeterminada. */
+export async function cargarDuracionReservacion(ex: Ejecutor): Promise<number> {
+  const [fila] = await filas(ex, "SELECT duracion_reservacion_minutos FROM configuracion_reservacion WHERE id = 1");
+  const minutos = Number(fila?.duracion_reservacion_minutos);
+  return Number.isInteger(minutos) && minutos > 0 ? minutos : DURACION_RESERVACION_MINUTOS;
+}
 
 export interface MesaConCapacidad {
   id_mesa: number;
@@ -56,11 +64,16 @@ export async function exigirMesaDisponible(
   cx: Ejecutor,
   reservacion: { idReservacion?: number; fechaHora: string; personas: number },
 ): Promise<void> {
+  const duracion = await cargarDuracionReservacion(cx);
+  // Si la reservación empieza dentro de la duración desde ahora, las mesas ocupadas en este momento (por ejemplo, por
+  // clientes que llegaron sin reservación) todavía no estarán libres: no cuentan.
   const mesas = await filas(
     cx,
-    `SELECT m.id_mesa, m.capacidad
+    `SELECT m.id_mesa, m.capacidad,
+            (m.estado = 'ocupada' AND ABS(TIMESTAMPDIFF(MINUTE, NOW(), ?)) < ?) AS ocupada_a_esa_hora
        FROM mesa m JOIN seccion s ON s.nombre = m.zona
       WHERE m.activa = TRUE AND s.activa = TRUE AND s.es_para_llevar = FALSE`,
+    [reservacion.fechaHora, duracion],
   );
   const grandes = mesas.filter((m) => Number(m.capacidad) >= reservacion.personas);
   if (grandes.length === 0) {
@@ -84,27 +97,30 @@ export async function exigirMesaDisponible(
       reservacion.fechaHora,
       reservacion.idReservacion ?? 0,
       reservacion.fechaHora,
-      DURACION_RESERVACION_MINUTOS,
+      duracion,
       reservacion.fechaHora,
-      DURACION_RESERVACION_MINUTOS,
+      duracion,
     ],
   );
 
   const hay = hayMesaParaReservacion(
-    mesas.map((m) => ({ id_mesa: Number(m.id_mesa), capacidad: Number(m.capacidad) })),
+    mesas
+      .filter((m) => Number(m.ocupada_a_esa_hora) !== 1)
+      .map((m) => ({ id_mesa: Number(m.id_mesa), capacidad: Number(m.capacidad) })),
     otras.map((r) => ({
       id_mesa: r.id_mesa == null ? null : Number(r.id_mesa),
       personas: Number(r.personas),
       distanciaMinutos: Number(r.distancia_minutos),
     })),
     reservacion.personas,
+    duracion,
   );
   if (!hay) {
     throw new ErrorApi(
       409,
       "mesa_no_disponible",
       `No hay mesa disponible para ${reservacion.personas} ${reservacion.personas === 1 ? "persona" : "personas"} a esa hora ` +
-        `(cada reservación ocupa su mesa ${describirMinutos(DURACION_RESERVACION_MINUTOS)}). Elige otro horario.`,
+        `(cada reservación ocupa su mesa ${describirMinutos(duracion)}). Elige otro horario.`,
     );
   }
 }

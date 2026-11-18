@@ -224,9 +224,24 @@ describe('mock reservaciones: confirmar y cancelar', () => {
 describe('mock reservaciones: editar', () => {
   it('cambia las personas y la hora', async () => {
     const { hostess } = await nuevoMock()
-    const r = await resolver(hostess.actualizarReservacion(3, { personas: 8, fechaHora: hoyA(23) }))
+    const r = await resolver(hostess.actualizarReservacion(3, { personas: 8, fechaHora: hoyA(21) }))
     expect(r.personas).toBe(8)
-    expect(r.fechaHora).toEqual(hoyA(23))
+    expect(r.fechaHora).toEqual(hoyA(21))
+  })
+
+  it('no acepta una hora fuera del horario de reservaciones ni un día cerrado', async () => {
+    const { hostess, baseDatos } = await nuevoMock()
+    // Horario predeterminado: de 13:00 a 21:00.
+    expect(await codigoDeError(hostess.actualizarReservacion(3, { fechaHora: hoyA(23) }))).toBe('estado_invalido')
+    // Cerrado el viernes (el 16 de octubre de 2026 es viernes).
+    baseDatos.configuracionReservacion.diasAbiertos = '1111011'
+    expect(await codigoDeError(hostess.actualizarReservacion(3, { fechaHora: hoyA(21) }))).toBe('estado_invalido')
+  })
+
+  it('la hostess puede anotar un minuto entre intervalos dentro del horario', async () => {
+    const { hostess } = await nuevoMock()
+    const r = await resolver(hostess.actualizarReservacion(3, { fechaHora: hoyA(20, 45) }))
+    expect(r.fechaHora).toEqual(hoyA(20, 45))
   })
 
   it('cambiar de mesa: la nueva queda reservada y la anterior libre', async () => {

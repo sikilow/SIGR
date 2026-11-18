@@ -7,6 +7,13 @@ import { conIdempotencia } from "../services/idempotencia";
 import { esCorreoValido } from "../services/correo";
 import { encolarNotificacionReservacion, solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
 import { exigirMesaDisponible } from "../services/disponibilidadReservacion";
+import { cargarHorario, exigirHorarioReservacion } from "../models/horarioReservacion";
+import {
+  conCaracteristicasDeMesa,
+  conCaracteristicasPedidas,
+  guardarCaracteristicasReservacion,
+  IdsCaracteristicas,
+} from "../models/caracteristicasMesa";
 import type { RowDataPacket } from "mysql2/promise";
 
 const FiltroReservaciones = z.object({ fecha: z.string().optional() });
@@ -17,12 +24,13 @@ const ClienteNuevo = z.object({
   telefono: z.string().trim().regex(/^\d{10}$/, "el teléfono debe tener 10 dígitos"),
   correo: z.union([z.string().trim().email().max(120), z.literal("")]).nullable().optional(),
 }).strict();
-/** Preferencias de mesa de una reservación (columnas `pref_*`, migración 021). Todas opcionales. */
+/**
+ * Preferencias de mesa de una reservación: sección (`pref_zona`, migración 021) y características del catálogo que
+ * administra Gerencia (`pref_caracteristicas`: ids de caracteristica_mesa, migración 023). Todas opcionales.
+ */
 export const CamposPreferencias = {
   pref_zona: z.string().trim().max(40).nullable().optional(),
-  pref_planta_baja: z.boolean().optional(),
-  pref_carriola: z.boolean().optional(),
-  pref_sin_escaleras: z.boolean().optional(),
+  pref_caracteristicas: IdsCaracteristicas.optional(),
 };
 const ReservacionNueva = z.object({
   id_cliente: z.number().int().positive(),
@@ -58,19 +66,9 @@ const LlegadaReservacion = z.object({
 }).strict();
 
 /** Valores listos para guardar: una sección vacía es «cualquiera» (`NULL`) y lo ausente es `false`. */
-export function normalizarPreferencias(datos: {
-  pref_zona?: string | null | undefined;
-  pref_planta_baja?: boolean | undefined;
-  pref_carriola?: boolean | undefined;
-  pref_sin_escaleras?: boolean | undefined;
-}) {
+export function normalizarPreferencias(datos: { pref_zona?: string | null | undefined }) {
   const zona = datos.pref_zona?.trim() ?? "";
-  return {
-    pref_zona: zona === "" ? null : zona,
-    pref_planta_baja: datos.pref_planta_baja ?? false,
-    pref_carriola: datos.pref_carriola ?? false,
-    pref_sin_escaleras: datos.pref_sin_escaleras ?? false,
-  };
+  return { pref_zona: zona === "" ? null : zona };
 }
 
 function esDuplicado(error: unknown): boolean {
@@ -112,7 +110,7 @@ async function cargarReservacion(ex: Ejecutor, id: number) {
   const [reservacion] = await filas(
     ex,
     `SELECT r.id_reservacion, r.id_cliente, r.id_mesa, r.fecha_hora, r.personas, r.estado, r.llegada_en,
-            r.pref_zona, r.pref_planta_baja, r.pref_carriola, r.pref_sin_escaleras,
+            r.pref_zona,
             c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.correo AS cliente_correo, m.numero AS mesa_numero
        FROM reservacion r
        JOIN cliente c ON c.id_cliente = r.id_cliente
@@ -120,7 +118,9 @@ async function cargarReservacion(ex: Ejecutor, id: number) {
       WHERE r.id_reservacion = ?`,
     [id],
   );
-  return reservacion ?? null;
+  if (!reservacion) return null;
+  const [conCaracteristicas] = await conCaracteristicasPedidas(ex, [reservacion]);
+  return conCaracteristicas ?? null;
 }
 
 async function cargarEspera(ex: Ejecutor, id: number) {
@@ -266,7 +266,7 @@ export const listarReservaciones = async (req: Request, res: Response) => {
   const rows = await filas(
     pool,
     `SELECT r.id_reservacion, r.id_cliente, r.id_mesa, r.fecha_hora, r.personas, r.estado, r.llegada_en,
-            r.pref_zona, r.pref_planta_baja, r.pref_carriola, r.pref_sin_escaleras,
+            r.pref_zona,
             c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.correo AS cliente_correo, m.numero AS mesa_numero
        FROM reservacion r
        JOIN cliente c ON c.id_cliente = r.id_cliente
@@ -275,7 +275,7 @@ export const listarReservaciones = async (req: Request, res: Response) => {
       ORDER BY r.fecha_hora, r.id_reservacion`,
     params,
   );
-  res.json(rows);
+  res.json(await conCaracteristicasPedidas(pool, rows));
 };
 
 /**
@@ -287,7 +287,7 @@ export const listarReservacionesPendientes = async (_req: Request, res: Response
   const rows = await filas(
     pool,
     `SELECT r.id_reservacion, r.id_cliente, r.id_mesa, r.fecha_hora, r.personas, r.estado, r.llegada_en,
-            r.pref_zona, r.pref_planta_baja, r.pref_carriola, r.pref_sin_escaleras,
+            r.pref_zona,
             c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.correo AS cliente_correo, m.numero AS mesa_numero
        FROM reservacion r
        JOIN cliente c ON c.id_cliente = r.id_cliente
@@ -296,7 +296,7 @@ export const listarReservacionesPendientes = async (_req: Request, res: Response
       ORDER BY r.fecha_hora, r.id_reservacion
       LIMIT 200`,
   );
-  res.json(rows);
+  res.json(await conCaracteristicasPedidas(pool, rows));
 };
 
 /** POST /api/reservaciones: registra una reservación pendiente y, si aplica, reserva una mesa libre. */
@@ -321,6 +321,8 @@ export const crearReservacion = async (req: Request, res: Response) => {
         throw new ErrorApi(422, "estado_invalido", "La fecha debe ser desde ahora y no puede superar un año.");
       }
       await exigirAnticipacionMinima(cx, datos.fecha_hora);
+      // La hostess puede anotar cualquier minuto, pero dentro del horario y en un día abierto.
+      await exigirHorarioReservacion(cx, datos.fecha_hora, false);
       await exigirMesaDisponible(cx, { fechaHora: datos.fecha_hora, personas: datos.personas });
       if (datos.id_mesa !== undefined && datos.id_mesa !== null && Number(fecha.es_hoy) !== 1) {
         throw new ErrorApi(422, "estado_invalido", "Solo se puede asignar una mesa a una reservación de hoy.");
@@ -348,10 +350,10 @@ export const crearReservacion = async (req: Request, res: Response) => {
       const pref = normalizarPreferencias(datos);
       const insertado = await ejecutar(
         cx,
-        `INSERT INTO reservacion (id_cliente, id_mesa, fecha_hora, personas, pref_zona, pref_planta_baja, pref_carriola, pref_sin_escaleras)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [datos.id_cliente, datos.id_mesa ?? null, datos.fecha_hora, datos.personas, pref.pref_zona, pref.pref_planta_baja, pref.pref_carriola, pref.pref_sin_escaleras],
+        "INSERT INTO reservacion (id_cliente, id_mesa, fecha_hora, personas, pref_zona) VALUES (?, ?, ?, ?, ?)",
+        [datos.id_cliente, datos.id_mesa ?? null, datos.fecha_hora, datos.personas, pref.pref_zona],
       );
+      await guardarCaracteristicasReservacion(cx, insertado.insertId, datos.pref_caracteristicas ?? []);
       const reservacion = exigirRegistro(await cargarReservacion(cx, insertado.insertId), "reservación");
       await encolarNotificacionReservacion(cx, reservacion, "confirmacion", "creada");
       return reservacion;
@@ -422,6 +424,7 @@ export const editarReservacion = async (req: Request, res: Response) => {
               throw new ErrorApi(422, "estado_invalido", "La fecha debe ser desde ahora y no puede superar un año.");
             }
             await exigirAnticipacionMinima(cx, cambio.fecha_hora);
+            await exigirHorarioReservacion(cx, cambio.fecha_hora, false);
           }
         }
 
@@ -463,12 +466,16 @@ export const editarReservacion = async (req: Request, res: Response) => {
           columnas.push("id_mesa = ?");
           valores.push(cambio.id_mesa);
         }
-        for (const clave of ["pref_zona", "pref_planta_baja", "pref_carriola", "pref_sin_escaleras"] as const) {
-          if (cambio[clave] === undefined) continue;
-          columnas.push(`${clave} = ?`);
-          valores.push(clave === "pref_zona" ? normalizarPreferencias(cambio).pref_zona : cambio[clave]);
+        if (cambio.pref_zona !== undefined) {
+          columnas.push("pref_zona = ?");
+          valores.push(normalizarPreferencias(cambio).pref_zona);
         }
-        await ejecutar(cx, `UPDATE reservacion SET ${columnas.join(", ")} WHERE id_reservacion = ?`, [...valores, id]);
+        if (columnas.length > 0) {
+          await ejecutar(cx, `UPDATE reservacion SET ${columnas.join(", ")} WHERE id_reservacion = ?`, [...valores, id]);
+        }
+        if (cambio.pref_caracteristicas !== undefined) {
+          await guardarCaracteristicasReservacion(cx, id, cambio.pref_caracteristicas);
+        }
         if (mesaFinal !== mesaAnterior) await liberarMesaSiCorresponde(cx, mesaAnterior, id);
       }
 
@@ -544,10 +551,9 @@ export const registrarLlegada = async (req: Request, res: Response) => {
       );
       if (mesaId !== mesaAnterior) await liberarMesaSiCorresponde(cx, mesaAnterior, id);
 
-      const [mesaActualizada] = await filas(
+      const [mesaActualizada] = await conCaracteristicasDeMesa(
         cx,
-        "SELECT id_mesa, numero, capacidad, zona, planta_baja, espacio_carriola, sin_escaleras, estado FROM mesa WHERE id_mesa = ?",
-        [mesaId],
+        await filas(cx, "SELECT id_mesa, numero, capacidad, zona, estado FROM mesa WHERE id_mesa = ?", [mesaId]),
       );
       return {
         mesa: exigirRegistro(mesaActualizada ?? null, "mesa"),
@@ -627,4 +633,10 @@ export const editarEspera = async (req: Request, res: Response) => {
       return exigirRegistro(await cargarEspera(cx, id), "grupo de espera");
     }),
   );
+};
+
+/** GET /api/reservaciones/horario: horario de reservaciones para guiar a la hostess (lo edita Gerencia). */
+export const obtenerHorarioReservaciones = async (_req: Request, res: Response) => {
+  const [fila] = await filas(pool, "SELECT anticipacion_minutos FROM configuracion_reservacion WHERE id = 1");
+  res.json({ ...(await cargarHorario(pool)), anticipacion_minutos: Number(fila?.anticipacion_minutos ?? 60) });
 };

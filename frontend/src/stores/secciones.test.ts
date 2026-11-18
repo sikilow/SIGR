@@ -12,9 +12,7 @@ const mesa = (numero: number, zona: string | null, estado: Mesa['estado'] = 'lib
   capacidad: 4,
   estado,
   zona,
-  plantaBaja: false,
-  espacioCarriola: false,
-  sinEscaleras: false,
+  caracteristicas: [],
   estadoCuenta: estado === 'ocupada' ? 'abierta' : null,
   pedidosActivos: 0,
   totalCuenta: 0,
@@ -78,8 +76,8 @@ describe('store de mesas (Panel del mesero)', () => {
 describe('store del Salón (hostess)', () => {
   it('combina estado y sección, incluido «Sin sección»', () => {
     const store = useSalonStore()
-    store.mesas = varias.map(({ idMesa, numero, capacidad, estado, zona, plantaBaja, espacioCarriola, sinEscaleras }) => ({
-      idMesa, numero, capacidad, estado, zona, plantaBaja, espacioCarriola, sinEscaleras,
+    store.mesas = varias.map(({ idMesa, numero, capacidad, estado, zona, caracteristicas }) => ({
+      idMesa, numero, capacidad, estado, zona, caracteristicas,
     }))
     store.filtro = 'libre'
     store.seccion = CLAVE_SIN_SECCION

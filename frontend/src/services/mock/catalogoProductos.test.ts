@@ -1,3 +1,4 @@
+import { HORARIO_POR_DEFECTO } from '../../utils/horarioReservacion'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 async function nuevoCatalogo() {
@@ -34,12 +35,12 @@ afterEach(() => vi.useRealTimers())
 describe('catálogo e inventario de productos', () => {
   it('permite consultar y actualizar la tolerancia, el recordatorio y la anticipación mínima de reservaciones', async () => {
     const catalogo = await nuevoCatalogo()
-    expect(await resolver(catalogo.obtenerConfiguracionReservacion())).toEqual({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60 })
-    expect(await resolver(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 20, recordatorioMinutos: 10, anticipacionMinutos: 90 })))
-      .toEqual({ toleranciaMinutos: 20, recordatorioMinutos: 10, anticipacionMinutos: 90 })
-    expect((await errorDe(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 2, recordatorioMinutos: 10, anticipacionMinutos: 90 }))).codigo)
+    expect(await resolver(catalogo.obtenerConfiguracionReservacion())).toEqual({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60, duracionReservacionMinutos: 90, ...HORARIO_POR_DEFECTO })
+    expect(await resolver(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 20, recordatorioMinutos: 10, anticipacionMinutos: 90, duracionReservacionMinutos: 90, ...HORARIO_POR_DEFECTO })))
+      .toEqual({ toleranciaMinutos: 20, recordatorioMinutos: 10, anticipacionMinutos: 90, duracionReservacionMinutos: 90, ...HORARIO_POR_DEFECTO })
+    expect((await errorDe(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 2, recordatorioMinutos: 10, anticipacionMinutos: 90, duracionReservacionMinutos: 90, ...HORARIO_POR_DEFECTO }))).codigo)
       .toBe('estado_invalido')
-    expect((await errorDe(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 20, recordatorioMinutos: 10, anticipacionMinutos: -1 }))).codigo)
+    expect((await errorDe(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 20, recordatorioMinutos: 10, anticipacionMinutos: -1, duracionReservacionMinutos: 90, ...HORARIO_POR_DEFECTO }))).codigo)
       .toBe('estado_invalido')
   })
 

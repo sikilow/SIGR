@@ -3,7 +3,8 @@
 // el esquema de la BD (ids numéricos, `fechaHora`, `indicaciones`…). Ver docs/equivalencias-bd.md.
 import clientesJson from '../../mocks/clientes.json'
 import productosJson from '../../mocks/productos.json'
-import type { CanalPedido, CategoriaMenu, Cliente, Cuenta, ListaEspera, Mesa, MotivoCancelacion, Pedido, Reservacion, Rol, Usuario } from '../../types'
+import { HORARIO_POR_DEFECTO } from '../../utils/horarioReservacion'
+import type { CanalPedido, CategoriaMenu, Cliente, ConfiguracionReservacion, Cuenta, ListaEspera, Mesa, MotivoCancelacion, Pedido, Reservacion, Rol, Usuario } from '../../types'
 
 /** Usuario de demostración: además del perfil guarda el acceso (`credenciales.nombre_usuario` y su contraseña). */
 export interface UsuarioMock extends Omit<Usuario, 'rol' | 'activo'> {
@@ -19,10 +20,19 @@ export interface UsuarioMock extends Omit<Usuario, 'rol' | 'activo'> {
 export type CuentaGuardada = Omit<Cuenta, 'pedidos' | 'total'>
 
 /** Mesa tal como se guarda: el resumen de cuenta y pedidos se calcula al consultarla. */
-export type MesaGuardada = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estado' | 'plantaBaja' | 'espacioCarriola' | 'sinEscaleras'> & {
+export type MesaGuardada = Pick<Mesa, 'idMesa' | 'numero' | 'capacidad' | 'estado'> & {
+  /** Ids de caracteristica_mesa. */
+  caracteristicas: number[]
   /** mesa.zona: sección registrada del salón. */
   zona: string | null
   /** mesa.activa: `false` = no disponible (no aparece en el panel del mesero ni en el salón de la hostess). */
+  activa: boolean
+}
+
+/** caracteristica_mesa del mock. */
+export interface CaracteristicaGuardada {
+  idCaracteristica: number
+  nombre: string
   activa: boolean
 }
 
@@ -43,6 +53,8 @@ export interface BaseDatosMock {
   usuarios: UsuarioMock[]
   mesas: MesaGuardada[]
   secciones: SeccionGuardada[]
+  /** Catálogo de características de mesa (Gerente → Mesas → Características). */
+  caracteristicas: CaracteristicaGuardada[]
   /** Tabla `canal_pedido`: canales de los pedidos para llevar. */
   canales: CanalPedido[]
   categorias: CategoriaMenu[]
@@ -54,7 +66,7 @@ export interface BaseDatosMock {
   clientes: Cliente[]
   reservaciones: ReservacionGuardada[]
   listaEspera: EsperaGuardada[]
-  configuracionReservacion: { toleranciaMinutos: number; recordatorioMinutos: number; anticipacionMinutos: number }
+  configuracionReservacion: ConfiguracionReservacion
   siguienteIdPedido: number
   siguienteIdCuenta: number
   siguienteIdMotivo: number
@@ -96,9 +108,13 @@ function crearMesas(): MesaGuardada[] {
     capacidad,
     estado,
     zona: zona ?? 'General',
-    plantaBaja: true,
-    espacioCarriola: [1, 4, 9, 13].includes(i + 1),
-    sinEscaleras: [1, 2, 4, 6, 9, 13, 15].includes(i + 1),
+    // 1 = Planta baja, 2 = Espacio para carriola, 3 = Sin escaleras, 4 = Junto a la ventana.
+    caracteristicas: [
+      1,
+      ...([1, 4, 9, 13].includes(i + 1) ? [2] : []),
+      ...([1, 2, 4, 6, 9, 13, 15].includes(i + 1) ? [3] : []),
+      ...([3, 5, 9, 10].includes(i + 1) ? [4] : []),
+    ],
     activa: true,
   }))
   // Mesas virtuales 101 a 110 de la sección «Para llevar» (como la migración 019).
@@ -108,9 +124,7 @@ function crearMesas(): MesaGuardada[] {
     capacidad: 1,
     estado: 'libre' as const,
     zona: 'Para llevar',
-    plantaBaja: true,
-    espacioCarriola: false,
-    sinEscaleras: false,
+    caracteristicas: [],
     activa: true,
   }))
   return [...delSalon, ...paraLlevar]
@@ -265,7 +279,13 @@ function crearReservaciones(): ReservacionGuardada[] {
     {
       idReservacion: 3, idCliente: 3, idMesa: null, fechaHora: hoyEn(150), personas: 6, estado: 'pendiente', llegadaEn: null,
       // Solicitud con necesidades de acceso: la hostess las ve al confirmar y al sentar al grupo.
-      preferencias: { zona: null, plantaBaja: true, espacioCarriola: true, sinEscaleras: false },
+      preferencias: {
+        zona: null,
+        caracteristicas: [
+          { idCaracteristica: 1, nombre: 'Planta baja' },
+          { idCaracteristica: 2, nombre: 'Espacio para carriola' },
+        ],
+      },
     },
     { idReservacion: 4, idCliente: 4, idMesa: 8, fechaHora: hoyEn(-100), personas: 5, estado: 'llego', llegadaEn: hoyEn(-95) },
     { idReservacion: 5, idCliente: 5, idMesa: null, fechaHora: hace(24 * 60), personas: 3, estado: 'cancelada', llegadaEn: null },
@@ -307,8 +327,22 @@ export const baseDatos: BaseDatosMock = {
   clientes: crearClientes(),
   reservaciones: crearReservaciones(),
   listaEspera: crearListaEspera(),
-  configuracionReservacion: { toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60 },
+  configuracionReservacion: { toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60, duracionReservacionMinutos: 90, ...HORARIO_POR_DEFECTO },
+  caracteristicas: [
+    { idCaracteristica: 1, nombre: 'Planta baja', activa: true },
+    { idCaracteristica: 2, nombre: 'Espacio para carriola', activa: true },
+    { idCaracteristica: 3, nombre: 'Sin escaleras', activa: true },
+    { idCaracteristica: 4, nombre: 'Junto a la ventana', activa: true },
+  ],
   siguienteIdPedido: 15,
   siguienteIdCuenta: 9,
   siguienteIdMotivo: 3,
+}
+
+/** Características ACTIVAS de una mesa del mock, con nombre (como `GET /mesas`). */
+export function caracteristicasDeMesa(mesa: Pick<MesaGuardada, 'caracteristicas'>): Array<{ idCaracteristica: number; nombre: string }> {
+  return baseDatos.caracteristicas
+    .filter((c) => c.activa && mesa.caracteristicas.includes(c.idCaracteristica))
+    .map(({ idCaracteristica, nombre }) => ({ idCaracteristica, nombre }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 }

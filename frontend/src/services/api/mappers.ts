@@ -9,6 +9,8 @@ import type {
   CambioMesa,
   CanalPedido,
   CambioProducto,
+  CaracteristicaAdmin,
+  CaracteristicaMesa,
   ConfiguracionReservacion,
   CambioUsuario,
   CategoriaAdmin,
@@ -32,6 +34,7 @@ import type {
   Usuario,
   UsuarioAdmin,
 } from '../../types'
+import { HORARIO_POR_DEFECTO, type HorarioReservacion, INTERVALOS_RESERVACION } from '../../utils/horarioReservacion'
 import { ErrorServicio } from '../errores'
 import {
   aBooleano,
@@ -73,9 +76,8 @@ export interface MesaDto {
   estado: string
   /** mesa.zona: «sección» del salón (hasta 40 caracteres); `null` si no tiene. Opcional por tolerancia. */
   zona?: string | null
-  planta_baja?: Booleano
-  espacio_carriola?: Booleano
-  sin_escaleras?: Booleano
+  /** Características activas (catálogo de Gerencia, migración 023). */
+  caracteristicas?: CaracteristicaDto[]
   /** seccion.es_para_llevar: mesa virtual de pedidos para llevar. */
   es_para_llevar?: Booleano
   // --- CALCULADOS por la API (no son columnas de `mesa`) ---
@@ -210,9 +212,7 @@ export function aMesa(dto: MesaDto): Mesa {
     capacidad: aNumero(dto.capacidad, 'capacidad'),
     estado: aEstadoMesa(dto.estado),
     zona: aZona(dto.zona),
-    plantaBaja: dto.planta_baja === undefined ? false : aBooleano(dto.planta_baja, 'planta_baja'),
-    espacioCarriola: dto.espacio_carriola === undefined ? false : aBooleano(dto.espacio_carriola, 'espacio_carriola'),
-    sinEscaleras: dto.sin_escaleras === undefined ? false : aBooleano(dto.sin_escaleras, 'sin_escaleras'),
+    caracteristicas: aCaracteristicas(dto.caracteristicas),
     estadoCuenta: estadoCuenta === 'cerrada' ? null : estadoCuenta,
     pedidosActivos: aNumeroONulo(dto.pedidos_activos, 'pedidos_activos') ?? 0,
     totalCuenta: aNumeroONulo(dto.total_cuenta, 'total_cuenta') ?? 0,
@@ -369,10 +369,70 @@ export interface SeccionAdminDto {
   total_mesas: Numerico
 }
 
-export interface ConfiguracionReservacionDto {
+/** Horario de reservaciones tal como lo envía la API (horas "HH:MM"; una API anterior a la 022 no lo envía). */
+export interface HorarioReservacionDto {
+  hora_apertura?: string
+  hora_ultima_reservacion?: string
+  intervalo_minutos?: Numerico
+  dias_abiertos?: string
+}
+
+export interface ConfiguracionReservacionDto extends HorarioReservacionDto {
   tolerancia_minutos: Numerico
   recordatorio_minutos: Numerico
   anticipacion_minutos: Numerico
+  /** Migración 023; una API anterior no la envía (se usa 90). */
+  duracion_reservacion_minutos?: Numerico
+}
+
+/** Característica tal como la envía la API (id y nombre). */
+export interface CaracteristicaDto {
+  id_caracteristica: Numerico
+  nombre: string
+}
+
+/** Lista de características de la API; ausente = ninguna. */
+export function aCaracteristicas(dto: CaracteristicaDto[] | undefined | null): CaracteristicaMesa[] {
+  return (dto ?? []).map((c) => ({ idCaracteristica: aNumero(c.id_caracteristica, 'id_caracteristica'), nombre: aTexto(c.nombre) }))
+}
+
+export interface CaracteristicaAdminDto extends CaracteristicaDto {
+  activa: unknown
+  total_mesas: Numerico
+  total_reservaciones: Numerico
+}
+
+export function aCaracteristicaAdmin(dto: CaracteristicaAdminDto): CaracteristicaAdmin {
+  return {
+    idCaracteristica: aNumero(dto.id_caracteristica, 'id_caracteristica'),
+    nombre: aTexto(dto.nombre),
+    activa: aBooleano(dto.activa, 'activa'),
+    totalMesas: aNumero(dto.total_mesas, 'total_mesas'),
+    totalReservaciones: aNumero(dto.total_reservaciones, 'total_reservaciones'),
+  }
+}
+
+/** Horario de la API; lo que falte toma el predeterminado (13:00 a 21:00, cada 30 min, todos los días). */
+export function aHorarioReservacion(dto: HorarioReservacionDto): HorarioReservacion {
+  const intervalo = Number(dto.intervalo_minutos)
+  return {
+    horaApertura: dto.hora_apertura?.slice(0, 5) || HORARIO_POR_DEFECTO.horaApertura,
+    horaUltima: dto.hora_ultima_reservacion?.slice(0, 5) || HORARIO_POR_DEFECTO.horaUltima,
+    intervaloMinutos: (INTERVALOS_RESERVACION as readonly number[]).includes(intervalo)
+      ? (intervalo as HorarioReservacion['intervaloMinutos'])
+      : HORARIO_POR_DEFECTO.intervaloMinutos,
+    diasAbiertos: /^[01]{7}$/.test(dto.dias_abiertos ?? '') ? dto.dias_abiertos! : HORARIO_POR_DEFECTO.diasAbiertos,
+  }
+}
+
+/** Horario → cuerpo de la API. */
+export function deHorarioReservacion(h: HorarioReservacion): Required<HorarioReservacionDto> {
+  return {
+    hora_apertura: h.horaApertura,
+    hora_ultima_reservacion: h.horaUltima,
+    intervalo_minutos: h.intervaloMinutos,
+    dias_abiertos: h.diasAbiertos,
+  }
 }
 
 export function aConfiguracionReservacion(dto: ConfiguracionReservacionDto): ConfiguracionReservacion {
@@ -380,6 +440,8 @@ export function aConfiguracionReservacion(dto: ConfiguracionReservacionDto): Con
     toleranciaMinutos: aNumero(dto.tolerancia_minutos, 'tolerancia_minutos'),
     recordatorioMinutos: aNumero(dto.recordatorio_minutos, 'recordatorio_minutos'),
     anticipacionMinutos: aNumero(dto.anticipacion_minutos, 'anticipacion_minutos'),
+    duracionReservacionMinutos: dto.duracion_reservacion_minutos === undefined ? 90 : aNumero(dto.duracion_reservacion_minutos, 'duracion_reservacion_minutos'),
+    ...aHorarioReservacion(dto),
   }
 }
 
@@ -389,9 +451,8 @@ export interface MesaAdminDto {
   capacidad: Numerico
   /** mesa.zona: obligatoria después de 009_secciones_mesas.sql; se tolera null para detectar API desactualizada. */
   zona: string | null
-  planta_baja?: Booleano
-  espacio_carriola?: Booleano
-  sin_escaleras?: Booleano
+  /** Ids de caracteristica_mesa. */
+  caracteristicas?: Numerico[]
   /** mesa.activa (BOOLEAN; puede llegar como 0/1). */
   activa: unknown
   estado: string
@@ -458,9 +519,7 @@ export function aMesaAdmin(dto: MesaAdminDto): MesaAdmin {
     numero: aNumero(dto.numero, 'numero'),
     capacidad: aNumero(dto.capacidad, 'capacidad'),
     zona,
-    plantaBaja: dto.planta_baja === undefined ? false : aBooleano(dto.planta_baja, 'planta_baja'),
-    espacioCarriola: dto.espacio_carriola === undefined ? false : aBooleano(dto.espacio_carriola, 'espacio_carriola'),
-    sinEscaleras: dto.sin_escaleras === undefined ? false : aBooleano(dto.sin_escaleras, 'sin_escaleras'),
+    caracteristicas: (dto.caracteristicas ?? []).map((id) => aNumero(id, 'caracteristicas')),
     activa: aBooleano(dto.activa, 'activa'),
     estado: aEstadoMesa(dto.estado),
   }
@@ -488,9 +547,7 @@ export function deNuevaMesa(m: NuevaMesa) {
     numero: m.numero,
     capacidad: m.capacidad,
     zona: m.zona.trim(),
-    planta_baja: m.plantaBaja ?? false,
-    espacio_carriola: m.espacioCarriola ?? false,
-    sin_escaleras: m.sinEscaleras ?? false,
+    caracteristicas: m.caracteristicas ?? [],
     activa: m.activa,
   }
 }
@@ -501,9 +558,7 @@ export function deCambioMesa(c: CambioMesa) {
     ...(c.numero !== undefined ? { numero: c.numero } : {}),
     ...(c.capacidad !== undefined ? { capacidad: c.capacidad } : {}),
     ...(c.zona !== undefined ? { zona: c.zona.trim() } : {}),
-    ...(c.plantaBaja !== undefined ? { planta_baja: c.plantaBaja } : {}),
-    ...(c.espacioCarriola !== undefined ? { espacio_carriola: c.espacioCarriola } : {}),
-    ...(c.sinEscaleras !== undefined ? { sin_escaleras: c.sinEscaleras } : {}),
+    ...(c.caracteristicas !== undefined ? { caracteristicas: c.caracteristicas } : {}),
     ...(c.activa !== undefined ? { activa: c.activa } : {}),
   }
 }

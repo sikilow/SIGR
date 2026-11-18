@@ -50,7 +50,7 @@ describe('aMesaSalon', () => {
     const dto: MesaSalonDto = { id_mesa: 1, numero: 1, capacidad: 2, estado: 'libre' }
     expect(aMesaSalon(dto)).toEqual({
       idMesa: 1, numero: 1, capacidad: 2, estado: 'libre', zona: null,
-      plantaBaja: false, espacioCarriola: false, sinEscaleras: false,
+      caracteristicas: [],
     })
   })
 
@@ -64,11 +64,12 @@ describe('aMesaSalon', () => {
     expect(aMesaSalon(base).zona).toBeNull()
   })
 
-  it('convierte las características de acceso a booleanos', () => {
+  it('convierte las características de la mesa (id y nombre)', () => {
     expect(aMesaSalon({
       id_mesa: 1, numero: 1, capacidad: 4, estado: 'libre',
-      planta_baja: '1', espacio_carriola: 0, sin_escaleras: true,
-    })).toMatchObject({ plantaBaja: true, espacioCarriola: false, sinEscaleras: true })
+      caracteristicas: [{ id_caracteristica: '2', nombre: 'Junto a la ventana' }],
+    }).caracteristicas).toEqual([{ idCaracteristica: 2, nombre: 'Junto a la ventana' }])
+    expect(aMesaSalon({ id_mesa: 1, numero: 1, capacidad: 4, estado: 'libre' }).caracteristicas).toEqual([])
   })
 
   it('tolera «disponible» (nombre anterior) como libre, sin advertir', () => {
@@ -89,9 +90,9 @@ describe('aMesaSalon', () => {
     const mesa = aMesaSalon(dto)
     expect(mesa).toEqual({
       idMesa: 3, numero: 3, capacidad: 4, estado: 'ocupada', zona: null,
-      plantaBaja: false, espacioCarriola: false, sinEscaleras: false,
+      caracteristicas: [],
     })
-    expect(Object.keys(mesa)).toEqual(['idMesa', 'numero', 'capacidad', 'estado', 'zona', 'plantaBaja', 'espacioCarriola', 'sinEscaleras'])
+    expect(Object.keys(mesa)).toEqual(['idMesa', 'numero', 'capacidad', 'estado', 'zona', 'caracteristicas'])
   })
 
   it('un estado desconocido da «desconocido» con una sola advertencia', () => {
@@ -231,18 +232,18 @@ describe('deAsignacion (cuerpo de POST /mesas/{id}/asignar)', () => {
   })
 })
 
-describe('preferencias de mesa (columnas pref_*)', () => {
-  it('aReservacion las lee; sin columnas, quedan vacías', () => {
-    const r = aReservacion({ ...reservacionDto, pref_zona: 'Terraza', pref_planta_baja: 1, pref_carriola: '1', pref_sin_escaleras: 0 })
-    expect(r.preferencias).toEqual({ zona: 'Terraza', plantaBaja: true, espacioCarriola: true, sinEscaleras: false })
-    expect(aReservacion(reservacionDto).preferencias).toEqual({ zona: null, plantaBaja: false, espacioCarriola: false, sinEscaleras: false })
+describe('preferencias de mesa (sección y características)', () => {
+  it('aReservacion las lee; sin datos, quedan vacías', () => {
+    const r = aReservacion({ ...reservacionDto, pref_zona: 'Terraza', pref_caracteristicas: [{ id_caracteristica: 1, nombre: 'Planta baja' }] })
+    expect(r.preferencias).toEqual({ zona: 'Terraza', caracteristicas: [{ idCaracteristica: 1, nombre: 'Planta baja' }] })
+    expect(aReservacion(reservacionDto).preferencias).toEqual({ zona: null, caracteristicas: [] })
   })
 
-  it('viajan en POST y PATCH de reservaciones; la sección vacía es null', () => {
-    const preferencias = { zona: '', plantaBaja: false, espacioCarriola: true, sinEscaleras: true }
+  it('viajan en POST y PATCH como ids; la sección vacía es null', () => {
+    const preferencias = { zona: '', caracteristicas: [{ idCaracteristica: 2, nombre: 'Carriola' }, { idCaracteristica: 3, nombre: 'Sin escaleras' }] }
     const cuerpo = deNuevaReservacion({ idCliente: 1, fechaHora: new Date(2026, 9, 16, 21, 0), personas: 2, idMesa: null, preferencias })
-    expect(cuerpo).toMatchObject({ pref_zona: null, pref_planta_baja: false, pref_carriola: true, pref_sin_escaleras: true })
-    expect(deCambioReservacion({ preferencias })).toEqual({ pref_zona: null, pref_planta_baja: false, pref_carriola: true, pref_sin_escaleras: true })
+    expect(cuerpo).toMatchObject({ pref_zona: null, pref_caracteristicas: [2, 3] })
+    expect(deCambioReservacion({ preferencias })).toEqual({ pref_zona: null, pref_caracteristicas: [2, 3] })
     expect(deCambioReservacion({ personas: 3 })).toEqual({ personas: 3 })
   })
 })

@@ -1,7 +1,8 @@
 // Administración simulada (usuarios, categorías, productos, inventario) para VITE_USE_MOCK=true.
 // Los cambios se hacen sobre la misma "base de datos" en memoria que usa el mesero, así que un
 // producto nuevo o un precio editado se ven en el menú del mesero. Se reinicia al recargar la página.
-import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CategoriaAdmin, type MesaAdmin, type ProductoAdmin, type SeccionAdmin, type UsuarioAdmin } from '../../types'
+import { validarHorario } from '../../utils/horarioReservacion'
+import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CaracteristicaAdmin, type CategoriaAdmin, type MesaAdmin, type ProductoAdmin, type SeccionAdmin, type UsuarioAdmin } from '../../types'
 import { ErrorServicio } from '../errores'
 import type { CatalogoService, UsuariosService } from '../interfaces'
 import { baseDatos, type MesaGuardada } from './baseDatos'
@@ -227,11 +228,27 @@ const aMesaAdmin = (m: MesaGuardada): MesaAdmin => {
     numero: m.numero,
     capacidad: m.capacidad,
     zona,
-    plantaBaja: m.plantaBaja,
-    espacioCarriola: m.espacioCarriola,
-    sinEscaleras: m.sinEscaleras,
+    caracteristicas: [...m.caracteristicas],
     activa: m.activa,
     estado: m.estado,
+  }
+}
+
+function aCaracteristicaAdmin(id: number): CaracteristicaAdmin {
+  const c = baseDatos.caracteristicas.find((x) => x.idCaracteristica === id)
+  if (!c) throw noExiste('La característica')
+  return {
+    ...c,
+    totalMesas: baseDatos.mesas.filter((m) => m.caracteristicas.includes(id)).length,
+    totalReservaciones: baseDatos.reservaciones.filter((r) => r.preferencias?.caracteristicas.some((x) => x.idCaracteristica === id)).length,
+  }
+}
+
+function validarNombreCaracteristica(nombre: string, actual?: number): void {
+  const texto = nombre.trim()
+  if (!texto || texto.length > 40) throw new ErrorServicio('estado_invalido', 'El nombre debe tener entre 1 y 40 caracteres.', 422)
+  if (baseDatos.caracteristicas.some((c) => c.idCaracteristica !== actual && c.nombre.toLocaleLowerCase('es') === texto.toLocaleLowerCase('es'))) {
+    throw new ErrorServicio('estado_invalido', 'Ya existe una característica con ese nombre.', 409)
   }
 }
 
@@ -267,10 +284,13 @@ function validarDatosMesa(c: {
   numero?: number
   capacidad?: number
   zona?: string
-  plantaBaja?: boolean
-  espacioCarriola?: boolean
-  sinEscaleras?: boolean
+  caracteristicas?: number[]
 }): void {
+  for (const id of c.caracteristicas ?? []) {
+    if (!baseDatos.caracteristicas.some((x) => x.idCaracteristica === id && x.activa)) {
+      throw new ErrorServicio('estado_invalido', 'Alguna característica no existe o está desactivada. Actualiza la pantalla.', 422)
+    }
+  }
   if (c.numero !== undefined && (!Number.isInteger(c.numero) || c.numero < 1 || c.numero > MESA_NUMERO_MAX)) {
     throw new ErrorServicio('estado_invalido', `El número de mesa debe ser un entero de 1 a ${MESA_NUMERO_MAX}.`, 422)
   }
@@ -424,6 +444,11 @@ export function crearCatalogoMock(): CatalogoService {
         if (!Number.isInteger(cambio.anticipacionMinutos) || cambio.anticipacionMinutos < 0 || cambio.anticipacionMinutos > 1440) {
           throw new ErrorServicio('estado_invalido', 'La anticipación debe estar entre 0 y 1440 minutos.', 422)
         }
+        if (!Number.isInteger(cambio.duracionReservacionMinutos) || cambio.duracionReservacionMinutos < 30 || cambio.duracionReservacionMinutos > 360) {
+          throw new ErrorServicio('estado_invalido', 'La duración de la reservación debe estar entre 30 y 360 minutos.', 422)
+        }
+        const errorHorario = validarHorario(cambio)
+        if (errorHorario) throw new ErrorServicio('estado_invalido', errorHorario, 422)
         baseDatos.configuracionReservacion = { ...cambio }
         return { ...baseDatos.configuracionReservacion }
       })
@@ -431,6 +456,45 @@ export function crearCatalogoMock(): CatalogoService {
 
     listarCategorias() {
       return conRetraso(() => baseDatos.categorias.map((c) => aCategoria(c.idCategoria)))
+    },
+
+    listarCaracteristicas() {
+      return conRetraso(() => baseDatos.caracteristicas
+        .map((c) => aCaracteristicaAdmin(c.idCaracteristica))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')))
+    },
+
+    crearCaracteristica(nombre) {
+      return conRetraso(() => {
+        validarNombreCaracteristica(nombre)
+        const nueva = { idCaracteristica: Math.max(0, ...baseDatos.caracteristicas.map((c) => c.idCaracteristica)) + 1, nombre: nombre.trim(), activa: true }
+        baseDatos.caracteristicas.push(nueva)
+        return aCaracteristicaAdmin(nueva.idCaracteristica)
+      })
+    },
+
+    actualizarCaracteristica(id, cambio) {
+      return conRetraso(() => {
+        const c = baseDatos.caracteristicas.find((x) => x.idCaracteristica === id)
+        if (!c) throw noExiste('La característica')
+        if ('nombre' in cambio) {
+          validarNombreCaracteristica(cambio.nombre, id)
+          c.nombre = cambio.nombre.trim()
+        } else {
+          c.activa = cambio.activa
+        }
+        return aCaracteristicaAdmin(id)
+      })
+    },
+
+    eliminarCaracteristica(id) {
+      return conRetraso(() => {
+        const c = aCaracteristicaAdmin(id)
+        if (c.totalMesas > 0 || c.totalReservaciones > 0) {
+          throw new ErrorServicio('estado_invalido', `«${c.nombre}» está en uso. Quítala de las mesas o desactívala.`, 409)
+        }
+        baseDatos.caracteristicas = baseDatos.caracteristicas.filter((x) => x.idCaracteristica !== id)
+      })
     },
 
     listarSecciones() {
@@ -508,9 +572,7 @@ export function crearCatalogoMock(): CatalogoService {
           numero: mesa.numero,
           capacidad: mesa.capacidad,
           zona: mesa.zona.trim(),
-          plantaBaja: mesa.plantaBaja ?? false,
-          espacioCarriola: mesa.espacioCarriola ?? false,
-          sinEscaleras: mesa.sinEscaleras ?? false,
+          caracteristicas: [...new Set(mesa.caracteristicas ?? [])],
           activa: mesa.activa,
           estado: 'libre',
         }
@@ -543,9 +605,11 @@ export function crearCatalogoMock(): CatalogoService {
         if (cambio.numero !== undefined) mesa.numero = cambio.numero
         if (cambio.capacidad !== undefined) mesa.capacidad = cambio.capacidad
         if (cambio.zona !== undefined) mesa.zona = cambio.zona.trim()
-        if (cambio.plantaBaja !== undefined) mesa.plantaBaja = cambio.plantaBaja
-        if (cambio.espacioCarriola !== undefined) mesa.espacioCarriola = cambio.espacioCarriola
-        if (cambio.sinEscaleras !== undefined) mesa.sinEscaleras = cambio.sinEscaleras
+        if (cambio.caracteristicas !== undefined) {
+          // Como la API: las desactivadas que ya tenía la mesa se conservan.
+          const inactivas = mesa.caracteristicas.filter((id) => !baseDatos.caracteristicas.find((c) => c.idCaracteristica === id)?.activa)
+          mesa.caracteristicas = [...new Set([...cambio.caracteristicas, ...inactivas])]
+        }
         if (cambio.activa !== undefined) mesa.activa = cambio.activa
         return aMesaAdmin(mesa)
       })

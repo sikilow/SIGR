@@ -2,7 +2,7 @@ import type { Mesa } from '../../types'
 import { ErrorServicio } from '../errores'
 import { esPedidoActivo } from '../../utils/reglas'
 import type { MesasService } from '../interfaces'
-import { baseDatos, esMesaParaLlevar, type CuentaGuardada, type MesaGuardada } from './baseDatos'
+import { baseDatos, caracteristicasDeMesa, esMesaParaLlevar, type CuentaGuardada, type MesaGuardada } from './baseDatos'
 import { conRetraso } from './utiles'
 
 /** Agrega a la mesa el resumen de su cuenta activa y de sus pedidos. */
@@ -14,6 +14,7 @@ function conResumen(mesaGuardada: MesaGuardada): Mesa {
 
   return {
     ...mesa,
+    caracteristicas: caracteristicasDeMesa(mesaGuardada),
     estadoCuenta: cuenta && cuenta.estado !== 'cerrada' ? cuenta.estado : null,
     pedidosActivos: pedidos.filter((p) => esPedidoActivo(p.estado)).length,
     tipoPagoSolicitado: cuenta?.tipoPagoSolicitado ?? null,

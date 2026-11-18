@@ -16,9 +16,7 @@ const mesa = (sobrescribir: Partial<MesaSalon> = {}): MesaSalon => ({
   capacidad: 4,
   estado: 'libre',
   zona: null,
-  plantaBaja: false,
-  espacioCarriola: false,
-  sinEscaleras: false,
+  caracteristicas: [],
   ...sobrescribir,
 })
 

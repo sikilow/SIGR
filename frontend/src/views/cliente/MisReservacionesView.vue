@@ -10,20 +10,13 @@ interface Reservacion {
   estado: string
   mesa_numero: number | null
   pref_zona?: string | null
-  pref_planta_baja?: boolean | number
-  pref_carriola?: boolean | number
-  pref_sin_escaleras?: boolean | number
+  /** Características que pidió (catálogo de Gerencia). */
+  pref_caracteristicas?: Array<{ id_caracteristica: number; nombre: string }>
 }
 
-/** Lo que pidió el cliente al reservar: «Terraza · planta baja · carriola». Vacío si no pidió nada. */
+/** Lo que pidió el cliente al reservar: «Terraza · Planta baja · Espacio para carriola». Vacío si no pidió nada. */
 function textoPreferencias(r: Reservacion): string {
-  const si = (v: boolean | number | undefined) => v === true || v === 1
-  return [
-    r.pref_zona,
-    si(r.pref_planta_baja) && 'planta baja',
-    si(r.pref_carriola) && 'espacio para carriola',
-    si(r.pref_sin_escaleras) && 'sin escaleras'
-  ]
+  return [r.pref_zona, ...(r.pref_caracteristicas ?? []).map((c) => c.nombre)]
     .filter(Boolean)
     .join(' · ')
 }

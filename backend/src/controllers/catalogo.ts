@@ -3,40 +3,80 @@ import { z } from "zod";
 import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
 import { idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
+import { aHoraCorta, aMinutos, INTERVALOS_RESERVACION } from "../models/horarioReservacion";
+import { guardarCaracteristicasMesa, IdsCaracteristicas, idsCaracteristicasDeMesas } from "../models/caracteristicasMesa";
 
 // Todo este módulo es solo del gerente.
+
+const SELECT_CONFIGURACION = `
+  SELECT tolerancia_minutos, recordatorio_minutos, anticipacion_minutos,
+         hora_apertura, hora_ultima_reservacion, intervalo_minutos, dias_abiertos, duracion_reservacion_minutos
+    FROM configuracion_reservacion WHERE id = 1`;
+
+/** Fila de la base → respuesta (horas como "HH:MM"). */
+function aConfiguracionDto(fila: Record<string, unknown>) {
+  return {
+    tolerancia_minutos: Number(fila.tolerancia_minutos),
+    recordatorio_minutos: Number(fila.recordatorio_minutos),
+    anticipacion_minutos: Number(fila.anticipacion_minutos),
+    hora_apertura: aHoraCorta(fila.hora_apertura),
+    hora_ultima_reservacion: aHoraCorta(fila.hora_ultima_reservacion),
+    intervalo_minutos: Number(fila.intervalo_minutos),
+    dias_abiertos: String(fila.dias_abiertos),
+    duracion_reservacion_minutos: Number(fila.duracion_reservacion_minutos),
+  };
+}
 
 /** GET /api/catalogo/configuracion-reservacion */
 export const obtenerConfiguracionReservacion = async (_req: Request, res: Response) => {
   const [configuracion] = await filas(
     pool,
-    "SELECT tolerancia_minutos, recordatorio_minutos, anticipacion_minutos FROM configuracion_reservacion WHERE id = 1",
+    SELECT_CONFIGURACION,
   );
   if (!configuracion) throw new ErrorApi(500, "desconocido", "No existe la configuración de reservaciones. Ejecuta la migración 010.");
-  res.json(configuracion);
+  res.json(aConfiguracionDto(configuracion));
 };
 
+const HoraHHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "la hora debe tener formato HH:MM");
 const ConfiguracionReservacion = z.object({
   tolerancia_minutos: z.number().int().min(5).max(180),
   recordatorio_minutos: z.number().int().min(1).max(30),
   /** Con cuánto tiempo mínimo antes de la hora se puede reservar (0 = sin mínimo; hasta 24 h). */
   anticipacion_minutos: z.number().int().min(0).max(1440),
-}).strict();
+  /** Horario de reservaciones (migración 022). */
+  hora_apertura: HoraHHMM,
+  hora_ultima_reservacion: HoraHHMM,
+  intervalo_minutos: z.number().int().refine((n) => (INTERVALOS_RESERVACION as readonly number[]).includes(n), "debe ser 15, 30 o 60"),
+  dias_abiertos: z.string().regex(/^[01]{7}$/, "siete caracteres 0/1 de lunes a domingo").refine((d) => d !== "0000000", "abre al menos un día"),
+  /** Cuánto ocupa una reservación su mesa al calcular la disponibilidad (migración 023). */
+  duracion_reservacion_minutos: z.number().int().min(30).max(360),
+}).strict().refine(
+  (c) => aMinutos(c.hora_apertura) <= aMinutos(c.hora_ultima_reservacion),
+  "la última hora para reservar no puede ser antes de la primera",
+);
 
 /** PATCH /api/catalogo/configuracion-reservacion */
 export const actualizarConfiguracionReservacion = async (req: Request, res: Response) => {
   const datos = validar(ConfiguracionReservacion, req.body);
   await ejecutar(
     pool,
-    "UPDATE configuracion_reservacion SET tolerancia_minutos = ?, recordatorio_minutos = ?, anticipacion_minutos = ? WHERE id = 1",
-    [datos.tolerancia_minutos, datos.recordatorio_minutos, datos.anticipacion_minutos],
+    `UPDATE configuracion_reservacion
+        SET tolerancia_minutos = ?, recordatorio_minutos = ?, anticipacion_minutos = ?,
+            hora_apertura = ?, hora_ultima_reservacion = ?, intervalo_minutos = ?, dias_abiertos = ?,
+            duracion_reservacion_minutos = ?
+      WHERE id = 1`,
+    [
+      datos.tolerancia_minutos, datos.recordatorio_minutos, datos.anticipacion_minutos,
+      datos.hora_apertura, datos.hora_ultima_reservacion, datos.intervalo_minutos, datos.dias_abiertos,
+      datos.duracion_reservacion_minutos,
+    ],
   );
   const [configuracion] = await filas(
     pool,
-    "SELECT tolerancia_minutos, recordatorio_minutos, anticipacion_minutos FROM configuracion_reservacion WHERE id = 1",
+    SELECT_CONFIGURACION,
   );
   if (!configuracion) throw new ErrorApi(500, "desconocido", "No existe la configuración de reservaciones. Ejecuta la migración 010.");
-  res.json(configuracion);
+  res.json(aConfiguracionDto(configuracion));
 };
 
 const TipoCategoriaPago = z.enum(["fisico", "digital"]);
@@ -698,24 +738,21 @@ interface MesaAdminDto {
   numero: number;
   capacidad: number;
   zona: string | null; // «sección» del salón; texto libre
-  planta_baja: boolean;
-  espacio_carriola: boolean;
-  sin_escaleras: boolean;
+  /** Ids de caracteristica_mesa (también las desactivadas, para no perderlas al editar). */
+  caracteristicas: number[];
   activa: boolean;
   estado: string; // libre | ocupada | reservada (ocupación actual)
 }
 
-const SELECT_MESA_ADMIN = "SELECT id_mesa, numero, capacidad, zona, planta_baja, espacio_carriola, sin_escaleras, activa, estado FROM mesa";
+const SELECT_MESA_ADMIN = "SELECT id_mesa, numero, capacidad, zona, activa, estado FROM mesa";
 
-function aMesaAdminDto(r: Record<string, unknown>): MesaAdminDto {
+function aMesaAdminDto(r: Record<string, unknown>, caracteristicas: number[]): MesaAdminDto {
   return {
     id_mesa: r.id_mesa as number,
     numero: r.numero as number,
     capacidad: r.capacidad as number,
     zona: (r.zona as string | null) ?? null,
-    planta_baja: Number(r.planta_baja) === 1,
-    espacio_carriola: Number(r.espacio_carriola) === 1,
-    sin_escaleras: Number(r.sin_escaleras) === 1,
+    caracteristicas,
     activa: Boolean(r.activa),
     estado: r.estado as string,
   };
@@ -724,13 +761,14 @@ function aMesaAdminDto(r: Record<string, unknown>): MesaAdminDto {
 async function cargarMesaAdmin(ex: Ejecutor, id: number): Promise<MesaAdminDto> {
   const [fila] = await filas(ex, `${SELECT_MESA_ADMIN} WHERE id_mesa = ?`, [id]);
   if (!fila) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
-  return aMesaAdminDto(fila);
+  return aMesaAdminDto(fila, (await idsCaracteristicasDeMesas(ex)).get(id) ?? []);
 }
 
 /** GET /api/catalogo/mesas: todas las mesas, también las no disponibles. */
 export const listarMesasAdmin = async (_req: Request, res: Response) => {
   const rows = await filas(pool, `${SELECT_MESA_ADMIN} ORDER BY numero`);
-  res.json(rows.map(aMesaAdminDto));
+  const caracteristicas = await idsCaracteristicasDeMesas(pool);
+  res.json(rows.map((r) => aMesaAdminDto(r, caracteristicas.get(Number(r.id_mesa)) ?? [])));
 };
 
 const NumeroMesa = z.number().int().min(1, "debe ser mayor a 0").max(999, "máximo 999");
@@ -741,9 +779,7 @@ const CrearMesa = z.object({
   numero: NumeroMesa,
   capacidad: CapacidadMesa,
   zona: ZonaMesa.min(1, "la sección es obligatoria"),
-  planta_baja: z.boolean().default(false),
-  espacio_carriola: z.boolean().default(false),
-  sin_escaleras: z.boolean().default(false),
+  caracteristicas: IdsCaracteristicas.default([]),
   activa: z.boolean().optional(),
 });
 
@@ -759,17 +795,14 @@ export const crearMesaAdmin = async (req: Request, res: Response) => {
   try {
     const r = await transaccion(async (cx) => {
       await exigirSeccionActiva(cx, d.zona);
-      return ejecutar(cx, `INSERT INTO mesa
-        (numero, capacidad, zona, planta_baja, espacio_carriola, sin_escaleras, activa)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+      const insertada = await ejecutar(cx, "INSERT INTO mesa (numero, capacidad, zona, activa) VALUES (?, ?, ?, ?)", [
         d.numero,
         d.capacidad,
         d.zona,
-        d.planta_baja,
-        d.espacio_carriola,
-        d.sin_escaleras,
         d.activa ?? true,
       ]);
+      await guardarCaracteristicasMesa(cx, insertada.insertId, d.caracteristicas);
+      return insertada;
     });
     id = r.insertId;
   } catch (e) {
@@ -784,9 +817,7 @@ const EditarMesa = z
     numero: NumeroMesa,
     capacidad: CapacidadMesa,
     zona: ZonaMesa.min(1, "la sección es obligatoria"),
-    planta_baja: z.boolean(),
-    espacio_carriola: z.boolean(),
-    sin_escaleras: z.boolean(),
+    caracteristicas: IdsCaracteristicas,
     activa: z.boolean(),
   })
   .partial();
@@ -830,11 +861,24 @@ export const editarMesaAdmin = async (req: Request, res: Response) => {
       if (d.numero !== undefined) (sets.push("numero = ?"), params.push(d.numero));
       if (d.capacidad !== undefined) (sets.push("capacidad = ?"), params.push(d.capacidad));
       if (d.zona !== undefined) (sets.push("zona = ?"), params.push(d.zona));
-      if (d.planta_baja !== undefined) (sets.push("planta_baja = ?"), params.push(d.planta_baja));
-      if (d.espacio_carriola !== undefined) (sets.push("espacio_carriola = ?"), params.push(d.espacio_carriola));
-      if (d.sin_escaleras !== undefined) (sets.push("sin_escaleras = ?"), params.push(d.sin_escaleras));
       if (d.activa !== undefined) (sets.push("activa = ?"), params.push(d.activa));
-      await ejecutar(cx, `UPDATE mesa SET ${sets.join(", ")} WHERE id_mesa = ?`, [...params, id]);
+      if (sets.length > 0) await ejecutar(cx, `UPDATE mesa SET ${sets.join(", ")} WHERE id_mesa = ?`, [...params, id]);
+      if (d.caracteristicas !== undefined) {
+        // Las desactivadas que ya tenía la mesa se conservan aunque el formulario no las muestre.
+        const [inactivas] = await filas(
+          cx,
+          `SELECT GROUP_CONCAT(mc.id_caracteristica) AS ids
+             FROM mesa_caracteristica mc JOIN caracteristica_mesa c USING (id_caracteristica)
+            WHERE mc.id_mesa = ? AND c.activa = FALSE`,
+          [id],
+        );
+        const conservar = String(inactivas?.ids ?? "").split(",").filter(Boolean).map(Number);
+        const activas = d.caracteristicas.filter((c) => !conservar.includes(c));
+        await guardarCaracteristicasMesa(cx, id, activas);
+        for (const c of conservar) {
+          await ejecutar(cx, "INSERT IGNORE INTO mesa_caracteristica (id_mesa, id_caracteristica) VALUES (?, ?)", [id, c]);
+        }
+      }
     });
   } catch (e) {
     if (esDuplicado(e)) throw new ErrorApi(409, "estado_invalido", `Ya existe la mesa ${d.numero}.`);
@@ -842,4 +886,85 @@ export const editarMesaAdmin = async (req: Request, res: Response) => {
   }
 
   res.json(await cargarMesaAdmin(pool, id));
+};
+
+// ───────────────────────────── Características de mesa (solo gerente) ─────────────────────────────
+// Catálogo de características que Gerencia asigna a las mesas («Planta baja», «Junto a la ventana»…). El cliente y la
+// hostess las piden en la reservación. Desactivar una la oculta para nuevas asignaciones y del portal, sin borrarla de
+// las mesas; borrar solo se permite si ninguna mesa ni reservación la usa.
+
+const NombreCaracteristica = z.string().trim().min(1, "es obligatorio").max(40, "máximo 40 caracteres");
+
+const SELECT_CARACTERISTICA = `
+  SELECT c.id_caracteristica, c.nombre, c.activa,
+         (SELECT COUNT(*) FROM mesa_caracteristica mc WHERE mc.id_caracteristica = c.id_caracteristica) AS total_mesas,
+         (SELECT COUNT(*) FROM reservacion_caracteristica rc WHERE rc.id_caracteristica = c.id_caracteristica) AS total_reservaciones
+    FROM caracteristica_mesa c`;
+
+function aCaracteristicaAdmin(r: Record<string, unknown>) {
+  return {
+    id_caracteristica: Number(r.id_caracteristica),
+    nombre: String(r.nombre),
+    activa: Boolean(r.activa),
+    total_mesas: Number(r.total_mesas),
+    total_reservaciones: Number(r.total_reservaciones),
+  };
+}
+
+async function cargarCaracteristica(ex: Ejecutor, id: number) {
+  const [fila] = await filas(ex, `${SELECT_CARACTERISTICA} WHERE c.id_caracteristica = ?`, [id]);
+  if (!fila) throw new ErrorApi(404, "no_encontrado", "La característica no existe.");
+  return aCaracteristicaAdmin(fila);
+}
+
+/** GET /api/catalogo/caracteristicas: activas e inactivas, con cuántas mesas y reservaciones las usan. */
+export const listarCaracteristicas = async (_req: Request, res: Response) => {
+  const rows = await filas(pool, `${SELECT_CARACTERISTICA} ORDER BY c.nombre`);
+  res.json(rows.map(aCaracteristicaAdmin));
+};
+
+/** POST /api/catalogo/caracteristicas { nombre } → 201. */
+export const crearCaracteristica = async (req: Request, res: Response) => {
+  const { nombre } = validar(z.object({ nombre: NombreCaracteristica }).strict(), req.body);
+  try {
+    const r = await ejecutar(pool, "INSERT INTO caracteristica_mesa (nombre) VALUES (?)", [nombre]);
+    res.status(201).json(await cargarCaracteristica(pool, r.insertId));
+  } catch (e) {
+    if (esDuplicado(e)) throw new ErrorApi(409, "estado_invalido", "Ya existe una característica con ese nombre.");
+    throw e;
+  }
+};
+
+/** PATCH /api/catalogo/caracteristicas/:id { nombre } o { activa }. */
+export const editarCaracteristica = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const cambio = validar(
+    z.union([z.object({ nombre: NombreCaracteristica }).strict(), z.object({ activa: z.boolean() }).strict()]),
+    req.body,
+  );
+  await cargarCaracteristica(pool, id);
+  try {
+    if ("nombre" in cambio) await ejecutar(pool, "UPDATE caracteristica_mesa SET nombre = ? WHERE id_caracteristica = ?", [cambio.nombre, id]);
+    else await ejecutar(pool, "UPDATE caracteristica_mesa SET activa = ? WHERE id_caracteristica = ?", [cambio.activa, id]);
+  } catch (e) {
+    if (esDuplicado(e)) throw new ErrorApi(409, "estado_invalido", "Ya existe una característica con ese nombre.");
+    throw e;
+  }
+  res.json(await cargarCaracteristica(pool, id));
+};
+
+/** DELETE /api/catalogo/caracteristicas/:id: solo si ninguna mesa ni reservación la usa (si no, desactivarla). */
+export const borrarCaracteristica = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const c = await cargarCaracteristica(pool, id);
+  if (c.total_mesas > 0 || c.total_reservaciones > 0) {
+    throw new ErrorApi(
+      409,
+      "estado_invalido",
+      `«${c.nombre}» está en ${c.total_mesas} ${c.total_mesas === 1 ? "mesa" : "mesas"} y ${c.total_reservaciones} ` +
+        `${c.total_reservaciones === 1 ? "reservación" : "reservaciones"}. Quítala de las mesas o desactívala.`,
+    );
+  }
+  await ejecutar(pool, "DELETE FROM caracteristica_mesa WHERE id_caracteristica = ?", [id]);
+  res.json({ ok: true });
 };

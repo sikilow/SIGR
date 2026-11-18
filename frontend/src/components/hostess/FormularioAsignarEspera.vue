@@ -12,7 +12,14 @@ import type { ListaEspera, PreferenciasReservacion } from '../../types'
 import { mesasSugeridasParaEspera } from '../../utils/espera'
 import { formatearCapacidad, formatearEspera } from '../../utils/formato'
 import { crearClaveIdempotencia, esFalloReintentable } from '../../utils/idempotencia'
-import { advertenciaCapacidadMesa, aPreferenciasMesa, textoCaracteristicasMesa } from '../../utils/reservaciones'
+import {
+  advertenciaCapacidadMesa,
+  aPreferenciasMesa,
+  caracteristicasDisponibles,
+  mesaCumplePreferencias,
+  sinPreferencias,
+  textoCaracteristicasMesa,
+} from '../../utils/reservaciones'
 import PreferenciasMesaCampos from './PreferenciasMesaCampos.vue'
 
 const props = defineProps<{ espera: ListaEspera }>()
@@ -28,20 +35,13 @@ const anuncios = useAnunciosStore()
 const claves = crearClaveIdempotencia()
 
 /** Lo que necesita el grupo: solo ordena las sugerencias (no se guarda en la lista de espera). */
-const preferencias = ref<PreferenciasReservacion>({ zona: null, plantaBaja: false, espacioCarriola: false, sinEscaleras: false })
+const preferencias = ref<PreferenciasReservacion>(sinPreferencias())
+const caracteristicas = computed(() => caracteristicasDisponibles(store.mesas))
 const zonas = computed(() => [...new Set(store.mesas.map((m) => m.zona).filter((z): z is string => z !== null))].sort())
 const opciones = computed(() => mesasSugeridasParaEspera(store.mesas, props.espera.personas, aPreferenciasMesa(preferencias.value)))
 /** ¿La mesa cumple todo lo que se pidió? (para marcarla). Sin preferencias, ninguna se marca. */
 function cumple(mesa: (typeof store.mesas)[number]): boolean {
-  const p = preferencias.value
-  const algo = p.zona !== null || p.plantaBaja || p.espacioCarriola || p.sinEscaleras
-  return (
-    algo &&
-    (p.zona === null || mesa.zona === p.zona) &&
-    (!p.plantaBaja || mesa.plantaBaja) &&
-    (!p.espacioCarriola || mesa.espacioCarriola) &&
-    (!p.sinEscaleras || mesa.sinEscaleras)
-  )
+  return mesaCumplePreferencias(mesa, preferencias.value)
 }
 /** La mejor opción: la primera que alcanza (la más justa). */
 const idSugerida = computed(() => opciones.value.find((o) => o.alcanza)?.mesa.idMesa ?? null)
@@ -118,6 +118,7 @@ async function confirmar() {
       v-model="preferencias"
       id-prefijo="esp-pref"
       :zonas="zonas"
+      :opciones="caracteristicas"
       :deshabilitado="enCurso"
       leyenda="¿Qué necesita el grupo? (opcional)"
     />

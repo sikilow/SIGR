@@ -29,6 +29,8 @@
 | `PATCH /api/clientes/{id}` | **Ya existe** (actualiza el correo para reservaciones) | `requiereAuth("hostess", "gerente")` |
 | `GET /api/catalogo/configuracion-reservacion` | **Ya existe** | `requiereAuth("gerente")` |
 | `PATCH /api/catalogo/configuracion-reservacion` | **Ya existe** | `requiereAuth("gerente")` |
+| `GET /api/reservaciones/horario` | **Ya existe** (migración 022) | `requiereAuth("hostess", "gerente")` |
+| `GET /api/reservaciones-clientes/horario` | **Ya existe** (portal; migración 022) | `requiereCliente` |
 
 `GET /api/reservaciones?fecha=` (sección 2) ya se usa para el Salón y para la lista de la pantalla **Reservaciones**
 (H2), que puede pedir cualquier día. Las rutas marcadas (H2) las necesita esa pantalla; ver la sección
@@ -40,13 +42,13 @@ operación de más nivel (cambia mesa **y** grupo en una sola transacción).
 ## Qué datos ve la hostess
 
 Solo mesas, reservaciones y lista de espera. **No** ve pedidos, cuentas ni totales: el frontend usa solo
-`id_mesa`, `numero`, `capacidad`, `zona`, `planta_baja`, `espacio_carriola`, `sin_escaleras` y `estado` de `GET /mesas` e **ignora** `estado_cuenta`, `pedidos_activos`,
+`id_mesa`, `numero`, `capacidad`, `zona`, `caracteristicas` y `estado` de `GET /mesas` e **ignora** `estado_cuenta`, `pedidos_activos`,
 `total_cuenta`, `pedidos_listos` y `tipo_pago_solicitado` aunque lleguen. Si el equipo de API prefiere no enviárselos
 a este rol, puede hacerlo sin avisar al frontend.
 
 ## 1. `GET /api/mesas` — ya existe
 
-> **Cambio:** solo devuelve las mesas **disponibles** (`mesa.activa = TRUE`) y agrega `zona` y las características fijas `planta_baja`, `espacio_carriola` y `sin_escaleras`. Una mesa no disponible tampoco se puede sentar, reservar ni cambiar de estado: la API responde `409 mesa_no_disponible`.
+> **Cambio:** solo devuelve las mesas **disponibles** (`mesa.activa = TRUE`) y agrega `zona` y `caracteristicas`: las características **activas** del catálogo que administra Gerencia, como `[{ "id_caracteristica": 1, "nombre": "Planta baja" }]` (migración 023). Una mesa no disponible tampoco se puede sentar, reservar ni cambiar de estado: la API responde `409 mesa_no_disponible`.
 
 Sin cambios. Campos usados: `id_mesa`, `numero`, `capacidad`, `estado` (`libre` | `ocupada` | `reservada`).
 La interfaz del salón llama **«Libre»** al estado `libre` (el frontend usa el mismo código `libre`; `aEstadoMesa`
@@ -207,13 +209,15 @@ Cuerpo (todas son columnas de `reservacion`):
 
 ```json
 { "id_cliente": 6, "fecha_hora": "2026-10-16 21:00:00", "personas": 4, "id_mesa": null,
-  "pref_zona": "Terraza", "pref_planta_baja": false, "pref_carriola": true, "pref_sin_escaleras": false }
+  "pref_zona": "Terraza", "pref_caracteristicas": [1, 4] }
 ```
 
-Los campos `pref_*` (migración 021) son **opcionales**: lo que pidió el cliente (sección y acceso). `pref_zona` vacío o
-`null` = cualquier sección; los demás son `true`/`false` (ausentes = `false`). No apartan una mesa: la hostess los ve en la
-tarjeta («Pidió: …»), al editar y al registrar la llegada, donde las mesas que coinciden se sugieren primero. `GET` y las
-respuestas de reservaciones los devuelven siempre.
+Los campos `pref_*` son **opcionales**: lo que pidió el cliente. `pref_zona` (migración 021) es la sección; vacía o
+`null` = cualquiera. `pref_caracteristicas` (migración 023) son ids **activos** del catálogo de características que
+administra Gerencia (si alguno no existe o está desactivado: `422 estado_invalido`). No apartan una mesa: la hostess los ve
+en la tarjeta («Pidió: …»), al editar y al registrar la llegada, donde las mesas que coinciden se sugieren primero. `GET` y
+las respuestas de reservaciones los devuelven siempre: `pref_zona` y `pref_caracteristicas` como
+`[{ "id_caracteristica": 1, "nombre": "Planta baja" }]`.
 
 Respuesta `201`: la reservación con los mismos campos que `GET /reservaciones` (incluidos `cliente_nombre`,
 `cliente_telefono`, `cliente_correo` y `mesa_numero`, **calculados**). El correo del cliente es opcional: si existe y es
@@ -241,10 +245,27 @@ común. Los fallos quedan en `notificacion_reservacion` y se reintentan por Rese
 Solo Gerencia puede consultar y modificar `GET/PATCH /api/catalogo/configuracion-reservacion`:
 
 ```json
-{ "tolerancia_minutos": 15, "recordatorio_minutos": 5, "anticipacion_minutos": 60 }
+{
+  "tolerancia_minutos": 15, "recordatorio_minutos": 5, "anticipacion_minutos": 60,
+  "hora_apertura": "13:00", "hora_ultima_reservacion": "21:00", "intervalo_minutos": 30, "dias_abiertos": "1111111"
+}
 ```
 
-La actualización requiere los tres campos enteros: tolerancia de 5–180 minutos, recordatorio de 1–30 minutos y `anticipacion_minutos` de 0–1440 (0 = sin mínimo; predeterminado 60). La anticipación es el tiempo que debe faltar, como mínimo, para la hora reservada: `POST /api/reservaciones`, `PATCH /api/reservaciones/{id}` (al cambiar la fecha) y el portal de clientes responden `422 estado_invalido` («Las reservaciones se hacen con al menos 1 hora de anticipación.») si la hora queda más cerca. Configura
+**Horario de reservaciones (migración 022).** `hora_apertura` y `hora_ultima_reservacion` («HH:MM») son la primera y la
+última hora que se pueden reservar (la última no es la hora de cierre); `intervalo_minutos` (15, 30 o 60) es cada cuánto
+ofrece horas el portal; `dias_abiertos` son siete caracteres `1`/`0` de lunes a domingo (al menos uno abierto). El PATCH
+exige todos los campos y responde `422 estado_invalido` si la última hora es anterior a la primera. Con el horario:
+
+- `POST /api/reservaciones-clientes` (portal) rechaza un día cerrado, una hora fuera del horario o una hora que no cae en
+  el intervalo («Elige una de las horas disponibles (cada 30 minutos desde las 13:00).»).
+- `POST /api/reservaciones` y `PATCH /api/reservaciones/{id}` (al cambiar la fecha) rechazan el día cerrado y la hora
+  fuera del horario, pero la hostess **sí** puede anotar un minuto entre intervalos (por ejemplo, 19:45).
+- `GET /api/reservaciones/horario` (hostess) y `GET /api/reservaciones-clientes/horario` (portal) devuelven el horario
+  y `anticipacion_minutos`, para armar las horas y avisar antes de guardar.
+
+Código: `backend/src/models/horarioReservacion.ts` y `frontend/src/utils/horarioReservacion.ts`.
+
+La actualización requiere los tres campos de tiempo enteros: tolerancia de 5–180 minutos, recordatorio de 1–30 minutos y `anticipacion_minutos` de 0–1440 (0 = sin mínimo; predeterminado 60). La anticipación es el tiempo que debe faltar, como mínimo, para la hora reservada: `POST /api/reservaciones`, `PATCH /api/reservaciones/{id}` (al cambiar la fecha) y el portal de clientes responden `422 estado_invalido` («Las reservaciones se hacen con al menos 1 hora de anticipación.») si la hora queda más cerca. Configura
 `CORREO_PROVEEDOR`, `CORREO_REMITENTE` y las credenciales de Resend o SMTP en `backend/.env`; el detalle está en
 [`resend-reservaciones.md`](resend-reservaciones.md).
 
@@ -254,7 +275,7 @@ Las reservaciones que siguen en estado `pendiente` (sin confirmar), de **cualqui
 
 ### Mesa disponible al registrar y al confirmar
 
-`POST /api/reservaciones`, `PATCH /api/reservaciones/{id}` con `{ "estado": "confirmada" }` y `POST /api/reservaciones-clientes` (portal) comprueban que haya una mesa **del salón** (no las virtuales de «Para llevar») con capacidad para el grupo a esa hora, descontando las reservaciones `confirmada` o `llego` que se traslapan (cada una ocupa su mesa 90 minutos; las que ya tienen mesa ocupan esa mesa y las demás, la más chica que les alcance). Si no hay, responden `409 mesa_no_disponible`: «No tenemos mesas para N personas.» o «No hay mesa disponible para N personas a esa hora… Elige otro horario.». Las solicitudes `pendiente` todavía no comprometen mesa. Código: `backend/src/services/disponibilidadReservacion.ts`.
+`POST /api/reservaciones`, `PATCH /api/reservaciones/{id}` con `{ "estado": "confirmada" }` y `POST /api/reservaciones-clientes` (portal) comprueban que haya una mesa **del salón** (no las virtuales de «Para llevar») con capacidad para el grupo a esa hora, descontando las reservaciones `confirmada` o `llego` que se traslapan (cada una ocupa su mesa los minutos que configura Gerencia en `duracion_reservacion_minutos`, 90 por defecto, migración 023; si la hora está dentro de esa duración desde ahora, tampoco cuentan las mesas ocupadas en ese momento, por ejemplo por clientes sin reservación; las que ya tienen mesa ocupan esa mesa y las demás, la más chica que les alcance). Si no hay, responden `409 mesa_no_disponible`: «No tenemos mesas para N personas.» o «No hay mesa disponible para N personas a esa hora… Elige otro horario.». Las solicitudes `pendiente` todavía no comprometen mesa. Código: `backend/src/services/disponibilidadReservacion.ts`.
 
 ### Correos de la reservación
 
@@ -272,7 +293,7 @@ campos que cambian.
 | `{ "estado": "confirmada" }` | Solo desde `pendiente`. |
 | `{ "estado": "cancelada" }` | Desde `pendiente` o `confirmada`. Libera la mesa según la regla de arriba. |
 | `{ "fecha_hora": "…", "personas": 5, "id_mesa": 4 }` | Edita lo que venga. `id_mesa: null` **quita** la mesa; si se mueve la fecha a un día que no es hoy, el frontend manda también `id_mesa: null`. |
-| `{ "pref_zona": null, "pref_planta_baja": true, … }` | Edita las preferencias de mesa (se pueden mandar junto con los demás datos). |
+| `{ "pref_zona": null, "pref_caracteristicas": [1] }` | Edita las preferencias de mesa; `pref_caracteristicas` reemplaza la lista completa (se pueden mandar junto con los demás datos). |
 
 Respuesta `200`: la reservación actualizada. Errores como en el alta, más `404 no_encontrado` y `409 estado_invalido`
 (la reservación ya no es `pendiente`/`confirmada`, o se quiere confirmar una que no está `pendiente`).
@@ -333,18 +354,23 @@ ya existe y **no se vuelve a crear** al reintentar.
 
 ### `GET /api/reservaciones-clientes/opciones-mesa` (portal de clientes)
 
-Lo que el cliente puede pedir al reservar: por cada sección **activa** del salón (no las de «Para llevar») con mesas
-disponibles, cuántas mesas tiene, la capacidad de la más grande y si alguna está en planta baja, tiene espacio para carriola
-o se llega sin escaleras. No dice qué mesas están libres ni reserva ninguna.
+Lo que el cliente puede pedir al reservar. No dice qué mesas están libres ni reserva ninguna.
 
 ```json
-[{ "seccion": "Terraza", "mesas": 4, "capacidad_maxima": 6, "planta_baja": true, "espacio_carriola": true, "sin_escaleras": false }]
+{
+  "secciones": [{ "seccion": "Terraza", "mesas": 4, "capacidad_maxima": 6, "caracteristicas": [1, 4] }],
+  "caracteristicas": [{ "id_caracteristica": 1, "nombre": "Planta baja" }, { "id_caracteristica": 4, "nombre": "Junto a la ventana" }]
+}
 ```
 
-El portal muestra cada sección con sus características y desactiva las casillas que ninguna mesa cumple. `POST
-/api/reservaciones-clientes` acepta los mismos campos `pref_*` que `POST /api/reservaciones`, y `GET
-/api/reservaciones-clientes/mis-reservaciones` los devuelve («Pediste: …»). Para que el cliente vea características, el
-gerente debe marcarlas en cada mesa (Gerente → Mesas).
+- `secciones`: cada sección **activa** del salón (no las de «Para llevar») con mesas disponibles, cuántas mesas tiene, la
+  capacidad de la más grande y qué características (ids) tiene alguna de sus mesas.
+- `caracteristicas`: solo las **activas** del catálogo que tiene al menos una mesa disponible del salón.
+
+El portal muestra cada sección con sus características y ofrece solo las que existen (las que no tiene la sección elegida
+se desactivan). `POST /api/reservaciones-clientes` acepta `pref_zona` y `pref_caracteristicas` como `POST
+/api/reservaciones`, y `GET /api/reservaciones-clientes/mis-reservaciones` los devuelve («Pediste: …»). Para que el cliente
+vea características, el gerente debe crearlas (Gerente → Mesas → Características) y marcarlas en cada mesa.
 
 ### `PATCH /api/lista-espera/{id}`
 

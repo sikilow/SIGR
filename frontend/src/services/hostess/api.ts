@@ -1,6 +1,7 @@
 // Servicios de hostess contra la API real. Ver docs/contrato-api-hostess.md.
 import { aDiaISO } from '../../utils/reservaciones'
 import { solicitar } from '../api/cliente'
+import { aHorarioReservacion, type HorarioReservacionDto } from '../api/mappers'
 import type { HostessService } from './interfaces'
 import {
   aCliente,
@@ -34,6 +35,11 @@ export function crearHostessApi(): HostessService {
       // Sin día, hoy en hora local (lo que espera `?fecha=`).
       const r = await solicitar<ReservacionDto[]>('GET', '/reservaciones', { consulta: { fecha: dia ?? aDiaISO(new Date()) } })
       return r.map(aReservacion)
+    },
+
+    async obtenerHorario() {
+      const r = await solicitar<HorarioReservacionDto & { anticipacion_minutos?: number | string }>('GET', '/reservaciones/horario')
+      return { ...aHorarioReservacion(r), anticipacionMinutos: Number(r.anticipacion_minutos ?? 60) }
     },
 
     async listarReservacionesPendientes() {

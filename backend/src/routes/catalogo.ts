@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requiereAuth } from "../utils/auth";
-import { actualizarConfiguracionReservacion, obtenerConfiguracionReservacion, listarCategorias, crearCategoria, editarCategoria, borrarCategoria, listarProductos, crearProducto, editarProducto, listarSeccionesAdmin, crearSeccionAdmin, editarSeccionAdmin, borrarSeccionAdmin, listarMesasAdmin, crearMesaAdmin, editarMesaAdmin, listarMetodosPago, listarMetodosPagoDisponibles, listarCanales, listarCanalesDisponibles, crearCanal, actualizarCanal, crearCategoriaMetodoPago, actualizarCategoriaMetodoPago, crearMetodoPago, actualizarMetodoPago } from "../controllers/catalogo";
+import { actualizarConfiguracionReservacion, obtenerConfiguracionReservacion, listarCategorias, crearCategoria, editarCategoria, borrarCategoria, listarProductos, crearProducto, editarProducto, listarCaracteristicas, crearCaracteristica, editarCaracteristica, borrarCaracteristica, listarSeccionesAdmin, crearSeccionAdmin, editarSeccionAdmin, borrarSeccionAdmin, listarMesasAdmin, crearMesaAdmin, editarMesaAdmin, listarMetodosPago, listarMetodosPagoDisponibles, listarCanales, listarCanalesDisponibles, crearCanal, actualizarCanal, crearCategoriaMetodoPago, actualizarCategoriaMetodoPago, crearMetodoPago, actualizarMetodoPago } from "../controllers/catalogo";
 
 export const catalogoRouter = Router();
 
@@ -12,6 +12,10 @@ catalogoRouter.get("/categorias", listarCategorias);
 catalogoRouter.post("/categorias", crearCategoria);
 catalogoRouter.patch("/categorias/:id", editarCategoria);
 catalogoRouter.delete("/categorias/:id", borrarCategoria);
+catalogoRouter.get("/caracteristicas", listarCaracteristicas);
+catalogoRouter.post("/caracteristicas", crearCaracteristica);
+catalogoRouter.patch("/caracteristicas/:id", editarCaracteristica);
+catalogoRouter.delete("/caracteristicas/:id", borrarCaracteristica);
 catalogoRouter.get("/secciones", listarSeccionesAdmin);
 catalogoRouter.post("/secciones", crearSeccionAdmin);
 catalogoRouter.patch("/secciones/:nombre", editarSeccionAdmin);

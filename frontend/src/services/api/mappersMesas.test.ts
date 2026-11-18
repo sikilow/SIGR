@@ -5,7 +5,24 @@ import { aConfiguracionReservacion, aMesaAdmin, aSeccionAdmin, deCambioMesa, deN
 describe('aConfiguracionReservacion', () => {
   it('convierte los minutos enviados por MySQL', () => {
     expect(aConfiguracionReservacion({ tolerancia_minutos: '15', recordatorio_minutos: 5, anticipacion_minutos: '60' }))
-      .toEqual({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60 })
+      .toEqual({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60, duracionReservacionMinutos: 90, horaApertura: '13:00', horaUltima: '21:00', intervaloMinutos: 30, diasAbiertos: '1111111' })
+  })
+
+  it('lee el horario (TIME de MySQL) y descarta valores inválidos', () => {
+    expect(
+      aConfiguracionReservacion({
+        tolerancia_minutos: 15,
+        recordatorio_minutos: 5,
+        anticipacion_minutos: 60,
+        hora_apertura: '12:30:00',
+        hora_ultima_reservacion: '22:00',
+        intervalo_minutos: '15',
+        dias_abiertos: '0111111',
+      }),
+    ).toMatchObject({ horaApertura: '12:30', horaUltima: '22:00', intervaloMinutos: 15, diasAbiertos: '0111111' })
+    expect(
+      aConfiguracionReservacion({ tolerancia_minutos: 15, recordatorio_minutos: 5, anticipacion_minutos: 60, intervalo_minutos: 45, dias_abiertos: 'x' }),
+    ).toMatchObject({ intervaloMinutos: 30, diasAbiertos: '1111111' })
   })
 })
 
@@ -16,9 +33,7 @@ describe('aMesaAdmin', () => {
       numero: 7,
       capacidad: 4,
       zona: 'Terraza',
-      plantaBaja: false,
-      espacioCarriola: false,
-      sinEscaleras: false,
+      caracteristicas: [],
       activa: true,
       estado: 'libre',
     })
@@ -31,21 +46,21 @@ describe('aMesaAdmin', () => {
     expect(aMesaAdmin({ ...base, zona: ' General ', activa: 0 })).toMatchObject({ zona: 'General', activa: false })
   })
 
-  it('convierte las características de acceso de la mesa', () => {
+  it('convierte los ids de las características de la mesa (catálogo de Gerencia)', () => {
     expect(aMesaAdmin({
-      id_mesa: 1, numero: 1, capacidad: 4, zona: 'Salón', activa: true, estado: 'libre',
-      planta_baja: 1, espacio_carriola: '0', sin_escaleras: true,
-    })).toMatchObject({ plantaBaja: true, espacioCarriola: false, sinEscaleras: true })
+      id_mesa: 1, numero: 1, capacidad: 4, zona: 'Salón', activa: true, estado: 'libre', caracteristicas: ['1', 3],
+    })).toMatchObject({ caracteristicas: [1, 3] })
+    expect(aMesaAdmin({ id_mesa: 1, numero: 1, capacidad: 4, zona: 'Salón', activa: true, estado: 'libre' }).caracteristicas).toEqual([])
   })
 })
 
 describe('deNuevaMesa y deCambioMesa', () => {
   it('manda la sección obligatoria recortada al crear', () => {
     expect(deNuevaMesa({ numero: 9, capacidad: 4, zona: '  ', activa: true })).toEqual({
-      numero: 9, capacidad: 4, zona: '', planta_baja: false, espacio_carriola: false, sin_escaleras: false, activa: true,
+      numero: 9, capacidad: 4, zona: '', caracteristicas: [], activa: true,
     })
     expect(deNuevaMesa({ numero: 9, capacidad: 4, zona: ' Barra ', activa: false })).toEqual({
-      numero: 9, capacidad: 4, zona: 'Barra', planta_baja: false, espacio_carriola: false, sin_escaleras: false, activa: false,
+      numero: 9, capacidad: 4, zona: 'Barra', caracteristicas: [], activa: false,
     })
   })
 

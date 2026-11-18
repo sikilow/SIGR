@@ -6,6 +6,7 @@ import {
   crearReservacionCliente,
   listarMisReservaciones,
   opcionesMesaCliente,
+  horarioClientes,
 } from "../controllers/reservacionesClientes";
 
 export const reservacionesClientesRouter = Router();
@@ -29,4 +30,10 @@ reservacionesClientesRouter.get(
 reservacionesClientesRouter.get(
   "/opciones-mesa",
   opcionesMesaCliente
+);
+
+// Horario para armar la lista de horas
+reservacionesClientesRouter.get(
+  "/horario",
+  horarioClientes
 );

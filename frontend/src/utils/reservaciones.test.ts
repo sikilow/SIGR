@@ -25,6 +25,8 @@ import {
   validarFechaHora,
   validarPersonasReservacion,
   aPreferenciasMesa,
+  caracteristicasDisponibles,
+  mesaCumplePreferencias,
   textoCaracteristicasMesa,
   textoPreferencias,
   tienePreferencias,
@@ -39,9 +41,7 @@ const mesa = (idMesa: number, capacidad: number, estado: MesaSalon['estado'] = '
   capacidad,
   estado,
   zona: null,
-  plantaBaja: false,
-  espacioCarriola: false,
-  sinEscaleras: false,
+  caracteristicas: [],
 })
 
 const reservacion = (sobrescribir: Partial<Reservacion> = {}): Reservacion => ({
@@ -196,8 +196,9 @@ describe('reservaciones: mesas que se ofrecen', () => {
   })
 
   it('prioriza las mesas que cumplen preferencias sin anteponer una mesa insuficiente', () => {
-    const candidatas = [mesa(7, 4), { ...mesa(8, 6), plantaBaja: true }, { ...mesa(9, 2), plantaBaja: true }]
-    expect(mesasParaReservacion(candidatas, 4, null, { plantaBaja: true }).map((o) => o.mesa.idMesa)).toEqual([8, 7, 9])
+    const pb = { idCaracteristica: 1, nombre: 'Planta baja' }
+    const candidatas = [mesa(7, 4), { ...mesa(8, 6), caracteristicas: [pb] }, { ...mesa(9, 2), caracteristicas: [pb] }]
+    expect(mesasParaReservacion(candidatas, 4, null, { caracteristicas: [1] }).map((o) => o.mesa.idMesa)).toEqual([8, 7, 9])
   })
 
   it('prioriza sección solicitada entre las mesas con capacidad suficiente', () => {
@@ -312,26 +313,39 @@ describe('mesas disponibles para una reservación', () => {
 })
 
 describe('reservaciones: preferencias de mesa del cliente', () => {
-  const sinNada = { zona: null, plantaBaja: false, espacioCarriola: false, sinEscaleras: false }
+  const sinNada = { zona: null, caracteristicas: [] }
+  const pb = { idCaracteristica: 1, nombre: 'Planta baja' }
+  const carriola = { idCaracteristica: 2, nombre: 'Espacio para carriola' }
+  const ventana = { idCaracteristica: 4, nombre: 'Junto a la ventana' }
 
   it('describe lo que pidió y lo que tiene cada mesa', () => {
-    expect(textoPreferencias({ zona: 'Terraza', plantaBaja: true, espacioCarriola: true, sinEscaleras: false })).toBe(
-      'Terraza · planta baja · carriola',
-    )
+    expect(textoPreferencias({ zona: 'Terraza', caracteristicas: [pb, carriola] })).toBe('Terraza · Planta baja · Espacio para carriola')
     expect(textoPreferencias(sinNada)).toBe('')
     expect(textoPreferencias(undefined)).toBe('')
     expect(tienePreferencias(sinNada)).toBe(false)
-    expect(textoCaracteristicasMesa({ ...mesa(1, 4), sinEscaleras: true })).toBe('sin escaleras')
+    expect(textoCaracteristicasMesa({ ...mesa(1, 4), caracteristicas: [ventana] })).toBe('Junto a la ventana')
+  })
+
+  it('cumple solo si tiene la sección y TODAS las características pedidas', () => {
+    const m = { ...mesa(1, 4), zona: 'Terraza', caracteristicas: [pb, ventana] }
+    expect(mesaCumplePreferencias(m, { zona: 'Terraza', caracteristicas: [pb] })).toBe(true)
+    expect(mesaCumplePreferencias(m, { zona: null, caracteristicas: [pb, carriola] })).toBe(false)
+    expect(mesaCumplePreferencias(m, sinNada)).toBe(false)
+  })
+
+  it('las características que se ofrecen son las de las mesas, sin repetir y por nombre', () => {
+    const mesas = [{ ...mesa(1, 4), caracteristicas: [pb, ventana] }, { ...mesa(2, 4), caracteristicas: [pb] }]
+    expect(caracteristicasDisponibles(mesas).map((c) => c.nombre)).toEqual(['Junto a la ventana', 'Planta baja'])
   })
 
   it('las mesas que coinciden con lo que pidió se sugieren primero (entre las que alcanzan)', () => {
     const mesas = [
       mesa(1, 4),
-      { ...mesa(2, 6), plantaBaja: true, espacioCarriola: true },
+      { ...mesa(2, 6), caracteristicas: [pb, carriola] },
       { ...mesa(3, 4), zona: 'Terraza' },
       mesa(4, 2),
     ]
-    const conCarriola = mesasParaReservacion(mesas, 4, null, aPreferenciasMesa({ ...sinNada, espacioCarriola: true }))
+    const conCarriola = mesasParaReservacion(mesas, 4, null, aPreferenciasMesa({ ...sinNada, caracteristicas: [carriola] }))
     expect(conCarriola[0]!.mesa.idMesa).toBe(2)
     const enTerraza = mesasParaReservacion(mesas, 4, null, aPreferenciasMesa({ ...sinNada, zona: 'Terraza' }))
     expect(enTerraza[0]!.mesa.idMesa).toBe(3)

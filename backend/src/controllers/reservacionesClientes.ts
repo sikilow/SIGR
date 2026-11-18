@@ -7,6 +7,8 @@ import { exigirMesaDisponible } from "../services/disponibilidadReservacion";
 import { encolarNotificacionReservacion, solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
 import { ErrorApi } from "../utils/errores";
 import { CamposPreferencias, normalizarPreferencias } from "./hostess";
+import { cargarHorario, exigirHorarioReservacion } from "../models/horarioReservacion";
+import { conCaracteristicasPedidas, guardarCaracteristicasReservacion } from "../models/caracteristicasMesa";
 
 // Validaciones del formulario
 const NuevaReservacionCliente = z.object({
@@ -100,6 +102,8 @@ export const crearReservacionCliente = async (
       );
     }
     await exigirAnticipacionMinima(cx, datos.fecha_hora);
+    // El portal solo acepta las horas que ofrece (día abierto, dentro del horario y en el intervalo).
+    await exigirHorarioReservacion(cx, datos.fecha_hora, true);
     // Una solicitud solo se acepta si hay una mesa posible para ese grupo a esa hora.
     await exigirMesaDisponible(cx, { fechaHora: datos.fecha_hora, personas: datos.personas });
 
@@ -128,18 +132,17 @@ export const crearReservacionCliente = async (
     const resultado = await ejecutar(
       cx,
       `INSERT INTO reservacion
-       (id_cliente, id_mesa, fecha_hora, personas, estado,
-        pref_zona, pref_planta_baja, pref_carriola, pref_sin_escaleras)
-       VALUES (?, NULL, ?, ?, 'pendiente', ?, ?, ?, ?)`,
-      [idCliente, datos.fecha_hora, datos.personas,
-       pref.pref_zona, pref.pref_planta_baja, pref.pref_carriola, pref.pref_sin_escaleras]
+       (id_cliente, id_mesa, fecha_hora, personas, estado, pref_zona)
+       VALUES (?, NULL, ?, ?, 'pendiente', ?)`,
+      [idCliente, datos.fecha_hora, datos.personas, pref.pref_zona]
     );
+    await guardarCaracteristicasReservacion(cx, resultado.insertId, datos.pref_caracteristicas ?? []);
 
     const [nueva] = await filas(
       cx,
       `SELECT id_reservacion, id_cliente,
               fecha_hora, personas, estado,
-              pref_zona, pref_planta_baja, pref_carriola, pref_sin_escaleras
+              pref_zona
        FROM reservacion
        WHERE id_reservacion = ?`,
       [resultado.insertId]
@@ -154,7 +157,8 @@ export const crearReservacionCliente = async (
       "creada",
     );
 
-    return nueva;
+    const [conCaracteristicas] = nueva ? await conCaracteristicasPedidas(cx, [nueva]) : [nueva];
+    return conCaracteristicas;
   });
   solicitarProcesamientoReservaciones();
 
@@ -187,9 +191,6 @@ export const listarMisReservaciones = async (
        r.personas,
        r.estado,
        r.pref_zona,
-       r.pref_planta_baja,
-       r.pref_carriola,
-       r.pref_sin_escaleras,
        m.numero AS mesa_numero
      FROM reservacion r
      LEFT JOIN mesa m
@@ -199,39 +200,54 @@ export const listarMisReservaciones = async (
     [idCliente]
   );
 
-  res.json(reservaciones);
+  res.json(await conCaracteristicasPedidas(pool, reservaciones));
 };
 
 /**
- * GET /api/reservaciones-clientes/opciones-mesa: lo que el cliente puede pedir al reservar. Por cada sección del
- * salón que esté activa (no las de «para llevar»), cuántas mesas tiene, para cuántas personas es la más grande y si
- * alguna mesa está en planta baja, tiene espacio para carriola o se llega sin escaleras. No dice qué mesas están
- * libres ni reserva ninguna: la mesa la asigna la hostess.
+ * GET /api/reservaciones-clientes/opciones-mesa: lo que el cliente puede pedir al reservar.
+ *   - `secciones`: cada sección activa del salón (no las de «para llevar») con cuántas mesas tiene, para cuántas
+ *     personas es la más grande y qué características (ids) tiene alguna de sus mesas.
+ *   - `caracteristicas`: las características ACTIVAS del catálogo de Gerencia que tiene al menos una mesa del salón.
+ * No dice qué mesas están libres ni reserva ninguna: la mesa la asigna la hostess.
  */
 export const opcionesMesaCliente = async (_req: Request, res: Response) => {
   const secciones = await filas(
     pool,
-    `SELECT s.nombre AS seccion,
-            COUNT(m.id_mesa) AS mesas,
-            MAX(m.capacidad) AS capacidad_maxima,
-            MAX(m.planta_baja) AS planta_baja,
-            MAX(m.espacio_carriola) AS espacio_carriola,
-            MAX(m.sin_escaleras) AS sin_escaleras
+    `SELECT s.nombre AS seccion, COUNT(m.id_mesa) AS mesas, MAX(m.capacidad) AS capacidad_maxima
        FROM seccion s
        JOIN mesa m ON m.zona = s.nombre AND m.activa = 1
       WHERE s.activa = 1 AND s.es_para_llevar = 0
       GROUP BY s.nombre
       ORDER BY s.nombre`,
   );
-  const verdadero = (v: unknown) => v === true || Number(v) === 1;
-  res.json(
-    secciones.map((s) => ({
+  const enSecciones = await filas(
+    pool,
+    `SELECT DISTINCT m.zona AS seccion, c.id_caracteristica, c.nombre
+       FROM mesa m
+       JOIN seccion s ON s.nombre = m.zona AND s.activa = 1 AND s.es_para_llevar = 0
+       JOIN mesa_caracteristica mc ON mc.id_mesa = m.id_mesa
+       JOIN caracteristica_mesa c ON c.id_caracteristica = mc.id_caracteristica AND c.activa = 1
+      WHERE m.activa = 1
+      ORDER BY c.nombre`,
+  );
+  const catalogo = new Map<number, string>();
+  for (const f of enSecciones) catalogo.set(Number(f.id_caracteristica), String(f.nombre));
+  res.json({
+    secciones: secciones.map((s) => ({
       seccion: s.seccion as string,
       mesas: Number(s.mesas),
       capacidad_maxima: Number(s.capacidad_maxima),
-      planta_baja: verdadero(s.planta_baja),
-      espacio_carriola: verdadero(s.espacio_carriola),
-      sin_escaleras: verdadero(s.sin_escaleras),
+      caracteristicas: enSecciones.filter((f) => f.seccion === s.seccion).map((f) => Number(f.id_caracteristica)),
     })),
-  );
+    caracteristicas: [...catalogo.entries()].map(([id_caracteristica, nombre]) => ({ id_caracteristica, nombre })),
+  });
+};
+
+/**
+ * GET /api/reservaciones-clientes/horario: con qué horas arma el portal la lista para reservar (lo configura Gerencia):
+ * primera y última hora, intervalo, días abiertos y anticipación mínima.
+ */
+export const horarioClientes = async (_req: Request, res: Response) => {
+  const [fila] = await filas(pool, "SELECT anticipacion_minutos FROM configuracion_reservacion WHERE id = 1");
+  res.json({ ...(await cargarHorario(pool)), anticipacion_minutos: Number(fila?.anticipacion_minutos ?? 60) });
 };

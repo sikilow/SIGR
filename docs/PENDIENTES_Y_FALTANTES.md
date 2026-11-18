@@ -2,7 +2,7 @@
 
 Documento de seguimiento para que el equipo **verifique y decida**. Registra tanto las funciones ya implementadas que surgieron de las revisiones como los asuntos que siguen pendientes; no sustituye el código ni el ERS.
 
-- **Última revisión:** octubre de 2026, sobre el código del repositorio y el ERS.
+- **Última revisión:** 17 de noviembre de 2026, sobre el código del repositorio y el ERS. La lista única de lo que falta está en [`incrementos.md`](incrementos.md#lo-que-falta-lista-única-17-de-noviembre-de-2026).
 - **Cómo leer la columna «Verificación»:** *Verificado* = lo comprobé leyendo el código o el esquema. *Por validar* = es una suposición o una idea que el equipo debe confirmar.
 - **Códigos de requisito:** son **propuestos**. Cuando el equipo los apruebe se agregan al ERS (ver `README.md`, sección «Cómo agregar un requerimiento nuevo»).
 
@@ -66,8 +66,8 @@ El actor autenticado se establece en la sesión MySQL que ejecuta la transacció
 | P-02 | **Auditoría de cancelaciones** | La migración 013 audita quién y cuándo modificó el pedido, incluidos estado y valores anterior/nuevo. No hay campos dedicados `pedido.id_cancelado_por` ni `pedido.cancelado_en`; la auditoría no se expone en la respuesta del pedido. | Implementado en migración; falta aplicarla en cada base y probar MySQL |
 | P-03 | **Seguridad del ERS sin cubrir** | RNF-009 (bloqueo tras 5 intentos), RNF-011 (expiración por inactividad: hoy el token dura 8 horas fijas), RNF-012 (invalidar la sesión al salir) y registro de accesos fallidos/no autorizados. La auditoría 013 cubre cambios exitosos en datos, no intentos de acceso fallidos. | Parcial |
 | P-04 | **Sin protecciones básicas de la API** | El backend no usa límite de peticiones (contra fuerza bruta) ni cabeceras de seguridad. No hay HTTPS configurado en el proyecto. | Verificado en `package.json`; el HTTPS es por validar |
-| P-05 | **Las pruebas del backend son mínimas** | `backend/tests/` cubre dominio, mocks, importes, transporte, plantillas y cola de correo (64 pruebas en 9 archivos), pero no las rutas ni las reglas que requieren base de datos. El frontend sí tiene pruebas unitarias y de rutas, pero falta una prueba integral contra MySQL. | Verificado |
-| P-06 | **Pantallas pendientes** | Caja ya está disponible en `/cajero/caja`; facturación fiscal aún no tiene proveedor, API ni pantalla. | Parcial |
+| P-05 | **Las pruebas del backend son unitarias** | `backend/tests/` tiene 97 pruebas en 13 archivos (dominio, caja, correo, horario, disponibilidad, reporte de ventas…) y el frontend 619. Falta probar las rutas contra MySQL. | Verificado |
+| P-06 | **Pantallas pendientes** | Caja (`/cajero/caja`) y Reporte de ventas (`/gerente/ventas`) ya existen. Falta solo el comprobante con datos fiscales (RF-VEN-002). | Parcial |
 | P-07 | **Resuelto: `PATCH /api/lista-espera/:id`** | Quita a un grupo de la lista (`estado: cancelada`) o cambia cuántas personas son, solo mientras sigue esperando. | Resuelto |
 
 ### 2.2 Reglas del dominio que el servidor no aplica o que chocan con el diseño
@@ -76,7 +76,7 @@ El actor autenticado se establece en la sesión MySQL que ejecuta la transacció
 | --- | --- | --- |
 | 1 y 2: tiempo de tolerancia para clientes con reserva; liberar o cancelar si no llegan | **Implementada**: Gerencia configura 5–180 minutos (15 por defecto); el backend marca `vencida`, libera la mesa y encola un aviso por correo. Requiere migración 010 y configuración de Resend para entregar el correo. | Implementado; la configuración y las pruebas del proveedor están documentadas |
 | 5: cada reserva se asocia a una mesa | La mesa es **opcional** (`id_mesa` puede ser nulo) y se asigna al sentar. Es una decisión de diseño por confirmar. | Verificado |
-| 6: no dos reservas en la misma mesa y horario | Se evita de forma **indirecta** (para reservar, la mesa debe estar libre) y **solo para reservaciones de hoy**. No hay validación por franja horaria. | Verificado |
+| 6: no dos reservas en la misma mesa y horario | **Implementada**: al crear, confirmar y desde el portal se comprueba que quede una mesa con capacidad para el grupo a esa hora, contando las confirmadas que se traslapan (duración configurable por Gerencia, 90 min por defecto) y las mesas ocupadas sin reservación si la hora es próxima. | Verificado |
 | 8 y 9: asignar mesas según el número de personas, con capacidad máxima | El frontend **solo avisa** («Puedes continuar si las acomodas») y el servidor acepta cualquier número de personas sin comparar con la capacidad. Puede ser intencional; hay que confirmarlo. | Verificado |
 | 11: una mesa no puede tener más de un pedido activo | **Choca con el diseño actual**: una cuenta tiene varios pedidos a la vez (rondas de pedidos). Hay que decidir cuál vale y corregir el ERS o el código. | Verificado |
 | 22: no registrar dos clientes con el mismo contacto | Solo lo valida el backend con una consulta; **la base de datos no tiene `UNIQUE`** en `cliente.telefono`, así que dos peticiones simultáneas podrían duplicarlo. | Verificado |
@@ -101,7 +101,7 @@ La migración 013 debe aplicarse y probarse en cada base. También queda por def
 | Id | Hallazgo | Verificación |
 | --- | --- | --- |
 | P-08 | `reservacion.estado` y `lista_espera.estado` son texto libre, **sin `CHECK` ni catálogo**. Los valores usados por la aplicación ya están documentados; `vencida` se asigna por el proceso de reservaciones. | Verificado |
-| P-09 | El estado de pedido `Pagado` existe pero **nada lo usa**. | Verificado |
+| P-09 | **Resuelto:** el estado de pedido `Pagado` se asigna al cobrar la cuenta. | Resuelto |
 | P-10 | Las tablas fiscales (`datos_fiscales`, `factura`) existen pero **ninguna ruta las usa**. Las tablas de venta, pago y corte ya están conectadas a la API de caja. | Parcial |
 | P-11 | `GET /api/pedidos` devuelve **todos** los pedidos visibles sin paginación; con el tiempo el historial crecerá. | Verificado |
 | P-12 | Las fechas dependen de la zona horaria de MySQL (`NOW()`); si el servidor y la base difieren, las reservaciones pueden correrse. Ya hay una advertencia en `seed_demo.sql`. | Verificado |
@@ -126,7 +126,7 @@ Son sugerencias mías, **no requisitos**. Solo valen si el restaurante las neces
 - Propinas y descuentos.
 - Impresión de tickets o comandas para cocina.
 - Alerta al gerente cuando un producto baje de su stock mínimo (hoy hay un filtro, no un aviso).
-- Reporte de ventas y productos más vendidos (ya es RF-VEN-004).
+- ~~Reporte de ventas y productos más vendidos~~ Hecho (RF-VEN-004, Gerente → Cortes y ventas → Reporte de ventas).
 - Historial de cambios de precio del menú.
 
 ---

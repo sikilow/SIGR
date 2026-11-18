@@ -13,6 +13,7 @@ import type {
   CambioProducto,
   ConfiguracionReservacion,
   CambioUsuario,
+  CaracteristicaAdmin,
   CategoriaAdmin,
   CategoriaMenu,
   Credenciales,
@@ -175,6 +176,14 @@ export interface CatalogoService {
   renombrarCategoria(id: number, nombre: string): Promise<CategoriaAdmin>
   /** DELETE /catalogo/categorias/{id}. Solo si no tiene productos (si no, `estado_invalido`). */
   eliminarCategoria(id: number): Promise<void>
+  /** GET /catalogo/caracteristicas: catálogo de características de mesa (activas e inactivas). */
+  listarCaracteristicas(): Promise<CaracteristicaAdmin[]>
+  /** POST /catalogo/caracteristicas. Nombre único (si no, `estado_invalido`). */
+  crearCaracteristica(nombre: string): Promise<CaracteristicaAdmin>
+  /** PATCH /catalogo/caracteristicas/{id}: `{ nombre }` o `{ activa }`. */
+  actualizarCaracteristica(id: number, cambio: { nombre: string } | { activa: boolean }): Promise<CaracteristicaAdmin>
+  /** DELETE /catalogo/caracteristicas/{id}. Solo si ninguna mesa ni reservación la usa. */
+  eliminarCaracteristica(id: number): Promise<void>
   /** GET /catalogo/secciones */
   listarSecciones(): Promise<SeccionAdmin[]>
   /** POST /catalogo/secciones */

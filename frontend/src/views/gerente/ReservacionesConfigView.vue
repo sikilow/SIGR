@@ -1,11 +1,45 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ErrorServicio, servicios } from '../../services'
 import type { ConfiguracionReservacion } from '../../types'
+import {
+  alternarDia,
+  DIAS_SEMANA,
+  HORARIO_POR_DEFECTO,
+  type HorarioReservacion,
+  horasDelDia,
+  INTERVALOS_RESERVACION,
+  textoDiasCerrados,
+  validarHorario,
+} from '../../utils/horarioReservacion'
 
 const tolerancia = ref('15')
 const recordatorio = ref('5')
 const anticipacion = ref('60')
+const duracion = ref('90')
+// Horario de reservaciones (migración 022).
+const horaApertura = ref(HORARIO_POR_DEFECTO.horaApertura)
+const horaUltima = ref(HORARIO_POR_DEFECTO.horaUltima)
+const intervalo = ref<HorarioReservacion['intervaloMinutos']>(HORARIO_POR_DEFECTO.intervaloMinutos)
+const diasAbiertos = ref(HORARIO_POR_DEFECTO.diasAbiertos)
+
+const horario = computed<HorarioReservacion>(() => ({
+  horaApertura: horaApertura.value,
+  horaUltima: horaUltima.value,
+  intervaloMinutos: intervalo.value,
+  diasAbiertos: diasAbiertos.value,
+}))
+const errorHorario = computed(() => validarHorario(horario.value))
+/** Lo que verá el cliente en el portal: las horas de un día abierto. */
+const vistaPrevia = computed(() => (errorHorario.value ? [] : horasDelDia(horario.value)))
+const cerrados = computed(() => textoDiasCerrados(horario.value))
+
+function aplicarHorario(config: HorarioReservacion) {
+  horaApertura.value = config.horaApertura
+  horaUltima.value = config.horaUltima
+  intervalo.value = config.intervaloMinutos
+  diasAbiertos.value = config.diasAbiertos
+}
 const cargando = ref(true)
 const cargado = ref(false)
 const guardando = ref(false)
@@ -21,6 +55,8 @@ async function cargar() {
     tolerancia.value = String(config.toleranciaMinutos)
     recordatorio.value = String(config.recordatorioMinutos)
     anticipacion.value = String(config.anticipacionMinutos)
+    duracion.value = String(config.duracionReservacionMinutos)
+    aplicarHorario(config)
     cargado.value = true
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo cargar la configuración.'
@@ -35,6 +71,8 @@ async function guardar() {
     toleranciaMinutos: Number(tolerancia.value),
     recordatorioMinutos: Number(recordatorio.value),
     anticipacionMinutos: Number(anticipacion.value),
+    duracionReservacionMinutos: Number(duracion.value),
+    ...horario.value,
   }
   if (!Number.isInteger(config.toleranciaMinutos) || config.toleranciaMinutos < 5 || config.toleranciaMinutos > 180) {
     error.value = 'La tolerancia debe estar entre 5 y 180 minutos.'
@@ -48,6 +86,14 @@ async function guardar() {
     error.value = 'La anticipación debe estar entre 0 y 1440 minutos (24 horas).'
     return
   }
+  if (!Number.isInteger(config.duracionReservacionMinutos) || config.duracionReservacionMinutos < 30 || config.duracionReservacionMinutos > 360) {
+    error.value = 'La duración de la reservación debe estar entre 30 y 360 minutos.'
+    return
+  }
+  if (errorHorario.value) {
+    error.value = errorHorario.value
+    return
+  }
   guardando.value = true
   error.value = ''
   mensaje.value = ''
@@ -56,7 +102,9 @@ async function guardar() {
     tolerancia.value = String(guardada.toleranciaMinutos)
     recordatorio.value = String(guardada.recordatorioMinutos)
     anticipacion.value = String(guardada.anticipacionMinutos)
-    mensaje.value = 'Configuración guardada. Los tiempos se aplican a las próximas reservaciones y correos.'
+    duracion.value = String(guardada.duracionReservacionMinutos)
+    aplicarHorario(guardada)
+    mensaje.value = 'Configuración guardada. El horario y los tiempos se aplican a las próximas reservaciones y correos.'
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo guardar la configuración.'
   } finally {
@@ -73,7 +121,7 @@ onMounted(() => void cargar())
       <div>
         <p class="sobretitulo">Gerencia</p>
         <h2>Reservaciones</h2>
-        <p>Define con cuánta anticipación se reserva, el tiempo de espera para la llegada y cuándo recordar al cliente.</p>
+        <p>Define el horario para reservar, con cuánta anticipación, el tiempo de espera para la llegada y cuándo recordar al cliente.</p>
       </div>
       <button class="btn btn--secundario" type="button" :disabled="cargando || guardando" @click="cargar">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -104,6 +152,61 @@ onMounted(() => void cargar())
           <p>Estos tiempos aplican a todas las reservaciones del restaurante.</p>
         </div>
 
+        <fieldset class="horario">
+          <legend class="horario__titulo">Horario de reservaciones</legend>
+          <p class="horario__ayuda">
+            El portal de clientes ofrece estas horas, y la hostess y el sistema no aceptan reservaciones fuera de ellas ni en días
+            cerrados. La hostess sí puede anotar una hora entre intervalos (por ejemplo, 19:45).
+          </p>
+
+          <div class="config__campos">
+            <div class="campo">
+              <label for="hora-apertura">Primera hora para reservar</label>
+              <input id="hora-apertura" v-model="horaApertura" type="time" step="900" required :disabled="cargando || guardando" />
+            </div>
+            <div class="campo">
+              <label for="hora-ultima">Última hora para reservar</label>
+              <input id="hora-ultima" v-model="horaUltima" type="time" step="900" required :disabled="cargando || guardando" />
+              <p class="campo__ayuda">La última mesa que se puede apartar, no la hora de cierre.</p>
+            </div>
+            <div class="campo">
+              <label for="intervalo">Horas disponibles cada</label>
+              <select id="intervalo" v-model.number="intervalo" :disabled="cargando || guardando">
+                <option v-for="i in INTERVALOS_RESERVACION" :key="i" :value="i">{{ i === 60 ? '1 hora (en punto)' : `${i} minutos` }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="dias" role="group" aria-labelledby="dias-titulo">
+            <p id="dias-titulo" class="dias__titulo">Días que se reciben reservaciones</p>
+            <div class="dias__botones">
+              <button
+                v-for="(d, i) in DIAS_SEMANA"
+                :key="d.nombre"
+                type="button"
+                class="dia"
+                :class="{ 'dia--abierto': diasAbiertos[i] === '1' }"
+                :aria-pressed="diasAbiertos[i] === '1'"
+                :aria-label="d.nombre"
+                :title="d.nombre"
+                :disabled="cargando || guardando"
+                @click="diasAbiertos = alternarDia(diasAbiertos, i)"
+              >
+                {{ d.corto }}
+              </button>
+            </div>
+            <p class="campo__ayuda">{{ cerrados || 'Abierto todos los días.' }}</p>
+          </div>
+
+          <p v-if="errorHorario" class="texto-error" role="alert">{{ errorHorario }}</p>
+          <div v-else class="vista-previa">
+            <p class="vista-previa__titulo">Así verá las horas el cliente ({{ vistaPrevia.length }}):</p>
+            <ul class="vista-previa__horas">
+              <li v-for="h in vistaPrevia" :key="h" class="numero">{{ h }}</li>
+            </ul>
+          </div>
+        </fieldset>
+
         <div class="config__campos">
           <div class="campo">
             <label for="anticipacion">Anticipación mínima para reservar (minutos)</label>
@@ -111,6 +214,14 @@ onMounted(() => void cargar())
             <p class="campo__ayuda">
               Tiempo que debe faltar, como mínimo, para la hora reservada. Aplica a la hostess y al portal de clientes.
               De 0 (sin mínimo) a 1440 minutos; predeterminado: 60 (1 hora).
+            </p>
+          </div>
+          <div class="campo">
+            <label for="duracion">Duración de cada reservación (minutos)</label>
+            <input id="duracion" v-model="duracion" type="number" min="30" max="360" step="15" required :disabled="cargando || guardando" />
+            <p class="campo__ayuda">
+              Cuánto tiempo aparta una reservación su mesa. Con 90, una mesa reservada a las 14:00 no se da a otra reservación
+              entre 12:30 y 15:30. De 30 a 360 minutos; predeterminado: 90.
             </p>
           </div>
           <div class="campo">
@@ -215,6 +326,88 @@ onMounted(() => void cargar())
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: var(--espacio-5);
+}
+
+.horario {
+  display: grid;
+  gap: var(--espacio-4);
+  min-width: 0;
+  margin: 0;
+  padding: var(--espacio-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radio);
+  background: var(--color-surface-2);
+}
+
+.horario__titulo {
+  padding: 0 var(--espacio-1);
+  font-size: var(--texto-lg);
+  font-weight: 700;
+}
+
+.horario__ayuda {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.dias__titulo {
+  margin: 0 0 var(--espacio-2);
+  font-weight: 700;
+}
+
+.dias__botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+}
+
+.dia {
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: line-through;
+  cursor: pointer;
+}
+
+.dia:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.dia--abierto {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+  text-decoration: none;
+}
+
+.vista-previa__titulo {
+  margin: 0 0 var(--espacio-2);
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 650;
+}
+
+.vista-previa__horas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vista-previa__horas li {
+  padding: 2px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: var(--texto-sm);
 }
 
 .config__acciones {

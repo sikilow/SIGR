@@ -28,9 +28,7 @@
 | `Mesa.numero` | `mesa.numero` | `numero` | `numero` | columna |
 | `Mesa.capacidad` | `mesa.capacidad` | `capacidad` | `capacidad` | columna |
 | `Mesa.zona` | `mesa.zona` | `zona` | `zona` | columna obligatoria (nombre de `seccion.nombre`; migración `009_secciones_mesas.sql`) |
-| `Mesa.plantaBaja` | `mesa.planta_baja` | `plantaBaja` | `planta_baja` | característica fija de acceso (migración `010_reservaciones_y_caracteristicas.sql`) |
-| `Mesa.espacioCarriola` | `mesa.espacio_carriola` | `espacioCarriola` | `espacio_carriola` | característica fija de acceso |
-| `Mesa.sinEscaleras` | `mesa.sin_escaleras` | `sinEscaleras` | `sin_escaleras` | característica fija de acceso |
+| `Mesa.caracteristicas` | `mesa_caracteristica` + `caracteristica_mesa` | `caracteristicas` (`{ idCaracteristica, nombre }[]`) | `caracteristicas` (`{ id_caracteristica, nombre }[]`) | catálogo que administra Gerencia (migración 023; antes eran las columnas fijas `planta_baja`, `espacio_carriola` y `sin_escaleras`) |
 | — (catálogo de secciones) | `seccion.nombre`, `seccion.activa` | `SeccionAdmin.nombre`, `activa` | `nombre`, `activa`, `total_mesas` | `total_mesas` se calcula contando `mesa.zona`; las secciones inhabilitadas no ofrecen mesas a mesero ni hostess |
 | `Mesa.estado` | `mesa.estado` | `estado` (`libre` \| `ocupada` \| `reservada`) | `estado` (`libre` \| `ocupada` \| `reservada`) | columna con `CHECK` (default `libre`). Mismo código en BD, API y frontend; la interfaz muestra «Libre». `disponible` se sigue entendiendo como `libre` al leer |
 | `Mesa.estadoCuenta` | — (de `cuenta.estado` de la cuenta activa) | `estadoCuenta` | `estado_cuenta` | calculado por la API |

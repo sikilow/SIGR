@@ -28,6 +28,7 @@ import {
   parseFechaMySQL,
   parseFechaMySQLONula,
 } from '../api/conversion'
+import { aCaracteristicas, type CaracteristicaDto } from '../api/mappers'
 
 /** INT o DECIMAL tal como puede llegar desde PDO: número o texto ("12"). */
 type Numerico = number | string
@@ -43,9 +44,8 @@ export interface MesaSalonDto {
   estado: string
   /** mesa.zona («sección»). GET /mesas la envía; la respuesta de asignar mesa no: ausente = sin sección. */
   zona?: string | null
-  planta_baja?: boolean | number | string
-  espacio_carriola?: boolean | number | string
-  sin_escaleras?: boolean | number | string
+  /** Características activas de la mesa (migración 023). */
+  caracteristicas?: CaracteristicaDto[]
   /** seccion.es_para_llevar: mesa virtual de pedidos para llevar (la hostess no la ve). */
   es_para_llevar?: boolean | number | string
 }
@@ -69,9 +69,8 @@ export interface ReservacionDto {
   mesa_numero: Numerico | null
   /** Preferencias de mesa (migración 021). Una API anterior no las envía: ausentes = sin preferencias. */
   pref_zona?: string | null
-  pref_planta_baja?: boolean | number | string
-  pref_carriola?: boolean | number | string
-  pref_sin_escaleras?: boolean | number | string
+  /** Características que pidió el cliente (migración 023). */
+  pref_caracteristicas?: CaracteristicaDto[]
 }
 
 export interface ListaEsperaDto {
@@ -109,31 +108,16 @@ function aTelefono(valor: unknown): string | null {
   return texto === '' ? null : texto
 }
 
-/** BOOLEAN de MySQL tal como puede llegar: `true`, `1` o `"1"`. */
-function aBooleano(valor: unknown): boolean {
-  return valor === true || valor === 1 || valor === '1'
-}
-
-/** Preferencias de una fila de `reservacion` (columnas `pref_*`). */
-export function aPreferencias(dto: Pick<ReservacionDto, 'pref_zona' | 'pref_planta_baja' | 'pref_carriola' | 'pref_sin_escaleras'>): PreferenciasReservacion {
+/** Preferencias de una fila de `reservacion`: sección y características pedidas. */
+export function aPreferencias(dto: Pick<ReservacionDto, 'pref_zona' | 'pref_caracteristicas'>): PreferenciasReservacion {
   const zona = aTexto(dto.pref_zona).trim()
-  return {
-    zona: zona === '' ? null : zona,
-    plantaBaja: aBooleano(dto.pref_planta_baja),
-    espacioCarriola: aBooleano(dto.pref_carriola),
-    sinEscaleras: aBooleano(dto.pref_sin_escaleras),
-  }
+  return { zona: zona === '' ? null : zona, caracteristicas: aCaracteristicas(dto.pref_caracteristicas) }
 }
 
-/** Columnas `pref_*` para POST/PATCH de reservaciones. Una sección vacía viaja como `null` («cualquiera»). */
-export function dePreferencias(p: PreferenciasReservacion): Record<string, string | boolean | null> {
+/** Preferencias para POST/PATCH de reservaciones. Una sección vacía viaja como `null` («cualquiera»). */
+export function dePreferencias(p: PreferenciasReservacion): { pref_zona: string | null; pref_caracteristicas: number[] } {
   const zona = p.zona?.trim() ?? ''
-  return {
-    pref_zona: zona === '' ? null : zona,
-    pref_planta_baja: p.plantaBaja,
-    pref_carriola: p.espacioCarriola,
-    pref_sin_escaleras: p.sinEscaleras,
-  }
+  return { pref_zona: zona === '' ? null : zona, pref_caracteristicas: p.caracteristicas.map((c) => c.idCaracteristica) }
 }
 
 export function aMesaSalon(dto: MesaSalonDto): MesaSalon {
@@ -143,9 +127,7 @@ export function aMesaSalon(dto: MesaSalonDto): MesaSalon {
     capacidad: aNumero(dto.capacidad, 'capacidad'),
     estado: aEstadoMesa(dto.estado),
     zona: aZona(dto.zona),
-    plantaBaja: dto.planta_baja === true || dto.planta_baja === 1 || dto.planta_baja === '1',
-    espacioCarriola: dto.espacio_carriola === true || dto.espacio_carriola === 1 || dto.espacio_carriola === '1',
-    sinEscaleras: dto.sin_escaleras === true || dto.sin_escaleras === 1 || dto.sin_escaleras === '1',
+    caracteristicas: aCaracteristicas(dto.caracteristicas),
   }
 }
 
@@ -217,7 +199,7 @@ export function deNuevoCliente(c: NuevoCliente): Record<string, string | null> {
 }
 
 /** Cuerpo de POST /reservaciones. */
-export function deNuevaReservacion(r: NuevaReservacion): Record<string, string | number | boolean | null> {
+export function deNuevaReservacion(r: NuevaReservacion): Record<string, string | number | number[] | null> {
   return {
     id_cliente: r.idCliente,
     fecha_hora: aFechaMySQL(r.fechaHora),
@@ -228,8 +210,8 @@ export function deNuevaReservacion(r: NuevaReservacion): Record<string, string |
 }
 
 /** Cuerpo de PATCH /reservaciones/{id}: solo viajan los campos que cambian (`id_mesa: null` quita la mesa). */
-export function deCambioReservacion(c: CambioReservacion): Record<string, string | number | boolean | null> {
-  const cuerpo: Record<string, string | number | boolean | null> = {}
+export function deCambioReservacion(c: CambioReservacion): Record<string, string | number | number[] | null> {
+  const cuerpo: Record<string, string | number | number[] | null> = {}
   if (c.estado !== undefined) cuerpo.estado = c.estado
   if (c.fechaHora !== undefined) cuerpo.fecha_hora = aFechaMySQL(c.fechaHora)
   if (c.personas !== undefined) cuerpo.personas = c.personas

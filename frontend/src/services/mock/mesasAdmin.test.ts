@@ -1,3 +1,4 @@
+import { HORARIO_POR_DEFECTO } from '../../utils/horarioReservacion'
 // Administración de mesas del gerente (mock). Cada prueba parte de una «base de datos» recién creada.
 // Mesas de la demo: libres 1, 2, 4, 6 y 9; ocupadas 3, 5, 8, 11 y 12; reservadas 7 y 10. La mesa 2 solo tiene una cuenta cerrada.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -118,7 +119,7 @@ describe('mesas no disponibles', () => {
     const mesa1 = (await resolver(catalogo.listarMesas())).find((m) => m.numero === 1)!
     await resolver(catalogo.actualizarMesa(mesa1.idMesa, { activa: false }))
     // Sin anticipación mínima: esta prueba solo quiere comprobar la regla de la mesa no disponible.
-    await resolver(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 0 }))
+    await resolver(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 0, duracionReservacionMinutos: 90, ...HORARIO_POR_DEFECTO, horaApertura: '00:00', horaUltima: '23:59' }))
     const e = await errorDe(hostess.crearReservacion({ idCliente: 1, fechaHora: new Date(Date.now() + 60_000), personas: 2, idMesa: mesa1.idMesa }))
     expect(e.codigo).toBe('mesa_no_disponible')
   })
@@ -215,5 +216,36 @@ describe('administración de secciones', () => {
     await resolver(catalogo.crearSeccion('Evento'))
     await resolver(catalogo.eliminarSeccion('Evento'))
     expect((await resolver(catalogo.listarSecciones())).some((s) => s.nombre === 'Evento')).toBe(false)
+  })
+})
+
+describe('catálogo de características de mesa (Gerente → Mesas → Características)', () => {
+  it('crea, renombra y asigna; la hostess ve el nombre en la mesa', async () => {
+    const { catalogo, hostess } = await nuevoMock()
+    const nueva = await resolver(catalogo.crearCaracteristica('Vista al jardín'))
+    expect((await errorDe(catalogo.crearCaracteristica(' vista al JARDÍN '))).codigo).toBe('estado_invalido')
+    await resolver(catalogo.actualizarCaracteristica(nueva.idCaracteristica, { nombre: 'Vista al patio' }))
+    await resolver(catalogo.actualizarMesa(1, { caracteristicas: [nueva.idCaracteristica] }))
+    const mesa = (await resolver(hostess.listarMesas())).find((m) => m.idMesa === 1)!
+    expect(mesa.caracteristicas.map((c) => c.nombre)).toEqual(['Vista al patio'])
+  })
+
+  it('una característica desactivada no se ofrece ni se puede asignar, pero la mesa la conserva', async () => {
+    const { catalogo, hostess } = await nuevoMock()
+    // La mesa 1 tiene «Planta baja» (1) en los datos de ejemplo.
+    await resolver(catalogo.actualizarCaracteristica(1, { activa: false }))
+    expect((await errorDe(catalogo.actualizarMesa(2, { caracteristicas: [1] }))).codigo).toBe('estado_invalido')
+    const mesa = (await resolver(hostess.listarMesas())).find((m) => m.idMesa === 1)!
+    expect(mesa.caracteristicas.some((c) => c.idCaracteristica === 1)).toBe(false)
+    await resolver(catalogo.actualizarMesa(1, { caracteristicas: [] }))
+    expect((await resolver(catalogo.listarMesas())).find((m) => m.idMesa === 1)!.caracteristicas).toContain(1)
+  })
+
+  it('solo se borra si ninguna mesa ni reservación la usa', async () => {
+    const { catalogo } = await nuevoMock()
+    expect((await errorDe(catalogo.eliminarCaracteristica(1))).codigo).toBe('estado_invalido')
+    const libre = await resolver(catalogo.crearCaracteristica('Zona tranquila'))
+    await resolver(catalogo.eliminarCaracteristica(libre.idCaracteristica))
+    expect((await resolver(catalogo.listarCaracteristicas())).some((c) => c.nombre === 'Zona tranquila')).toBe(false)
   })
 })

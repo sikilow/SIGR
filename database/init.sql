@@ -79,14 +79,29 @@ CREATE TABLE mesa (
   numero INT NOT NULL UNIQUE,
   capacidad INT NOT NULL CHECK (capacidad > 0),
   zona VARCHAR(40) NOT NULL DEFAULT 'General',
-  planta_baja BOOLEAN NOT NULL DEFAULT FALSE,
-  espacio_carriola BOOLEAN NOT NULL DEFAULT FALSE,
-  sin_escaleras BOOLEAN NOT NULL DEFAULT FALSE,
   activa BOOLEAN NOT NULL DEFAULT TRUE,
   estado VARCHAR(20) NOT NULL DEFAULT 'libre' CONSTRAINT chk_mesa_estado CHECK (estado IN ('libre', 'ocupada', 'reservada'))
 ) ENGINE=InnoDB;
 -- zona: sección existente; una sección inhabilitada oculta sus mesas a hostess y mesero.
 -- activa: FALSE = mesa no disponible; no aparece en el Salón ni en el Panel de mesas. No se borran (tienen cuentas ligadas).
+
+-- Características de mesa que administra Gerencia (migración 023): «Planta baja», «Junto a la ventana»…
+CREATE TABLE caracteristica_mesa (
+  id_caracteristica INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(40) NOT NULL,
+  activa BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT uq_caracteristica_mesa_nombre UNIQUE (nombre)
+) ENGINE=InnoDB;
+
+CREATE TABLE mesa_caracteristica (
+  id_mesa INT NOT NULL,
+  id_caracteristica INT NOT NULL,
+  PRIMARY KEY (id_mesa, id_caracteristica),
+  CONSTRAINT fk_mesa_caracteristica_mesa FOREIGN KEY (id_mesa) REFERENCES mesa (id_mesa) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_mesa_caracteristica_caracteristica FOREIGN KEY (id_caracteristica) REFERENCES caracteristica_mesa (id_caracteristica) ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+INSERT INTO caracteristica_mesa (nombre) VALUES ('Planta baja'), ('Espacio para carriola'), ('Sin escaleras');
 
 CREATE TABLE categoria_menu (
   id_categoria INT AUTO_INCREMENT PRIMARY KEY,
@@ -123,13 +138,19 @@ CREATE TABLE reservacion (
   personas INT NOT NULL CHECK (personas > 0),
   estado VARCHAR(25) NOT NULL DEFAULT 'pendiente',
   llegada_en DATETIME NULL,
-  -- Preferencias de mesa que pidió el cliente (migración 021). pref_zona NULL = cualquier sección.
+  -- Sección que pidió el cliente (migración 021); NULL = cualquiera. Las características pedidas van en
+  -- reservacion_caracteristica (migración 023).
   pref_zona VARCHAR(40) NULL,
-  pref_planta_baja BOOLEAN NOT NULL DEFAULT FALSE,
-  pref_carriola BOOLEAN NOT NULL DEFAULT FALSE,
-  pref_sin_escaleras BOOLEAN NOT NULL DEFAULT FALSE,
   CONSTRAINT fk_reservacion_id_cliente FOREIGN KEY (id_cliente) REFERENCES cliente (id_cliente) ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT fk_reservacion_id_mesa FOREIGN KEY (id_mesa) REFERENCES mesa (id_mesa) ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE reservacion_caracteristica (
+  id_reservacion INT NOT NULL,
+  id_caracteristica INT NOT NULL,
+  PRIMARY KEY (id_reservacion, id_caracteristica),
+  CONSTRAINT fk_reservacion_caracteristica_reservacion FOREIGN KEY (id_reservacion) REFERENCES reservacion (id_reservacion) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_reservacion_caracteristica_caracteristica FOREIGN KEY (id_caracteristica) REFERENCES caracteristica_mesa (id_caracteristica) ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE configuracion_reservacion (
@@ -138,6 +159,16 @@ CREATE TABLE configuracion_reservacion (
   recordatorio_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 5 CHECK (recordatorio_minutos BETWEEN 1 AND 30),
   anticipacion_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 60,
   CONSTRAINT chk_config_res_anticipacion CHECK (anticipacion_minutos BETWEEN 0 AND 1440),
+  -- Horario de reservaciones (migración 022). dias_abiertos: '1'/'0' de lunes a domingo.
+  hora_apertura TIME NOT NULL DEFAULT '13:00:00',
+  hora_ultima_reservacion TIME NOT NULL DEFAULT '21:00:00',
+  intervalo_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+  dias_abiertos CHAR(7) NOT NULL DEFAULT '1111111',
+  -- Cuánto ocupa una reservación su mesa al calcular la disponibilidad (migración 023).
+  duracion_reservacion_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 90,
+  CONSTRAINT chk_config_res_duracion CHECK (duracion_reservacion_minutos BETWEEN 30 AND 360),
+  CONSTRAINT chk_config_res_horario CHECK (hora_apertura <= hora_ultima_reservacion),
+  CONSTRAINT chk_config_res_intervalo CHECK (intervalo_minutos IN (15, 30, 60)),
   actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -620,17 +651,17 @@ DROP TRIGGER IF EXISTS `trg_aud_mesa_ad`$$
 CREATE TRIGGER `trg_aud_mesa_ai` AFTER INSERT ON `mesa` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'mesa', 'INSERT', JSON_OBJECT('id_mesa', NEW.`id_mesa`), JSON_OBJECT('id_mesa', NEW.`id_mesa`, 'numero', NEW.`numero`, 'capacidad', NEW.`capacidad`, 'zona', NEW.`zona`, 'planta_baja', NEW.`planta_baja`, 'espacio_carriola', NEW.`espacio_carriola`, 'sin_escaleras', NEW.`sin_escaleras`, 'activa', NEW.`activa`, 'estado', NEW.`estado`), USER());
+  VALUES (@sigr_actor_id, 'mesa', 'INSERT', JSON_OBJECT('id_mesa', NEW.`id_mesa`), JSON_OBJECT('id_mesa', NEW.`id_mesa`, 'numero', NEW.`numero`, 'capacidad', NEW.`capacidad`, 'zona', NEW.`zona`, 'activa', NEW.`activa`, 'estado', NEW.`estado`), USER());
 END$$
 CREATE TRIGGER `trg_aud_mesa_au` AFTER UPDATE ON `mesa` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'mesa', 'UPDATE', JSON_OBJECT('id_mesa', NEW.`id_mesa`), JSON_OBJECT('id_mesa', OLD.`id_mesa`, 'numero', OLD.`numero`, 'capacidad', OLD.`capacidad`, 'zona', OLD.`zona`, 'planta_baja', OLD.`planta_baja`, 'espacio_carriola', OLD.`espacio_carriola`, 'sin_escaleras', OLD.`sin_escaleras`, 'activa', OLD.`activa`, 'estado', OLD.`estado`), JSON_OBJECT('id_mesa', NEW.`id_mesa`, 'numero', NEW.`numero`, 'capacidad', NEW.`capacidad`, 'zona', NEW.`zona`, 'planta_baja', NEW.`planta_baja`, 'espacio_carriola', NEW.`espacio_carriola`, 'sin_escaleras', NEW.`sin_escaleras`, 'activa', NEW.`activa`, 'estado', NEW.`estado`), USER());
+  VALUES (@sigr_actor_id, 'mesa', 'UPDATE', JSON_OBJECT('id_mesa', NEW.`id_mesa`), JSON_OBJECT('id_mesa', OLD.`id_mesa`, 'numero', OLD.`numero`, 'capacidad', OLD.`capacidad`, 'zona', OLD.`zona`, 'activa', OLD.`activa`, 'estado', OLD.`estado`), JSON_OBJECT('id_mesa', NEW.`id_mesa`, 'numero', NEW.`numero`, 'capacidad', NEW.`capacidad`, 'zona', NEW.`zona`, 'activa', NEW.`activa`, 'estado', NEW.`estado`), USER());
 END$$
 CREATE TRIGGER `trg_aud_mesa_ad` AFTER DELETE ON `mesa` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
-  VALUES (@sigr_actor_id, 'mesa', 'DELETE', JSON_OBJECT('id_mesa', OLD.`id_mesa`), JSON_OBJECT('id_mesa', OLD.`id_mesa`, 'numero', OLD.`numero`, 'capacidad', OLD.`capacidad`, 'zona', OLD.`zona`, 'planta_baja', OLD.`planta_baja`, 'espacio_carriola', OLD.`espacio_carriola`, 'sin_escaleras', OLD.`sin_escaleras`, 'activa', OLD.`activa`, 'estado', OLD.`estado`), USER());
+  VALUES (@sigr_actor_id, 'mesa', 'DELETE', JSON_OBJECT('id_mesa', OLD.`id_mesa`), JSON_OBJECT('id_mesa', OLD.`id_mesa`, 'numero', OLD.`numero`, 'capacidad', OLD.`capacidad`, 'zona', OLD.`zona`, 'activa', OLD.`activa`, 'estado', OLD.`estado`), USER());
 END$$
 DROP TRIGGER IF EXISTS `trg_aud_categoria_menu_ai`$$
 DROP TRIGGER IF EXISTS `trg_aud_categoria_menu_au`$$

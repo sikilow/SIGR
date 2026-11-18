@@ -1,4 +1,5 @@
 // Tipos del módulo del gerente: administración de usuarios, categorías, productos, inventario y mesas.
+import type { HorarioReservacion } from '../utils/horarioReservacion'
 import type { EstadoMesa } from './estados'
 import type { Rol } from './usuario'
 
@@ -48,11 +49,14 @@ export interface SeccionAdmin {
   totalMesas: number
 }
 
-export interface ConfiguracionReservacion {
+/** configuracion_reservacion: tiempos de la reservación y horario (migración 022). */
+export interface ConfiguracionReservacion extends HorarioReservacion {
   toleranciaMinutos: number
   recordatorioMinutos: number
   /** Con cuánto tiempo mínimo antes de la hora se puede reservar (0 = sin mínimo). */
   anticipacionMinutos: number
+  /** Cuánto ocupa una reservación su mesa al calcular la disponibilidad (30 a 360; migración 023). */
+  duracionReservacionMinutos: number
 }
 
 export interface ProductoAdmin {
@@ -99,9 +103,8 @@ export interface MesaAdmin {
   capacidad: number
   /** mesa.zona: nombre de una sección registrada; es obligatoria en la base de datos. */
   zona: string
-  plantaBaja: boolean
-  espacioCarriola: boolean
-  sinEscaleras: boolean
+  /** Ids de caracteristica_mesa que tiene la mesa (también las desactivadas). */
+  caracteristicas: number[]
   /** mesa.activa: `false` = no disponible; desaparece del Salón y del Panel de mesas y no se puede sentar ni reservar. */
   activa: boolean
   /** mesa.estado: ocupación actual (libre, ocupada o reservada). */
@@ -113,10 +116,21 @@ export interface NuevaMesa {
   capacidad: number
   /** Sección activa del salón. */
   zona: string
-  plantaBaja?: boolean
-  espacioCarriola?: boolean
-  sinEscaleras?: boolean
+  /** Ids de caracteristica_mesa (ausente = ninguna). */
+  caracteristicas?: number[]
   activa: boolean
+}
+
+/** caracteristica_mesa: catálogo de características que Gerencia asigna a las mesas (migración 023). */
+export interface CaracteristicaAdmin {
+  idCaracteristica: number
+  nombre: string
+  /** `false` = ya no se ofrece para nuevas mesas ni en el portal (las mesas que la tienen la conservan). */
+  activa: boolean
+  /** CALCULADO: mesas que la tienen. */
+  totalMesas: number
+  /** CALCULADO: reservaciones que la pidieron. */
+  totalReservaciones: number
 }
 
 /** Cualquier subconjunto de campos editables. Marcar como no disponible = `{ activa: false }` (las mesas no se borran). */

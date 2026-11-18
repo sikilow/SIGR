@@ -1,5 +1,5 @@
 // Reglas de las reservaciones (rol hostess). Funciones puras: las usan la pantalla Reservaciones, el mock y las pruebas.
-import type { Cliente, EstadoReservacion, MesaSalon, PreferenciasReservacion, Reservacion } from '../types'
+import type { CaracteristicaMesa, Cliente, EstadoReservacion, MesaSalon, PreferenciasReservacion, Reservacion } from '../types'
 
 export const MIN_PERSONAS_RESERVACION = 1
 export const MAX_PERSONAS_RESERVACION = 20
@@ -225,7 +225,11 @@ export interface OpcionMesa {
  * Mesas que se pueden ofrecer para una reservación: las LIBRES y la que la reservación ya tiene (aunque esté
  * `reservada`, es la suya). Primero las que alcanzan, de la más justa a la más grande; después las que no alcanzan.
  */
-export type PreferenciasMesa = Partial<Pick<MesaSalon, 'plantaBaja' | 'espacioCarriola' | 'sinEscaleras'>> & { zona?: string }
+/** Lo que se pidió, para ordenar las mesas: sección y ids de características (catálogo de Gerencia). */
+export interface PreferenciasMesa {
+  zona?: string
+  caracteristicas?: number[]
+}
 
 export function mesasParaReservacion(
   mesas: MesaSalon[],
@@ -233,8 +237,7 @@ export function mesasParaReservacion(
   idMesaActual: number | null,
   preferencias: PreferenciasMesa = {},
 ): OpcionMesa[] {
-  const caracteristicas = (['plantaBaja', 'espacioCarriola', 'sinEscaleras'] as const)
-    .filter((clave) => preferencias[clave])
+  const pedidas = preferencias.caracteristicas ?? []
   return mesas
     .filter((m) => m.estado === 'libre' || m.idMesa === idMesaActual)
     .map((mesa) => ({ mesa, alcanza: mesa.capacidad >= personas }))
@@ -244,24 +247,31 @@ export function mesasParaReservacion(
       const coincideZonaB = preferencias.zona && b.mesa.zona === preferencias.zona ? 1 : 0
       if (coincideZonaA !== coincideZonaB) return coincideZonaB - coincideZonaA
       const coincidencias = (opcion: OpcionMesa) =>
-        caracteristicas.reduce((total, clave) => total + Number(opcion.mesa[clave]), 0)
+        pedidas.filter((id) => opcion.mesa.caracteristicas.some((c) => c.idCaracteristica === id)).length
       const diferenciaCaracteristicas = coincidencias(b) - coincidencias(a)
       if (diferenciaCaracteristicas !== 0) return diferenciaCaracteristicas
       return a.mesa.capacidad - b.mesa.capacidad || a.mesa.numero - b.mesa.numero
     })
 }
 
-/** Características de acceso de una mesa, en texto: «planta baja · carriola · sin escaleras» (vacío si no tiene). */
-export function textoCaracteristicasMesa(mesa: Pick<MesaSalon, 'plantaBaja' | 'espacioCarriola' | 'sinEscaleras'>): string {
-  return [mesa.plantaBaja && 'planta baja', mesa.espacioCarriola && 'carriola', mesa.sinEscaleras && 'sin escaleras']
-    .filter(Boolean)
-    .join(' · ')
+/** ¿La mesa cumple TODO lo que se pidió (sección y características)? Sin nada pedido, `false`. */
+export function mesaCumplePreferencias(mesa: Pick<MesaSalon, 'zona' | 'caracteristicas'>, p: PreferenciasReservacion): boolean {
+  if (!tienePreferencias(p)) return false
+  return (
+    (p.zona === null || mesa.zona === p.zona) &&
+    p.caracteristicas.every((c) => mesa.caracteristicas.some((m) => m.idCaracteristica === c.idCaracteristica))
+  )
 }
 
-/** Lo que pidió el cliente, en texto: «Terraza · planta baja · carriola». Vacío si no pidió nada. */
+/** Características de una mesa, en texto: «Planta baja · Junto a la ventana» (vacío si no tiene). */
+export function textoCaracteristicasMesa(mesa: Pick<MesaSalon, 'caracteristicas'>): string {
+  return mesa.caracteristicas.map((c) => c.nombre).join(' · ')
+}
+
+/** Lo que pidió el cliente, en texto: «Terraza · Planta baja · Espacio para carriola». Vacío si no pidió nada. */
 export function textoPreferencias(p: PreferenciasReservacion | undefined | null): string {
   if (!p) return ''
-  return [p.zona, textoCaracteristicasMesa(p)].filter(Boolean).join(' · ')
+  return [p.zona, ...p.caracteristicas.map((c) => c.nombre)].filter(Boolean).join(' · ')
 }
 
 /** ¿Pidió alguna sección o característica? */
@@ -272,7 +282,19 @@ export function tienePreferencias(p: PreferenciasReservacion | undefined | null)
 /** Las preferencias guardadas, en el formato que usa `mesasParaReservacion` para ordenar. */
 export function aPreferenciasMesa(p: PreferenciasReservacion | undefined | null): PreferenciasMesa {
   if (!p) return {}
-  return { zona: p.zona ?? '', plantaBaja: p.plantaBaja, espacioCarriola: p.espacioCarriola, sinEscaleras: p.sinEscaleras }
+  return { zona: p.zona ?? '', caracteristicas: p.caracteristicas.map((c) => c.idCaracteristica) }
+}
+
+/** Características que se pueden pedir: las que tiene al menos una de las mesas (sin repetir, por nombre). */
+export function caracteristicasDisponibles(mesas: ReadonlyArray<Pick<MesaSalon, 'caracteristicas'>>): CaracteristicaMesa[] {
+  const unicas = new Map<number, CaracteristicaMesa>()
+  for (const m of mesas) for (const c of m.caracteristicas) unicas.set(c.idCaracteristica, c)
+  return [...unicas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+}
+
+/** Preferencias vacías (cualquier sección, ninguna característica). */
+export function sinPreferencias(): PreferenciasReservacion {
+  return { zona: null, caracteristicas: [] }
 }
 
 /** Aviso (no bloquea) cuando las personas no caben en la mesa elegida; `null` si caben. */

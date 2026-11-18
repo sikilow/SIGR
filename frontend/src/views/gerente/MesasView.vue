@@ -6,15 +6,20 @@ import { computed, onMounted, ref } from 'vue'
 import ConfirmarAccionDialog from '../../components/ConfirmarAccionDialog.vue'
 import FormularioMesaDialog from '../../components/FormularioMesaDialog.vue'
 import InsigniaEstado from '../../components/InsigniaEstado.vue'
+import CaracteristicasDialog from '../../components/CaracteristicasDialog.vue'
 import SeccionesDialog from '../../components/SeccionesDialog.vue'
 import { ErrorServicio, servicios } from '../../services'
 import { useAnunciosStore } from '../../stores/anuncios'
-import { ETIQUETA_ESTADO_MESA, type MesaAdmin, type SeccionAdmin } from '../../types'
+import { ETIQUETA_ESTADO_MESA, type CaracteristicaAdmin, type MesaAdmin, type SeccionAdmin } from '../../types'
 
 const anuncios = useAnunciosStore()
 
 const mesas = ref<MesaAdmin[]>([])
 const secciones = ref<SeccionAdmin[]>([])
+const caracteristicas = ref<CaracteristicaAdmin[]>([])
+/** Nombres de las características activas de una mesa, para la tarjeta. */
+const nombresCaracteristicas = (m: MesaAdmin) =>
+  caracteristicas.value.filter((c) => c.activa && m.caracteristicas.includes(c.idCaracteristica)).map((c) => c.nombre)
 const cargando = ref(true)
 const error = ref('')
 
@@ -53,12 +58,14 @@ const cuenta = computed(() => ({
 async function cargar(conEsqueleto = false) {
   if (conEsqueleto) cargando.value = true
   try {
-    const [mesasRecibidas, seccionesRecibidas] = await Promise.all([
+    const [mesasRecibidas, seccionesRecibidas, caracteristicasRecibidas] = await Promise.all([
       servicios.catalogo.listarMesas(),
       servicios.catalogo.listarSecciones(),
+      servicios.catalogo.listarCaracteristicas(),
     ])
     mesas.value = mesasRecibidas
     secciones.value = seccionesRecibidas
+    caracteristicas.value = caracteristicasRecibidas
     // Si la sección filtrada ya no existe, vuelve a «todas».
     const f = seccionFiltro.value
     if (f !== 'todas' && !secciones.value.some((s) => s.nombre === f)) seccionFiltro.value = 'todas'
@@ -78,6 +85,19 @@ const enEdicion = ref<MesaAdmin | null>(null)
 const origenForm = ref<HTMLElement | null>(null)
 const seccionesAbierto = ref(false)
 const origenSecciones = ref<HTMLElement | null>(null)
+const caracteristicasAbierto = ref(false)
+const origenCaracteristicas = ref<HTMLElement | null>(null)
+
+function abrirCaracteristicas(e?: Event) {
+  origenCaracteristicas.value = (e?.currentTarget as HTMLElement | undefined) ?? null
+  caracteristicasAbierto.value = true
+}
+
+/** Desde el formulario de mesa: se cierra el formulario y se abre el catálogo. */
+function administrarDesdeFormulario() {
+  formAbierto.value = false
+  abrirCaracteristicas()
+}
 
 function abrirNueva(e: Event) {
   enEdicion.value = null
@@ -156,6 +176,9 @@ const personas = (n: number) => (n === 1 ? '1 persona' : `${n} personas`)
         <button type="button" class="btn btn--secundario" @click="abrirSecciones">
           Secciones
         </button>
+        <button type="button" class="btn btn--secundario" @click="abrirCaracteristicas">
+          Características
+        </button>
         <button type="button" class="btn" :disabled="seccionesActivas.length === 0" @click="abrirNueva">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 5v14M5 12h14" />
@@ -223,6 +246,7 @@ const personas = (n: number) => (n === 1 ? '1 persona' : `${n} personas`)
           <h3>Mesa {{ m.numero }}</h3>
           <p class="fila__linea numero">{{ personas(m.capacidad) }}</p>
           <p class="fila__linea fila__meta">Sección: {{ m.zona }}</p>
+          <p v-if="nombresCaracteristicas(m).length" class="fila__linea fila__meta">{{ nombresCaracteristicas(m).join(' · ') }}</p>
         </div>
 
         <div class="fila__lado">
@@ -254,10 +278,19 @@ const personas = (n: number) => (n === 1 ? '1 persona' : `${n} personas`)
       :abierto="formAbierto"
       :mesa="enEdicion"
       :secciones="opcionesFormulario"
+      :caracteristicas="caracteristicas"
       :siguiente-numero="siguienteNumero"
       :origen-foco="origenForm"
       @cerrar="formAbierto = false"
       @guardado="alGuardar"
+      @administrar-caracteristicas="administrarDesdeFormulario"
+    />
+
+    <CaracteristicasDialog
+      :abierto="caracteristicasAbierto"
+      :origen-foco="origenCaracteristicas"
+      @cerrar="caracteristicasAbierto = false"
+      @cambio="cargar()"
     />
 
     <SeccionesDialog

@@ -62,7 +62,7 @@ describe('mock hostess: lecturas', () => {
     ])
     for (const m of mesas) {
       expect(Object.keys(m).sort()).toEqual([
-        'capacidad', 'espacioCarriola', 'estado', 'idMesa', 'numero', 'plantaBaja', 'sinEscaleras', 'zona',
+        'capacidad', 'caracteristicas', 'estado', 'idMesa', 'numero', 'zona',
       ])
     }
     // Secciones de ejemplo del mock (RF-MES-007): Salón 1–8, Terraza 9–14, Barra 15–17 y General 18

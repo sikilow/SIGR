@@ -10,9 +10,9 @@ en [`capturas/`](capturas/) y se tomaron con el servidor de desarrollo en modo m
 |---|---|---|---|
 | Usuarios | `/gerente/usuarios` | RF-USR-001 a 007 | Funcional; documentación visual pendiente |
 | Productos e inventario | `/gerente/productos` | RF-PRO-001 a 006 | Funcional; incluye descripción obligatoria, variantes y filtros de inventario |
-| Mesas y secciones | `/gerente/mesas` | RF-MES-002 a 007 | Funcional; administración de mesas y catálogo de secciones |
+| Mesas, secciones y características | `/gerente/mesas` | RF-MES-002 a 007 | Funcional; administración de mesas, catálogo de secciones y catálogo de **características** (botón «Características»: crear, renombrar, desactivar, borrar si no se usa; se marcan en cada mesa al editarla) |
 | Canales de pedido | `/gerente/canales` | Canales de los pedidos para llevar: agregar y activar o desactivar (migración 019) | Funcional |
-| Reservas | `/gerente/reservaciones` | Configuración de anticipación mínima (migración 018), tolerancia y recordatorio (migración 010) | Funcional; ruta protegida para gerente |
+| Reservas | `/gerente/reservaciones` | Horario de reservaciones: primera y última hora, intervalo y días abiertos, con vista previa de las horas del portal (migración 022); duración de cada reservación (023); anticipación mínima (018), tolerancia y recordatorio (010) | Funcional; ruta protegida para gerente |
 | Pedidos | `/gerente/pedidos` y `/gerente/pedidos/:idPedido` | RF-PED-002 (gerente), RF-PED-003, RF-PED-005 (parcial) | Documentada abajo |
 | Cortes y ventas → Cortes de caja | `/gerente/cortes` | Cierres de turno por cajero, cuadre de efectivo | Funcional |
 | Cortes y ventas → Reporte de ventas | `/gerente/ventas` | RF-VEN-003 (historial) y RF-VEN-004 (reporte con exportación) | Documentada abajo |

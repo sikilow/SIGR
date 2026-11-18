@@ -3,8 +3,8 @@
 // personas (1 a 20) y mesa opcional. Validación: cada error va bajo su campo (aria-describedby) y, al intentar guardar,
 // un resumen enfocable los enlaza. El alta lleva Idempotency-Key (también el alta de un cliente nuevo): reintentar tras
 // un fallo de red no duplica nada, y si el cliente ya se creó no se vuelve a crear al reintentar la reservación.
-import { computed, nextTick, ref, watch } from 'vue'
-import { ErrorServicio } from '../../services'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { ErrorServicio, servicios } from '../../services'
 import { useAnunciosStore } from '../../stores/anuncios'
 import { useReservacionesStore } from '../../stores/reservaciones'
 import type { CambioReservacion, Cliente, PreferenciasReservacion, Reservacion } from '../../types'
@@ -14,6 +14,9 @@ import {
   aDiaISO,
   aHoraISO,
   aPreferenciasMesa,
+  caracteristicasDisponibles,
+  sinPreferencias,
+  textoCaracteristicasMesa,
   advertenciaCapacidadMesa,
   clienteFormVacio,
   combinarFechaHora,
@@ -27,6 +30,15 @@ import {
   textoPreferencias,
   validarPersonasReservacion,
 } from '../../utils/reservaciones'
+import {
+  diaAbierto,
+  HORARIO_POR_DEFECTO,
+  type HorarioReservacion,
+  horasDelDia,
+  horasDisponibles,
+  motivoFueraDeHorario,
+  textoHorario,
+} from '../../utils/horarioReservacion'
 import PreferenciasMesaCampos from './PreferenciasMesaCampos.vue'
 import SelectorCliente from './SelectorCliente.vue'
 
@@ -52,14 +64,15 @@ const clavesCliente = crearClaveIdempotencia()
 const edita = computed(() => props.reservacion !== null)
 const hoy = aDiaISO(new Date())
 
-/** Hora sugerida para hoy: la siguiente media hora; si cruzaría la medianoche, ninguna. */
+// Horario de reservaciones (lo configura Gerencia). Mientras carga se usa el predeterminado; la API valida igual.
+const horario = ref<HorarioReservacion>({ ...HORARIO_POR_DEFECTO })
+const anticipacionMinutos = ref(60)
+const horarioCargado = ref(false)
+
+/** Hora sugerida para hoy: la primera hora del horario que todavía cumple la anticipación; otro día, ninguna. */
 function horaInicial(dia: string): string {
-  const ahora = new Date()
-  if (dia !== aDiaISO(ahora)) return ''
-  const siguiente = new Date(ahora)
-  siguiente.setSeconds(0, 0)
-  siguiente.setMinutes(ahora.getMinutes() < 30 ? 30 : 60)
-  return aDiaISO(siguiente) === dia ? aHoraISO(siguiente) : ''
+  if (dia !== aDiaISO(new Date())) return ''
+  return horasDisponibles(horario.value, dia, new Date(), anticipacionMinutos.value)[0] ?? ''
 }
 
 const original = props.reservacion
@@ -68,10 +81,32 @@ const dia0 = original ? aDiaISO(original.fechaHora) : props.diaInicial < hoy ? h
 const cliente = ref(clienteFormVacio())
 const fecha = ref(dia0)
 const hora = ref(original ? aHoraISO(original.fechaHora) : horaInicial(dia0))
+/** Si la persona ya tocó la hora, no se la cambiamos al llegar el horario. */
+const horaTocada = ref(false)
+
+onMounted(async () => {
+  try {
+    const datos = await servicios.hostess.obtenerHorario()
+    horario.value = datos
+    anticipacionMinutos.value = datos.anticipacionMinutos
+    horarioCargado.value = true
+    if (!original && !horaTocada.value) hora.value = horaInicial(fecha.value)
+  } catch {
+    // Sin horario la API sigue validando al guardar.
+  }
+})
+
+/** Horas sugeridas en el campo (la hostess puede escribir cualquier minuto dentro del horario). */
+const horasSugeridas = computed(() => horasDelDia(horario.value))
+const ayudaHora = computed(() =>
+  fecha.value && !diaAbierto(horario.value, fecha.value)
+    ? 'Ese día no se reciben reservaciones.'
+    : `Horario: ${textoHorario(horario.value)}.`,
+)
 const personasTexto = ref(original ? String(original.personas) : '2')
 const idMesaTexto = ref(original?.idMesa != null ? String(original.idMesa) : '')
 const preferenciasMesa = ref<PreferenciasReservacion>(
-  original?.preferencias ? { ...original.preferencias } : { zona: null, plantaBaja: false, espacioCarriola: false, sinEscaleras: false },
+  original?.preferencias ? { ...original.preferencias, caracteristicas: [...original.preferencias.caracteristicas] } : sinPreferencias(),
 )
 
 const intentado = ref(false)
@@ -113,6 +148,7 @@ watch(idMesaTexto, () => {
 const opcionesMesa = computed(() =>
   mesasParaReservacion(store.mesas, personas.value || 1, props.reservacion?.idMesa ?? null, aPreferenciasMesa(preferenciasMesa.value)),
 )
+const caracteristicasMesa = computed(() => caracteristicasDisponibles(store.mesas))
 const zonasMesa = computed(() => [...new Set(store.mesas.map((mesa) => mesa.zona).filter((zona): zona is string => zona !== null))].sort())
 const mesaElegida = computed(() => store.mesas.find((m) => String(m.idMesa) === idMesaTexto.value) ?? null)
 const avisoCapacidad = computed(() =>
@@ -143,6 +179,13 @@ function validar(): Errores {
   const f = validarFechaHora(fecha.value, hora.value, new Date(), original?.fechaHora ?? null)
   errores.fecha = f.fecha
   errores.hora = f.hora
+  // Día cerrado o fuera del horario (solo si cambió la fecha u hora: una reservación anterior al horario se puede editar).
+  const sinCambio = original && aDiaISO(original.fechaHora) === fecha.value && aHoraISO(original.fechaHora) === hora.value
+  if (!errores.fecha && !errores.hora && fecha.value && hora.value && !sinCambio) {
+    const motivo = motivoFueraDeHorario(horario.value, fecha.value, hora.value, false)
+    if (motivo && !diaAbierto(horario.value, fecha.value)) errores.fecha = motivo
+    else if (motivo) errores.hora = motivo
+  }
   errores.personas = validarPersonasReservacion(personasTexto.value) || undefined
   return errores
 }
@@ -347,10 +390,18 @@ async function guardar() {
             id="res-hora"
             v-model="hora"
             type="time"
+            list="res-horas"
+            :min="horario.horaApertura"
+            :max="horario.horaUltima"
             aria-required="true"
             :aria-invalid="errores.hora ? 'true' : undefined"
-            :aria-describedby="errores.hora ? 'error-res-hora' : undefined"
+            :aria-describedby="errores.hora ? 'error-res-hora ayuda-res-hora' : 'ayuda-res-hora'"
+            @input="horaTocada = true"
           />
+          <datalist id="res-horas">
+            <option v-for="h in horasSugeridas" :key="h" :value="h" />
+          </datalist>
+          <p id="ayuda-res-hora" class="campo__ayuda" :class="{ 'campo__ayuda--aviso': fecha && !diaAbierto(horario, fecha) }">{{ ayudaHora }}</p>
           <p v-if="errores.hora" id="error-res-hora" class="texto-error">{{ errores.hora }}</p>
         </div>
       </div>
@@ -386,6 +437,7 @@ async function guardar() {
           v-model="preferenciasMesa"
           id-prefijo="res-pref"
           :zonas="zonasMesa"
+          :opciones="caracteristicasMesa"
           :deshabilitado="enCurso"
           leyenda="Preferencias del cliente"
         />
@@ -399,7 +451,7 @@ async function guardar() {
         >
           <option value="">Sin mesa (se elige al llegar)</option>
           <option v-for="o in opcionesMesa" :key="o.mesa.idMesa" :value="String(o.mesa.idMesa)">
-            Mesa {{ o.mesa.numero }} · {{ o.mesa.zona }} · para {{ o.mesa.capacidad }}{{ o.alcanza ? '' : ' · no alcanza' }}{{ o.mesa.idMesa === reservacion?.idMesa ? ' · la actual' : '' }}{{ o.mesa.plantaBaja ? ' · planta baja' : '' }}{{ o.mesa.espacioCarriola ? ' · carriola' : '' }}{{ o.mesa.sinEscaleras ? ' · sin escaleras' : '' }}
+            Mesa {{ o.mesa.numero }} · {{ o.mesa.zona }} · para {{ o.mesa.capacidad }}{{ o.alcanza ? '' : ' · no alcanza' }}{{ o.mesa.idMesa === reservacion?.idMesa ? ' · la actual' : '' }}{{ textoCaracteristicasMesa(o.mesa) ? ` · ${textoCaracteristicasMesa(o.mesa)}` : '' }}
           </option>
         </select>
         <p id="ayuda-res-mesa" class="campo__ayuda">
@@ -526,6 +578,11 @@ async function guardar() {
   color: var(--color-muted);
   font-size: var(--texto-sm);
   font-weight: 400;
+}
+
+.campo__ayuda--aviso {
+  color: var(--color-peligro-texto);
+  font-weight: 650;
 }
 
 .campo input[aria-invalid='true'],

@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { requiereAuth } from "../utils/auth";
-import { listarReservaciones, listarReservacionesPendientes, crearReservacion, editarReservacion, registrarLlegada } from "../controllers/hostess";
+import { listarReservaciones, listarReservacionesPendientes, crearReservacion, editarReservacion, registrarLlegada, obtenerHorarioReservaciones } from "../controllers/hostess";
 
 export const reservacionesRouter = Router();
 
 reservacionesRouter.get("/", requiereAuth("hostess", "gerente"), listarReservaciones);
+reservacionesRouter.get("/horario", requiereAuth("hostess", "gerente"), obtenerHorarioReservaciones);
 reservacionesRouter.get("/pendientes", requiereAuth("hostess", "gerente"), listarReservacionesPendientes);
 reservacionesRouter.post("/", requiereAuth("hostess", "gerente"), crearReservacion);
 reservacionesRouter.patch("/:id", requiereAuth("hostess", "gerente"), editarReservacion);

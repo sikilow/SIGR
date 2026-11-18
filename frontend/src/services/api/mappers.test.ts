@@ -68,7 +68,7 @@ describe('aMesa', () => {
     }
     expect(aMesa(dto)).toEqual({
       idMesa: 3, numero: 3, capacidad: 4, estado: 'ocupada', zona: null,
-      plantaBaja: false, espacioCarriola: false, sinEscaleras: false,
+      caracteristicas: [],
       estadoCuenta: 'abierta', pedidosActivos: 2, totalCuenta: 470, pedidosListos: 1, tipoPagoSolicitado: null,
     })
   })

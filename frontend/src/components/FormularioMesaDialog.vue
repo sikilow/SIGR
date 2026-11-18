@@ -4,7 +4,7 @@
 // para la hostess ni para el mesero (no se puede sentar ni reservar); las mesas no se borran.
 import { computed, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
-import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CambioMesa, type MesaAdmin, type SeccionAdmin } from '../types'
+import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CambioMesa, type CaracteristicaAdmin, type MesaAdmin, type SeccionAdmin } from '../types'
 import DialogoModal from './DialogoModal.vue'
 
 const props = defineProps<{
@@ -12,20 +12,31 @@ const props = defineProps<{
   mesa: MesaAdmin | null
   /** Solo se puede asignar una sección activa; la sección actual inhabilitada se muestra para permitir mover la mesa. */
   secciones: SeccionAdmin[]
+  /** Catálogo de características (Gerente → Mesas → Características). */
+  caracteristicas: CaracteristicaAdmin[]
   /** Número propuesto al crear (el siguiente al más alto). */
   siguienteNumero: number
   origenFoco?: HTMLElement | null
 }>()
 
-const emit = defineEmits<{ cerrar: []; guardado: [mesa: MesaAdmin, creada: boolean] }>()
+const emit = defineEmits<{ cerrar: []; guardado: [mesa: MesaAdmin, creada: boolean]; administrarCaracteristicas: [] }>()
 
 const numero = ref('')
 const capacidad = ref('')
 const zona = ref('')
 const activa = ref(true)
-const plantaBaja = ref(false)
-const espacioCarriola = ref(false)
-const sinEscaleras = ref(false)
+/** Ids de las características marcadas. */
+const seleccion = ref<number[]>([])
+/** Las activas del catálogo y, además, las desactivadas que ya tiene la mesa (se ven, pero no se pueden quitar ni poner). */
+const opcionesCaracteristica = computed(() =>
+  props.caracteristicas.filter((c) => c.activa || props.mesa?.caracteristicas.includes(c.idCaracteristica)),
+)
+
+function alternar(id: number, activa: boolean) {
+  seleccion.value = activa ? [...new Set([...seleccion.value, id])] : seleccion.value.filter((x) => x !== id)
+}
+
+const mismaLista = (a: number[], b: number[]) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i])
 const tocado = ref(false)
 const enCurso = ref(false)
 const errorServidor = ref('')
@@ -46,9 +57,7 @@ watch(
     capacidad.value = m ? String(m.capacidad) : ''
     zona.value = m?.zona ?? ''
     activa.value = m?.activa ?? true
-    plantaBaja.value = m?.plantaBaja ?? false
-    espacioCarriola.value = m?.espacioCarriola ?? false
-    sinEscaleras.value = m?.sinEscaleras ?? false
+    seleccion.value = [...(m?.caracteristicas ?? [])]
     tocado.value = false
     enCurso.value = false
     errorServidor.value = ''
@@ -84,9 +93,7 @@ function cambios(): CambioMesa {
   if (aNumero(numero.value) !== m.numero) c.numero = aNumero(numero.value)
   if (aNumero(capacidad.value) !== m.capacidad) c.capacidad = aNumero(capacidad.value)
   if (zona.value.trim() !== (m.zona ?? '')) c.zona = zona.value
-  if (plantaBaja.value !== m.plantaBaja) c.plantaBaja = plantaBaja.value
-  if (espacioCarriola.value !== m.espacioCarriola) c.espacioCarriola = espacioCarriola.value
-  if (sinEscaleras.value !== m.sinEscaleras) c.sinEscaleras = sinEscaleras.value
+  if (!mismaLista(seleccion.value, m.caracteristicas)) c.caracteristicas = [...seleccion.value]
   if (activa.value !== m.activa) c.activa = activa.value
   return c
 }
@@ -116,9 +123,7 @@ async function guardar() {
           numero: aNumero(numero.value),
           capacidad: aNumero(capacidad.value),
           zona: zona.value,
-          plantaBaja: plantaBaja.value,
-          espacioCarriola: espacioCarriola.value,
-          sinEscaleras: sinEscaleras.value,
+          caracteristicas: [...seleccion.value],
           activa: activa.value,
         }),
         true,
@@ -166,34 +171,25 @@ async function guardar() {
       </div>
 
       <fieldset class="campo">
-        <legend>Características de acceso</legend>
-        <div class="form__accesos">
-          <label class="opcion-acceso">
-            <input v-model="plantaBaja" type="checkbox" />
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 21V5a2 2 0 0 1 2-2h9M9 21h11M4 12h11M19 8v13" />
+        <legend>Características de la mesa</legend>
+        <div v-if="opcionesCaracteristica.length" class="form__accesos">
+          <label v-for="c in opcionesCaracteristica" :key="c.idCaracteristica" class="opcion-acceso" :class="{ 'opcion-acceso--inactiva': !c.activa }">
+            <input
+              type="checkbox"
+              :checked="seleccion.includes(c.idCaracteristica)"
+              :disabled="!c.activa"
+              @change="alternar(c.idCaracteristica, ($event.target as HTMLInputElement).checked)"
+            />
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6 9 17l-5-5" />
             </svg>
-            <span>Planta baja</span>
-          </label>
-          <label class="opcion-acceso">
-            <input v-model="espacioCarriola" type="checkbox" />
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 4h2.2l1.6 9.5h10.5L20 7H6" />
-              <circle cx="9" cy="19" r="1.6" />
-              <circle cx="17" cy="19" r="1.6" />
-              <path d="M12 4v4" />
-            </svg>
-            <span>Espacio para carriola</span>
-          </label>
-          <label class="opcion-acceso">
-            <input v-model="sinEscaleras" type="checkbox" />
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 20h4v-4h4v-4h4V8h4" />
-              <circle cx="6" cy="5" r="2" />
-            </svg>
-            <span>Acceso sin escaleras</span>
+            <span>{{ c.nombre }}<span v-if="!c.activa" class="form__opcional">Desactivada</span></span>
           </label>
         </div>
+        <p v-else class="form__opcional">Todavía no hay características en el catálogo.</p>
+        <button type="button" class="btn btn--secundario form__administrar" @click="emit('administrarCaracteristicas')">
+          Administrar características
+        </button>
       </fieldset>
 
       <label class="interruptor form__disponible">
@@ -269,7 +265,18 @@ async function guardar() {
 
 .opcion-acceso svg {
   flex: none;
-  color: var(--color-muted);
+  color: var(--color-primary-dark);
+  visibility: hidden;
+}
+
+.opcion-acceso--inactiva {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.form__administrar {
+  align-self: flex-start;
+  margin-top: var(--espacio-2);
 }
 
 .opcion-acceso:has(input:checked) {
@@ -279,7 +286,7 @@ async function guardar() {
 }
 
 .opcion-acceso:has(input:checked) svg {
-  color: var(--color-primary-dark);
+  visibility: visible;
 }
 
 .opcion-acceso:has(input:focus-visible) {
