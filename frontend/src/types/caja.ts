@@ -11,6 +11,8 @@ export interface MetodoPago {
 
 export interface MetodoPagoAdmin extends MetodoPago {
   activo: boolean
+  /** Cuándo se eliminó; `null` = vigente (migración 029). Solo lo ve el gerente en «Eliminados». */
+  eliminadoEn?: Date | null
 }
 
 export interface CategoriaMetodoPagoAdmin {
@@ -18,6 +20,8 @@ export interface CategoriaMetodoPagoAdmin {
   nombre: string
   tipo: 'fisico' | 'digital'
   activo: boolean
+  /** Cuándo se eliminó; `null` = vigente (migración 029). Solo lo ve el gerente en «Eliminados». */
+  eliminadoEn?: Date | null
   metodos: MetodoPagoAdmin[]
 }
 

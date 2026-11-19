@@ -37,7 +37,7 @@ import type {
   TipoPago,
   Usuario,
   UsuarioAdmin,
-  VentaCaja,
+  VentaCaja, CambioCliente, ClienteAdmin
 } from '../types'
 import type { HostessService } from './hostess/interfaces'
 
@@ -141,12 +141,16 @@ export interface CajaService {
 
 /** Administración de usuarios. Solo el gerente (la API lo valida con 403 `sin_permiso`). */
 export interface UsuariosService {
-  /** GET /usuarios (activos e inactivos) */
-  listar(): Promise<UsuarioAdmin[]>
+  /** GET /usuarios (activos e inactivos; `eliminados: true` = solo los eliminados) */
+  listar(opciones?: { eliminados?: boolean }): Promise<UsuarioAdmin[]>
   /** POST /usuarios. Falla con `estado_invalido` si el usuario o el correo ya existen. */
   crear(usuario: NuevoUsuario): Promise<UsuarioAdmin>
-  /** PATCH /usuarios/{id}. Desactivar = `{ activo: false }` (los usuarios no se borran). */
+  /** PATCH /usuarios/{id}. Desactivar = `{ activo: false }`: su sesión se cierra de inmediato. */
   actualizar(id: number, cambio: CambioUsuario): Promise<UsuarioAdmin>
+  /** DELETE /usuarios/{id}. Eliminado lógico: no entra más, se oculta y se puede restaurar (vuelve inactivo). No a uno mismo, ni al primer gerente, ni al último gerente activo. */
+  eliminar(id: number): Promise<UsuarioAdmin>
+  /** POST /usuarios/{id}/restaurar. Vuelve vigente pero inactivo. */
+  restaurar(id: number): Promise<UsuarioAdmin>
   /** POST /usuarios/{id}/contrasena. El usuario afectado debe proporcionar su contraseña anterior. */
   cambiarContrasena(id: number, contrasena: string, contrasenaActual: string): Promise<void>
   /**
@@ -162,26 +166,38 @@ export interface CatalogoService {
   listarMetodosPagoDisponibles(): Promise<MetodoPagoAdmin[]>
   /** GET /catalogo/canales/disponibles. Canales activos para un pedido para llevar (mesero). */
   listarCanalesDisponibles(): Promise<CanalPedido[]>
-  /** GET /catalogo/canales. Todos los canales (Gerencia). */
-  listarCanales(): Promise<CanalPedido[]>
+  /** GET /catalogo/canales. Los canales vigentes (Gerencia); `eliminados: true` = solo los eliminados. */
+  listarCanales(opciones?: { eliminados?: boolean }): Promise<CanalPedido[]>
   /** POST /catalogo/canales. Falla con `estado_invalido` si el nombre ya existe. */
   crearCanal(nombre: string): Promise<CanalPedido>
-  /** PATCH /catalogo/canales/{id}. Los canales no se borran: se desactivan. */
+  /** PATCH /catalogo/canales/{id}. Desactivar = `{ activo: false }`. */
   actualizarCanal(idCanal: number, cambio: { activo: boolean }): Promise<CanalPedido>
+  /** DELETE /catalogo/canales/{id}. Eliminado lógico; no mientras una cuenta abierta lo use. */
+  eliminarCanal(idCanal: number): Promise<CanalPedido>
+  /** POST /catalogo/canales/{id}/restaurar (vuelve inactivo). */
+  restaurarCanal(idCanal: number): Promise<CanalPedido>
   /** GET /catalogo/configuracion-reservacion */
   obtenerConfiguracionReservacion(): Promise<ConfiguracionReservacion>
   /** PATCH /catalogo/configuracion-reservacion */
   actualizarConfiguracionReservacion(cambio: ConfiguracionReservacion): Promise<ConfiguracionReservacion>
-  /** GET /catalogo/metodos-pago. Categorías y métodos activos e inactivos. */
-  listarMetodosPago(): Promise<CategoriaMetodoPagoAdmin[]>
+  /** GET /catalogo/metodos-pago. Categorías y métodos vigentes (activos e inactivos); `eliminados: true` = solo lo eliminado. */
+  listarMetodosPago(opciones?: { eliminados?: boolean }): Promise<CategoriaMetodoPagoAdmin[]>
   /** POST /catalogo/metodos-pago/categorias */
   crearCategoriaMetodoPago(nombre: string, tipo: 'fisico' | 'digital'): Promise<CategoriaMetodoPagoAdmin>
   /** PATCH /catalogo/metodos-pago/categorias/{id} */
   actualizarCategoriaMetodoPago(id: number, cambio: { activo: boolean }): Promise<CategoriaMetodoPagoAdmin>
+  /** DELETE /catalogo/metodos-pago/categorias/{id}. Eliminado lógico; solo sin métodos vigentes. */
+  eliminarCategoriaMetodoPago(id: number): Promise<CategoriaMetodoPagoAdmin>
+  /** POST /catalogo/metodos-pago/categorias/{id}/restaurar (vuelve inactiva). */
+  restaurarCategoriaMetodoPago(id: number): Promise<CategoriaMetodoPagoAdmin>
   /** POST /catalogo/metodos-pago */
   crearMetodoPago(nombre: string, idCategoriaMetodoPago: number, esEfectivo: boolean): Promise<MetodoPagoAdmin>
   /** PATCH /catalogo/metodos-pago/{id} */
   actualizarMetodoPago(id: number, cambio: { activo?: boolean; esEfectivo?: boolean }): Promise<MetodoPagoAdmin>
+  /** DELETE /catalogo/metodos-pago/{id}. Eliminado lógico; no el de efectivo ni uno solicitado por una cuenta abierta. */
+  eliminarMetodoPago(id: number): Promise<MetodoPagoAdmin>
+  /** POST /catalogo/metodos-pago/{id}/restaurar (vuelve inactivo; su categoría debe estar vigente). */
+  restaurarMetodoPago(id: number): Promise<MetodoPagoAdmin>
   /** GET /catalogo/categorias (`eliminados: true` = solo las eliminadas) */
   listarCategorias(opciones?: { eliminados?: boolean }): Promise<CategoriaAdmin[]>
   /** POST /catalogo/categorias */
@@ -192,24 +208,28 @@ export interface CatalogoService {
   eliminarCategoria(id: number): Promise<void>
   /** POST /catalogo/categorias/{id}/restaurar */
   restaurarCategoria(id: number): Promise<CategoriaAdmin>
-  /** GET /catalogo/caracteristicas: catálogo de características de mesa (activas e inactivas). */
-  listarCaracteristicas(): Promise<CaracteristicaAdmin[]>
+  /** GET /catalogo/caracteristicas: catálogo de características de mesa (activas e inactivas); `eliminados: true` = solo las eliminadas. */
+  listarCaracteristicas(opciones?: { eliminados?: boolean }): Promise<CaracteristicaAdmin[]>
   /** POST /catalogo/caracteristicas. Nombre único (si no, `estado_invalido`). */
   crearCaracteristica(nombre: string): Promise<CaracteristicaAdmin>
   /** PATCH /catalogo/caracteristicas/{id}: `{ nombre }` o `{ activa }`. */
   actualizarCaracteristica(id: number, cambio: { nombre: string } | { activa: boolean }): Promise<CaracteristicaAdmin>
-  /** DELETE /catalogo/caracteristicas/{id}. Solo si ninguna mesa ni reservación la usa. */
+  /** DELETE /catalogo/caracteristicas/{id}. Eliminado lógico: las mesas y reservaciones que ya la tenían la conservan. */
   eliminarCaracteristica(id: number): Promise<void>
-  /** GET /catalogo/secciones */
-  listarSecciones(): Promise<SeccionAdmin[]>
+  /** POST /catalogo/caracteristicas/{id}/restaurar (vuelve inactiva). */
+  restaurarCaracteristica(id: number): Promise<CaracteristicaAdmin>
+  /** GET /catalogo/secciones (`eliminados: true` = solo las eliminadas) */
+  listarSecciones(opciones?: { eliminados?: boolean }): Promise<SeccionAdmin[]>
   /** POST /catalogo/secciones */
   crearSeccion(nombre: string): Promise<SeccionAdmin>
   /** PATCH /catalogo/secciones/{nombre} */
   renombrarSeccion(nombre: string, nuevoNombre: string): Promise<SeccionAdmin>
   /** PATCH /catalogo/secciones/{nombre} */
   actualizarSeccion(nombre: string, cambio: { activa: boolean }): Promise<SeccionAdmin>
-  /** DELETE /catalogo/secciones/{nombre}. Solo si no tiene mesas asignadas. */
+  /** DELETE /catalogo/secciones/{nombre}. Eliminado lógico; solo sin mesas vigentes y no la de «Para llevar». */
   eliminarSeccion(nombre: string): Promise<void>
+  /** POST /catalogo/secciones/{nombre}/restaurar (vuelve inhabilitada). */
+  restaurarSeccion(nombre: string): Promise<SeccionAdmin>
   /** GET /catalogo/productos (también los inactivos, con su inventario; `eliminados: true` = solo los eliminados) */
   listarProductos(opciones?: { eliminados?: boolean }): Promise<ProductoAdmin[]>
   /** POST /catalogo/productos */
@@ -220,12 +240,28 @@ export interface CatalogoService {
   eliminarProducto(id: number): Promise<ProductoAdmin>
   /** POST /catalogo/productos/{id}/restaurar */
   restaurarProducto(id: number): Promise<ProductoAdmin>
-  /** GET /catalogo/mesas (también las no disponibles) */
-  listarMesas(): Promise<MesaAdmin[]>
+  /** GET /catalogo/mesas (también las no disponibles; `eliminados: true` = solo las eliminadas) */
+  listarMesas(opciones?: { eliminados?: boolean }): Promise<MesaAdmin[]>
   /** POST /catalogo/mesas */
   crearMesa(mesa: NuevaMesa): Promise<MesaAdmin>
-  /** PATCH /catalogo/mesas/{id}. No disponible = `{ activa: false }` (las mesas no se borran). Una mesa ocupada, con cuenta o con reservaciones vigentes no se puede desactivar. */
+  /** PATCH /catalogo/mesas/{id}. No disponible = `{ activa: false }`. Una mesa ocupada, con cuenta o con reservaciones vigentes no se puede desactivar. */
   actualizarMesa(id: number, cambio: CambioMesa): Promise<MesaAdmin>
+  /** DELETE /catalogo/mesas/{id}. Eliminado lógico; mismas condiciones que para dejarla no disponible. */
+  eliminarMesa(id: number): Promise<MesaAdmin>
+  /** POST /catalogo/mesas/{id}/restaurar (vuelve no disponible; su sección debe estar vigente). */
+  restaurarMesa(id: number): Promise<MesaAdmin>
+}
+
+/** Gestión de clientes por el gerente (Gerente → Clientes). */
+export interface ClientesService {
+  /** GET /clientes/gestion (`eliminados: true` = solo los eliminados) */
+  listar(opciones?: { eliminados?: boolean }): Promise<ClienteAdmin[]>
+  /** PATCH /clientes/{id}: corrige nombre, teléfono, lada o correo (cualquier subconjunto). */
+  actualizar(id: number, cambio: CambioCliente): Promise<ClienteAdmin>
+  /** DELETE /clientes/{id}. Eliminado lógico; no con reservaciones vigentes ni en la lista de espera. */
+  eliminar(id: number): Promise<ClienteAdmin>
+  /** POST /clientes/{id}/restaurar */
+  restaurar(id: number): Promise<ClienteAdmin>
 }
 
 export interface Servicios {
@@ -236,6 +272,7 @@ export interface Servicios {
   cuentas: CuentasService
   caja: CajaService
   usuarios: UsuariosService
+  clientes: ClientesService
   catalogo: CatalogoService
   hostess: HostessService
 }

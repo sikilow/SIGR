@@ -47,7 +47,7 @@ export const iniciarSesion = async (req: Request, res: Response) => {
        FROM credenciales c
        JOIN usuario u ON u.id_usuario = c.id_usuario
        JOIN rol r ON r.id_rol = u.id_rol
-      WHERE c.nombre_usuario = ? AND u.activo = TRUE`,
+      WHERE c.nombre_usuario = ? AND u.activo = TRUE AND u.eliminado_en IS NULL`,
     [usuario],
   );
 
@@ -72,7 +72,7 @@ export const obtenerPerfil = async (req: Request, res: Response) => {
     pool,
     `SELECT ${SELECT_PERFIL}
        FROM usuario u JOIN rol r ON r.id_rol = u.id_rol
-      WHERE u.id_usuario = ? AND u.activo = TRUE`,
+      WHERE u.id_usuario = ? AND u.activo = TRUE AND u.eliminado_en IS NULL`,
     [req.usuario?.id],
   );
   if (!fila) throw new ErrorApi(401, "no_autenticado", "El usuario ya no está activo.");
@@ -99,7 +99,7 @@ export const solicitarRecuperacion = async (req: Request, res: Response) => {
     pool,
     `SELECT u.id_usuario, u.nombre, u.correo, c.nombre_usuario
        FROM usuario u JOIN credenciales c ON c.id_usuario = u.id_usuario
-      WHERE u.activo = TRUE AND (c.nombre_usuario = ? OR u.correo = ?)
+      WHERE u.activo = TRUE AND u.eliminado_en IS NULL AND (c.nombre_usuario = ? OR u.correo = ?)
       LIMIT 1`,
     [usuario_o_correo, usuario_o_correo],
   );
@@ -126,7 +126,7 @@ async function buscarEnlace(token: string) {
        FROM restablecimiento_contrasena r
        JOIN usuario u ON u.id_usuario = r.id_usuario
        JOIN credenciales c ON c.id_usuario = r.id_usuario
-      WHERE r.token_hash = ? AND r.usado_en IS NULL AND r.expira_en > NOW() AND u.activo = TRUE`,
+      WHERE r.token_hash = ? AND r.usado_en IS NULL AND r.expira_en > NOW() AND u.activo = TRUE AND u.eliminado_en IS NULL`,
     [huellaToken(token)],
   );
   return fila;

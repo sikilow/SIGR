@@ -14,7 +14,7 @@ describe('métodos de pago administrables', () => {
     expect(nuevo.activo).toBe(true)
     expect(nuevo.tipo).toBe('digital')
     expect((await catalogo.listarMetodosPago()).find((item) => item.idCategoriaMetodoPago === categoria.idCategoriaMetodoPago)?.metodos)
-      .toContainEqual(nuevo)
+      .toContainEqual({ ...nuevo, eliminadoEn: null })
     expect((await catalogo.listarMetodosPagoDisponibles()).some((metodo) => metodo.idMetodo === nuevo.idMetodo)).toBe(true)
     expect((await catalogo.actualizarMetodoPago(nuevo.idMetodo, { activo: false })).activo).toBe(false)
     expect((await catalogo.listarMetodosPagoDisponibles()).some((metodo) => metodo.idMetodo === nuevo.idMetodo)).toBe(false)

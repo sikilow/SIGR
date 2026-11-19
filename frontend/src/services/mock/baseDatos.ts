@@ -64,6 +64,8 @@ export interface BaseDatosMock {
   motivos: MotivoCancelacion[]
   /** Rol hostess: tablas `cliente`, `reservacion` y `lista_espera`. Las mesas se comparten con el mesero. */
   clientes: Cliente[]
+  /** Clientes eliminados (lógico) y cuándo: siguen en `clientes` para el historial, pero se ocultan de búsquedas y listas. */
+  clientesEliminados: Map<number, Date>
   reservaciones: ReservacionGuardada[]
   listaEspera: EsperaGuardada[]
   configuracionReservacion: ConfiguracionReservacion
@@ -325,6 +327,7 @@ export const baseDatos: BaseDatosMock = {
     { idMotivo: 2, descripcion: 'Demora excesiva en cocina' },
   ],
   clientes: crearClientes(),
+  clientesEliminados: new Map<number, Date>(),
   reservaciones: crearReservaciones(),
   listaEspera: crearListaEspera(),
   configuracionReservacion: { toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60, duracionReservacionMinutos: 90, ...HORARIO_POR_DEFECTO },

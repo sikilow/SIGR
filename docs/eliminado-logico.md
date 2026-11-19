@@ -1,6 +1,6 @@
 # Eliminado lógico («Eliminar» que no borra)
 
-**Estado:** fase 1 hecha (productos y categorías del menú, migración 026). Solo el **gerente** puede eliminar y restaurar.
+**Estado:** fase 1 hecha (productos y categorías del menú, migración 026) fase 2 hecha (usuarios, migración 027), fase 3 hecha (clientes, migración 028) y fase 4 hecha (mesas, secciones, características, canales y métodos de pago, migración 029). Solo el **gerente** puede eliminar y restaurar.
 
 ## Idea
 
@@ -38,12 +38,51 @@ ventas y reportes viejos siguen mostrando el nombre del producto, y se puede res
 
 Respuestas de producto y categoría incluyen `eliminado_en` (`null` = vigente).
 
-## Fases siguientes (pendientes)
+## Fase 2: usuarios
 
-2. **Usuarios**: además de la marca, la API debe rechazar de inmediato la sesión de un usuario eliminado o desactivado
-   (hoy el token dura 8 h y no se vuelve a consultar la base).
-3. **Clientes**: requiere una pantalla de clientes para el gerente (hoy no existe).
-4. **Mesas, secciones, características, canales, métodos de pago y sus categorías.**
+- `DELETE /api/usuarios/:id` elimina (lógico) y deja al usuario **inactivo**; `POST /api/usuarios/:id/restaurar` lo
+  devuelve vigente pero **inactivo** (el gerente lo reactiva). `GET /api/usuarios[?eliminados=1]`.
+- No se puede eliminar: a uno mismo, al primer gerente (también lo impide un trigger) ni al último gerente activo.
+- Correo, usuario y teléfono siguen ocupados por un usuario eliminado: crear otro igual avisa «restáuralo».
+- Un usuario eliminado no se edita ni se le manda restablecer contraseña; no puede iniciar sesión.
+- **Sesión:** `requiereAuth` consulta la base en CADA petición (usuario activo, no eliminado, rol actual). Desactivar o
+  eliminar a alguien cierra su sesión al instante (`401` con `motivo: "cuenta_inactiva"`; el frontend lo manda a
+  `/login?motivo=desactivada`), y un cambio de rol se aplica también al instante. Esto cubre además a los usuarios
+  simplemente desactivados, que antes seguían hasta 8 horas.
+
+## Fase 3: clientes
+
+- Pantalla nueva **Gerente → Clientes** (`/gerente/clientes`): lista con búsqueda, corregir datos (nombre, lada y
+  teléfono, correo), eliminar y restaurar («Eliminados»).
+- API (solo gerente): `GET /api/clientes/gestion[?eliminados=1]`, `PATCH /api/clientes/:id` (la hostess sigue pudiendo
+  corregir solo el correo), `DELETE /api/clientes/:id`, `POST /api/clientes/:id/restaurar`.
+- No se puede eliminar a un cliente con reservaciones **pendientes o confirmadas** ni mientras esté en la lista de espera.
+- Un cliente eliminado: no sale en la búsqueda de la hostess, no se le hacen reservaciones ni se anota en la espera, y
+  **no puede entrar al portal** (sesión rechazada al instante; el inicio de sesión dice «la cuenta ya no está activa»
+  solo después de comprobar la contraseña, para no revelar qué correos existen). Se bloquean también registrarse de nuevo
+  con su correo o teléfono.
+- Teléfono y correo siguen ocupados por un cliente eliminado: la hostess recibe «pídele al gerente que lo restaure».
+- La cuenta del portal (`cliente_credencial`) no se toca: al restaurar al cliente, vuelve a entrar con lo mismo.
+
+## Fase 4: mesas, secciones, características, canales y métodos de pago
+
+Migración 029: `eliminado_en` y `eliminado_por` en `mesa`, `seccion`, `caracteristica_mesa`, `canal_pedido`,
+`categoria_metodo_pago` y `metodo_pago`. Pantallas: Gerente → Mesas (con los diálogos Secciones y Características),
+Canales de pedido y Métodos de pago; todas con «Eliminar», la vista «Eliminados/Eliminadas» y «Restaurar».
+
+- **Regla fija:** algo eliminado queda también **inactivo** (`activa`/`activo` = FALSE). Así las pantallas que ya filtran
+  por «activo» (panel de mesas, salón, portal, caja, menú de canales) lo ocultan sin cambios. **Restaurar lo deja
+  inactivo**: el gerente lo activa después.
+- Nombres y números siguen ocupados por lo eliminado; la API responde «hay uno eliminado, restáuralo».
+- Listas: `?eliminados=1` devuelve solo lo eliminado; por omisión, solo lo vigente. Los reportes e historial nunca filtran.
+- **Mesa:** no se elimina si está ocupada o tiene cuenta abierta o reservaciones vigentes. No se restaura si su sección
+  está eliminada.
+- **Sección:** no se elimina si tiene mesas vigentes ni la sección de sistema «Para llevar».
+- **Característica:** no se elimina mientras la usen mesas vigentes o reservaciones vigentes.
+- **Canal:** no se elimina mientras una cuenta sin cobrar lo use.
+- **Categoría de método de pago:** no se elimina con métodos vigentes. **Método de pago:** el de efectivo no se puede
+  eliminar (el cuadre de caja lo necesita); no se restaura si su categoría está eliminada.
+- Orden al restaurar: primero la sección/categoría, luego sus mesas/métodos.
 
 Para cada fase: migración nueva (columnas + triggers de auditoría + `init.sql`), filtro «vigente» en las consultas vivas,
 rutas `DELETE` y `restaurar`, y la interfaz («Eliminar», «Eliminados», «Restaurar»).

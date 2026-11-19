@@ -9,8 +9,9 @@ en [`capturas/`](capturas/) y se tomaron con el servidor de desarrollo en modo m
 | Pantalla | Ruta | Requisitos | Estado de este documento |
 |---|---|---|---|
 | Usuarios | `/gerente/usuarios` | RF-USR-001 a 007 | Funcional; documentación visual pendiente |
+| Clientes | `/gerente/clientes` | RF-CLI-002 y RF-CLI-003 | Consultar, corregir, eliminar (lógico) y restaurar clientes; ver [`eliminado-logico.md`](eliminado-logico.md) |
 | Productos e inventario | `/gerente/productos` | RF-PRO-001 a 006 | Funcional; incluye descripción obligatoria, variantes y filtros de inventario |
-| Mesas, secciones y características | `/gerente/mesas` | RF-MES-002 a 007 | Funcional; administración de mesas, catálogo de secciones y catálogo de **características** (botón «Características»: crear, renombrar, desactivar, borrar si no se usa; se marcan en cada mesa al editarla) |
+| Mesas, secciones y características | `/gerente/mesas` | RF-MES-002 a 007 | Funcional; administración de mesas, catálogo de secciones y catálogo de **características** (botón «Características»: crear, renombrar, desactivar, eliminar y restaurar; se marcan en cada mesa al editarla). Mesas, secciones, características, canales y métodos de pago se eliminan de forma lógica y se restauran desde «Eliminadas»; ver [`eliminado-logico.md`](eliminado-logico.md) |
 | Canales de pedido | `/gerente/canales` | Canales de los pedidos para llevar: agregar y activar o desactivar (migración 019) | Funcional |
 | Reservas | `/gerente/reservaciones` | Horario de reservaciones: primera y última hora, intervalo y días abiertos, con vista previa de las horas del portal (migración 022); duración de cada reservación (023); anticipación mínima (018), tolerancia y recordatorio (010) | Funcional; ruta protegida para gerente |
 | Pedidos | `/gerente/pedidos` y `/gerente/pedidos/:idPedido` | RF-PED-002 (gerente), RF-PED-003, RF-PED-005 (parcial) | Documentada abajo |
@@ -21,7 +22,7 @@ en [`capturas/`](capturas/) y se tomaron con el servidor de desarrollo en modo m
 
 - **Productos:** la descripción es obligatoria. El campo «Presentación o variante» solo aparece para las categorías Bebidas y Postres. La categoría, el nombre y la presentación identifican una variante; intentar crear una ya existente no cambia el inventario. Para ajustar existencias se edita el producto. La lista permite distinguir Disponible, Stock bajo y Agotado.
 - **Mesas:** se administra número, capacidad, sección y disponibilidad, además de las características de planta baja, espacio para carriola y acceso sin escaleras.
-- **Secciones:** desde Gerente → Mesas → Secciones se pueden crear, renombrar, inhabilitar/habilitar y borrar. Renombrar actualiza las mesas asociadas; borrar requiere que no haya mesas asignadas. Las mesas deben pertenecer a una sección activa.
+- **Secciones:** desde Gerente → Mesas → Secciones se pueden crear, renombrar, inhabilitar/habilitar y eliminar (lógico, se restaura desde «Eliminadas»). Renombrar actualiza las mesas asociadas; eliminar requiere que no haya mesas vigentes asignadas. Las mesas deben pertenecer a una sección activa.
 
 ## Usuarios y seguridad
 

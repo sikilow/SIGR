@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Mesas (/gerente/mesas): registrar mesas nuevas (número, cantidad de personas, sección), editarlas y marcarlas
 // como disponibles o no disponibles. Una mesa no disponible NO aparece para la hostess ni para el mesero.
-// Las mesas no se borran (tienen cuentas y reservaciones ligadas).
+// «Eliminar» es lógico (solo el gerente): la mesa sale de las listas pero se conserva, porque tiene cuentas y
+// reservaciones ligadas; se restaura desde «Eliminadas» (vuelve como no disponible). Una mesa en uso no se elimina.
 import { computed, onMounted, ref } from 'vue'
 import ConfirmarAccionDialog from '../../components/ConfirmarAccionDialog.vue'
 import FormularioMesaDialog from '../../components/FormularioMesaDialog.vue'
@@ -16,6 +17,8 @@ import { vPermitir } from '../../utils/campos'
 const anuncios = useAnunciosStore()
 
 const mesas = ref<MesaAdmin[]>([])
+const eliminadas = ref<MesaAdmin[]>([])
+const fechaCorta = (d: Date | null | undefined) => (d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
 const secciones = ref<SeccionAdmin[]>([])
 const caracteristicas = ref<CaracteristicaAdmin[]>([])
 /** Nombres de las características activas de una mesa, para la tarjeta. */
@@ -24,7 +27,7 @@ const nombresCaracteristicas = (m: MesaAdmin) =>
 const cargando = ref(true)
 const error = ref('')
 
-type Disponibilidad = 'todas' | 'disponibles' | 'no_disponibles'
+type Disponibilidad = 'todas' | 'disponibles' | 'no_disponibles' | 'eliminadas'
 const disponibilidad = ref<Disponibilidad>('todas')
 const seccionFiltro = ref<string>('todas')
 const busqueda = ref('')
@@ -40,7 +43,12 @@ const seccionHabilitada = (zona: string | null) => secciones.value.some((s) => s
 
 const lista = computed(() => {
   const q = busqueda.value.trim().toLowerCase()
-  return mesas.value.filter((m) => {
+  const verEliminadas = disponibilidad.value === 'eliminadas'
+  return (verEliminadas ? eliminadas.value : mesas.value).filter((m) => {
+    if (verEliminadas) {
+      if (seccionFiltro.value !== 'todas' && m.zona !== seccionFiltro.value) return false
+      return !q || `mesa ${m.numero} ${m.zona}`.toLowerCase().includes(q)
+    }
     const disponible = m.activa && seccionHabilitada(m.zona)
     if (disponibilidad.value === 'disponibles' && !disponible) return false
     if (disponibilidad.value === 'no_disponibles' && disponible) return false
@@ -54,17 +62,22 @@ const cuenta = computed(() => ({
   todas: mesas.value.length,
   disponibles: mesas.value.filter((m) => m.activa && seccionHabilitada(m.zona)).length,
   no_disponibles: mesas.value.filter((m) => !m.activa || !seccionHabilitada(m.zona)).length,
+  eliminadas: eliminadas.value.length,
 }))
 
 async function cargar(conEsqueleto = false) {
   if (conEsqueleto) cargando.value = true
   try {
-    const [mesasRecibidas, seccionesRecibidas, caracteristicasRecibidas] = await Promise.all([
+    const [mesasRecibidas, seccionesRecibidas, caracteristicasRecibidas, eliminadasRecibidas] = await Promise.all([
       servicios.catalogo.listarMesas(),
       servicios.catalogo.listarSecciones(),
       servicios.catalogo.listarCaracteristicas(),
+      servicios.catalogo.listarMesas({ eliminados: true }),
     ])
     mesas.value = mesasRecibidas
+    eliminadas.value = eliminadasRecibidas
+    // Si ya no queda nada eliminado, se vuelve a la lista normal.
+    if (eliminadasRecibidas.length === 0 && disponibilidad.value === 'eliminadas') disponibilidad.value = 'todas'
     secciones.value = seccionesRecibidas
     caracteristicas.value = caracteristicasRecibidas
     // Si la sección filtrada ya no existe, vuelve a «todas».
@@ -160,11 +173,67 @@ async function confirmarCambioDisponibilidad() {
   }
 }
 
-const DISPONIBILIDADES: Array<{ clave: Disponibilidad; texto: string }> = [
+// ---------- Eliminar / restaurar ----------
+const aEliminar = ref<MesaAdmin | null>(null)
+const origenEliminar = ref<HTMLElement | null>(null)
+const eliminando = ref(false)
+const errorEliminar = ref('')
+const rechazoEliminar = ref('')
+const avisoAccion = ref('')
+const restaurando = ref(false)
+
+function pedirEliminar(m: MesaAdmin, e: Event) {
+  aEliminar.value = m
+  origenEliminar.value = e.currentTarget as HTMLElement
+  eliminando.value = false
+  errorEliminar.value = ''
+  rechazoEliminar.value = ''
+  avisoAccion.value = ''
+}
+
+async function confirmarEliminar() {
+  const m = aEliminar.value
+  if (!m || eliminando.value) return
+  eliminando.value = true
+  errorEliminar.value = ''
+  try {
+    await servicios.catalogo.eliminarMesa(m.idMesa)
+    aEliminar.value = null
+    void anuncios.anunciar(`Mesa ${m.numero} eliminada`)
+    await cargar()
+  } catch (e) {
+    if (e instanceof ErrorServicio && e.codigo === 'red') {
+      errorEliminar.value = 'No se pudo conectar con el servidor. Vuelve a intentarlo.'
+    } else {
+      rechazoEliminar.value = e instanceof ErrorServicio ? e.message : 'Ocurrió un error inesperado.'
+      void cargar()
+    }
+  } finally {
+    eliminando.value = false
+  }
+}
+
+async function restaurar(m: MesaAdmin) {
+  if (restaurando.value) return
+  restaurando.value = true
+  avisoAccion.value = ''
+  try {
+    await servicios.catalogo.restaurarMesa(m.idMesa)
+    void anuncios.anunciar(`Mesa ${m.numero} restaurada. Está no disponible: márcala como disponible para usarla.`)
+    await cargar()
+  } catch (e) {
+    avisoAccion.value = e instanceof ErrorServicio ? e.message : 'No se pudo restaurar la mesa.'
+  } finally {
+    restaurando.value = false
+  }
+}
+
+const DISPONIBILIDADES = computed<Array<{ clave: Disponibilidad; texto: string }>>(() => [
   { clave: 'todas', texto: 'Todas' },
   { clave: 'disponibles', texto: 'Disponibles' },
   { clave: 'no_disponibles', texto: 'No disponibles' },
-]
+  ...(eliminadas.value.length > 0 ? [{ clave: 'eliminadas' as const, texto: 'Eliminadas' }] : []),
+])
 
 const personas = (n: number) => (n === 1 ? '1 persona' : `${n} personas`)
 </script>
@@ -231,13 +300,20 @@ const personas = (n: number) => (n === 1 ? '1 persona' : `${n} personas`)
       <button type="button" class="btn btn--secundario" @click="cargar(true)">Reintentar</button>
     </div>
 
+    <div v-if="avisoAccion" class="nota-secciones nota-secciones--error" role="alert">{{ avisoAccion }}</div>
+
+    <p v-if="disponibilidad === 'eliminadas'" class="nota-secciones">
+      Estas mesas no se ofrecen en ningún lado y su número sigue ocupado. Las cuentas y reservaciones anteriores las conservan. Al restaurar una, vuelve como no disponible (su sección debe estar vigente).
+    </p>
+
     <div v-if="cargando" class="lista" aria-busy="true">
       <div v-for="n in 4" :key="n" class="esqueleto" />
       <p class="solo-lectores" role="status">Cargando mesas…</p>
     </div>
 
     <div v-else-if="!error && lista.length === 0" class="vacio">
-      <p v-if="mesas.length === 0">Todavía no hay mesas. Registra la primera con «Nueva mesa».</p>
+      <p v-if="disponibilidad === 'eliminadas'">No hay mesas eliminadas.</p>
+      <p v-else-if="mesas.length === 0">Todavía no hay mesas. Registra la primera con «Nueva mesa».</p>
       <p v-else>Ninguna mesa coincide con los filtros.</p>
     </div>
 
@@ -250,7 +326,16 @@ const personas = (n: number) => (n === 1 ? '1 persona' : `${n} personas`)
           <p v-if="nombresCaracteristicas(m).length" class="fila__linea fila__meta">{{ nombresCaracteristicas(m).join(' · ') }}</p>
         </div>
 
-        <div class="fila__lado">
+        <div v-if="disponibilidad === 'eliminadas'" class="fila__lado">
+          <div class="fila__insignias">
+            <InsigniaEstado tono="cancelado" :texto="`Eliminada el ${fechaCorta(m.eliminadoEn)}`" />
+          </div>
+          <div class="fila__acciones">
+            <button type="button" class="btn" :aria-label="`Restaurar la mesa ${m.numero}`" :disabled="restaurando" @click="restaurar(m)">Restaurar</button>
+          </div>
+        </div>
+
+        <div v-else class="fila__lado">
           <div class="fila__insignias">
             <InsigniaEstado
               :tono="!m.activa || !seccionHabilitada(m.zona) ? 'cancelado' : 'activo'"
@@ -270,6 +355,7 @@ const personas = (n: number) => (n === 1 ? '1 persona' : `${n} personas`)
               No disponible
             </button>
             <button v-else type="button" class="btn" :aria-label="`Marcar la mesa ${m.numero} como disponible`" @click="pedirCambioDisponibilidad(m, $event)">Disponible</button>
+            <button type="button" class="btn btn--peligro-suave" :aria-label="`Eliminar la mesa ${m.numero}`" @click="pedirEliminar(m, $event)">Eliminar</button>
           </div>
         </div>
       </li>
@@ -318,12 +404,27 @@ const personas = (n: number) => (n === 1 ? '1 persona' : `${n} personas`)
       @confirmar="confirmarCambioDisponibilidad"
       @cerrar="objetivo = null"
     />
+
+    <ConfirmarAccionDialog
+      :abierto="aEliminar !== null"
+      id-base="eliminar-mesa"
+      :titulo="`¿Eliminar la mesa ${aEliminar?.numero}?`"
+      descripcion="Dejará de aparecer en todas partes y su número seguirá ocupado. Las cuentas y reservaciones anteriores la conservan. Podrás restaurarla desde «Eliminadas» (volverá como no disponible). No se puede eliminar si está en uso o tiene reservaciones vigentes."
+      texto-confirmar="Eliminar"
+      :en-curso="eliminando"
+      :error-reintentable="errorEliminar"
+      :rechazo="rechazoEliminar"
+      :origen-foco="origenEliminar"
+      @confirmar="confirmarEliminar"
+      @cerrar="aEliminar = null"
+    />
   </section>
 </template>
 
 <style scoped>
 .pantalla { display: flex; flex-direction: column; gap: var(--espacio-4); max-width: 1000px; margin: 0 auto; }
 .nota-secciones { margin: 0; padding: var(--espacio-3) var(--espacio-4); border-radius: var(--radio); background: var(--color-bg); color: var(--color-muted); }
+.nota-secciones--error { background: var(--color-peligro-fondo); color: var(--color-peligro-texto); font-weight: 600; }
 .pantalla__cabecera { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--espacio-3); }
 .pantalla__acciones { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
 .filtros { display: flex; flex-direction: column; gap: var(--espacio-3); }

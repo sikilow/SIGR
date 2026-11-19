@@ -241,11 +241,16 @@ describe('catálogo de características de mesa (Gerente → Mesas → Caracter�
     expect((await resolver(catalogo.listarMesas())).find((m) => m.idMesa === 1)!.caracteristicas).toContain(1)
   })
 
-  it('solo se borra si ninguna mesa ni reservación la usa', async () => {
+  it('eliminar es lógico: sale de la lista, queda inactiva y se restaura', async () => {
     const { catalogo } = await nuevoMock()
-    expect((await errorDe(catalogo.eliminarCaracteristica(1))).codigo).toBe('estado_invalido')
     const libre = await resolver(catalogo.crearCaracteristica('Zona tranquila'))
     await resolver(catalogo.eliminarCaracteristica(libre.idCaracteristica))
     expect((await resolver(catalogo.listarCaracteristicas())).some((c) => c.nombre === 'Zona tranquila')).toBe(false)
+    const eliminadas = await resolver(catalogo.listarCaracteristicas({ eliminados: true }))
+    expect(eliminadas.find((c) => c.nombre === 'Zona tranquila')).toMatchObject({ activa: false })
+    expect((await errorDe(catalogo.eliminarCaracteristica(libre.idCaracteristica))).codigo).toBe('estado_invalido')
+    const restaurada = await resolver(catalogo.restaurarCaracteristica(libre.idCaracteristica))
+    expect(restaurada.eliminadoEn).toBeNull()
+    expect(restaurada.activa).toBe(false) // vuelve inactiva
   })
 })

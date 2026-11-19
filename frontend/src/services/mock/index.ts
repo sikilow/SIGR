@@ -1,6 +1,6 @@
 import { crearHostessMock } from '../hostess/mock'
 import type { Servicios } from '../interfaces'
-import { crearCatalogoMock, crearUsuariosMock } from './adminMock'
+import { crearCatalogoMock, crearClientesMock, crearUsuariosMock } from './adminMock'
 import { crearAuthMock } from './authMock'
 import { crearCuentasMock } from './cuentasMock'
 import { crearCajaMock } from './cajaMock'
@@ -20,6 +20,7 @@ export function crearServiciosMock(): Servicios {
     cuentas: crearCuentasMock(),
     caja: crearCajaMock(),
     usuarios: crearUsuariosMock(),
+    clientes: crearClientesMock(),
     catalogo: crearCatalogoMock(),
     hostess: crearHostessMock(),
   }

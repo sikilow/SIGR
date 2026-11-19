@@ -8,7 +8,11 @@ import { vPermitir } from '../utils/campos'
 const props = defineProps<{ abierto: boolean; origenFoco?: HTMLElement | null }>()
 const emit = defineEmits<{ cerrar: []; cambio: [] }>()
 
+// «Eliminar» es lógico: la sección deja de mostrarse pero se conserva (y su nombre sigue ocupado); se restaura desde «Eliminadas».
 const secciones = ref<SeccionAdmin[]>([])
+const eliminadas = ref<SeccionAdmin[]>([])
+const verEliminadas = ref(false)
+const fechaCorta = (d: Date | null | undefined) => (d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
 const cargando = ref(false)
 const nueva = ref('')
 const editando = ref<string | null>(null)
@@ -22,7 +26,10 @@ const campoNueva = ref<HTMLInputElement | null>(null)
 async function cargar() {
   cargando.value = true
   try {
-    secciones.value = await servicios.catalogo.listarSecciones()
+    const [vigentes, borradas] = await Promise.all([servicios.catalogo.listarSecciones(), servicios.catalogo.listarSecciones({ eliminados: true })])
+    secciones.value = vigentes
+    eliminadas.value = borradas
+    if (borradas.length === 0) verEliminadas.value = false
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudieron cargar las secciones.'
   } finally {
@@ -38,6 +45,7 @@ watch(
     editando.value = null
     aBorrar.value = null
     aInhabilitar.value = null
+    verEliminadas.value = false
     error.value = ''
     await cargar()
   },
@@ -110,6 +118,10 @@ async function confirmarInhabilitacion() {
   if (await correr(() => servicios.catalogo.actualizarSeccion(nombre, { activa: false }))) aInhabilitar.value = null
 }
 
+async function restaurar(seccion: SeccionAdmin) {
+  await correr(() => servicios.catalogo.restaurarSeccion(seccion.nombre))
+}
+
 async function borrar() {
   const nombre = aBorrar.value
   if (nombre === null) return
@@ -136,7 +148,29 @@ async function borrar() {
 
       <div v-if="error" class="secciones__alerta" role="alert"><p>{{ error }}</p></div>
 
-      <p v-if="cargando && secciones.length === 0" class="secciones__vacio">Cargando…</p>
+      <div v-if="eliminadas.length > 0" class="secciones__vistas" role="group" aria-label="Ver secciones">
+        <button type="button" class="chip" :class="{ 'chip--activo': !verEliminadas }" :aria-pressed="!verEliminadas" @click="verEliminadas = false">Vigentes</button>
+        <button type="button" class="chip" :class="{ 'chip--activo': verEliminadas }" :aria-pressed="verEliminadas" @click="verEliminadas = true">
+          Eliminadas <span class="numero">({{ eliminadas.length }})</span>
+        </button>
+      </div>
+
+      <template v-if="verEliminadas">
+        <p class="secciones__ayuda">Las secciones eliminadas no se ofrecen en ningún lado y su nombre sigue ocupado. Al restaurarla vuelve inhabilitada.</p>
+        <ul class="secciones__lista">
+          <li v-for="seccion in eliminadas" :key="seccion.nombre" class="secciones__fila">
+            <div class="secciones__datos">
+              <strong>{{ seccion.nombre }}</strong>
+              <span class="secciones__cuenta">Eliminada el {{ fechaCorta(seccion.eliminadoEn) }}</span>
+            </div>
+            <div class="secciones__acciones">
+              <button type="button" class="btn" :aria-label="`Restaurar ${seccion.nombre}`" :aria-disabled="enCurso ? 'true' : undefined" @click="restaurar(seccion)">Restaurar</button>
+            </div>
+          </li>
+        </ul>
+      </template>
+
+      <p v-else-if="cargando && secciones.length === 0" class="secciones__vacio">Cargando…</p>
       <p v-else-if="secciones.length === 0" class="secciones__vacio">Todavía no hay secciones.</p>
 
       <ul v-else class="secciones__lista">
@@ -150,10 +184,10 @@ async function borrar() {
             </form>
           </template>
           <template v-else-if="aBorrar === seccion.nombre">
-            <p class="secciones__confirmar" role="alert">¿Borrar «{{ seccion.nombre }}»? No se puede deshacer.</p>
+            <p class="secciones__confirmar" role="alert">¿Eliminar «{{ seccion.nombre }}»? Dejará de mostrarse; podrás restaurarla desde «Eliminadas».</p>
             <div class="secciones__acciones">
-              <button type="button" class="btn btn--peligro" :aria-disabled="enCurso ? 'true' : undefined" @click="borrar">Sí, borrar</button>
-              <button type="button" class="btn btn--secundario" @click="aBorrar = null">No borrar</button>
+              <button type="button" class="btn btn--peligro" :aria-disabled="enCurso ? 'true' : undefined" @click="borrar">Sí, eliminar</button>
+              <button type="button" class="btn btn--secundario" @click="aBorrar = null">No eliminar</button>
             </div>
           </template>
           <template v-else-if="aInhabilitar === seccion.nombre">
@@ -181,12 +215,12 @@ async function borrar() {
               <button
                 type="button"
                 class="btn btn--peligro-suave"
-                :aria-label="`Borrar ${seccion.nombre}`"
+                :aria-label="`Eliminar ${seccion.nombre}`"
                 :aria-disabled="seccion.totalMesas > 0 ? 'true' : undefined"
-                :title="seccion.totalMesas > 0 ? 'Solo se pueden borrar secciones sin mesas asignadas' : undefined"
-                @click="seccion.totalMesas === 0 ? (aBorrar = seccion.nombre) : (error = `«${seccion.nombre}» tiene mesas asignadas. Muévelas a otra sección antes de borrarla.`)"
+                :title="seccion.totalMesas > 0 ? 'Solo se pueden eliminar secciones sin mesas vigentes' : undefined"
+                @click="seccion.totalMesas === 0 ? (aBorrar = seccion.nombre) : (error = `«${seccion.nombre}» tiene mesas vigentes. Muévelas a otra sección o elimínalas antes de eliminarla.`)"
               >
-                Borrar
+                Eliminar
               </button>
             </div>
           </template>
@@ -203,6 +237,7 @@ async function borrar() {
 <style scoped>
 .secciones { display: flex; flex-direction: column; gap: var(--espacio-3); }
 .secciones__ayuda { margin: 0; color: var(--color-muted); }
+.secciones__vistas { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
 .secciones__nueva { display: flex; align-items: flex-end; gap: var(--espacio-3); }
 .secciones__nueva .campo { flex: 1; min-width: 0; }
 .secciones__lista { margin: 0; padding: 0; list-style: none; border: 1px solid var(--color-border); border-radius: var(--radio); }

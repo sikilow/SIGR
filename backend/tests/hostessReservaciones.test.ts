@@ -88,7 +88,7 @@ beforeEach(() => {
   });
   filasMock.mockImplementation(async (_ex: unknown, sql: string) => {
     if (sql.includes("AS pasada")) return [{ pasada: 0, lejana: 0, es_hoy: 0 }];
-    if (sql.includes("SELECT id_cliente, correo FROM cliente")) {
+    if (sql.includes("SELECT id_cliente, correo, eliminado_en FROM cliente")) {
       return [{ id_cliente: 7, correo: clienteCorreo }];
     }
     if (sql.includes("FROM reservacion r")) {

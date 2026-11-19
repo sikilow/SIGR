@@ -31,6 +31,8 @@ interface CuerpoError {
   error?: string
   /** En errores `producto_agotado`, los productos agotados (`id_producto`, `disponible`). */
   productos?: DisponibilidadDto[]
+  /** En un 401 de sesión: `cuenta_inactiva` = el usuario fue desactivado o eliminado. */
+  motivo?: string
 }
 
 const CODIGOS_CONOCIDOS: readonly CodigoError[] = [
@@ -105,7 +107,8 @@ export async function solicitar<T>(metodo: Metodo, ruta: string, opciones: Opcio
       ruta === '/auth/login' || ruta === '/auth/me' || ruta === '/auth/recuperar' || ruta.startsWith('/auth/restablecer')
     if (respuesta.status === 401 && !esRutaDeSesion) {
       limpiarToken()
-      if (window.location.pathname !== '/login') window.location.assign('/login?motivo=expirada')
+      const motivo = (json as CuerpoError | null)?.motivo === 'cuenta_inactiva' ? 'desactivada' : 'expirada'
+      if (window.location.pathname !== '/login') window.location.assign(`/login?motivo=${motivo}`)
     }
     throw aErrorServicio(respuesta.status, json as CuerpoError | null)
   }

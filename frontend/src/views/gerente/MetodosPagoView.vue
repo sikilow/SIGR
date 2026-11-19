@@ -1,7 +1,10 @@
 <script setup lang="ts">
 // Métodos de pago (/gerente/metodos-pago). Gerencia organiza los métodos por categoría (física o digital).
 // Lo que está activo aquí es lo que ven el mesero (al solicitar la cuenta) y el cajero (al cobrar).
+// «Eliminar» es lógico (solo el gerente): sale de la lista pero se conserva, porque los pagos anteriores lo usaron, y se
+// restaura desde «Eliminados» (vuelve desactivado). El método de efectivo no se puede eliminar.
 import { computed, onMounted, ref } from 'vue'
+import ConfirmarAccionDialog from '../../components/ConfirmarAccionDialog.vue'
 import { ErrorServicio, servicios } from '../../services'
 import type { CategoriaMetodoPagoAdmin, MetodoPagoAdmin } from '../../types'
 import { vPermitir } from '../../utils/campos'
@@ -14,6 +17,9 @@ const TIPOS: ReadonlyArray<{ valor: Tipo; etiqueta: string; ayuda: string }> = [
 ]
 
 const categorias = ref<CategoriaMetodoPagoAdmin[]>([])
+/** Lo eliminado: categorías eliminadas y métodos eliminados (agrupados en su categoría). */
+const eliminados = ref<CategoriaMetodoPagoAdmin[]>([])
+const verEliminados = ref(false)
 const nombreCategoria = ref('')
 const tipoCategoria = ref<Tipo>('digital')
 const nombresMetodo = ref<Record<number, string>>({})
@@ -23,6 +29,9 @@ const cargado = ref(false)
 const guardando = ref(false)
 const error = ref('')
 const mensaje = ref('')
+
+const totalEliminados = computed(() => eliminados.value.reduce((n, c) => n + (c.eliminadoEn ? 1 : 0) + c.metodos.length, 0))
+const fechaCorta = (d: Date | null | undefined) => (d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
 
 const categoriasActivas = computed(() => categorias.value.filter((categoria) => categoria.activo).length)
 const metodosActivos = computed(
@@ -44,7 +53,11 @@ async function cargar() {
   cargando.value = true
   error.value = ''
   try {
-    categorias.value = await servicios.catalogo.listarMetodosPago()
+    const [vigentes, borrados] = await Promise.all([servicios.catalogo.listarMetodosPago(), servicios.catalogo.listarMetodosPago({ eliminados: true })])
+    categorias.value = vigentes
+    eliminados.value = borrados
+    // Si ya no queda nada eliminado, se vuelve a la lista normal.
+    if (borrados.length === 0) verEliminados.value = false
     cargado.value = true
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'No se pudieron cargar los métodos de pago.'
@@ -151,6 +164,67 @@ async function actualizarMetodo(
   }
 }
 
+// ---------- Eliminar / restaurar ----------
+interface ObjetivoEliminar {
+  tipo: 'categoria' | 'metodo'
+  id: number
+  nombre: string
+}
+const aEliminar = ref<ObjetivoEliminar | null>(null)
+const origenEliminar = ref<HTMLElement | null>(null)
+const eliminando = ref(false)
+const errorEliminar = ref('')
+const rechazoEliminar = ref('')
+
+function pedirEliminar(objetivo: ObjetivoEliminar, e: Event) {
+  aEliminar.value = objetivo
+  origenEliminar.value = e.currentTarget as HTMLElement
+  eliminando.value = false
+  errorEliminar.value = ''
+  rechazoEliminar.value = ''
+}
+
+async function confirmarEliminar() {
+  const objetivo = aEliminar.value
+  if (!objetivo || eliminando.value) return
+  eliminando.value = true
+  errorEliminar.value = ''
+  try {
+    if (objetivo.tipo === 'categoria') await servicios.catalogo.eliminarCategoriaMetodoPago(objetivo.id)
+    else await servicios.catalogo.eliminarMetodoPago(objetivo.id)
+    aEliminar.value = null
+    error.value = ''
+    mensaje.value = `«${objetivo.nombre}» eliminado. Puedes restaurarlo desde «Eliminados».`
+    await cargar()
+  } catch (e) {
+    if (e instanceof ErrorServicio && e.codigo === 'red') {
+      errorEliminar.value = 'No se pudo conectar con el servidor. Vuelve a intentarlo.'
+    } else {
+      rechazoEliminar.value = e instanceof ErrorServicio ? e.message : 'Ocurrió un error inesperado.'
+      void cargar()
+    }
+  } finally {
+    eliminando.value = false
+  }
+}
+
+async function restaurar(objetivo: ObjetivoEliminar) {
+  if (guardando.value) return
+  guardando.value = true
+  error.value = ''
+  mensaje.value = ''
+  try {
+    if (objetivo.tipo === 'categoria') await servicios.catalogo.restaurarCategoriaMetodoPago(objetivo.id)
+    else await servicios.catalogo.restaurarMetodoPago(objetivo.id)
+    mensaje.value = `«${objetivo.nombre}» restaurado. Está desactivado: actívalo para que se vea.`
+    await cargar()
+  } catch (e) {
+    error.value = e instanceof ErrorServicio ? e.message : 'No se pudo restaurar.'
+  } finally {
+    guardando.value = false
+  }
+}
+
 onMounted(() => void cargar())
 </script>
 
@@ -220,8 +294,58 @@ onMounted(() => void cargar())
       <section class="lista" aria-labelledby="lista-metodos-titulo">
         <h3 id="lista-metodos-titulo">Categorías y métodos</h3>
 
+        <div v-if="totalEliminados > 0" class="vistas" role="group" aria-label="Ver métodos de pago">
+          <button type="button" class="chip" :class="{ 'chip--activo': !verEliminados }" :aria-pressed="!verEliminados" @click="verEliminados = false">Vigentes</button>
+          <button type="button" class="chip" :class="{ 'chip--activo': verEliminados }" :aria-pressed="verEliminados" @click="verEliminados = true">
+            Eliminados <span class="numero">({{ totalEliminados }})</span>
+          </button>
+        </div>
+
+        <template v-if="verEliminados">
+          <p class="vistas__nota">Estos métodos y categorías no se ofrecen en ningún lado. Los pagos anteriores los conservan; restáuralos para volver a usarlos (si restauras un método, su categoría debe estar vigente).</p>
+          <article v-for="categoria in eliminados" :key="categoria.idCategoriaMetodoPago" class="categoria panel categoria--inactiva">
+            <header class="categoria__encabezado">
+              <div class="categoria__titulo">
+                <h4>{{ categoria.nombre }}</h4>
+                <p>
+                  <span class="etiqueta">{{ etiquetaTipo(categoria.tipo) }}</span>
+                  <span v-if="categoria.eliminadoEn" class="estado estado--no">Categoría eliminada el {{ fechaCorta(categoria.eliminadoEn) }}</span>
+                  <span v-else class="estado estado--si">Categoría vigente</span>
+                </p>
+              </div>
+              <button
+                v-if="categoria.eliminadoEn"
+                type="button"
+                class="btn"
+                :aria-label="`Restaurar la categoría ${categoria.nombre}`"
+                :disabled="guardando"
+                @click="restaurar({ tipo: 'categoria', id: categoria.idCategoriaMetodoPago, nombre: categoria.nombre })"
+              >
+                Restaurar categoría
+              </button>
+            </header>
+            <ul v-if="categoria.metodos.length > 0" class="metodos">
+              <li v-for="metodo in categoria.metodos" :key="metodo.idMetodo" class="metodos__inactivo">
+                <div class="metodos__nombre">
+                  <strong>{{ metodo.nombre }}</strong>
+                  <span>Eliminado el {{ fechaCorta(metodo.eliminadoEn) }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="btn"
+                  :aria-label="`Restaurar ${metodo.nombre}`"
+                  :disabled="guardando"
+                  @click="restaurar({ tipo: 'metodo', id: metodo.idMetodo, nombre: metodo.nombre })"
+                >
+                  Restaurar
+                </button>
+              </li>
+            </ul>
+          </article>
+        </template>
+
         <article
-          v-for="categoria in categorias"
+          v-for="categoria in (verEliminados ? [] : categorias)"
           :key="categoria.idCategoriaMetodoPago"
           class="categoria panel"
           :class="{ 'categoria--inactiva': !categoria.activo }"
@@ -253,6 +377,16 @@ onMounted(() => void cargar())
             >
               <span class="interruptor__pista"><span class="interruptor__pulgar" /></span>
             </button>
+            <button
+              type="button"
+              class="btn btn--peligro-suave btn--chico"
+              :aria-label="`Eliminar la categoría ${categoria.nombre}`"
+              :disabled="guardando || categoria.metodos.length > 0"
+              :title="categoria.metodos.length > 0 ? 'Elimina primero sus métodos' : undefined"
+              @click="pedirEliminar({ tipo: 'categoria', id: categoria.idCategoriaMetodoPago, nombre: categoria.nombre }, $event)"
+            >
+              Eliminar
+            </button>
           </header>
 
           <ul class="metodos">
@@ -276,6 +410,16 @@ onMounted(() => void cargar())
                 @click="cambiarEstadoMetodo(metodo, !metodo.activo)"
               >
                 <span class="interruptor__pista"><span class="interruptor__pulgar" /></span>
+              </button>
+              <button
+                type="button"
+                class="btn btn--peligro-suave btn--chico"
+                :aria-label="`Eliminar ${metodo.nombre}`"
+                :disabled="guardando || metodo.esEfectivo"
+                :title="metodo.esEfectivo ? 'El método de efectivo no se puede eliminar: el cuadre de caja lo necesita' : undefined"
+                @click="pedirEliminar({ tipo: 'metodo', id: metodo.idMetodo, nombre: metodo.nombre }, $event)"
+              >
+                Eliminar
               </button>
             </li>
             <li v-if="categoria.metodos.length === 0" class="metodos__vacio">
@@ -308,10 +452,43 @@ onMounted(() => void cargar())
         </article>
       </section>
     </template>
+
+    <ConfirmarAccionDialog
+      :abierto="aEliminar !== null"
+      id-base="eliminar-pago"
+      :titulo="`¿Eliminar ${aEliminar?.tipo === 'categoria' ? 'la categoría' : 'el método'} «${aEliminar?.nombre}»?`"
+      :descripcion="aEliminar?.tipo === 'categoria'
+        ? 'Dejará de aparecer en esta lista y no se ofrecerá en ningún lado. Podrás restaurarla desde «Eliminados» (volverá desactivada).'
+        : 'Dejará de aparecer y ya no se ofrecerá al mesero ni al cajero. Los pagos anteriores lo conservan y podrás restaurarlo desde «Eliminados» (volverá desactivado).'"
+      texto-confirmar="Eliminar"
+      :en-curso="eliminando"
+      :error-reintentable="errorEliminar"
+      :rechazo="rechazoEliminar"
+      :origen-foco="origenEliminar"
+      @confirmar="confirmarEliminar"
+      @cerrar="aEliminar = null"
+    />
   </section>
 </template>
 
 <style scoped>
+.vistas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+}
+
+.vistas__nota {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+}
+
+.btn--chico {
+  min-height: 40px;
+  padding: 0 var(--espacio-3);
+}
+
 .pagina {
   display: grid;
   gap: var(--espacio-5);

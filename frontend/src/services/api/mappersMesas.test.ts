@@ -36,6 +36,7 @@ describe('aMesaAdmin', () => {
       caracteristicas: [],
       activa: true,
       estado: 'libre',
+      eliminadoEn: null,
     })
   })
 
@@ -70,6 +71,7 @@ describe('deNuevaMesa y deCambioMesa', () => {
         nombre: 'Terraza',
         activa: false,
         totalMesas: 4,
+        eliminadoEn: null,
       })
     })
   })

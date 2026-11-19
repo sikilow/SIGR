@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Catálogo de características de mesa (Gerente → Mesas → Características): «Planta baja», «Junto a la ventana»,
-// «Terraza techada»… Gerencia las crea, renombra, desactiva o borra; después las marca en cada mesa. El portal de
+// «Terraza techada»… Gerencia las crea, renombra, desactiva o elimina (eliminar es lógico: se restaura desde «Eliminadas»); después las marca en cada mesa. El portal de
 // clientes y la hostess ofrecen las que tiene al menos una mesa. Mismo estilo que el diálogo de Secciones.
 import { nextTick, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
@@ -12,6 +12,9 @@ const props = defineProps<{ abierto: boolean; origenFoco?: HTMLElement | null }>
 const emit = defineEmits<{ cerrar: []; cambio: [] }>()
 
 const lista = ref<CaracteristicaAdmin[]>([])
+const eliminadas = ref<CaracteristicaAdmin[]>([])
+const verEliminadas = ref(false)
+const fechaCorta = (d: Date | null | undefined) => (d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
 const cargando = ref(false)
 const nueva = ref('')
 const editando = ref<number | null>(null)
@@ -26,7 +29,10 @@ const SUGERENCIAS = ['Junto a la ventana', 'Terraza techada', 'Área infantil ce
 async function cargar() {
   cargando.value = true
   try {
-    lista.value = await servicios.catalogo.listarCaracteristicas()
+    const [vigentes, borradas] = await Promise.all([servicios.catalogo.listarCaracteristicas(), servicios.catalogo.listarCaracteristicas({ eliminados: true })])
+    lista.value = vigentes
+    eliminadas.value = borradas
+    if (borradas.length === 0) verEliminadas.value = false
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudieron cargar las características.'
   } finally {
@@ -41,6 +47,7 @@ watch(
     nueva.value = ''
     editando.value = null
     aBorrar.value = null
+    verEliminadas.value = false
     error.value = ''
     await cargar()
   },
@@ -100,12 +107,16 @@ async function alternarActiva(c: CaracteristicaAdmin) {
 
 function pedirBorrado(c: CaracteristicaAdmin) {
   if (c.totalMesas > 0 || c.totalReservaciones > 0) {
-    error.value = `«${c.nombre}» está en uso (${c.totalMesas} ${c.totalMesas === 1 ? 'mesa' : 'mesas'}, ${c.totalReservaciones} ${c.totalReservaciones === 1 ? 'reservación' : 'reservaciones'}). Quítala de las mesas o desactívala.`
+    error.value = `«${c.nombre}» está en uso (${c.totalMesas} ${c.totalMesas === 1 ? 'mesa' : 'mesas'}, ${c.totalReservaciones} ${c.totalReservaciones === 1 ? 'reservación' : 'reservaciones'}). Quítala de las mesas o desactívala antes de eliminarla.`
     return
   }
   aBorrar.value = c.idCaracteristica
   editando.value = null
   error.value = ''
+}
+
+async function restaurar(c: CaracteristicaAdmin) {
+  await correr(() => servicios.catalogo.restaurarCaracteristica(c.idCaracteristica))
 }
 
 async function borrar() {
@@ -140,7 +151,29 @@ const sugerenciasLibres = () => SUGERENCIAS.filter((s) => !lista.value.some((c) 
 
       <div v-if="error" class="caracteristicas__alerta" role="alert"><p>{{ error }}</p></div>
 
-      <p v-if="cargando && lista.length === 0" class="caracteristicas__vacio">Cargando…</p>
+      <div v-if="eliminadas.length > 0" class="caracteristicas__vistas" role="group" aria-label="Ver características">
+        <button type="button" class="vista" :class="{ 'vista--activa': !verEliminadas }" :aria-pressed="!verEliminadas" @click="verEliminadas = false">Vigentes</button>
+        <button type="button" class="vista" :class="{ 'vista--activa': verEliminadas }" :aria-pressed="verEliminadas" @click="verEliminadas = true">
+          Eliminadas <span class="numero">({{ eliminadas.length }})</span>
+        </button>
+      </div>
+
+      <template v-if="verEliminadas">
+        <p class="caracteristicas__ayuda">Las características eliminadas no se ofrecen en ningún lado y su nombre sigue ocupado. Al restaurarla vuelve desactivada.</p>
+        <ul class="caracteristicas__lista">
+          <li v-for="c in eliminadas" :key="c.idCaracteristica" class="caracteristicas__fila">
+            <div class="caracteristicas__datos">
+              <strong>{{ c.nombre }}</strong>
+              <span class="caracteristicas__cuenta">Eliminada el {{ fechaCorta(c.eliminadoEn) }}</span>
+            </div>
+            <div class="caracteristicas__acciones">
+              <button type="button" class="btn" :aria-label="`Restaurar ${c.nombre}`" :aria-disabled="enCurso ? 'true' : undefined" @click="restaurar(c)">Restaurar</button>
+            </div>
+          </li>
+        </ul>
+      </template>
+
+      <p v-else-if="cargando && lista.length === 0" class="caracteristicas__vacio">Cargando…</p>
       <p v-else-if="lista.length === 0" class="caracteristicas__vacio">Todavía no hay características.</p>
       <ul v-else class="caracteristicas__lista">
         <li v-for="c in lista" :key="c.idCaracteristica" class="caracteristicas__fila">
@@ -153,10 +186,10 @@ const sugerenciasLibres = () => SUGERENCIAS.filter((s) => !lista.value.some((c) 
             </form>
           </template>
           <template v-else-if="aBorrar === c.idCaracteristica">
-            <p class="caracteristicas__confirmar" role="alert">¿Borrar «{{ c.nombre }}»? No se puede deshacer.</p>
+            <p class="caracteristicas__confirmar" role="alert">¿Eliminar «{{ c.nombre }}»? Dejará de mostrarse; podrás restaurarla desde «Eliminadas».</p>
             <div class="caracteristicas__acciones">
-              <button type="button" class="btn btn--peligro" :aria-disabled="enCurso ? 'true' : undefined" @click="borrar">Sí, borrar</button>
-              <button type="button" class="btn btn--secundario" @click="aBorrar = null">No borrar</button>
+              <button type="button" class="btn btn--peligro" :aria-disabled="enCurso ? 'true' : undefined" @click="borrar">Sí, eliminar</button>
+              <button type="button" class="btn btn--secundario" @click="aBorrar = null">No eliminar</button>
             </div>
           </template>
           <template v-else>
@@ -180,7 +213,7 @@ const sugerenciasLibres = () => SUGERENCIAS.filter((s) => !lista.value.some((c) 
               >
                 {{ c.activa ? 'Desactivar' : 'Activar' }}
               </button>
-              <button type="button" class="btn btn--peligro-suave" :aria-label="`Borrar ${c.nombre}`" @click="pedirBorrado(c)">Borrar</button>
+              <button type="button" class="btn btn--peligro-suave" :aria-label="`Eliminar ${c.nombre}`" @click="pedirBorrado(c)">Eliminar</button>
             </div>
           </template>
         </li>
@@ -196,6 +229,10 @@ const sugerenciasLibres = () => SUGERENCIAS.filter((s) => !lista.value.some((c) 
 <style scoped>
 .caracteristicas { display: flex; flex-direction: column; gap: var(--espacio-3); }
 .caracteristicas__ayuda { margin: 0; color: var(--color-muted); }
+.caracteristicas__vistas { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
+.vista { min-height: 40px; padding: 0 var(--espacio-4); border: 1.5px solid var(--color-borde-control); border-radius: 999px; background: var(--color-surface); color: var(--color-text); font: inherit; font-weight: 650; cursor: pointer; }
+.vista--activa { border-color: var(--color-primary); background: var(--color-primary); color: #fff; }
+.vista:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
 .caracteristicas__nueva { display: flex; align-items: flex-end; gap: var(--espacio-3); }
 .caracteristicas__nueva .campo { flex: 1; min-width: 0; }
 .caracteristicas__sugerencias { display: flex; flex-wrap: wrap; align-items: center; gap: var(--espacio-2); color: var(--color-muted); font-size: var(--texto-sm); }

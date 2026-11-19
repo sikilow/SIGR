@@ -3,9 +3,9 @@
 // producto nuevo o un precio editado se ven en el menú del mesero. Se reinicia al recargar la página.
 import { validarHorario } from '../../utils/horarioReservacion'
 import { rangoTelefono, textoDigitos } from '../../utils/lada'
-import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CaracteristicaAdmin, type CategoriaAdmin, type MesaAdmin, type Producto, type ProductoAdmin, type SeccionAdmin, type UsuarioAdmin } from '../../types'
+import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CaracteristicaAdmin, type CategoriaAdmin, type CategoriaMetodoPagoAdmin, type MetodoPagoAdmin, type Cliente, type ClienteAdmin, type MesaAdmin, type Producto, type ProductoAdmin, type SeccionAdmin, type UsuarioAdmin } from '../../types'
 import { ErrorServicio } from '../errores'
-import type { CatalogoService, UsuariosService } from '../interfaces'
+import type { CatalogoService, ClientesService, UsuariosService } from '../interfaces'
 import { baseDatos, type MesaGuardada } from './baseDatos'
 import { categoriasMetodoPagoMock, metodosPagoMock } from './metodosPago'
 import { conRetraso } from './utiles'
@@ -27,6 +27,8 @@ interface DatosExtra {
   ultimoAcceso: Date | null
 }
 const extra = new Map<number, DatosExtra>()
+/** Usuarios eliminados (lógico) y cuándo; siguen en `baseDatos` para el historial, pero inactivos y ocultos. */
+const usuariosEliminados = new Map<number, Date>()
 
 function datosExtra(id: number, usuario: string): DatosExtra {
   let d = extra.get(id)
@@ -70,6 +72,7 @@ function aAdmin(id: number): UsuarioAdmin {
     lada: e.lada,
     creadoEn: e.creadoEn,
     ultimoAcceso: e.ultimoAcceso,
+    eliminadoEn: usuariosEliminados.get(u.idUsuario) ?? null,
   }
 }
 
@@ -83,14 +86,105 @@ function idSesion(): number | null {
   }
 }
 
+// ---------- Clientes (Gerente → Clientes) ----------
+function aClienteAdminMock(c: Cliente): ClienteAdmin {
+  const delCliente = baseDatos.reservaciones.filter((r) => r.idCliente === c.idCliente)
+  return {
+    idCliente: c.idCliente,
+    nombre: c.nombre,
+    telefono: c.telefono,
+    lada: c.lada ?? '52',
+    correo: c.correo,
+    tieneCuenta: false,
+    reservacionesVigentes: delCliente.filter((r) => r.estado === 'pendiente' || r.estado === 'confirmada').length,
+    totalReservaciones: delCliente.length,
+    eliminadoEn: baseDatos.clientesEliminados.get(c.idCliente) ?? null,
+  }
+}
+
+export function crearClientesMock(): ClientesService {
+  const buscar = (id: number): Cliente => {
+    const c = baseDatos.clientes.find((x) => x.idCliente === id)
+    if (!c) throw noExiste('El cliente')
+    return c
+  }
+  return {
+    listar(opciones) {
+      return conRetraso(() =>
+        baseDatos.clientes
+          .filter((c) => baseDatos.clientesEliminados.has(c.idCliente) === Boolean(opciones?.eliminados))
+          .map(aClienteAdminMock)
+          .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
+      )
+    },
+
+    actualizar(id, cambio) {
+      return conRetraso(() => {
+        const c = buscar(id)
+        if (baseDatos.clientesEliminados.has(id)) throw new ErrorServicio('estado_invalido', 'El cliente está eliminado. Restáuralo para poder editarlo.', 409)
+        const lada = cambio.lada ?? c.lada ?? '52'
+        const telefono = cambio.telefono ?? c.telefono ?? ''
+        if (cambio.telefono !== undefined || cambio.lada !== undefined) {
+          const { min, max } = rangoTelefono(lada)
+          if (telefono !== '' && (!/^\d+$/.test(telefono) || telefono.length < min || telefono.length > max)) {
+            throw new ErrorServicio('estado_invalido', `El teléfono debe tener ${textoDigitos(lada)}.`, 422)
+          }
+        }
+        const otro = baseDatos.clientes.find((x) => x.idCliente !== id && ((cambio.telefono !== undefined && x.telefono === cambio.telefono) || (cambio.correo !== undefined && x.correo?.toLowerCase() === cambio.correo.toLowerCase())))
+        if (otro) {
+          throw new ErrorServicio(
+            'estado_invalido',
+            baseDatos.clientesEliminados.has(otro.idCliente) ? 'Hay un cliente eliminado con ese teléfono o correo. Restáuralo desde «Eliminados» en lugar de repetirlo.' : 'Ya existe un cliente con ese teléfono o correo.',
+            409,
+          )
+        }
+        if (cambio.nombre !== undefined) c.nombre = cambio.nombre.trim()
+        if (cambio.telefono !== undefined) c.telefono = cambio.telefono
+        if (cambio.lada !== undefined) c.lada = cambio.lada
+        if (cambio.correo !== undefined) c.correo = cambio.correo.trim().toLowerCase()
+        return aClienteAdminMock(c)
+      })
+    },
+
+    eliminar(id) {
+      return conRetraso(() => {
+        const c = buscar(id)
+        if (baseDatos.clientesEliminados.has(id)) throw new ErrorServicio('estado_invalido', 'El cliente ya está eliminado.', 409)
+        const vigentes = baseDatos.reservaciones.filter((r) => r.idCliente === id && (r.estado === 'pendiente' || r.estado === 'confirmada')).length
+        if (vigentes > 0) {
+          throw new ErrorServicio('estado_invalido', `${c.nombre} tiene ${vigentes} reservación(es) pendientes o confirmadas. Cancélalas o espera a que pasen antes de eliminarlo.`, 409)
+        }
+        if (baseDatos.listaEspera.some((e) => e.idCliente === id && e.estado === 'esperando')) {
+          throw new ErrorServicio('estado_invalido', `${c.nombre} está en la lista de espera. Quítalo de la lista antes de eliminarlo.`, 409)
+        }
+        baseDatos.clientesEliminados.set(id, new Date())
+        return aClienteAdminMock(c)
+      })
+    },
+
+    restaurar(id) {
+      return conRetraso(() => {
+        const c = buscar(id)
+        if (!baseDatos.clientesEliminados.has(id)) throw new ErrorServicio('estado_invalido', 'El cliente no está eliminado.', 409)
+        baseDatos.clientesEliminados.delete(id)
+        return aClienteAdminMock(c)
+      })
+    },
+  }
+}
+
 export function crearUsuariosMock(): UsuariosService {
   return {
-    listar() {
-      return conRetraso(() => baseDatos.usuarios.map((u) => aAdmin(u.idUsuario)).sort((a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre)))
+    listar(opciones) {
+      return conRetraso(() => baseDatos.usuarios.filter((u) => usuariosEliminados.has(u.idUsuario) === Boolean(opciones?.eliminados)).map((u) => aAdmin(u.idUsuario)).sort((a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre)))
     },
 
     crear(n) {
       return conRetraso(() => {
+        const igualEliminado = baseDatos.usuarios.some(
+          (u) => usuariosEliminados.has(u.idUsuario) && (u.nombreUsuario.toLowerCase() === n.nombreUsuario.trim().toLowerCase() || datosExtra(u.idUsuario, u.nombreUsuario).correo.toLowerCase() === n.correo.trim().toLowerCase()),
+        )
+        if (igualEliminado) throw new ErrorServicio('estado_invalido', 'Hay un usuario eliminado con ese correo, usuario o teléfono. Restáuralo desde «Eliminados» en lugar de crear otro.', 409)
         if (baseDatos.usuarios.some((u) => u.nombreUsuario.toLowerCase() === n.nombreUsuario.trim().toLowerCase())) throw duplicado('nombre de usuario')
         if (baseDatos.usuarios.some((u) => datosExtra(u.idUsuario, u.nombreUsuario).correo.toLowerCase() === n.correo.trim().toLowerCase())) throw duplicado('correo')
         const id = Math.max(0, ...baseDatos.usuarios.map((u) => u.idUsuario)) + 1
@@ -114,6 +208,7 @@ export function crearUsuariosMock(): UsuariosService {
       return conRetraso(() => {
         const u = baseDatos.usuarios.find((x) => x.idUsuario === id)
         if (!u) throw noExiste('El usuario')
+        if (usuariosEliminados.has(id)) throw new ErrorServicio('estado_invalido', 'El usuario está eliminado. Restáuralo para poder editarlo.', 409)
         const primerGerente = baseDatos.usuarios
           .filter((candidato) => candidato.rol === 'gerente')
           .sort((a, b) => a.idUsuario - b.idUsuario)[0]
@@ -139,6 +234,33 @@ export function crearUsuariosMock(): UsuariosService {
         if (c.correo !== undefined) e.correo = c.correo.trim()
         if (c.telefono !== undefined) e.telefono = telefonoValido(c.telefono, id, c.lada ?? e.lada)
         if (c.lada !== undefined) e.lada = c.lada
+        return aAdmin(id)
+      })
+    },
+
+    eliminar(id) {
+      return conRetraso(() => {
+        const u = baseDatos.usuarios.find((x) => x.idUsuario === id)
+        if (!u) throw noExiste('El usuario')
+        if (usuariosEliminados.has(id)) throw new ErrorServicio('estado_invalido', 'El usuario ya está eliminado.', 409)
+        if (id === idSesion()) throw new ErrorServicio('estado_invalido', 'No puedes eliminar tu propio usuario.', 409)
+        const primerGerente = baseDatos.usuarios.filter((x) => x.rol === 'gerente').sort((a, b) => a.idUsuario - b.idUsuario)[0]
+        if (primerGerente?.idUsuario === id) throw new ErrorServicio('estado_invalido', 'El primer gerente no se puede eliminar.', 409)
+        if (u.rol === 'gerente' && u.activo !== false) {
+          const otros = baseDatos.usuarios.filter((x) => x.idUsuario !== id && x.rol === 'gerente' && x.activo !== false && !usuariosEliminados.has(x.idUsuario))
+          if (otros.length === 0) throw new ErrorServicio('estado_invalido', 'Debe quedar al menos un gerente activo.', 409)
+        }
+        u.activo = false
+        usuariosEliminados.set(id, new Date())
+        return aAdmin(id)
+      })
+    },
+
+    restaurar(id) {
+      return conRetraso(() => {
+        if (!baseDatos.usuarios.some((x) => x.idUsuario === id)) throw noExiste('El usuario')
+        if (!usuariosEliminados.has(id)) throw new ErrorServicio('estado_invalido', 'El usuario no está eliminado.', 409)
+        usuariosEliminados.delete(id)
         return aAdmin(id)
       })
     },
@@ -299,6 +421,7 @@ const aMesaAdmin = (m: MesaGuardada): MesaAdmin => {
     caracteristicas: [...m.caracteristicas],
     activa: m.activa,
     estado: m.estado,
+    eliminadoEn: elimMesas.get(m.idMesa) ?? null,
   }
 }
 
@@ -307,7 +430,8 @@ function aCaracteristicaAdmin(id: number): CaracteristicaAdmin {
   if (!c) throw noExiste('La característica')
   return {
     ...c,
-    totalMesas: baseDatos.mesas.filter((m) => m.caracteristicas.includes(id)).length,
+    totalMesas: baseDatos.mesas.filter((m) => m.caracteristicas.includes(id) && !elimMesas.has(m.idMesa)).length,
+    eliminadoEn: elimCaracteristicas.get(id) ?? null,
     totalReservaciones: baseDatos.reservaciones.filter((r) => r.preferencias?.caracteristicas.some((x) => x.idCaracteristica === id)).length,
   }
 }
@@ -315,8 +439,13 @@ function aCaracteristicaAdmin(id: number): CaracteristicaAdmin {
 function validarNombreCaracteristica(nombre: string, actual?: number): void {
   const texto = nombre.trim()
   if (!texto || texto.length > 40) throw new ErrorServicio('estado_invalido', 'El nombre debe tener entre 1 y 40 caracteres.', 422)
-  if (baseDatos.caracteristicas.some((c) => c.idCaracteristica !== actual && c.nombre.toLocaleLowerCase('es') === texto.toLocaleLowerCase('es'))) {
-    throw new ErrorServicio('estado_invalido', 'Ya existe una característica con ese nombre.', 409)
+  const igual = baseDatos.caracteristicas.find((c) => c.idCaracteristica !== actual && c.nombre.toLocaleLowerCase('es') === texto.toLocaleLowerCase('es'))
+  if (igual) {
+    throw new ErrorServicio(
+      'estado_invalido',
+      elimCaracteristicas.has(igual.idCaracteristica) ? 'Hay una característica eliminada con ese nombre. Restáurala desde «Eliminadas» en lugar de crear otra.' : 'Ya existe una característica con ese nombre.',
+      409,
+    )
   }
 }
 
@@ -328,7 +457,8 @@ function aSeccionAdmin(nombre: string): SeccionAdmin {
   return {
     nombre: seccion.nombre,
     activa: seccion.activa,
-    totalMesas: baseDatos.mesas.filter((m) => m.zona === nombre).length,
+    totalMesas: baseDatos.mesas.filter((m) => m.zona === nombre && !elimMesas.has(m.idMesa)).length,
+    eliminadoEn: elimSecciones.get(nombre) ?? null,
   }
 }
 
@@ -337,8 +467,13 @@ function validarNombreSeccion(nombre: string, actual?: string): void {
   if (!texto || texto.length > MESA_ZONA_MAX) {
     throw new ErrorServicio('estado_invalido', `El nombre de la sección debe tener entre 1 y ${MESA_ZONA_MAX} caracteres.`, 422)
   }
-  if (baseDatos.secciones.some((s) => s.nombre !== actual && claveSeccion(s.nombre) === claveSeccion(texto))) {
-    throw new ErrorServicio('estado_invalido', 'Ya existe una sección con ese nombre.', 409)
+  const igual = baseDatos.secciones.find((s) => s.nombre !== actual && claveSeccion(s.nombre) === claveSeccion(texto))
+  if (igual) {
+    throw new ErrorServicio(
+      'estado_invalido',
+      elimSecciones.has(igual.nombre) ? 'Hay una sección eliminada con ese nombre. Restáurala desde «Eliminadas» en lugar de crear otra.' : 'Ya existe una sección con ese nombre.',
+      409,
+    )
   }
 }
 
@@ -371,10 +506,36 @@ function validarDatosMesa(c: {
 }
 
 function exigirNumeroLibre(numero: number, exceptoId?: number): void {
-  if (baseDatos.mesas.some((m) => m.numero === numero && m.idMesa !== exceptoId)) {
-    throw new ErrorServicio('estado_invalido', `Ya existe la mesa ${numero}.`, 409)
+  const igual = baseDatos.mesas.find((m) => m.numero === numero && m.idMesa !== exceptoId)
+  if (igual) {
+    throw new ErrorServicio(
+      'estado_invalido',
+      elimMesas.has(igual.idMesa) ? `Hay una mesa ${numero} eliminada. Restáurala desde «Eliminadas» en lugar de crear otra.` : `Ya existe la mesa ${numero}.`,
+      409,
+    )
   }
 }
+
+/** Una mesa solo se puede dejar de usar (no disponible o eliminada) si está libre, sin cuenta abierta y sin reservaciones vigentes. */
+function exigirMesaSinUsoMock(mesa: MesaGuardada, destino: string): void {
+  if (mesa.estado !== 'libre') throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} está ${mesa.estado}: libérala antes de ${destino}.`, 409)
+  if (baseDatos.cuentas.some((c) => c.idMesa === mesa.idMesa && c.estado !== 'cerrada')) {
+    throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} tiene una cuenta abierta: hay que cerrarla antes.`, 409)
+  }
+  if (baseDatos.reservaciones.some((r) => r.idMesa === mesa.idMesa && (r.estado === 'pendiente' || r.estado === 'confirmada'))) {
+    throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} tiene reservaciones vigentes: cancélalas o cámbialas de mesa antes.`, 409)
+  }
+}
+
+// Lo eliminado (lógico) y cuándo. Como en la API, algo eliminado queda también inactivo (activa/activo = false), así que
+// las pantallas que ya filtran por «activo» lo ocultan sin cambios.
+const elimCanales = new Map<number, Date>()
+const elimCategoriasPago = new Map<number, Date>()
+const elimMetodos = new Map<number, Date>()
+const elimCaracteristicas = new Map<number, Date>()
+const elimSecciones = new Map<string, Date>()
+const elimMesas = new Map<number, Date>()
+const pideElim = (o?: { eliminados?: boolean }) => Boolean(o?.eliminados)
 
 export function crearCatalogoMock(): CatalogoService {
   // Los productos agotados de la demo cuentan como "activos sin existencia" salvo que se indique otra cosa.
@@ -383,8 +544,12 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => structuredClone(baseDatos.canales.filter((c) => c.activo)))
     },
 
-    listarCanales() {
-      return conRetraso(() => structuredClone(baseDatos.canales))
+    listarCanales(opciones) {
+      return conRetraso(() =>
+        baseDatos.canales
+          .filter((c) => elimCanales.has(c.idCanal) === pideElim(opciones))
+          .map((c) => ({ ...c, eliminadoEn: elimCanales.get(c.idCanal) ?? null })),
+      )
     },
 
     crearCanal(nombre) {
@@ -392,8 +557,13 @@ export function crearCatalogoMock(): CatalogoService {
         const limpio = nombre.trim()
         if (!limpio) throw new ErrorServicio('estado_invalido', 'El nombre del canal es obligatorio.', 422)
         if (limpio.length > 40) throw new ErrorServicio('estado_invalido', 'El nombre del canal admite hasta 40 caracteres.', 422)
-        if (baseDatos.canales.some((c) => c.nombre.toLocaleLowerCase() === limpio.toLocaleLowerCase())) {
-          throw new ErrorServicio('estado_invalido', 'Ya existe un canal con ese nombre.', 409)
+        const igual = baseDatos.canales.find((c) => c.nombre.toLocaleLowerCase() === limpio.toLocaleLowerCase())
+        if (igual) {
+          throw new ErrorServicio(
+            'estado_invalido',
+            elimCanales.has(igual.idCanal) ? 'Hay un canal eliminado con ese nombre. Restáuralo desde «Eliminados» en lugar de crear otro.' : 'Ya existe un canal con ese nombre.',
+            409,
+          )
         }
         const canal = { idCanal: Math.max(0, ...baseDatos.canales.map((c) => c.idCanal)) + 1, nombre: limpio, activo: true }
         baseDatos.canales.push(canal)
@@ -405,8 +575,32 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const canal = baseDatos.canales.find((c) => c.idCanal === idCanal)
         if (!canal) throw noExiste('El canal')
+        if (elimCanales.has(idCanal)) throw new ErrorServicio('estado_invalido', 'El canal está eliminado. Restáuralo para poder cambiarlo.', 409)
         canal.activo = cambio.activo
         return { ...canal }
+      })
+    },
+
+    eliminarCanal(idCanal) {
+      return conRetraso(() => {
+        const canal = baseDatos.canales.find((c) => c.idCanal === idCanal)
+        if (!canal) throw noExiste('El canal')
+        if (elimCanales.has(idCanal)) throw new ErrorServicio('estado_invalido', 'El canal ya está eliminado.', 409)
+        const enUso = baseDatos.cuentas.filter((c) => (c as { idCanal?: number | null }).idCanal === idCanal && c.estado !== 'cerrada').length
+        if (enUso > 0) throw new ErrorServicio('estado_invalido', `«${canal.nombre}» lo usan ${enUso} pedido(s) para llevar que aún no se cobran. Espera a que se cobren.`, 409)
+        canal.activo = false
+        elimCanales.set(idCanal, new Date())
+        return { ...canal, eliminadoEn: elimCanales.get(idCanal) ?? null }
+      })
+    },
+
+    restaurarCanal(idCanal) {
+      return conRetraso(() => {
+        const canal = baseDatos.canales.find((c) => c.idCanal === idCanal)
+        if (!canal) throw noExiste('El canal')
+        if (!elimCanales.has(idCanal)) throw new ErrorServicio('estado_invalido', 'El canal no está eliminado.', 409)
+        elimCanales.delete(idCanal)
+        return { ...canal, eliminadoEn: null }
       })
     },
 
@@ -418,11 +612,67 @@ export function crearCatalogoMock(): CatalogoService {
       )))
     },
 
-    listarMetodosPago() {
-      return conRetraso(() => structuredClone(categoriasMetodoPagoMock.map((categoria) => ({
-        ...categoria,
-        metodos: metodosPagoMock.filter((metodo) => metodo.idCategoriaMetodoPago === categoria.idCategoriaMetodoPago),
-      }))))
+    listarMetodosPago(opciones) {
+      return conRetraso(() => {
+        const eliminados = pideElim(opciones)
+        const conFecha = (m: MetodoPagoAdmin): MetodoPagoAdmin => ({ ...m, eliminadoEn: elimMetodos.get(m.idMetodo) ?? null })
+        const resultado: CategoriaMetodoPagoAdmin[] = []
+        for (const categoria of categoriasMetodoPagoMock) {
+          const catEliminada = elimCategoriasPago.has(categoria.idCategoriaMetodoPago)
+          const metodos = metodosPagoMock.filter((m) => m.idCategoriaMetodoPago === categoria.idCategoriaMetodoPago).filter((m) => elimMetodos.has(m.idMetodo) === eliminados).map(conFecha)
+          if (eliminados ? !(catEliminada || metodos.length > 0) : catEliminada) continue
+          resultado.push({ ...categoria, eliminadoEn: elimCategoriasPago.get(categoria.idCategoriaMetodoPago) ?? null, metodos })
+        }
+        return structuredClone(resultado)
+      })
+    },
+
+    eliminarCategoriaMetodoPago(id) {
+      return conRetraso(() => {
+        const categoria = categoriasMetodoPagoMock.find((c) => c.idCategoriaMetodoPago === id)
+        if (!categoria) throw noExiste('La categoría de pago')
+        if (elimCategoriasPago.has(id)) throw new ErrorServicio('estado_invalido', 'La categoría ya está eliminada.', 409)
+        const vigentes = metodosPagoMock.filter((m) => m.idCategoriaMetodoPago === id && !elimMetodos.has(m.idMetodo)).length
+        if (vigentes > 0) throw new ErrorServicio('estado_invalido', `«${categoria.nombre}» tiene ${vigentes} método(s) de pago. Elimínalos antes de eliminar la categoría.`, 409)
+        categoria.activo = false
+        elimCategoriasPago.set(id, new Date())
+        return { ...structuredClone(categoria), eliminadoEn: elimCategoriasPago.get(id) ?? null, metodos: [] }
+      })
+    },
+
+    restaurarCategoriaMetodoPago(id) {
+      return conRetraso(() => {
+        const categoria = categoriasMetodoPagoMock.find((c) => c.idCategoriaMetodoPago === id)
+        if (!categoria) throw noExiste('La categoría de pago')
+        if (!elimCategoriasPago.has(id)) throw new ErrorServicio('estado_invalido', 'La categoría no está eliminada.', 409)
+        elimCategoriasPago.delete(id)
+        return { ...structuredClone(categoria), eliminadoEn: null, metodos: structuredClone(metodosPagoMock.filter((m) => m.idCategoriaMetodoPago === id && !elimMetodos.has(m.idMetodo))) }
+      })
+    },
+
+    eliminarMetodoPago(id) {
+      return conRetraso(() => {
+        const metodo = metodosPagoMock.find((m) => m.idMetodo === id)
+        if (!metodo) throw noExiste('El método de pago')
+        if (elimMetodos.has(id)) throw new ErrorServicio('estado_invalido', 'El método de pago ya está eliminado.', 409)
+        if (metodo.esEfectivo) throw new ErrorServicio('estado_invalido', 'El método marcado como efectivo no se puede eliminar: el cuadre de caja lo necesita.', 409)
+        const solicitado = baseDatos.cuentas.filter((c) => c.idMetodoPagoSolicitado === id && c.estado !== 'cerrada').length
+        if (solicitado > 0) throw new ErrorServicio('estado_invalido', `«${metodo.nombre}» lo tienen solicitado ${solicitado} cuenta(s) abiertas. Espera a que se cobren.`, 409)
+        metodo.activo = false
+        elimMetodos.set(id, new Date())
+        return { ...metodo, eliminadoEn: elimMetodos.get(id) ?? null }
+      })
+    },
+
+    restaurarMetodoPago(id) {
+      return conRetraso(() => {
+        const metodo = metodosPagoMock.find((m) => m.idMetodo === id)
+        if (!metodo) throw noExiste('El método de pago')
+        if (!elimMetodos.has(id)) throw new ErrorServicio('estado_invalido', 'El método de pago no está eliminado.', 409)
+        if (elimCategoriasPago.has(metodo.idCategoriaMetodoPago)) throw new ErrorServicio('estado_invalido', 'Su categoría está eliminada. Restaura primero la categoría.', 409)
+        elimMetodos.delete(id)
+        return { ...metodo, eliminadoEn: null }
+      })
     },
 
     crearCategoriaMetodoPago(nombre, tipo) {
@@ -443,6 +693,7 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const categoria = categoriasMetodoPagoMock.find((item) => item.idCategoriaMetodoPago === id)
         if (!categoria) throw noExiste('La categoría de pago')
+        if (elimCategoriasPago.has(id)) throw new ErrorServicio('estado_invalido', 'La categoría está eliminada. Restáurala para poder cambiarla.', 409)
         categoria.activo = cambio.activo
         return {
           ...structuredClone(categoria),
@@ -456,9 +707,15 @@ export function crearCatalogoMock(): CatalogoService {
         const limpio = nombre.trim()
         const categoria = categoriasMetodoPagoMock.find((item) => item.idCategoriaMetodoPago === idCategoriaMetodoPago)
         if (!categoria) throw noExiste('La categoría de pago')
+        if (elimCategoriasPago.has(idCategoriaMetodoPago)) throw new ErrorServicio('estado_invalido', 'La categoría de pago está eliminada. Restáurala o elige otra.', 422)
         if (!limpio || limpio.length > 40) throw new ErrorServicio('estado_invalido', 'El nombre debe tener entre 1 y 40 caracteres.', 422)
-        if (metodosPagoMock.some((metodo) => metodo.nombre.toLocaleLowerCase() === limpio.toLocaleLowerCase())) {
-          throw new ErrorServicio('estado_invalido', 'Ya existe un método de pago con ese nombre.', 409)
+        const igualMetodo = metodosPagoMock.find((metodo) => metodo.nombre.toLocaleLowerCase() === limpio.toLocaleLowerCase())
+        if (igualMetodo) {
+          throw new ErrorServicio(
+            'estado_invalido',
+            elimMetodos.has(igualMetodo.idMetodo) ? 'Hay un método de pago eliminado con ese nombre. Restáuralo desde «Eliminados» en lugar de crear otro.' : 'Ya existe un método de pago con ese nombre.',
+            409,
+          )
         }
         if (esEfectivo && categoria.tipo !== 'fisico') {
           throw new ErrorServicio('estado_invalido', 'El método de efectivo debe pertenecer a una categoría física.', 422)
@@ -485,6 +742,7 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const metodo = metodosPagoMock.find((item) => item.idMetodo === id)
         if (!metodo) throw noExiste('El método de pago')
+        if (elimMetodos.has(id)) throw new ErrorServicio('estado_invalido', 'El método de pago está eliminado. Restáuralo para poder cambiarlo.', 409)
         if (cambio.esEfectivo && metodo.tipo !== 'fisico') {
           throw new ErrorServicio('estado_invalido', 'El método de efectivo debe pertenecer a una categoría física.', 422)
         }
@@ -522,8 +780,9 @@ export function crearCatalogoMock(): CatalogoService {
       })
     },
 
-    listarCaracteristicas() {
+    listarCaracteristicas(opciones) {
       return conRetraso(() => baseDatos.caracteristicas
+        .filter((c) => elimCaracteristicas.has(c.idCaracteristica) === pideElim(opciones))
         .map((c) => aCaracteristicaAdmin(c.idCaracteristica))
         .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')))
     },
@@ -541,6 +800,7 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const c = baseDatos.caracteristicas.find((x) => x.idCaracteristica === id)
         if (!c) throw noExiste('La característica')
+        if (elimCaracteristicas.has(id)) throw new ErrorServicio('estado_invalido', 'La característica está eliminada. Restáurala para poder cambiarla.', 409)
         if ('nombre' in cambio) {
           validarNombreCaracteristica(cambio.nombre, id)
           c.nombre = cambio.nombre.trim()
@@ -553,16 +813,26 @@ export function crearCatalogoMock(): CatalogoService {
 
     eliminarCaracteristica(id) {
       return conRetraso(() => {
-        const c = aCaracteristicaAdmin(id)
-        if (c.totalMesas > 0 || c.totalReservaciones > 0) {
-          throw new ErrorServicio('estado_invalido', `«${c.nombre}» está en uso. Quítala de las mesas o desactívala.`, 409)
-        }
-        baseDatos.caracteristicas = baseDatos.caracteristicas.filter((x) => x.idCaracteristica !== id)
+        const c = baseDatos.caracteristicas.find((x) => x.idCaracteristica === id)
+        if (!c) throw noExiste('La característica')
+        if (elimCaracteristicas.has(id)) throw new ErrorServicio('estado_invalido', 'La característica ya está eliminada.', 409)
+        c.activa = false
+        elimCaracteristicas.set(id, new Date())
       })
     },
 
-    listarSecciones() {
+    restaurarCaracteristica(id) {
+      return conRetraso(() => {
+        if (!baseDatos.caracteristicas.some((x) => x.idCaracteristica === id)) throw noExiste('La característica')
+        if (!elimCaracteristicas.has(id)) throw new ErrorServicio('estado_invalido', 'La característica no está eliminada.', 409)
+        elimCaracteristicas.delete(id)
+        return aCaracteristicaAdmin(id)
+      })
+    },
+
+    listarSecciones(opciones) {
       return conRetraso(() => baseDatos.secciones
+        .filter((s) => elimSecciones.has(s.nombre) === pideElim(opciones))
         .map((s) => aSeccionAdmin(s.nombre))
         .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')))
     },
@@ -580,6 +850,7 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const seccion = baseDatos.secciones.find((s) => s.nombre === nombre)
         if (!seccion) throw noExiste('La sección')
+        if (elimSecciones.has(nombre)) throw new ErrorServicio('estado_invalido', 'La sección está eliminada. Restáurala para poder cambiarla.', 409)
         validarNombreSeccion(nuevoNombre, nombre)
         const anterior = seccion.nombre
         seccion.nombre = nuevoNombre.trim()
@@ -594,6 +865,7 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const seccion = baseDatos.secciones.find((s) => s.nombre === nombre)
         if (!seccion) throw noExiste('La sección')
+        if (elimSecciones.has(nombre)) throw new ErrorServicio('estado_invalido', 'La sección está eliminada. Restáurala para poder cambiarla.', 409)
         if (!cambio.activa && seccion.activa) {
           const ocupada = baseDatos.mesas.find((m) =>
             m.zona === nombre &&
@@ -614,16 +886,33 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const seccion = baseDatos.secciones.find((s) => s.nombre === nombre)
         if (!seccion) throw noExiste('La sección')
-        const totalMesas = baseDatos.mesas.filter((m) => m.zona === nombre).length
+        if (elimSecciones.has(nombre)) throw new ErrorServicio('estado_invalido', 'La sección ya está eliminada.', 409)
+        if (nombre === 'Para llevar') throw new ErrorServicio('estado_invalido', `«${nombre}» la usa el sistema para los pedidos para llevar y no se puede eliminar.`, 409)
+        const totalMesas = baseDatos.mesas.filter((m) => m.zona === nombre && !elimMesas.has(m.idMesa)).length
         if (totalMesas > 0) {
-          throw new ErrorServicio('estado_invalido', `No se puede borrar «${nombre}» mientras tenga mesas asignadas.`, 409)
+          throw new ErrorServicio('estado_invalido', `No se puede eliminar «${nombre}» mientras tenga ${totalMesas} mesa(s) asignadas. Elimínalas o pásalas a otra sección.`, 409)
         }
-        baseDatos.secciones.splice(baseDatos.secciones.indexOf(seccion), 1)
+        seccion.activa = false
+        elimSecciones.set(nombre, new Date())
       })
     },
 
-    listarMesas() {
-      return conRetraso(() => [...baseDatos.mesas].sort((a, b) => a.numero - b.numero).map(aMesaAdmin))
+    restaurarSeccion(nombre) {
+      return conRetraso(() => {
+        if (!baseDatos.secciones.some((s) => s.nombre === nombre)) throw noExiste('La sección')
+        if (!elimSecciones.has(nombre)) throw new ErrorServicio('estado_invalido', 'La sección no está eliminada.', 409)
+        elimSecciones.delete(nombre)
+        return aSeccionAdmin(nombre)
+      })
+    },
+
+    listarMesas(opciones) {
+      return conRetraso(() =>
+        baseDatos.mesas
+          .filter((m) => elimMesas.has(m.idMesa) === pideElim(opciones))
+          .sort((a, b) => a.numero - b.numero)
+          .map(aMesaAdmin),
+      )
     },
 
     crearMesa(mesa) {
@@ -649,21 +938,12 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const mesa = baseDatos.mesas.find((m) => m.idMesa === id)
         if (!mesa) throw noExiste('La mesa')
+        if (elimMesas.has(id)) throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} está eliminada. Restáurala para poder cambiarla.`, 409)
         if (Object.keys(cambio).length === 0) throw new ErrorServicio('estado_invalido', 'No hay nada que cambiar.', 422)
         validarDatosMesa(cambio)
         if (cambio.zona !== undefined) exigirSeccionActiva(cambio.zona)
 
-        if (cambio.activa === false && mesa.activa) {
-          if (mesa.estado !== 'libre') {
-            throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} está ${mesa.estado}: libérala antes de marcarla como no disponible.`, 409)
-          }
-          if (baseDatos.cuentas.some((c) => c.idMesa === id && c.estado !== 'cerrada')) {
-            throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} tiene una cuenta abierta: hay que cerrarla antes.`, 409)
-          }
-          if (baseDatos.reservaciones.some((r) => r.idMesa === id && (r.estado === 'pendiente' || r.estado === 'confirmada'))) {
-            throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} tiene reservaciones vigentes: cancélalas o cámbialas de mesa antes.`, 409)
-          }
-        }
+        if (cambio.activa === false && mesa.activa) exigirMesaSinUsoMock(mesa, 'marcarla como no disponible')
         if (cambio.numero !== undefined) exigirNumeroLibre(cambio.numero, id)
 
         if (cambio.numero !== undefined) mesa.numero = cambio.numero
@@ -675,6 +955,29 @@ export function crearCatalogoMock(): CatalogoService {
           mesa.caracteristicas = [...new Set([...cambio.caracteristicas, ...inactivas])]
         }
         if (cambio.activa !== undefined) mesa.activa = cambio.activa
+        return aMesaAdmin(mesa)
+      })
+    },
+
+    eliminarMesa(id) {
+      return conRetraso(() => {
+        const mesa = baseDatos.mesas.find((m) => m.idMesa === id)
+        if (!mesa) throw noExiste('La mesa')
+        if (elimMesas.has(id)) throw new ErrorServicio('estado_invalido', 'La mesa ya está eliminada.', 409)
+        exigirMesaSinUsoMock(mesa, 'eliminarla')
+        mesa.activa = false
+        elimMesas.set(id, new Date())
+        return aMesaAdmin(mesa)
+      })
+    },
+
+    restaurarMesa(id) {
+      return conRetraso(() => {
+        const mesa = baseDatos.mesas.find((m) => m.idMesa === id)
+        if (!mesa) throw noExiste('La mesa')
+        if (!elimMesas.has(id)) throw new ErrorServicio('estado_invalido', 'La mesa no está eliminada.', 409)
+        if (elimSecciones.has(mesa.zona ?? '')) throw new ErrorServicio('estado_invalido', 'Su sección está eliminada. Restaura primero la sección o pasa la mesa a otra.', 409)
+        elimMesas.delete(id)
         return aMesaAdmin(mesa)
       })
     },

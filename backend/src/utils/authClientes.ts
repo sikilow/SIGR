@@ -66,7 +66,7 @@ export const requiereCliente: RequestHandler = async (
      FROM cliente c
      JOIN cliente_credencial cc
        ON cc.id_cliente = c.id_cliente
-     WHERE c.id_cliente = ?`,
+     WHERE c.id_cliente = ? AND c.eliminado_en IS NULL`,
     [payload.id]
   );
 
@@ -74,7 +74,8 @@ export const requiereCliente: RequestHandler = async (
     throw new ErrorApi(
       401,
       "no_autenticado",
-      "La cuenta del cliente ya no existe."
+      "Tu cuenta ya no está activa. Si crees que es un error, consulta con el restaurante.",
+      { motivo: "cuenta_inactiva" }
     );
   }
 

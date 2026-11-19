@@ -334,7 +334,7 @@ export function crearHostessMock(): HostessService {
       return conRetraso(() => {
         if (q.trim().length < 2) return []
         return baseDatos.clientes
-          .filter((c) => coincideBusqueda(c.nombre, c.telefono, q))
+          .filter((c) => !baseDatos.clientesEliminados.has(c.idCliente) && coincideBusqueda(c.nombre, c.telefono, q))
           .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
           .slice(0, 20)
       })
@@ -347,7 +347,11 @@ export function crearHostessMock(): HostessService {
         if (primero) throw new ErrorServicio('estado_invalido', primero, 422)
 
         const telefono = normalizarTelefono(cliente.telefono)
-        if (baseDatos.clientes.some((c) => c.telefono !== null && normalizarTelefono(c.telefono) === telefono)) {
+        const repetido = baseDatos.clientes.find((c) => c.telefono !== null && normalizarTelefono(c.telefono) === telefono)
+        if (repetido && baseDatos.clientesEliminados.has(repetido.idCliente)) {
+          throw new ErrorServicio('estado_invalido', 'Hay un cliente eliminado con ese teléfono o correo. Pídele al gerente que lo restaure.', 409)
+        }
+        if (repetido) {
           throw new ErrorServicio('estado_invalido', 'Ya existe un cliente con ese teléfono. Búscalo en la lista.', 409)
         }
         const nuevo: Cliente = {

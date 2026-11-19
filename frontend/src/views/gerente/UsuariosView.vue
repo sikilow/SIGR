@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Usuarios (/gerente/usuarios): consultar, crear, editar, cambiar contraseña, mandar enlace para restablecerla
-// (si el empleado la olvidó) y desactivar/reactivar.
-// Los usuarios no se borran (tienen pedidos y ventas ligados): se desactivan y dejan de poder entrar.
+// (si el empleado la olvidó), desactivar/reactivar y eliminar. «Eliminar» es lógico (solo el gerente): el usuario deja de
+// poder entrar y de mostrarse, pero se conserva para el historial y se restaura desde «Eliminados».
+// Desactivar o eliminar cierra su sesión de inmediato.
 import { computed, onMounted, ref } from 'vue'
 import ConfirmarAccionDialog from '../../components/ConfirmarAccionDialog.vue'
 import ContrasenaUsuarioDialog from '../../components/ContrasenaUsuarioDialog.vue'
@@ -18,6 +19,9 @@ const sesion = useSesionStore()
 const anuncios = useAnunciosStore()
 
 const usuarios = ref<UsuarioAdmin[]>([])
+const eliminados = ref<UsuarioAdmin[]>([])
+/** Muestra solo lo eliminado (con «Restaurar») en lugar de los usuarios vigentes. */
+const verEliminados = ref(false)
 const cargando = ref(true)
 const error = ref('')
 
@@ -26,8 +30,19 @@ const filtro = ref<Filtro>('activos')
 const rolFiltro = ref<Rol | 'todos'>('todos')
 const busqueda = ref('')
 
+function elegirFiltro(clave: Filtro) {
+  verEliminados.value = false
+  filtro.value = clave
+}
+
 const lista = computed(() => {
   const q = busqueda.value.trim().toLowerCase()
+  if (verEliminados.value) {
+    return eliminados.value.filter((u) => {
+      if (rolFiltro.value !== 'todos' && u.rol !== rolFiltro.value) return false
+      return !q || `${u.nombre} ${u.nombreUsuario} ${u.correo}`.toLowerCase().includes(q)
+    })
+  }
   return usuarios.value.filter((u) => {
     if (filtro.value === 'activos' && !u.activo) return false
     if (filtro.value === 'inactivos' && u.activo) return false
@@ -46,7 +61,11 @@ const cuenta = computed(() => ({
 async function cargar(conEsqueleto = false) {
   if (conEsqueleto) cargando.value = true
   try {
-    usuarios.value = await servicios.usuarios.listar()
+    const [vigentes, borrados] = await Promise.all([servicios.usuarios.listar(), servicios.usuarios.listar({ eliminados: true })])
+    usuarios.value = vigentes
+    eliminados.value = borrados
+    // Si ya no queda nada eliminado, se vuelve a la lista normal.
+    if (borrados.length === 0) verEliminados.value = false
     error.value = ''
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudieron cargar los usuarios.'
@@ -132,6 +151,55 @@ async function confirmarRestablecer() {
   }
 }
 
+// ---------- Eliminar / restaurar ----------
+const aEliminar = ref<UsuarioAdmin | null>(null)
+const origenEliminar = ref<HTMLElement | null>(null)
+const eliminando = ref(false)
+const errorEliminar = ref('')
+const rechazoEliminar = ref('')
+
+const esYo = (u: UsuarioAdmin) => u.idUsuario === sesion.usuario?.idUsuario
+
+function pedirEliminar(u: UsuarioAdmin, e: Event) {
+  aEliminar.value = u
+  origenEliminar.value = e.currentTarget as HTMLElement
+  eliminando.value = false
+  errorEliminar.value = ''
+  rechazoEliminar.value = ''
+}
+
+async function confirmarEliminar() {
+  const u = aEliminar.value
+  if (!u || eliminando.value) return
+  eliminando.value = true
+  errorEliminar.value = ''
+  try {
+    await servicios.usuarios.eliminar(u.idUsuario)
+    aEliminar.value = null
+    void anuncios.anunciar(`${u.nombre} eliminado. Puedes restaurarlo desde «Eliminados»`)
+    await cargar()
+  } catch (e) {
+    if (e instanceof ErrorServicio && e.codigo === 'red') {
+      errorEliminar.value = 'No se pudo conectar con el servidor. Vuelve a intentarlo.'
+    } else {
+      rechazoEliminar.value = e instanceof ErrorServicio ? e.message : 'Ocurrió un error inesperado.'
+      void cargar()
+    }
+  } finally {
+    eliminando.value = false
+  }
+}
+
+async function restaurar(u: UsuarioAdmin) {
+  try {
+    await servicios.usuarios.restaurar(u.idUsuario)
+    void anuncios.anunciar(`${u.nombre} restaurado. Está inactivo: reactívalo para que pueda entrar`)
+    await cargar()
+  } catch (e) {
+    error.value = e instanceof ErrorServicio ? e.message : 'No se pudo restaurar el usuario.'
+  }
+}
+
 // ---------- Activar / desactivar ----------
 const objetivo = ref<UsuarioAdmin | null>(null)
 const origenConfirmar = ref<HTMLElement | null>(null)
@@ -199,13 +267,27 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
           :key="f.clave"
           type="button"
           class="chip"
-          :class="{ 'chip--activo': filtro === f.clave }"
-          :aria-pressed="filtro === f.clave"
-          @click="filtro = f.clave"
+          :class="{ 'chip--activo': !verEliminados && filtro === f.clave }"
+          :aria-pressed="!verEliminados && filtro === f.clave"
+          @click="elegirFiltro(f.clave)"
         >
           {{ f.texto }} <span class="numero">({{ cuenta[f.clave] }})</span>
         </button>
+        <button
+          v-if="eliminados.length > 0"
+          type="button"
+          class="chip"
+          :class="{ 'chip--activo': verEliminados }"
+          :aria-pressed="verEliminados"
+          @click="verEliminados = true"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13" />
+          </svg>
+          Eliminados <span class="numero">({{ eliminados.length }})</span>
+        </button>
       </div>
+      <p v-if="verEliminados" class="filtros__nota">Estos usuarios ya no pueden entrar ni aparecen en las listas. Su historial se conserva; al restaurarlos vuelven inactivos.</p>
       <div class="filtros__campos">
         <div class="campo">
           <label for="usr-buscar">Buscar</label>
@@ -235,7 +317,7 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
     </div>
 
     <div v-else-if="!error && lista.length === 0" class="vacio">
-      <p v-if="usuarios.length === 0">Todavía no hay usuarios.</p>
+      <p v-if="usuarios.length === 0 && !verEliminados">Todavía no hay usuarios.</p>
       <p v-else>Ningún usuario coincide con los filtros.</p>
     </div>
 
@@ -252,7 +334,14 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
           <p class="fila__linea fila__meta">Último acceso: {{ fechaCorta(u.ultimoAcceso) }}</p>
         </div>
 
-        <div class="fila__lado">
+        <div v-if="verEliminados" class="fila__lado">
+          <InsigniaEstado tono="cancelado" :texto="`Eliminado el ${fechaCorta(u.eliminadoEn ?? null)}`" />
+          <div class="fila__acciones">
+            <button type="button" class="btn" :aria-label="`Restaurar a ${u.nombre}`" @click="restaurar(u)">Restaurar</button>
+          </div>
+        </div>
+
+        <div v-else class="fila__lado">
           <InsigniaEstado :tono="u.activo ? 'activo' : 'cancelado'" :texto="u.activo ? 'Activo' : 'Inactivo'" />
           <div class="fila__acciones">
             <button type="button" class="btn btn--secundario" :aria-label="`Editar a ${u.nombre}`" @click="abrirEdicion(u, $event)">Editar</button>
@@ -270,7 +359,7 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
             <button
               v-if="u.activo"
               type="button"
-              class="btn btn--peligro-suave"
+              class="btn btn--secundario"
               :disabled="u.esPrimerGerente || u.idUsuario === sesion.usuario?.idUsuario"
               :aria-label="`Desactivar a ${u.nombre}`"
               :aria-disabled="u.idUsuario === sesion.usuario?.idUsuario || u.esPrimerGerente ? 'true' : undefined"
@@ -280,6 +369,16 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
               Desactivar
             </button>
             <button v-else type="button" class="btn" :aria-label="`Reactivar a ${u.nombre}`" @click="pedirCambioEstado(u, $event)">Reactivar</button>
+            <button
+              type="button"
+              class="btn btn--peligro-suave"
+              :disabled="u.esPrimerGerente || esYo(u)"
+              :aria-label="`Eliminar a ${u.nombre}`"
+              :title="u.esPrimerGerente ? 'El primer gerente no se puede eliminar' : esYo(u) ? 'No puedes eliminarte a ti mismo' : undefined"
+              @click="pedirEliminar(u, $event)"
+            >
+              Eliminar
+            </button>
           </div>
         </div>
       </li>
@@ -312,12 +411,26 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
     />
 
     <ConfirmarAccionDialog
+      :abierto="aEliminar !== null"
+      id-base="eliminar-usuario"
+      :titulo="`¿Eliminar a ${aEliminar?.nombre}?`"
+      descripcion="Ya no podrá entrar y su sesión se cierra de inmediato. Dejará de aparecer en las listas, pero su historial (pedidos, ventas, cortes) se conserva y podrás restaurarlo desde «Eliminados» (volverá inactivo)."
+      texto-confirmar="Eliminar"
+      :en-curso="eliminando"
+      :error-reintentable="errorEliminar"
+      :rechazo="rechazoEliminar"
+      :origen-foco="origenEliminar"
+      @confirmar="confirmarEliminar"
+      @cerrar="aEliminar = null"
+    />
+
+    <ConfirmarAccionDialog
       :abierto="objetivo !== null"
       id-base="estado-usuario"
       :titulo="objetivo?.activo ? `¿Desactivar a ${objetivo?.nombre}?` : `¿Reactivar a ${objetivo?.nombre}?`"
       :descripcion="
         objetivo?.activo
-          ? 'Ya no podrá iniciar sesión. Su historial (pedidos, ventas) se conserva y puedes reactivarlo cuando quieras. Si tiene una sesión abierta, puede seguir usándola hasta que venza (máximo 8 horas).'
+          ? 'Ya no podrá iniciar sesión y, si tiene una sesión abierta, se cierra de inmediato. Su historial (pedidos, ventas) se conserva y puedes reactivarlo cuando quieras.'
           : 'Podrá volver a iniciar sesión con su usuario y contraseña de siempre.'
       "
       :texto-confirmar="objetivo?.activo ? 'Desactivar' : 'Reactivar'"
@@ -336,6 +449,7 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
 .pantalla__cabecera { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--espacio-3); }
 .filtros { display: flex; flex-direction: column; gap: var(--espacio-3); }
 .filtros__chips { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
+.filtros__nota { margin: 0; color: var(--color-muted); font-size: var(--texto-sm); }
 .filtros__campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--espacio-3); }
 .campo input[type='search'] { min-height: var(--tactil-min); }
 

@@ -30,6 +30,7 @@ onMounted(() => campoUsuario.value?.focus())
 const aviso = computed(() => {
   if (route.query.motivo === 'rol') return 'Tu rol no tiene acceso a esa pantalla. Inicia sesión con otro usuario.'
   if (route.query.motivo === 'expirada') return 'Tu sesión venció. Inicia sesión de nuevo.'
+  if (route.query.motivo === 'desactivada') return 'Tu cuenta ya no está activa. Si crees que es un error, consulta con el gerente.'
   return ''
 })
 

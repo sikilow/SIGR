@@ -11,6 +11,8 @@ import { validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 import { correo as correoValido, lada as ladaValida, LADA_MEXICO, limpiarNombrePersona, nombrePersona, refinarTelefonoConLada, telefono as telefonoValido } from "../utils/campos";
 
+const MENSAJE_CUENTA_ELIMINADA = "Esta cuenta ya no está activa. Si crees que es un error, consulta con el restaurante.";
+
 // Validaciones para registrar clientes
 // (mismo formato de telefono que exige la hostess)
 const RegistroCliente = z.object({
@@ -38,13 +40,17 @@ export const registrarCuentaCliente = async (
 
   const [existente] = await filas(
     pool,
-    `SELECT c.id_cliente, c.telefono, cc.id_credencial
+    `SELECT c.id_cliente, c.telefono, c.eliminado_en, cc.id_credencial
      FROM cliente c
      LEFT JOIN cliente_credencial cc
        ON cc.id_cliente = c.id_cliente
      WHERE c.correo = ?`,
     [correo]
   );
+
+  if (existente?.eliminado_en) {
+    throw new ErrorApi(409, "estado_invalido", MENSAJE_CUENTA_ELIMINADA);
+  }
 
   if (existente?.id_credencial) {
     throw new ErrorApi(
@@ -66,7 +72,7 @@ export const registrarCuentaCliente = async (
 
   const [otroConTelefono] = await filas(
     pool,
-    "SELECT id_cliente FROM cliente WHERE telefono = ? AND id_cliente <> ? LIMIT 1",
+    "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? AND id_cliente <> ? LIMIT 1",
     [datos.telefono, existente?.id_cliente ?? 0]
   );
 
@@ -74,7 +80,7 @@ export const registrarCuentaCliente = async (
     throw new ErrorApi(
       409,
       "estado_invalido",
-      "Este teléfono ya está registrado con otro correo."
+      otroConTelefono.eliminado_en ? MENSAJE_CUENTA_ELIMINADA : "Este teléfono ya está registrado con otro correo."
     );
   }
 
@@ -163,6 +169,7 @@ export const iniciarSesionCliente = async (
         c.id_cliente,
         c.nombre,
         c.correo,
+        c.eliminado_en,
         cc.password_hash
      FROM cliente c
      JOIN cliente_credencial cc
@@ -193,6 +200,9 @@ export const iniciarSesionCliente = async (
       "Correo o contraseña incorrectos."
     );
   }
+
+  // La contraseña ya es correcta: ahora sí se avisa que la cuenta fue dada de baja (así no se revela qué correos existen).
+  if (cliente.eliminado_en) throw new ErrorApi(401, "no_autenticado", MENSAJE_CUENTA_ELIMINADA);
 
   res.json(sesionCliente(cliente));
 };
@@ -240,12 +250,13 @@ export const iniciarSesionConGoogle = async (req: Request, res: Response) => {
   // 1) Cuenta de Google ya ligada.
   const [ligada] = await filas(
     pool,
-    `SELECT c.id_cliente, c.nombre, c.correo
+    `SELECT c.id_cliente, c.nombre, c.correo, c.eliminado_en
        FROM cliente_credencial cc JOIN cliente c ON c.id_cliente = cc.id_cliente
       WHERE cc.google_sub = ?`,
     [identidad.sub]
   );
   if (ligada) {
+    if (ligada.eliminado_en) throw new ErrorApi(401, "no_autenticado", MENSAJE_CUENTA_ELIMINADA);
     res.json(sesionCliente(ligada));
     return;
   }
@@ -253,12 +264,13 @@ export const iniciarSesionConGoogle = async (req: Request, res: Response) => {
   // 2) Mismo correo con cuenta de contraseña: se liga Google a esa cuenta.
   const [conCuenta] = await filas(
     pool,
-    `SELECT c.id_cliente, c.nombre, c.correo, cc.id_credencial, cc.google_sub
+    `SELECT c.id_cliente, c.nombre, c.correo, c.eliminado_en, cc.id_credencial, cc.google_sub
        FROM cliente c JOIN cliente_credencial cc ON cc.id_cliente = c.id_cliente
       WHERE c.correo = ?`,
     [identidad.correo]
   );
   if (conCuenta) {
+    if (conCuenta.eliminado_en) throw new ErrorApi(401, "no_autenticado", MENSAJE_CUENTA_ELIMINADA);
     if (conCuenta.google_sub) {
       throw new ErrorApi(409, "estado_invalido", "Este correo ya está ligado a otra cuenta de Google.");
     }
@@ -323,11 +335,12 @@ export const completarRegistroGoogle = async (req: Request, res: Response) => {
   const cliente = await transaccion(async (cx) => {
     const [existente] = await filas(
       cx,
-      `SELECT c.id_cliente, c.nombre, c.telefono, cc.id_credencial
+      `SELECT c.id_cliente, c.nombre, c.telefono, c.eliminado_en, cc.id_credencial
          FROM cliente c LEFT JOIN cliente_credencial cc ON cc.id_cliente = c.id_cliente
         WHERE c.correo = ? FOR UPDATE`,
       [registro.correo]
     );
+    if (existente?.eliminado_en) throw new ErrorApi(409, "estado_invalido", MENSAJE_CUENTA_ELIMINADA);
     if (existente?.id_credencial) {
       throw new ErrorApi(409, "estado_invalido", "Este correo ya tiene una cuenta. Inicia sesión.");
     }
@@ -340,11 +353,11 @@ export const completarRegistroGoogle = async (req: Request, res: Response) => {
     }
     const [otroConTelefono] = await filas(
       cx,
-      "SELECT id_cliente FROM cliente WHERE telefono = ? AND id_cliente <> ? LIMIT 1",
+      "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? AND id_cliente <> ? LIMIT 1",
       [datos.telefono, existente?.id_cliente ?? 0]
     );
     if (otroConTelefono) {
-      throw new ErrorApi(409, "estado_invalido", "Este teléfono ya está registrado con otro correo.");
+      throw new ErrorApi(409, "estado_invalido", otroConTelefono.eliminado_en ? MENSAJE_CUENTA_ELIMINADA : "Este teléfono ya está registrado con otro correo.");
     }
 
     let idCliente: number;

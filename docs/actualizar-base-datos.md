@@ -137,6 +137,9 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `022_horario_reservaciones.sql` | Horario de reservaciones en `configuracion_reservacion` (primera y última hora, intervalo y días abiertos) | Tras 021; puede repetirse |
 | `023_caracteristicas_mesa_y_duracion.sql` | Catálogo de características de mesa (`caracteristica_mesa`, `mesa_caracteristica`, `reservacion_caracteristica`), quita las columnas fijas de acceso y agrega `duracion_reservacion_minutos` | Tras 022; puede repetirse |
 | `024_restablecer_contrasena.sql` | Tabla `restablecimiento_contrasena`: enlaces de un solo uso (1 hora) para que el personal cree una contraseña nueva por correo | Tras 023; puede repetirse |
+| `028_eliminado_logico_clientes.sql` | Columnas `eliminado_en` y `eliminado_por` en `cliente` (eliminado lógico, fase 3); la auditoría las registra | Tras 027; puede repetirse |
+| `029_eliminado_logico_catalogos.sql` | Columnas `eliminado_en` y `eliminado_por` en `mesa`, `seccion`, `caracteristica_mesa`, `canal_pedido`, `categoria_metodo_pago` y `metodo_pago` (eliminado lógico, fase 4); la auditoría las registra | Tras 028; puede repetirse |
+| `027_eliminado_logico_usuarios.sql` | Columnas `eliminado_en` y `eliminado_por` en `usuario` (eliminado lógico, fase 2); protege al primer gerente también de ser eliminado; la auditoría las registra | Tras 026; puede repetirse |
 | `026_eliminado_logico_productos.sql` | Columnas `eliminado_en` y `eliminado_por` en `producto` y `categoria_menu` (eliminado lógico, fase 1); la auditoría las registra | Tras 025; puede repetirse |
 | `025_lada_telefono.sql` | Columna `lada` (código de país, «52» por defecto) en `cliente` y `perfil_usuario`; la auditoría de ambas la registra | Tras 024; puede repetirse |
 
@@ -311,7 +314,7 @@ Deja el teléfono de los usuarios solo con dígitos (por ejemplo `311 116 5727` 
 ```powershell
 New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
 mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-018.sql"
-Get-Content -Raw ".\database\migrations8_telefono_unico_y_anticipacion_reserva.sql" | mysql -h localhost -P 3306 -u root -p SIGR
+Get-Content -Raw ".\database\migrations\018_telefono_unico_y_anticipacion_reserva.sql" | mysql -h localhost -P 3306 -u root -p SIGR
 mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT * FROM configuracion_reservacion; SHOW INDEX FROM perfil_usuario WHERE Key_name = 'uq_perfil_usuario_telefono';"
 ```
 
@@ -412,6 +415,36 @@ Get-Content -Raw ".\database\migrations\026_eliminado_logico_productos.sql" | my
 
 Diseño y fases siguientes (usuarios, clientes, mesas…): [`eliminado-logico.md`](eliminado-logico.md). La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**.
 
+## Migración 027: eliminado lógico de usuarios
+
+Agrega `eliminado_en` y `eliminado_por` a `usuario`. «Eliminar» en Gerente → Usuarios marca al usuario: ya no puede entrar, se oculta de las listas y se restaura desde «Eliminados» (vuelve **inactivo**). Su historial (pedidos, ventas, cortes) se conserva. El trigger que protege al primer gerente ahora también impide eliminarlo. Puede repetirse.
+
+```powershell
+Get-Content -Raw ".\database\migrations\027_eliminado_logico_usuarios.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+**Cambio importante en la API (junto con esta migración):** ahora cada petición de un empleado consulta la base. Si el usuario fue desactivado o eliminado, su sesión se rechaza de inmediato (`401`), y un cambio de rol se aplica al instante; antes la sesión seguía hasta 8 horas. La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**.
+
+## Migración 028: eliminado lógico de clientes
+
+Agrega `eliminado_en` y `eliminado_por` a `cliente`. «Eliminar» en Gerente → Clientes marca al cliente: deja de aparecer en la búsqueda de la hostess, no puede entrar al portal (su sesión se rechaza de inmediato) y se restaura desde «Eliminados». Sus reservaciones y su lugar en el historial se conservan. Puede repetirse.
+
+```powershell
+Get-Content -Raw ".\database\migrations\028_eliminado_logico_clientes.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**.
+
+## Migración 029: eliminado lógico de mesas, secciones, características, canales y métodos de pago
+
+Agrega `eliminado_en` y `eliminado_por` a `mesa`, `seccion`, `caracteristica_mesa`, `canal_pedido`, `categoria_metodo_pago` y `metodo_pago`. «Eliminar» en Gerente → Mesas (Secciones y Características), Canales de pedido y Métodos de pago los oculta y los deja también inactivos; se restauran desde «Eliminados» (vuelven inactivos). Las cuentas, reservaciones y pagos anteriores se conservan. Puede repetirse.
+
+```powershell
+Get-Content -Raw ".\database\migrations\029_eliminado_logico_catalogos.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**.
+
 ## Base nueva o entorno de demostración
 
 - **Base nueva y vacía:** ejecuta `database/init.sql` y el seed de usuarios iniciales. `init.sql` ya es el estado final de las migraciones 001 a 017 (tablas, categorías y métodos de pago, gerente inicial protegido, bitácora y triggers de auditoría), así que **no hay que aplicar ninguna migración**. Para comprobarlo: `node database/verificar_init.mjs` (ver [`CONTEXTO_BASE_DE_DATOS.md`](CONTEXTO_BASE_DE_DATOS.md)).
@@ -420,4 +453,4 @@ Diseño y fases siguientes (usuarios, clientes, mesas…): [`eliminado-logico.md
 
 ## Secciones de mesas
 
-En **Gerente → Mesas → Secciones** se pueden crear, renombrar, inhabilitar, habilitar y borrar secciones. Renombrar actualiza las mesas asociadas. Una sección solo se puede borrar cuando no tiene mesas asignadas. Al inhabilitarla, sus mesas se conservan pero dejan de aparecer para meseros y hostess; para evitar ocultar trabajo activo, primero hay que liberar las mesas y resolver sus cuentas y reservaciones vigentes. No se permite asignar mesas a secciones inhabilitadas.
+En **Gerente → Mesas → Secciones** se pueden crear, renombrar, inhabilitar, habilitar y eliminar secciones (eliminar es lógico: se restaura desde «Eliminadas»). Renombrar actualiza las mesas asociadas. Una sección solo se puede eliminar cuando no tiene mesas vigentes asignadas. Al inhabilitarla, sus mesas se conservan pero dejan de aparecer para meseros y hostess; para evitar ocultar trabajo activo, primero hay que liberar las mesas y resolver sus cuentas y reservaciones vigentes. No se permite asignar mesas a secciones inhabilitadas.

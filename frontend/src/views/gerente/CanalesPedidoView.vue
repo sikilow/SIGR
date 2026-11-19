@@ -1,13 +1,17 @@
 <script setup lang="ts">
 // Canales de pedido (/gerente/canales): de dónde vienen los pedidos para llevar (mostrador, teléfono, plataformas…).
-// El mesero elige uno de los canales ACTIVOS al abrir un pedido para llevar. Los canales no se borran: se desactivan,
-// porque las cuentas anteriores los conservan.
+// El mesero elige uno de los canales ACTIVOS al abrir un pedido para llevar. «Desactivar» lo oculta al mesero; «Eliminar»
+// es lógico (solo el gerente): sale de la lista pero se conserva, porque las cuentas anteriores lo usaron, y se restaura
+// desde «Eliminados» (vuelve desactivado).
 import { computed, onMounted, ref } from 'vue'
+import ConfirmarAccionDialog from '../../components/ConfirmarAccionDialog.vue'
 import { ErrorServicio, servicios } from '../../services'
 import type { CanalPedido } from '../../types'
 import { vPermitir } from '../../utils/campos'
 
 const canales = ref<CanalPedido[]>([])
+const eliminados = ref<CanalPedido[]>([])
+const verEliminados = ref(false)
 const nombre = ref('')
 const cargando = ref(true)
 const cargado = ref(false)
@@ -16,12 +20,18 @@ const error = ref('')
 const mensaje = ref('')
 
 const activos = computed(() => canales.value.filter((canal) => canal.activo).length)
+const visibles = computed(() => (verEliminados.value ? eliminados.value : canales.value))
+const fechaCorta = (d: Date | null | undefined) => (d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
 
 async function cargar() {
   cargando.value = true
   error.value = ''
   try {
-    canales.value = await servicios.catalogo.listarCanales()
+    const [vigentes, borrados] = await Promise.all([servicios.catalogo.listarCanales(), servicios.catalogo.listarCanales({ eliminados: true })])
+    canales.value = vigentes
+    eliminados.value = borrados
+    // Si ya no queda nada eliminado, se vuelve a la lista normal.
+    if (borrados.length === 0) verEliminados.value = false
     cargado.value = true
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'No se pudieron cargar los canales.'
@@ -63,6 +73,60 @@ async function cambiarEstado(canal: CanalPedido, activo: boolean) {
     mensaje.value = `${actualizado.nombre}: ${activo ? 'activado' : 'desactivado'}.`
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo actualizar el canal.'
+  } finally {
+    guardando.value = false
+  }
+}
+
+// ---------- Eliminar / restaurar ----------
+const aEliminar = ref<CanalPedido | null>(null)
+const origenEliminar = ref<HTMLElement | null>(null)
+const eliminando = ref(false)
+const errorEliminar = ref('')
+const rechazoEliminar = ref('')
+
+function pedirEliminar(canal: CanalPedido, e: Event) {
+  aEliminar.value = canal
+  origenEliminar.value = e.currentTarget as HTMLElement
+  eliminando.value = false
+  errorEliminar.value = ''
+  rechazoEliminar.value = ''
+}
+
+async function confirmarEliminar() {
+  const canal = aEliminar.value
+  if (!canal || eliminando.value) return
+  eliminando.value = true
+  errorEliminar.value = ''
+  try {
+    await servicios.catalogo.eliminarCanal(canal.idCanal)
+    aEliminar.value = null
+    mensaje.value = `«${canal.nombre}» eliminado. Puedes restaurarlo desde «Eliminados».`
+    error.value = ''
+    await cargar()
+  } catch (e) {
+    if (e instanceof ErrorServicio && e.codigo === 'red') {
+      errorEliminar.value = 'No se pudo conectar con el servidor. Vuelve a intentarlo.'
+    } else {
+      rechazoEliminar.value = e instanceof ErrorServicio ? e.message : 'Ocurrió un error inesperado.'
+      void cargar()
+    }
+  } finally {
+    eliminando.value = false
+  }
+}
+
+async function restaurar(canal: CanalPedido) {
+  if (guardando.value) return
+  guardando.value = true
+  error.value = ''
+  mensaje.value = ''
+  try {
+    await servicios.catalogo.restaurarCanal(canal.idCanal)
+    mensaje.value = `«${canal.nombre}» restaurado. Está desactivado: actívalo para que el mesero pueda elegirlo.`
+    await cargar()
+  } catch (e) {
+    error.value = e instanceof ErrorServicio ? e.message : 'No se pudo restaurar el canal.'
   } finally {
     guardando.value = false
   }
@@ -113,26 +177,41 @@ onMounted(() => void cargar())
       <section class="lista panel" aria-labelledby="lista-canales-titulo">
         <div class="lista__encabezado">
           <h3 id="lista-canales-titulo">Canales</h3>
-          <span>{{ activos }} activos de {{ canales.length }}</span>
+          <span v-if="!verEliminados">{{ activos }} activos de {{ canales.length }}</span>
         </div>
-        <ul class="canales">
-          <li v-for="canal in canales" :key="canal.idCanal" :class="{ 'canales__inactivo': !canal.activo }">
+        <div v-if="eliminados.length > 0" class="vistas" role="group" aria-label="Ver canales">
+          <button type="button" class="chip" :class="{ 'chip--activo': !verEliminados }" :aria-pressed="!verEliminados" @click="verEliminados = false">Vigentes</button>
+          <button type="button" class="chip" :class="{ 'chip--activo': verEliminados }" :aria-pressed="verEliminados" @click="verEliminados = true">
+            Eliminados <span class="numero">({{ eliminados.length }})</span>
+          </button>
+        </div>
+        <p v-if="verEliminados" class="lista__nota lista__nota--arriba">Estos canales no se ofrecen en ningún lado. Las cuentas anteriores los conservan; restáuralos para volver a usarlos.</p>
+        <p v-if="visibles.length === 0" class="lista__nota">No hay canales{{ verEliminados ? ' eliminados' : '' }}.</p>
+        <ul v-else class="canales">
+          <li v-for="canal in visibles" :key="canal.idCanal" :class="{ 'canales__inactivo': !canal.activo }">
             <div class="canales__nombre">
               <strong>{{ canal.nombre }}</strong>
-              <span>{{ canal.activo ? 'El mesero puede elegirlo' : 'Oculto para el mesero' }}</span>
+              <span v-if="verEliminados">Eliminado el {{ fechaCorta(canal.eliminadoEn) }}</span>
+              <span v-else>{{ canal.activo ? 'El mesero puede elegirlo' : 'Oculto para el mesero' }}</span>
             </div>
-            <span class="estado" :class="canal.activo ? 'estado--si' : 'estado--no'">{{ canal.activo ? 'Activo' : 'Desactivado' }}</span>
-            <button
-              type="button"
-              class="interruptor"
-              role="switch"
-              :aria-checked="canal.activo"
-              :aria-label="`${canal.nombre}: ${canal.activo ? 'activo' : 'desactivado'}`"
-              :disabled="guardando"
-              @click="cambiarEstado(canal, !canal.activo)"
-            >
-              <span class="interruptor__pista"><span class="interruptor__pulgar" /></span>
-            </button>
+            <template v-if="verEliminados">
+              <button type="button" class="btn" :aria-label="`Restaurar ${canal.nombre}`" :disabled="guardando" @click="restaurar(canal)">Restaurar</button>
+            </template>
+            <template v-else>
+              <span class="estado" :class="canal.activo ? 'estado--si' : 'estado--no'">{{ canal.activo ? 'Activo' : 'Desactivado' }}</span>
+              <button
+                type="button"
+                class="interruptor"
+                role="switch"
+                :aria-checked="canal.activo"
+                :aria-label="`${canal.nombre}: ${canal.activo ? 'activo' : 'desactivado'}`"
+                :disabled="guardando"
+                @click="cambiarEstado(canal, !canal.activo)"
+              >
+                <span class="interruptor__pista"><span class="interruptor__pulgar" /></span>
+              </button>
+              <button type="button" class="btn btn--peligro-suave" :aria-label="`Eliminar ${canal.nombre}`" :disabled="guardando" @click="pedirEliminar(canal, $event)">Eliminar</button>
+            </template>
           </li>
         </ul>
         <p class="lista__nota">
@@ -140,6 +219,20 @@ onMounted(() => void cargar())
         </p>
       </section>
     </template>
+
+    <ConfirmarAccionDialog
+      :abierto="aEliminar !== null"
+      id-base="eliminar-canal"
+      :titulo="`¿Eliminar «${aEliminar?.nombre}»?`"
+      descripcion="Dejará de ofrecerse y de aparecer en esta lista. Las cuentas anteriores lo conservan y podrás restaurarlo desde «Eliminados» (volverá desactivado)."
+      texto-confirmar="Eliminar"
+      :en-curso="eliminando"
+      :error-reintentable="errorEliminar"
+      :rechazo="rechazoEliminar"
+      :origen-foco="origenEliminar"
+      @confirmar="confirmarEliminar"
+      @cerrar="aEliminar = null"
+    />
   </section>
 </template>
 
@@ -223,6 +316,22 @@ onMounted(() => void cargar())
 
 .lista__nota {
   margin: var(--espacio-4) 0 0;
+}
+
+.lista__nota--arriba {
+  margin-top: var(--espacio-3);
+}
+
+.vistas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+  margin-bottom: var(--espacio-3);
+}
+
+.canales .btn {
+  min-height: 40px;
+  padding: 0 var(--espacio-3);
 }
 
 .canales {

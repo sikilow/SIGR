@@ -84,9 +84,11 @@ function esCorreoDuplicado(error: unknown): boolean {
 
 const MENSAJE_CORREO_DUPLICADO = "Ya existe un cliente con ese correo. Búscalo para seleccionarlo.";
 
+const MENSAJE_CLIENTE_ELIMINADO = "Hay un cliente eliminado con ese teléfono o correo. Pídele al gerente que lo restaure.";
+
 async function exigirCorreoLibre(ex: Ejecutor, correo: string, idCliente = 0): Promise<void> {
-  const [otro] = await filas(ex, "SELECT id_cliente FROM cliente WHERE correo = ? AND id_cliente <> ? LIMIT 1", [correo, idCliente]);
-  if (otro) throw new ErrorApi(409, "estado_invalido", MENSAJE_CORREO_DUPLICADO);
+  const [otro] = await filas(ex, "SELECT id_cliente, eliminado_en FROM cliente WHERE correo = ? AND id_cliente <> ? LIMIT 1", [correo, idCliente]);
+  if (otro) throw new ErrorApi(409, "estado_invalido", otro.eliminado_en ? MENSAJE_CLIENTE_ELIMINADO : MENSAJE_CORREO_DUPLICADO);
 }
 
 function esFechaHoraMySQLValida(fechaHora: string): boolean {
@@ -189,7 +191,7 @@ export const listarClientes = async (req: Request, res: Response) => {
     pool,
     `SELECT id_cliente, nombre, telefono, lada, correo
        FROM cliente
-      WHERE LOCATE(?, nombre) > 0${porTelefono ? " OR LOCATE(?, telefono) > 0" : ""}
+      WHERE eliminado_en IS NULL AND (LOCATE(?, nombre) > 0${porTelefono ? " OR LOCATE(?, telefono) > 0" : ""})
       ORDER BY nombre, id_cliente
       LIMIT 20`,
     porTelefono ? [q, digitos] : [q],
@@ -202,9 +204,9 @@ export const registrarCliente = async (req: Request, res: Response) => {
   const datos = validar(ClienteNuevo, req.body);
   const correo = datos.correo?.trim() || null;
   await conIdempotencia(req, res, 201, async () => {
-    const [existente] = await filas(pool, "SELECT id_cliente FROM cliente WHERE telefono = ? LIMIT 1", [datos.telefono]);
+    const [existente] = await filas(pool, "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? LIMIT 1", [datos.telefono]);
     if (existente) {
-      throw new ErrorApi(409, "estado_invalido", "Ya existe un cliente con ese teléfono. Búscalo para seleccionarlo.");
+      throw new ErrorApi(409, "estado_invalido", existente.eliminado_en ? MENSAJE_CLIENTE_ELIMINADO : "Ya existe un cliente con ese teléfono. Búscalo para seleccionarlo.");
     }
     if (correo) await exigirCorreoLibre(pool, correo);
     try {
@@ -231,8 +233,9 @@ export const actualizarCorreoCliente = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
   const { correo } = validar(CorreoCliente, req.body);
   const cliente = await transaccion(async (cx) => {
-    const [existente] = await filas(cx, "SELECT id_cliente FROM cliente WHERE id_cliente = ? FOR UPDATE", [id]);
+    const [existente] = await filas(cx, "SELECT id_cliente, eliminado_en FROM cliente WHERE id_cliente = ? FOR UPDATE", [id]);
     if (!existente) throw new ErrorApi(404, "no_encontrado", "El cliente no existe.");
+    if (existente.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El cliente está eliminado. Pídele al gerente que lo restaure.");
     await exigirCorreoLibre(cx, correo, id);
     try {
       await ejecutar(cx, "UPDATE cliente SET correo = ? WHERE id_cliente = ?", [correo, id]);
@@ -330,8 +333,9 @@ export const crearReservacion = async (req: Request, res: Response) => {
         throw new ErrorApi(422, "estado_invalido", "Solo se puede asignar una mesa a una reservación de hoy.");
       }
 
-      const [cliente] = await filas(cx, "SELECT id_cliente, correo FROM cliente WHERE id_cliente = ?", [datos.id_cliente]);
+      const [cliente] = await filas(cx, "SELECT id_cliente, correo, eliminado_en FROM cliente WHERE id_cliente = ?", [datos.id_cliente]);
       if (!cliente) throw new ErrorApi(404, "no_encontrado", "El cliente no existe.");
+      if (cliente.eliminado_en) throw new ErrorApi(422, "estado_invalido", "El cliente está eliminado. Pídele al gerente que lo restaure.");
 
       if (datos.id_mesa !== undefined && datos.id_mesa !== null) {
         const [mesa] = await filas(
@@ -591,8 +595,9 @@ export const agregarEspera = async (req: Request, res: Response) => {
   const datos = validar(EsperaNueva, req.body);
   await conIdempotencia(req, res, 201, () =>
     transaccion(async (cx) => {
-      const [cliente] = await filas(cx, "SELECT id_cliente FROM cliente WHERE id_cliente = ? FOR UPDATE", [datos.id_cliente]);
+      const [cliente] = await filas(cx, "SELECT id_cliente, eliminado_en FROM cliente WHERE id_cliente = ? FOR UPDATE", [datos.id_cliente]);
       if (!cliente) throw new ErrorApi(404, "no_encontrado", "El cliente no existe.");
+      if (cliente.eliminado_en) throw new ErrorApi(422, "estado_invalido", "El cliente está eliminado. Pídele al gerente que lo restaure.");
 
       const [esperaActiva] = await filas(
         cx,

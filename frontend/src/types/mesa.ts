@@ -48,6 +48,8 @@ export interface CanalPedido {
   idCanal: number
   nombre: string
   activo: boolean
+  /** Cuándo se eliminó; `null` = vigente (migración 029). Solo lo ve el gerente en «Eliminados». */
+  eliminadoEn?: Date | null
 }
 
 /** Resultado de abrir un pedido para llevar: la mesa virtual ocupada y su cuenta. */

@@ -96,6 +96,14 @@ async function iniciarAPI(): Promise<void> {
     { archivo: "025_lada_telefono.sql", consulta: "SELECT lada FROM perfil_usuario LIMIT 0" },
     { archivo: "026_eliminado_logico_productos.sql", consulta: "SELECT eliminado_en, eliminado_por FROM producto LIMIT 0" },
     { archivo: "026_eliminado_logico_productos.sql", consulta: "SELECT eliminado_en, eliminado_por FROM categoria_menu LIMIT 0" },
+    { archivo: "027_eliminado_logico_usuarios.sql", consulta: "SELECT eliminado_en, eliminado_por FROM usuario LIMIT 0" },
+    { archivo: "028_eliminado_logico_clientes.sql", consulta: "SELECT eliminado_en, eliminado_por FROM cliente LIMIT 0" },
+    { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM mesa LIMIT 0" },
+    { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM seccion LIMIT 0" },
+    { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM caracteristica_mesa LIMIT 0" },
+    { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM canal_pedido LIMIT 0" },
+    { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM metodo_pago LIMIT 0" },
+    { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM categoria_metodo_pago LIMIT 0" },
   ];
   for (const { archivo, consulta } of migraciones) {
     try {

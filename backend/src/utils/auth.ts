@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "./config";
 import { ErrorApi } from "./errores";
 import { conActorAuditoria } from "../services/contextoAuditoria";
+import { filas, pool } from "../services/db";
 
 export type Rol = "gerente" | "mesero" | "cocinero" | "cajero" | "hostess";
 
@@ -23,9 +24,13 @@ declare global {
 /**
  * Exige un token válido (Authorization: Bearer <token>).
  * Si se pasan roles, además exige que el usuario tenga uno de ellos.
+ *
+ * Además de la firma del token, en CADA petición se consulta la base: si el usuario ya no existe, está desactivado o
+ * eliminado, la sesión se rechaza de inmediato (el token dura 8 h, pero no debe seguir sirviendo). El rol que cuenta es
+ * el de la base, así que un cambio de rol también se aplica al instante.
  */
 export function requiereAuth(...roles: Rol[]): RequestHandler {
-  return (req, _res, next) => {
+  return async (req, _res, next) => {
     const cabecera = req.headers.authorization;
     if (!cabecera?.startsWith("Bearer ")) {
       throw new ErrorApi(401, "no_autenticado", "Debes iniciar sesión.");
@@ -69,7 +74,26 @@ export function requiereAuth(...roles: Rol[]): RequestHandler {
       );
     }
 
-    const rol = payload.rol as Rol;
+    // Estado actual del usuario en la base (no el del momento en que se emitió el token).
+    const [actual] = await filas(
+      pool,
+      `SELECT u.activo, u.eliminado_en, LOWER(r.nombre) AS rol
+         FROM usuario u JOIN rol r ON r.id_rol = u.id_rol
+        WHERE u.id_usuario = ?`,
+      [payload.id],
+    );
+    if (!actual || !actual.activo || actual.eliminado_en) {
+      throw new ErrorApi(
+        401,
+        "no_autenticado",
+        "Tu cuenta ya no está activa. Si crees que es un error, consulta con el gerente.",
+        { motivo: "cuenta_inactiva" },
+      );
+    }
+    const rol = String(actual.rol) as Rol;
+    if (!rolesEmpleados.includes(rol)) {
+      throw new ErrorApi(403, "sin_permiso", "Esta ruta es exclusiva para empleados.");
+    }
 
     if (roles.length > 0 && !roles.includes(rol)) {
       throw new ErrorApi(

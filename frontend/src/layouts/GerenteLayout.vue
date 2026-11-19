@@ -51,6 +51,7 @@ const inicial = computed(() => (sesion.usuario?.nombre?.trim().charAt(0) ?? 'G')
 
 const enlaces = [
   { nombre: 'gerente-usuarios', texto: 'Usuarios', icono: 'usuarios' },
+  { nombre: 'gerente-clientes', texto: 'Clientes', icono: 'clientes' },
   { nombre: 'gerente-productos', texto: 'Productos', icono: 'productos' },
   { nombre: 'gerente-mesas', texto: 'Mesas', icono: 'mesas' },
   { nombre: 'gerente-reservaciones', texto: 'Reservaciones', icono: 'reservaciones' },
@@ -90,6 +91,11 @@ async function salir() {
           <svg v-if="enlace.icono === 'usuarios'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="9" cy="8" r="3.5" />
             <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 5a3.5 3.5 0 0 1 0 7M18 14.5c2.2.7 3.5 2.6 3.5 5.5" />
+          </svg>
+          <svg v-else-if="enlace.icono === 'clientes'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2.5" />
+            <circle cx="9" cy="10.5" r="2.2" />
+            <path d="M5.5 16.5c.6-1.6 1.9-2.4 3.5-2.4s2.9.8 3.5 2.4M15 9.5h3.5M15 13h3.5" />
           </svg>
           <svg v-else-if="enlace.icono === 'productos'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 8l9-5 9 5v8l-9 5-9-5z" />
@@ -187,6 +193,11 @@ async function salir() {
           <svg v-if="enlace.icono === 'usuarios'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="9" cy="8" r="3.5" />
             <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 5a3.5 3.5 0 0 1 0 7M18 14.5c2.2.7 3.5 2.6 3.5 5.5" />
+          </svg>
+          <svg v-else-if="enlace.icono === 'clientes'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2.5" />
+            <circle cx="9" cy="10.5" r="2.2" />
+            <path d="M5.5 16.5c.6-1.6 1.9-2.4 3.5-2.4s2.9.8 3.5 2.4M15 9.5h3.5M15 13h3.5" />
           </svg>
           <svg v-else-if="enlace.icono === 'productos'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 8l9-5 9 5v8l-9 5-9-5z" />

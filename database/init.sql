@@ -26,8 +26,12 @@ CREATE TABLE usuario (
   correo VARCHAR(120) NOT NULL UNIQUE,
   activo BOOLEAN NOT NULL DEFAULT TRUE,
   creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_usuario_id_rol FOREIGN KEY (id_rol) REFERENCES rol (id_rol) ON UPDATE CASCADE ON DELETE RESTRICT
+  eliminado_en DATETIME NULL,
+  eliminado_por INT NULL,
+  CONSTRAINT fk_usuario_id_rol FOREIGN KEY (id_rol) REFERENCES rol (id_rol) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT fk_usuario_eliminado_por FOREIGN KEY (eliminado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB;
+-- eliminado_en: NULL = vigente. Eliminar es solo marcar (el historial conserva al usuario); lo hace el gerente y se puede restaurar.
 
 CREATE TABLE credenciales (
   id_usuario INT PRIMARY KEY,
@@ -68,9 +72,13 @@ CREATE TABLE cliente (
   telefono VARCHAR(20) NULL,
   lada VARCHAR(4) NOT NULL DEFAULT '52',
   correo VARCHAR(120) NULL,
+  eliminado_en DATETIME NULL,
+  eliminado_por INT NULL,
   CONSTRAINT uq_cliente_correo UNIQUE (correo),
-  CONSTRAINT chk_cliente_lada CHECK (lada REGEXP '^[0-9]{1,4}$')
+  CONSTRAINT chk_cliente_lada CHECK (lada REGEXP '^[0-9]{1,4}$'),
+  CONSTRAINT fk_cliente_eliminado_por FOREIGN KEY (eliminado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB;
+-- eliminado_en: NULL = vigente. Eliminar es solo marcar (las reservaciones conservan al cliente); lo hace el gerente y se puede restaurar.
 -- correo: único y en minúsculas; lo usa el portal de clientes para iniciar sesión.
 
 -- Acceso de los clientes del portal web (migraciones 014 y 020): contraseña propia (password_hash) o cuenta de Google
@@ -87,7 +95,10 @@ CREATE TABLE cliente_credencial (
 CREATE TABLE seccion (
   nombre VARCHAR(40) PRIMARY KEY,
   activa BOOLEAN NOT NULL DEFAULT TRUE,
-  es_para_llevar BOOLEAN NOT NULL DEFAULT FALSE
+  es_para_llevar BOOLEAN NOT NULL DEFAULT FALSE,
+  eliminado_en DATETIME NULL,
+  eliminado_por INT NULL,
+  CONSTRAINT fk_seccion_eliminado_por FOREIGN KEY (eliminado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 INSERT INTO seccion (nombre) VALUES ('General'), ('Salón'), ('Terraza'), ('Barra');
@@ -99,7 +110,10 @@ CREATE TABLE mesa (
   capacidad INT NOT NULL CHECK (capacidad > 0),
   zona VARCHAR(40) NOT NULL DEFAULT 'General',
   activa BOOLEAN NOT NULL DEFAULT TRUE,
-  estado VARCHAR(20) NOT NULL DEFAULT 'libre' CONSTRAINT chk_mesa_estado CHECK (estado IN ('libre', 'ocupada', 'reservada'))
+  estado VARCHAR(20) NOT NULL DEFAULT 'libre' CONSTRAINT chk_mesa_estado CHECK (estado IN ('libre', 'ocupada', 'reservada')),
+  eliminado_en DATETIME NULL,
+  eliminado_por INT NULL,
+  CONSTRAINT fk_mesa_eliminado_por FOREIGN KEY (eliminado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB;
 -- zona: sección existente; una sección inhabilitada oculta sus mesas a hostess y mesero.
 -- activa: FALSE = mesa no disponible; no aparece en el Salón ni en el Panel de mesas. No se borran (tienen cuentas ligadas).
@@ -109,7 +123,10 @@ CREATE TABLE caracteristica_mesa (
   id_caracteristica INT AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(40) NOT NULL,
   activa BOOLEAN NOT NULL DEFAULT TRUE,
-  CONSTRAINT uq_caracteristica_mesa_nombre UNIQUE (nombre)
+  eliminado_en DATETIME NULL,
+  eliminado_por INT NULL,
+  CONSTRAINT uq_caracteristica_mesa_nombre UNIQUE (nombre),
+  CONSTRAINT fk_caracteristica_mesa_eliminado_por FOREIGN KEY (eliminado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE mesa_caracteristica (
@@ -233,7 +250,10 @@ CREATE TABLE lista_espera (
 CREATE TABLE canal_pedido (
   id_canal INT AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(40) NOT NULL UNIQUE,
-  activo BOOLEAN NOT NULL DEFAULT TRUE
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  eliminado_en DATETIME NULL,
+  eliminado_por INT NULL,
+  CONSTRAINT fk_canal_pedido_eliminado_por FOREIGN KEY (eliminado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE cuenta (
@@ -317,7 +337,10 @@ CREATE TABLE categoria_metodo_pago (
   id_categoria_metodo_pago INT AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(40) NOT NULL UNIQUE,
   tipo ENUM('fisico', 'digital') NOT NULL,
-  activo BOOLEAN NOT NULL DEFAULT TRUE
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  eliminado_en DATETIME NULL,
+  eliminado_por INT NULL,
+  CONSTRAINT fk_categoria_metodo_pago_eliminado_por FOREIGN KEY (eliminado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE metodo_pago (
@@ -325,7 +348,10 @@ CREATE TABLE metodo_pago (
   nombre VARCHAR(40) NOT NULL UNIQUE,
   id_categoria_metodo_pago INT NOT NULL,
   es_efectivo BOOLEAN NOT NULL DEFAULT FALSE,
-  activo BOOLEAN NOT NULL DEFAULT TRUE
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  eliminado_en DATETIME NULL,
+  eliminado_por INT NULL,
+  CONSTRAINT fk_metodo_pago_eliminado_por FOREIGN KEY (eliminado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 ALTER TABLE metodo_pago
@@ -501,8 +527,8 @@ CREATE TRIGGER trg_usuario_bu_proteger_primer_gerente BEFORE UPDATE ON usuario F
 BEGIN
   DECLARE v_primer_gerente INT DEFAULT NULL;
   SELECT id_primer_gerente INTO v_primer_gerente FROM configuracion_seguridad WHERE id = 1;
-  IF OLD.id_usuario = v_primer_gerente AND (NEW.activo = FALSE OR NEW.id_rol <> OLD.id_rol) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El primer gerente no se puede desactivar ni cambiar de rol';
+  IF OLD.id_usuario = v_primer_gerente AND (NEW.activo = FALSE OR NEW.eliminado_en IS NOT NULL OR NEW.id_rol <> OLD.id_rol) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El primer gerente no se puede desactivar, eliminar ni cambiar de rol';
   END IF;
 END$$
 DROP TRIGGER IF EXISTS trg_usuario_bd_proteger_primer_gerente$$
@@ -572,17 +598,17 @@ DROP TRIGGER IF EXISTS `trg_aud_usuario_ad`$$
 CREATE TRIGGER `trg_aud_usuario_ai` AFTER INSERT ON `usuario` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'usuario', 'INSERT', JSON_OBJECT('id_usuario', NEW.`id_usuario`), JSON_OBJECT('id_usuario', NEW.`id_usuario`, 'id_rol', NEW.`id_rol`, 'nombre', NEW.`nombre`, 'correo', NEW.`correo`, 'activo', NEW.`activo`, 'creado_en', NEW.`creado_en`), USER());
+  VALUES (@sigr_actor_id, 'usuario', 'INSERT', JSON_OBJECT('id_usuario', NEW.`id_usuario`), JSON_OBJECT('id_usuario', NEW.`id_usuario`, 'id_rol', NEW.`id_rol`, 'nombre', NEW.`nombre`, 'correo', NEW.`correo`, 'activo', NEW.`activo`, 'creado_en', NEW.`creado_en`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
 END$$
 CREATE TRIGGER `trg_aud_usuario_au` AFTER UPDATE ON `usuario` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'usuario', 'UPDATE', JSON_OBJECT('id_usuario', NEW.`id_usuario`), JSON_OBJECT('id_usuario', OLD.`id_usuario`, 'id_rol', OLD.`id_rol`, 'nombre', OLD.`nombre`, 'correo', OLD.`correo`, 'activo', OLD.`activo`, 'creado_en', OLD.`creado_en`), JSON_OBJECT('id_usuario', NEW.`id_usuario`, 'id_rol', NEW.`id_rol`, 'nombre', NEW.`nombre`, 'correo', NEW.`correo`, 'activo', NEW.`activo`, 'creado_en', NEW.`creado_en`), USER());
+  VALUES (@sigr_actor_id, 'usuario', 'UPDATE', JSON_OBJECT('id_usuario', NEW.`id_usuario`), JSON_OBJECT('id_usuario', OLD.`id_usuario`, 'id_rol', OLD.`id_rol`, 'nombre', OLD.`nombre`, 'correo', OLD.`correo`, 'activo', OLD.`activo`, 'creado_en', OLD.`creado_en`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), JSON_OBJECT('id_usuario', NEW.`id_usuario`, 'id_rol', NEW.`id_rol`, 'nombre', NEW.`nombre`, 'correo', NEW.`correo`, 'activo', NEW.`activo`, 'creado_en', NEW.`creado_en`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
 END$$
 CREATE TRIGGER `trg_aud_usuario_ad` AFTER DELETE ON `usuario` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
-  VALUES (@sigr_actor_id, 'usuario', 'DELETE', JSON_OBJECT('id_usuario', OLD.`id_usuario`), JSON_OBJECT('id_usuario', OLD.`id_usuario`, 'id_rol', OLD.`id_rol`, 'nombre', OLD.`nombre`, 'correo', OLD.`correo`, 'activo', OLD.`activo`, 'creado_en', OLD.`creado_en`), USER());
+  VALUES (@sigr_actor_id, 'usuario', 'DELETE', JSON_OBJECT('id_usuario', OLD.`id_usuario`), JSON_OBJECT('id_usuario', OLD.`id_usuario`, 'id_rol', OLD.`id_rol`, 'nombre', OLD.`nombre`, 'correo', OLD.`correo`, 'activo', OLD.`activo`, 'creado_en', OLD.`creado_en`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), USER());
 END$$
 DROP TRIGGER IF EXISTS `trg_aud_credenciales_ai`$$
 DROP TRIGGER IF EXISTS `trg_aud_credenciales_au`$$
@@ -641,17 +667,17 @@ DROP TRIGGER IF EXISTS `trg_aud_cliente_ad`$$
 CREATE TRIGGER `trg_aud_cliente_ai` AFTER INSERT ON `cliente` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'cliente', 'INSERT', JSON_OBJECT('id_cliente', NEW.`id_cliente`), JSON_OBJECT('id_cliente', NEW.`id_cliente`, 'nombre', NEW.`nombre`, 'telefono', NEW.`telefono`, 'lada', NEW.`lada`, 'correo', NEW.`correo`), USER());
+  VALUES (@sigr_actor_id, 'cliente', 'INSERT', JSON_OBJECT('id_cliente', NEW.`id_cliente`), JSON_OBJECT('id_cliente', NEW.`id_cliente`, 'nombre', NEW.`nombre`, 'telefono', NEW.`telefono`, 'lada', NEW.`lada`, 'correo', NEW.`correo`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
 END$$
 CREATE TRIGGER `trg_aud_cliente_au` AFTER UPDATE ON `cliente` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'cliente', 'UPDATE', JSON_OBJECT('id_cliente', NEW.`id_cliente`), JSON_OBJECT('id_cliente', OLD.`id_cliente`, 'nombre', OLD.`nombre`, 'telefono', OLD.`telefono`, 'lada', OLD.`lada`, 'correo', OLD.`correo`), JSON_OBJECT('id_cliente', NEW.`id_cliente`, 'nombre', NEW.`nombre`, 'telefono', NEW.`telefono`, 'lada', NEW.`lada`, 'correo', NEW.`correo`), USER());
+  VALUES (@sigr_actor_id, 'cliente', 'UPDATE', JSON_OBJECT('id_cliente', NEW.`id_cliente`), JSON_OBJECT('id_cliente', OLD.`id_cliente`, 'nombre', OLD.`nombre`, 'telefono', OLD.`telefono`, 'lada', OLD.`lada`, 'correo', OLD.`correo`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), JSON_OBJECT('id_cliente', NEW.`id_cliente`, 'nombre', NEW.`nombre`, 'telefono', NEW.`telefono`, 'lada', NEW.`lada`, 'correo', NEW.`correo`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
 END$$
 CREATE TRIGGER `trg_aud_cliente_ad` AFTER DELETE ON `cliente` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
-  VALUES (@sigr_actor_id, 'cliente', 'DELETE', JSON_OBJECT('id_cliente', OLD.`id_cliente`), JSON_OBJECT('id_cliente', OLD.`id_cliente`, 'nombre', OLD.`nombre`, 'telefono', OLD.`telefono`, 'lada', OLD.`lada`, 'correo', OLD.`correo`), USER());
+  VALUES (@sigr_actor_id, 'cliente', 'DELETE', JSON_OBJECT('id_cliente', OLD.`id_cliente`), JSON_OBJECT('id_cliente', OLD.`id_cliente`, 'nombre', OLD.`nombre`, 'telefono', OLD.`telefono`, 'lada', OLD.`lada`, 'correo', OLD.`correo`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), USER());
 END$$
 DROP TRIGGER IF EXISTS `trg_aud_seccion_ai`$$
 DROP TRIGGER IF EXISTS `trg_aud_seccion_au`$$
@@ -1210,5 +1236,99 @@ CREATE TRIGGER `trg_aud_canal_pedido_ad` AFTER DELETE ON `canal_pedido` FOR EACH
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
   VALUES (@sigr_actor_id, 'canal_pedido', 'DELETE', JSON_OBJECT('id_canal', OLD.`id_canal`), JSON_OBJECT('id_canal', OLD.`id_canal`, 'nombre', OLD.`nombre`, 'activo', OLD.`activo`), USER());
+END$$
+DELIMITER ;
+
+-- Eliminado logico de catalogos (migracion 029): la auditoria registra eliminado_en y eliminado_por.
+DELIMITER $$
+DROP TRIGGER IF EXISTS `trg_aud_mesa_ai`$$
+DROP TRIGGER IF EXISTS `trg_aud_mesa_au`$$
+DROP TRIGGER IF EXISTS `trg_aud_mesa_ad`$$
+CREATE TRIGGER `trg_aud_mesa_ai` AFTER INSERT ON `mesa` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'mesa', 'INSERT', JSON_OBJECT('id_mesa', NEW.`id_mesa`), JSON_OBJECT('id_mesa', NEW.`id_mesa`, 'numero', NEW.`numero`, 'capacidad', NEW.`capacidad`, 'zona', NEW.`zona`, 'activa', NEW.`activa`, 'estado', NEW.`estado`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
+END$$
+CREATE TRIGGER `trg_aud_mesa_au` AFTER UPDATE ON `mesa` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'mesa', 'UPDATE', JSON_OBJECT('id_mesa', NEW.`id_mesa`), JSON_OBJECT('id_mesa', OLD.`id_mesa`, 'numero', OLD.`numero`, 'capacidad', OLD.`capacidad`, 'zona', OLD.`zona`, 'activa', OLD.`activa`, 'estado', OLD.`estado`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), JSON_OBJECT('id_mesa', NEW.`id_mesa`, 'numero', NEW.`numero`, 'capacidad', NEW.`capacidad`, 'zona', NEW.`zona`, 'activa', NEW.`activa`, 'estado', NEW.`estado`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
+END$$
+CREATE TRIGGER `trg_aud_mesa_ad` AFTER DELETE ON `mesa` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
+  VALUES (@sigr_actor_id, 'mesa', 'DELETE', JSON_OBJECT('id_mesa', OLD.`id_mesa`), JSON_OBJECT('id_mesa', OLD.`id_mesa`, 'numero', OLD.`numero`, 'capacidad', OLD.`capacidad`, 'zona', OLD.`zona`, 'activa', OLD.`activa`, 'estado', OLD.`estado`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), USER());
+END$$
+DROP TRIGGER IF EXISTS `trg_aud_seccion_ai`$$
+DROP TRIGGER IF EXISTS `trg_aud_seccion_au`$$
+DROP TRIGGER IF EXISTS `trg_aud_seccion_ad`$$
+CREATE TRIGGER `trg_aud_seccion_ai` AFTER INSERT ON `seccion` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'seccion', 'INSERT', JSON_OBJECT('nombre', NEW.`nombre`), JSON_OBJECT('nombre', NEW.`nombre`, 'activa', NEW.`activa`, 'es_para_llevar', NEW.`es_para_llevar`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
+END$$
+CREATE TRIGGER `trg_aud_seccion_au` AFTER UPDATE ON `seccion` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'seccion', 'UPDATE', JSON_OBJECT('nombre', NEW.`nombre`), JSON_OBJECT('nombre', OLD.`nombre`, 'activa', OLD.`activa`, 'es_para_llevar', OLD.`es_para_llevar`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), JSON_OBJECT('nombre', NEW.`nombre`, 'activa', NEW.`activa`, 'es_para_llevar', NEW.`es_para_llevar`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
+END$$
+CREATE TRIGGER `trg_aud_seccion_ad` AFTER DELETE ON `seccion` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
+  VALUES (@sigr_actor_id, 'seccion', 'DELETE', JSON_OBJECT('nombre', OLD.`nombre`), JSON_OBJECT('nombre', OLD.`nombre`, 'activa', OLD.`activa`, 'es_para_llevar', OLD.`es_para_llevar`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), USER());
+END$$
+DROP TRIGGER IF EXISTS `trg_aud_canal_pedido_ai`$$
+DROP TRIGGER IF EXISTS `trg_aud_canal_pedido_au`$$
+DROP TRIGGER IF EXISTS `trg_aud_canal_pedido_ad`$$
+CREATE TRIGGER `trg_aud_canal_pedido_ai` AFTER INSERT ON `canal_pedido` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'canal_pedido', 'INSERT', JSON_OBJECT('id_canal', NEW.`id_canal`), JSON_OBJECT('id_canal', NEW.`id_canal`, 'nombre', NEW.`nombre`, 'activo', NEW.`activo`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
+END$$
+CREATE TRIGGER `trg_aud_canal_pedido_au` AFTER UPDATE ON `canal_pedido` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'canal_pedido', 'UPDATE', JSON_OBJECT('id_canal', NEW.`id_canal`), JSON_OBJECT('id_canal', OLD.`id_canal`, 'nombre', OLD.`nombre`, 'activo', OLD.`activo`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), JSON_OBJECT('id_canal', NEW.`id_canal`, 'nombre', NEW.`nombre`, 'activo', NEW.`activo`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
+END$$
+CREATE TRIGGER `trg_aud_canal_pedido_ad` AFTER DELETE ON `canal_pedido` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
+  VALUES (@sigr_actor_id, 'canal_pedido', 'DELETE', JSON_OBJECT('id_canal', OLD.`id_canal`), JSON_OBJECT('id_canal', OLD.`id_canal`, 'nombre', OLD.`nombre`, 'activo', OLD.`activo`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), USER());
+END$$
+DROP TRIGGER IF EXISTS `trg_aud_metodo_pago_ai`$$
+DROP TRIGGER IF EXISTS `trg_aud_metodo_pago_au`$$
+DROP TRIGGER IF EXISTS `trg_aud_metodo_pago_ad`$$
+CREATE TRIGGER `trg_aud_metodo_pago_ai` AFTER INSERT ON `metodo_pago` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'metodo_pago', 'INSERT', JSON_OBJECT('id_metodo', NEW.`id_metodo`), JSON_OBJECT('id_metodo', NEW.`id_metodo`, 'nombre', NEW.`nombre`, 'id_categoria_metodo_pago', NEW.`id_categoria_metodo_pago`, 'es_efectivo', NEW.`es_efectivo`, 'activo', NEW.`activo`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
+END$$
+CREATE TRIGGER `trg_aud_metodo_pago_au` AFTER UPDATE ON `metodo_pago` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'metodo_pago', 'UPDATE', JSON_OBJECT('id_metodo', NEW.`id_metodo`), JSON_OBJECT('id_metodo', OLD.`id_metodo`, 'nombre', OLD.`nombre`, 'id_categoria_metodo_pago', OLD.`id_categoria_metodo_pago`, 'es_efectivo', OLD.`es_efectivo`, 'activo', OLD.`activo`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), JSON_OBJECT('id_metodo', NEW.`id_metodo`, 'nombre', NEW.`nombre`, 'id_categoria_metodo_pago', NEW.`id_categoria_metodo_pago`, 'es_efectivo', NEW.`es_efectivo`, 'activo', NEW.`activo`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
+END$$
+CREATE TRIGGER `trg_aud_metodo_pago_ad` AFTER DELETE ON `metodo_pago` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
+  VALUES (@sigr_actor_id, 'metodo_pago', 'DELETE', JSON_OBJECT('id_metodo', OLD.`id_metodo`), JSON_OBJECT('id_metodo', OLD.`id_metodo`, 'nombre', OLD.`nombre`, 'id_categoria_metodo_pago', OLD.`id_categoria_metodo_pago`, 'es_efectivo', OLD.`es_efectivo`, 'activo', OLD.`activo`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), USER());
+END$$
+DROP TRIGGER IF EXISTS `trg_aud_categoria_metodo_pago_ai`$$
+DROP TRIGGER IF EXISTS `trg_aud_categoria_metodo_pago_au`$$
+DROP TRIGGER IF EXISTS `trg_aud_categoria_metodo_pago_ad`$$
+CREATE TRIGGER `trg_aud_categoria_metodo_pago_ai` AFTER INSERT ON `categoria_metodo_pago` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'categoria_metodo_pago', 'INSERT', JSON_OBJECT('id_categoria_metodo_pago', NEW.`id_categoria_metodo_pago`), JSON_OBJECT('id_categoria_metodo_pago', NEW.`id_categoria_metodo_pago`, 'nombre', NEW.`nombre`, 'tipo', NEW.`tipo`, 'activo', NEW.`activo`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
+END$$
+CREATE TRIGGER `trg_aud_categoria_metodo_pago_au` AFTER UPDATE ON `categoria_metodo_pago` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'categoria_metodo_pago', 'UPDATE', JSON_OBJECT('id_categoria_metodo_pago', NEW.`id_categoria_metodo_pago`), JSON_OBJECT('id_categoria_metodo_pago', OLD.`id_categoria_metodo_pago`, 'nombre', OLD.`nombre`, 'tipo', OLD.`tipo`, 'activo', OLD.`activo`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), JSON_OBJECT('id_categoria_metodo_pago', NEW.`id_categoria_metodo_pago`, 'nombre', NEW.`nombre`, 'tipo', NEW.`tipo`, 'activo', NEW.`activo`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
+END$$
+CREATE TRIGGER `trg_aud_categoria_metodo_pago_ad` AFTER DELETE ON `categoria_metodo_pago` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
+  VALUES (@sigr_actor_id, 'categoria_metodo_pago', 'DELETE', JSON_OBJECT('id_categoria_metodo_pago', OLD.`id_categoria_metodo_pago`), JSON_OBJECT('id_categoria_metodo_pago', OLD.`id_categoria_metodo_pago`, 'nombre', OLD.`nombre`, 'tipo', OLD.`tipo`, 'activo', OLD.`activo`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), USER());
 END$$
 DELIMITER ;

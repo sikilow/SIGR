@@ -45,7 +45,7 @@ este documento ya está hecho. Al terminar un punto, se marca aquí y en su fila
 | A3 | Cerrar sesión que invalide el token en el servidor (hoy solo se borra en el navegador) | RNF-012 | nueva ruta `POST /api/auth/logout` |
 | A4 | Registrar intentos de acceso fallidos o no autorizados | RNF-017 | bitácora |
 | A5 | Límite de peticiones (fuerza bruta) y cabeceras de seguridad; política de contraseñas más fuerte | P-04, P-14 | `backend/src/index.ts` |
-| A6 | Dar de baja (borrado lógico) a un cliente | RF-CLI-003 | `cliente.activo` + `PATCH /api/clientes/:id` |
+| ~~A6~~ | ✅ Hecho: dar de baja (eliminado lógico) a un cliente y restaurarlo, desde Gerente → Clientes (migración 028; ver [`eliminado-logico.md`](eliminado-logico.md)) | RF-CLI-003 | `controllers/clientesAdmin.ts` |
 | A7 | Que el cajero registre y actualice clientes (hoy solo hostess y gerente) | RF-CLI-001/002 | rutas de clientes y pantalla de Caja |
 | A8 | Teléfono de cliente único en la base (hoy solo lo revisa la API) | Regla de dominio 22 | migración |
 | A9 | Comprobante con datos fiscales del cliente (sin CFDI timbrado: el contrato lo excluye) | RF-VEN-002 | tablas `datos_fiscales` y `factura` (ya existen) |

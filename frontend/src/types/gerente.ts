@@ -24,6 +24,8 @@ export interface UsuarioAdmin {
   creadoEn: Date
   /** credenciales.ultimo_acceso (DATETIME, NULL si nunca entró). */
   ultimoAcceso: Date | null
+  /** Cuándo se eliminó; `null` = vigente (migración 027). Solo lo ve el gerente en «Eliminados». */
+  eliminadoEn?: Date | null
 }
 
 export interface NuevoUsuario {
@@ -52,7 +54,10 @@ export interface CategoriaAdmin {
 export interface SeccionAdmin {
   nombre: string
   activa: boolean
+  /** Mesas vigentes de la sección (las eliminadas no cuentan). */
   totalMesas: number
+  /** Cuándo se eliminó; `null` = vigente (migración 029). Solo lo ve el gerente en «Eliminados». */
+  eliminadoEn?: Date | null
 }
 
 /** configuracion_reservacion: tiempos de la reservación y horario (migración 022). */
@@ -117,6 +122,8 @@ export interface MesaAdmin {
   activa: boolean
   /** mesa.estado: ocupación actual (libre, ocupada o reservada). */
   estado: EstadoMesa
+  /** Cuándo se eliminó; `null` = vigente (migración 029). Solo lo ve el gerente en «Eliminados». */
+  eliminadoEn?: Date | null
 }
 
 export interface NuevaMesa {
@@ -139,6 +146,8 @@ export interface CaracteristicaAdmin {
   totalMesas: number
   /** CALCULADO: reservaciones que la pidieron. */
   totalReservaciones: number
+  /** Cuándo se eliminó; `null` = vigente (migración 029). Solo lo ve el gerente en «Eliminados». */
+  eliminadoEn?: Date | null
 }
 
 /** Cualquier subconjunto de campos editables. Marcar como no disponible = `{ activa: false }` (las mesas no se borran). */
@@ -154,3 +163,29 @@ export const ROLES_ASIGNABLES: readonly Rol[] = ['gerente', 'mesero', 'cocinero'
 
 export const CONTRASENA_MIN = 6
 export const CONTRASENA_MAX = 72
+
+/** Cliente visto por el gerente (Gerente → Clientes). Tabla `cliente` + datos calculados por la API. */
+export interface ClienteAdmin {
+  /** cliente.id_cliente */
+  idCliente: number
+  nombre: string
+  telefono: string | null
+  /** cliente.lada: código de país sin «+» (por defecto «52»). */
+  lada: string
+  correo: string | null
+  /** CALCULADO: tiene cuenta en el portal web (contraseña o Google). */
+  tieneCuenta: boolean
+  /** CALCULADO: reservaciones pendientes o confirmadas (impiden eliminarlo). */
+  reservacionesVigentes: number
+  totalReservaciones: number
+  /** Cuándo se eliminó; `null` = vigente (migración 028). */
+  eliminadoEn: Date | null
+}
+
+/** Cualquier subconjunto de campos que el gerente puede corregir. */
+export interface CambioCliente {
+  nombre?: string
+  telefono?: string
+  lada?: string
+  correo?: string
+}

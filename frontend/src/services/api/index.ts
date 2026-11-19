@@ -4,12 +4,19 @@ import { ErrorServicio } from '../errores'
 import { crearCajaApi } from './caja'
 import { crearHostessApi } from '../hostess/api'
 import type { Servicios } from '../interfaces'
-import type { CategoriaMetodoPagoAdmin, MetodoPagoAdmin } from '../../types'
+import type { MetodoPagoAdmin } from '../../types'
 import { solicitar } from './cliente'
 import { guardarToken, leerToken, limpiarToken } from './token'
 import {
   aCanalPedido,
   aCategoriaAdmin,
+  aCategoriaMetodoPagoAdmin,
+  aMetodoPagoAdmin,
+  type CategoriaMetodoPagoAdminDto,
+  type MetodoPagoAdminDto,
+  aClienteAdmin,
+  deCambioCliente,
+  type ClienteAdminDto,
   aCaracteristicaAdmin,
   type CaracteristicaAdminDto,
   aConfiguracionReservacion,
@@ -201,9 +208,28 @@ export function crearServiciosApi(): Servicios {
       },
     },
 
+    clientes: {
+      async listar(opciones) {
+        const r = await solicitar<ClienteAdminDto[]>('GET', '/clientes/gestion', { consulta: opciones?.eliminados ? { eliminados: '1' } : undefined })
+        return r.map(aClienteAdmin)
+      },
+
+      async actualizar(id, cambio) {
+        return aClienteAdmin(await solicitar<ClienteAdminDto>('PATCH', `/clientes/${id}`, { cuerpo: deCambioCliente(cambio) }))
+      },
+
+      async eliminar(id) {
+        return aClienteAdmin(await solicitar<ClienteAdminDto>('DELETE', `/clientes/${id}`))
+      },
+
+      async restaurar(id) {
+        return aClienteAdmin(await solicitar<ClienteAdminDto>('POST', `/clientes/${id}/restaurar`))
+      },
+    },
+
     usuarios: {
-      async listar() {
-        const r = await solicitar<UsuarioAdminDto[]>('GET', '/usuarios')
+      async listar(opciones) {
+        const r = await solicitar<UsuarioAdminDto[]>('GET', '/usuarios', { consulta: opciones?.eliminados ? { eliminados: '1' } : undefined })
         return r.map(aUsuarioAdmin)
       },
 
@@ -214,6 +240,14 @@ export function crearServiciosApi(): Servicios {
       async actualizar(id, cambio) {
         const cuerpo = deCambioUsuario(cambio)
         return aUsuarioAdmin(await solicitar<UsuarioAdminDto>('PATCH', `/usuarios/${id}`, { cuerpo }))
+      },
+
+      async eliminar(id) {
+        return aUsuarioAdmin(await solicitar<UsuarioAdminDto>('DELETE', `/usuarios/${id}`))
+      },
+
+      async restaurar(id) {
+        return aUsuarioAdmin(await solicitar<UsuarioAdminDto>('POST', `/usuarios/${id}/restaurar`))
       },
 
       async cambiarContrasena(id, contrasena, contrasenaActual) {
@@ -234,8 +268,8 @@ export function crearServiciosApi(): Servicios {
         return r.map(aCanalPedido)
       },
 
-      async listarCanales() {
-        const r = await solicitar<CanalPedidoDto[]>('GET', '/catalogo/canales')
+      async listarCanales(opciones) {
+        const r = await solicitar<CanalPedidoDto[]>('GET', '/catalogo/canales', { consulta: opciones?.eliminados ? { eliminados: '1' } : undefined })
         return r.map(aCanalPedido)
       },
 
@@ -245,6 +279,30 @@ export function crearServiciosApi(): Servicios {
 
       async actualizarCanal(idCanal, cambio) {
         return aCanalPedido(await solicitar<CanalPedidoDto>('PATCH', `/catalogo/canales/${idCanal}`, { cuerpo: { activo: cambio.activo } }))
+      },
+
+      async eliminarCanal(idCanal) {
+        return aCanalPedido(await solicitar<CanalPedidoDto>('DELETE', `/catalogo/canales/${idCanal}`))
+      },
+
+      async restaurarCanal(idCanal) {
+        return aCanalPedido(await solicitar<CanalPedidoDto>('POST', `/catalogo/canales/${idCanal}/restaurar`))
+      },
+
+      async eliminarCategoriaMetodoPago(id) {
+        return aCategoriaMetodoPagoAdmin(await solicitar<CategoriaMetodoPagoAdminDto>('DELETE', `/catalogo/metodos-pago/categorias/${id}`))
+      },
+
+      async restaurarCategoriaMetodoPago(id) {
+        return aCategoriaMetodoPagoAdmin(await solicitar<CategoriaMetodoPagoAdminDto>('POST', `/catalogo/metodos-pago/categorias/${id}/restaurar`))
+      },
+
+      async eliminarMetodoPago(id) {
+        return aMetodoPagoAdmin(await solicitar<MetodoPagoAdminDto>('DELETE', `/catalogo/metodos-pago/${id}`))
+      },
+
+      async restaurarMetodoPago(id) {
+        return aMetodoPagoAdmin(await solicitar<MetodoPagoAdminDto>('POST', `/catalogo/metodos-pago/${id}/restaurar`))
       },
 
       async listarMetodosPagoDisponibles() {
@@ -271,40 +329,11 @@ export function crearServiciosApi(): Servicios {
         }))
       },
 
-      async listarMetodosPago() {
-        const categorias = await solicitar<Array<{
-          id_categoria_metodo_pago: number | string
-          nombre: string
-          tipo: 'fisico' | 'digital'
-          activo: boolean | number
-          metodos: Array<{
-            id_metodo: number | string
-            nombre: string
-            id_categoria_metodo_pago: number | string
-            categoria: string
-            tipo: 'fisico' | 'digital'
-            es_efectivo: boolean | number
-            activo: boolean | number
-          }>
-        }>>(
-          'GET',
-          '/catalogo/metodos-pago',
-        )
-        return categorias.map((categoria): CategoriaMetodoPagoAdmin => ({
-          idCategoriaMetodoPago: Number(categoria.id_categoria_metodo_pago),
-          nombre: categoria.nombre,
-          tipo: categoria.tipo,
-          activo: Boolean(categoria.activo),
-          metodos: categoria.metodos.map((metodo): MetodoPagoAdmin => ({
-            idMetodo: Number(metodo.id_metodo),
-            nombre: metodo.nombre,
-            idCategoriaMetodoPago: Number(metodo.id_categoria_metodo_pago),
-            categoria: metodo.categoria,
-            tipo: metodo.tipo,
-            esEfectivo: Boolean(metodo.es_efectivo),
-            activo: Boolean(metodo.activo),
-          })),
-        }))
+      async listarMetodosPago(opciones) {
+        const categorias = await solicitar<CategoriaMetodoPagoAdminDto[]>('GET', '/catalogo/metodos-pago', {
+          consulta: opciones?.eliminados ? { eliminados: '1' } : undefined,
+        })
+        return categorias.map(aCategoriaMetodoPagoAdmin)
       },
 
       async crearCategoriaMetodoPago(nombre, tipo) {
@@ -438,8 +467,12 @@ export function crearServiciosApi(): Servicios {
         return aCategoriaAdmin(await solicitar<CategoriaAdminDto>('POST', `/catalogo/categorias/${id}/restaurar`))
       },
 
-      async listarCaracteristicas() {
-        return (await solicitar<CaracteristicaAdminDto[]>('GET', '/catalogo/caracteristicas')).map(aCaracteristicaAdmin)
+      async listarCaracteristicas(opciones) {
+        return (await solicitar<CaracteristicaAdminDto[]>('GET', '/catalogo/caracteristicas', { consulta: opciones?.eliminados ? { eliminados: '1' } : undefined })).map(aCaracteristicaAdmin)
+      },
+
+      async restaurarCaracteristica(id) {
+        return aCaracteristicaAdmin(await solicitar<CaracteristicaAdminDto>('POST', `/catalogo/caracteristicas/${id}/restaurar`))
       },
 
       async crearCaracteristica(nombre) {
@@ -455,8 +488,12 @@ export function crearServiciosApi(): Servicios {
         await solicitar<unknown>('DELETE', `/catalogo/caracteristicas/${id}`)
       },
 
-      async listarSecciones() {
-        return (await solicitar<SeccionAdminDto[]>('GET', '/catalogo/secciones')).map(aSeccionAdmin)
+      async listarSecciones(opciones) {
+        return (await solicitar<SeccionAdminDto[]>('GET', '/catalogo/secciones', { consulta: opciones?.eliminados ? { eliminados: '1' } : undefined })).map(aSeccionAdmin)
+      },
+
+      async restaurarSeccion(nombre) {
+        return aSeccionAdmin(await solicitar<SeccionAdminDto>('POST', `/catalogo/secciones/${encodeURIComponent(nombre)}/restaurar`))
       },
 
       async obtenerConfiguracionReservacion() {
@@ -518,8 +555,8 @@ export function crearServiciosApi(): Servicios {
         return aProductoAdmin(await solicitar<ProductoAdminDto>('POST', `/catalogo/productos/${id}/restaurar`))
       },
 
-      async listarMesas() {
-        const r = await solicitar<MesaAdminDto[]>('GET', '/catalogo/mesas')
+      async listarMesas(opciones) {
+        const r = await solicitar<MesaAdminDto[]>('GET', '/catalogo/mesas', { consulta: opciones?.eliminados ? { eliminados: '1' } : undefined })
         return r.map(aMesaAdmin)
       },
 
@@ -531,6 +568,14 @@ export function crearServiciosApi(): Servicios {
       async actualizarMesa(id, cambio) {
         const cuerpo = deCambioMesa(cambio)
         return aMesaAdmin(await solicitar<MesaAdminDto>('PATCH', `/catalogo/mesas/${id}`, { cuerpo }))
+      },
+
+      async eliminarMesa(id) {
+        return aMesaAdmin(await solicitar<MesaAdminDto>('DELETE', `/catalogo/mesas/${id}`))
+      },
+
+      async restaurarMesa(id) {
+        return aMesaAdmin(await solicitar<MesaAdminDto>('POST', `/catalogo/mesas/${id}/restaurar`))
       },
     },
 

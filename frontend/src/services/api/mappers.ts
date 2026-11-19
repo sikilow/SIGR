@@ -32,7 +32,7 @@ import type {
   SeccionAdmin,
   TipoPago,
   Usuario,
-  UsuarioAdmin,
+  UsuarioAdmin, CambioCliente, ClienteAdmin, CategoriaMetodoPagoAdmin, MetodoPagoAdmin
 } from '../../types'
 import { HORARIO_POR_DEFECTO, type HorarioReservacion, INTERVALOS_RESERVACION } from '../../utils/horarioReservacion'
 import { ErrorServicio } from '../errores'
@@ -173,6 +173,7 @@ export interface CanalPedidoDto {
   id_canal: Numerico
   nombre: string
   activo: Booleano
+  eliminado_en?: string | null
 }
 
 export interface AperturaParaLlevarDto {
@@ -279,7 +280,12 @@ export function aPedido(dto: PedidoDto): Pedido {
 }
 
 export function aCanalPedido(dto: CanalPedidoDto): CanalPedido {
-  return { idCanal: aNumero(dto.id_canal, 'id_canal'), nombre: dto.nombre, activo: aBooleano(dto.activo, 'activo') }
+  return {
+    idCanal: aNumero(dto.id_canal, 'id_canal'),
+    nombre: dto.nombre,
+    activo: aBooleano(dto.activo, 'activo'),
+    eliminadoEn: parseFechaMySQLONula(dto.eliminado_en ?? null, 'eliminado_en'),
+  }
 }
 
 export function aCuenta(dto: CuentaDto): Cuenta {
@@ -356,6 +362,20 @@ export interface UsuarioAdminDto {
   creado_en: string
   /** credenciales.ultimo_acceso */
   ultimo_acceso: string | null
+  /** usuario.eliminado_en (migración 027); null = vigente. Una API anterior no lo envía. */
+  eliminado_en?: string | null
+}
+
+export interface ClienteAdminDto {
+  id_cliente: Numerico
+  nombre: string
+  telefono: string | null
+  lada?: string
+  correo: string | null
+  tiene_cuenta: Booleano
+  reservaciones_vigentes: Numerico
+  total_reservaciones: Numerico
+  eliminado_en?: string | null
 }
 
 export interface CategoriaAdminDto {
@@ -371,6 +391,7 @@ export interface SeccionAdminDto {
   nombre: string
   activa: Booleano
   total_mesas: Numerico
+  eliminado_en?: string | null
 }
 
 /** Horario de reservaciones tal como lo envía la API (horas "HH:MM"; una API anterior a la 022 no lo envía). */
@@ -404,6 +425,7 @@ export interface CaracteristicaAdminDto extends CaracteristicaDto {
   activa: unknown
   total_mesas: Numerico
   total_reservaciones: Numerico
+  eliminado_en?: string | null
 }
 
 export function aCaracteristicaAdmin(dto: CaracteristicaAdminDto): CaracteristicaAdmin {
@@ -413,6 +435,7 @@ export function aCaracteristicaAdmin(dto: CaracteristicaAdminDto): Caracteristic
     activa: aBooleano(dto.activa, 'activa'),
     totalMesas: aNumero(dto.total_mesas, 'total_mesas'),
     totalReservaciones: aNumero(dto.total_reservaciones, 'total_reservaciones'),
+    eliminadoEn: parseFechaMySQLONula(dto.eliminado_en ?? null, 'eliminado_en'),
   }
 }
 
@@ -460,6 +483,7 @@ export interface MesaAdminDto {
   /** mesa.activa (BOOLEAN; puede llegar como 0/1). */
   activa: unknown
   estado: string
+  eliminado_en?: string | null
 }
 
 export interface ProductoAdminDto {
@@ -499,6 +523,31 @@ export function aUsuarioAdmin(dto: UsuarioAdminDto): UsuarioAdmin {
     lada: dto.lada ?? undefined,
     creadoEn: parseFechaMySQL(dto.creado_en, 'creado_en'),
     ultimoAcceso: parseFechaMySQLONula(dto.ultimo_acceso, 'ultimo_acceso'),
+    eliminadoEn: parseFechaMySQLONula(dto.eliminado_en ?? null, 'eliminado_en'),
+  }
+}
+
+export function aClienteAdmin(dto: ClienteAdminDto): ClienteAdmin {
+  return {
+    idCliente: aNumero(dto.id_cliente, 'id_cliente'),
+    nombre: dto.nombre,
+    telefono: dto.telefono ?? null,
+    lada: dto.lada || '52',
+    correo: dto.correo ?? null,
+    tieneCuenta: aBooleano(dto.tiene_cuenta, 'tiene_cuenta'),
+    reservacionesVigentes: aNumero(dto.reservaciones_vigentes, 'reservaciones_vigentes'),
+    totalReservaciones: aNumero(dto.total_reservaciones, 'total_reservaciones'),
+    eliminadoEn: parseFechaMySQLONula(dto.eliminado_en ?? null, 'eliminado_en'),
+  }
+}
+
+/** Solo viajan los campos que cambiaron (PATCH parcial). */
+export function deCambioCliente(c: CambioCliente) {
+  return {
+    ...(c.nombre !== undefined ? { nombre: c.nombre.trim() } : {}),
+    ...(c.telefono !== undefined ? { telefono: c.telefono.trim() } : {}),
+    ...(c.lada !== undefined ? { lada: c.lada } : {}),
+    ...(c.correo !== undefined ? { correo: c.correo.trim() } : {}),
   }
 }
 
@@ -516,6 +565,7 @@ export function aSeccionAdmin(dto: SeccionAdminDto): SeccionAdmin {
     nombre: dto.nombre,
     activa: aBooleano(dto.activa, 'activa'),
     totalMesas: aNumero(dto.total_mesas, 'total_mesas'),
+    eliminadoEn: parseFechaMySQLONula(dto.eliminado_en ?? null, 'eliminado_en'),
   }
 }
 
@@ -530,6 +580,7 @@ export function aMesaAdmin(dto: MesaAdminDto): MesaAdmin {
     caracteristicas: (dto.caracteristicas ?? []).map((id) => aNumero(id, 'caracteristicas')),
     activa: aBooleano(dto.activa, 'activa'),
     estado: aEstadoMesa(dto.estado),
+    eliminadoEn: parseFechaMySQLONula(dto.eliminado_en ?? null, 'eliminado_en'),
   }
 }
 
@@ -622,5 +673,51 @@ export function deCambioProducto(c: CambioProducto) {
     ...(c.controlaExistencia !== undefined ? { controla_existencia: c.controlaExistencia } : {}),
     ...(c.existencia !== undefined ? { existencia: c.existencia } : {}),
     ...(c.stockMinimo !== undefined ? { stock_minimo: c.stockMinimo } : {}),
+  }
+}
+
+// ---------- Métodos de pago (Gerente → Métodos de pago) ----------
+
+export interface MetodoPagoAdminDto {
+  id_metodo: Numerico
+  nombre: string
+  id_categoria_metodo_pago: Numerico
+  categoria: string
+  tipo: 'fisico' | 'digital'
+  es_efectivo: Booleano
+  activo: Booleano
+  eliminado_en?: string | null
+}
+
+export interface CategoriaMetodoPagoAdminDto {
+  id_categoria_metodo_pago: Numerico
+  nombre: string
+  tipo: 'fisico' | 'digital'
+  activo: Booleano
+  eliminado_en?: string | null
+  metodos: MetodoPagoAdminDto[]
+}
+
+export function aMetodoPagoAdmin(dto: MetodoPagoAdminDto): MetodoPagoAdmin {
+  return {
+    idMetodo: aNumero(dto.id_metodo, 'id_metodo'),
+    nombre: dto.nombre,
+    idCategoriaMetodoPago: aNumero(dto.id_categoria_metodo_pago, 'id_categoria_metodo_pago'),
+    categoria: dto.categoria,
+    tipo: dto.tipo,
+    esEfectivo: aBooleano(dto.es_efectivo, 'es_efectivo'),
+    activo: aBooleano(dto.activo, 'activo'),
+    eliminadoEn: parseFechaMySQLONula(dto.eliminado_en ?? null, 'eliminado_en'),
+  }
+}
+
+export function aCategoriaMetodoPagoAdmin(dto: CategoriaMetodoPagoAdminDto): CategoriaMetodoPagoAdmin {
+  return {
+    idCategoriaMetodoPago: aNumero(dto.id_categoria_metodo_pago, 'id_categoria_metodo_pago'),
+    nombre: dto.nombre,
+    tipo: dto.tipo,
+    activo: aBooleano(dto.activo, 'activo'),
+    eliminadoEn: parseFechaMySQLONula(dto.eliminado_en ?? null, 'eliminado_en'),
+    metodos: dto.metodos.map(aMetodoPagoAdmin),
   }
 }

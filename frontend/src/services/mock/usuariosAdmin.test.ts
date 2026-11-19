@@ -103,3 +103,47 @@ describe('mock: teléfono de usuarios', () => {
     expect(await codigoDeError(usuarios.actualizar(segundo.idUsuario, { telefono: '3115550199' }))).toBe('estado_invalido')
   })
 })
+
+describe('mock: eliminar y restaurar usuarios (eliminado lógico)', () => {
+  it('un usuario eliminado sale de la lista, no puede entrar y se restaura inactivo', async () => {
+    const { usuarios, baseDatos } = await nuevoMock()
+    iniciarSesionGerente()
+
+    const eliminado = await resolver(usuarios.eliminar(1))
+    expect(eliminado.eliminadoEn).toBeInstanceOf(Date)
+    expect(eliminado.activo).toBe(false)
+    expect(baseDatos.usuarios.find((u) => u.idUsuario === 1)?.activo).toBe(false) // ya no puede iniciar sesión
+
+    expect((await resolver(usuarios.listar())).some((u) => u.idUsuario === 1)).toBe(false)
+    expect((await resolver(usuarios.listar({ eliminados: true }))).map((u) => u.idUsuario)).toEqual([1])
+
+    const restaurado = await resolver(usuarios.restaurar(1))
+    expect(restaurado.eliminadoEn).toBeNull()
+    expect(restaurado.activo).toBe(false) // vuelve inactivo
+    expect((await resolver(usuarios.listar())).some((u) => u.idUsuario === 1)).toBe(true)
+
+    const reactivado = await resolver(usuarios.actualizar(1, { activo: true }))
+    expect(reactivado.activo).toBe(true)
+  })
+
+  it('no se elimina a uno mismo, ni al primer gerente, ni dos veces; ni se edita un eliminado', async () => {
+    const { usuarios } = await nuevoMock()
+    iniciarSesionGerente() // la sesión es el usuario 2 (primer gerente)
+
+    expect(await codigoDeError(usuarios.eliminar(2))).toBe('estado_invalido')
+    await resolver(usuarios.eliminar(1))
+    expect(await codigoDeError(usuarios.eliminar(1))).toBe('estado_invalido')
+    expect(await codigoDeError(usuarios.actualizar(1, { nombre: 'Otro Nombre' }))).toBe('estado_invalido')
+    expect(await codigoDeError(usuarios.restaurar(3))).toBe('estado_invalido') // vigente
+  })
+
+  it('crear un usuario igual a uno eliminado avisa que hay que restaurarlo', async () => {
+    const { usuarios } = await nuevoMock()
+    iniciarSesionGerente()
+    const original = (await resolver(usuarios.listar())).find((u) => u.idUsuario === 1)!
+    await resolver(usuarios.eliminar(1))
+
+    const intento = usuarios.crear({ nombre: 'Otra Persona', correo: 'otro@correo.com', nombreUsuario: original.nombreUsuario, contrasena: 'secreta123', rol: 'mesero' })
+    await expect(resolver(intento)).rejects.toThrow(/eliminado/)
+  })
+})

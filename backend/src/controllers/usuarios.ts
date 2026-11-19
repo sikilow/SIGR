@@ -43,12 +43,15 @@ export interface UsuarioAdminDto {
   lada: string;
   creado_en: string;
   ultimo_acceso: string | null;
+  /** NULL = vigente; con fecha = eliminado (migración 027, solo se ve en «Eliminados»). */
+  eliminado_en: string | null;
 }
 
 const SELECT_USUARIO = `
   SELECT u.id_usuario, u.id_rol, u.nombre, u.correo, c.nombre_usuario, r.nombre AS rol, u.activo,
          (u.id_usuario = (SELECT id_primer_gerente FROM configuracion_seguridad WHERE id = 1)) AS es_primer_gerente,
-         p.telefono, p.lada, u.creado_en, c.ultimo_acceso
+         p.telefono, p.lada, u.creado_en, c.ultimo_acceso,
+         DATE_FORMAT(u.eliminado_en, '%Y-%m-%d %H:%i:%s') AS eliminado_en
     FROM usuario u
     JOIN rol r ON r.id_rol = u.id_rol
     LEFT JOIN credenciales c ON c.id_usuario = u.id_usuario
@@ -69,6 +72,7 @@ function aDto(r: Record<string, unknown>): UsuarioAdminDto {
     // DATETIME tal cual ("2026-10-15 16:34:00"); el pool usa dateStrings.
     creado_en: r.creado_en as string,
     ultimo_acceso: (r.ultimo_acceso as string | null) ?? null,
+    eliminado_en: (r.eliminado_en as string | null) ?? null,
   };
 }
 
@@ -93,11 +97,44 @@ function traducirDuplicado(error: unknown): never {
   throw error;
 }
 
-/** GET /api/usuarios  →  todos los usuarios (activos e inactivos), por nombre. */
-export const listarUsuarios = async (_req: Request, res: Response) => {
-  const rows = await filas(pool, `${SELECT_USUARIO} ORDER BY u.activo DESC, u.nombre`);
+/** GET /api/usuarios[?eliminados=1]  →  los usuarios vigentes (activos e inactivos), por nombre; o solo los eliminados. */
+export const listarUsuarios = async (req: Request, res: Response) => {
+  const eliminados = req.query.eliminados === "1" || req.query.eliminados === "true";
+  const rows = await filas(
+    pool,
+    `${SELECT_USUARIO} WHERE u.eliminado_en IS ${eliminados ? "NOT NULL" : "NULL"} ORDER BY u.activo DESC, u.nombre`,
+  );
   res.json(rows.map(aDto));
 };
+
+/**
+ * Los datos únicos (correo, usuario, teléfono) siguen ocupados aunque el usuario esté eliminado. Si lo que se quiere
+ * guardar choca con uno eliminado, se avisa que hay que restaurarlo en lugar de crear otro.
+ */
+async function exigirSinEliminadoIgual(
+  ex: Ejecutor,
+  datos: { correo?: string | undefined; nombre_usuario?: string | undefined; telefono?: string | null | undefined },
+  idPropio = 0,
+): Promise<void> {
+  const [f] = await filas(
+    ex,
+    `SELECT u.id_usuario
+       FROM usuario u
+       LEFT JOIN credenciales c ON c.id_usuario = u.id_usuario
+       LEFT JOIN perfil_usuario p ON p.id_usuario = u.id_usuario
+      WHERE u.eliminado_en IS NOT NULL AND u.id_usuario <> ?
+        AND (u.correo = ? OR c.nombre_usuario = ? OR (? <> '' AND p.telefono = ?))
+      LIMIT 1`,
+    [idPropio, datos.correo ?? "", datos.nombre_usuario ?? "", datos.telefono ?? "", datos.telefono ?? ""],
+  );
+  if (f) {
+    throw new ErrorApi(
+      409,
+      "estado_invalido",
+      "Hay un usuario eliminado con ese correo, usuario o teléfono. Restáuralo desde «Eliminados» en lugar de crear otro.",
+    );
+  }
+}
 
 /**
  * Teléfono: opcional. Si se captura son solo dígitos y su cantidad depende de la lada (México: 10); no puede repetirse
@@ -121,6 +158,7 @@ export const crearUsuario = async (req: Request, res: Response) => {
   const hash = await bcrypt.hash(d.contrasena, 10);
 
   const id = await transaccion(async (cx) => {
+    await exigirSinEliminadoIgual(cx, d);
     const [existe] = await filas(cx, "SELECT 1 AS x FROM credenciales WHERE nombre_usuario = ?", [d.nombre_usuario]);
     if (existe) throw new ErrorApi(409, "estado_invalido", "Ya existe otro usuario con ese nombre de usuario.");
     try {
@@ -174,13 +212,15 @@ export const editarUsuario = async (req: Request, res: Response) => {
     // FOR UPDATE: dos gerentes editando a la vez no pueden dejar el sistema sin gerente activo.
     const [actual] = await filas(
       cx,
-      `SELECT u.activo, LOWER(r.nombre) AS rol,
+      `SELECT u.activo, u.eliminado_en, LOWER(r.nombre) AS rol,
               (u.id_usuario = (SELECT id_primer_gerente FROM configuracion_seguridad WHERE id = 1)) AS es_primer_gerente
          FROM usuario u JOIN rol r ON r.id_rol = u.id_rol
         WHERE u.id_usuario = ? FOR UPDATE`,
       [id],
     );
     if (!actual) throw new ErrorApi(404, "no_encontrado", "El usuario no existe.");
+    if (actual.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El usuario está eliminado. Restáuralo para poder editarlo.");
+    await exigirSinEliminadoIgual(cx, { correo: d.correo, nombre_usuario: d.nombre_usuario, telefono: d.telefono }, id);
 
     // El teléfono y la lada se validan juntos; si solo llega uno, se toma el otro de lo guardado.
     if (d.telefono !== undefined || d.lada !== undefined) {
@@ -282,12 +322,13 @@ export const enviarRestablecimiento = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
   const [destino] = await filas(
     pool,
-    `SELECT u.id_usuario, u.nombre, u.correo, u.activo, c.nombre_usuario
+    `SELECT u.id_usuario, u.nombre, u.correo, u.activo, u.eliminado_en, c.nombre_usuario
        FROM usuario u JOIN credenciales c ON c.id_usuario = u.id_usuario
       WHERE u.id_usuario = ?`,
     [id],
   );
   if (!destino) throw new ErrorApi(404, "no_encontrado", "El usuario no existe.");
+  if (destino.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El usuario está eliminado. Restáuralo antes de restablecer su contraseña.");
   if (!destino.activo) {
     throw new ErrorApi(409, "estado_invalido", "El usuario está inactivo. Actívalo antes de restablecer su contraseña.");
   }
@@ -312,4 +353,56 @@ export const enviarRestablecimiento = async (req: Request, res: Response) => {
     throw new ErrorApi(502, "correo_no_enviado", "No se pudo enviar el correo. Revisa que el correo del usuario sea correcto y la configuración de correo del servidor.");
   }
   res.json({ ok: true, correo: enmascararCorreo(destino.correo as string) });
+};
+
+/**
+ * DELETE /api/usuarios/:id  →  el usuario, ya eliminado.
+ * «Eliminar» es lógico (migración 027): el usuario deja de mostrarse y de poder entrar (su sesión se rechaza de
+ * inmediato), pero se conserva para el historial (pedidos, ventas y cortes siguen mostrando su nombre). Queda además
+ * desactivado. No puedes eliminarte a ti mismo, ni al primer gerente, ni al último gerente activo.
+ * Se restaura con POST /usuarios/:id/restaurar (vuelve inactivo: hay que activarlo).
+ */
+export const eliminarUsuario = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  await transaccion(async (cx) => {
+    const [u] = await filas(
+      cx,
+      `SELECT u.activo, u.eliminado_en, LOWER(r.nombre) AS rol,
+              (u.id_usuario = (SELECT id_primer_gerente FROM configuracion_seguridad WHERE id = 1)) AS es_primer_gerente
+         FROM usuario u JOIN rol r ON r.id_rol = u.id_rol
+        WHERE u.id_usuario = ? FOR UPDATE`,
+      [id],
+    );
+    if (!u) throw new ErrorApi(404, "no_encontrado", "El usuario no existe.");
+    if (u.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El usuario ya está eliminado.");
+    if (req.usuario?.id === id) throw new ErrorApi(409, "estado_invalido", "No puedes eliminar tu propio usuario.");
+    if (Boolean(u.es_primer_gerente)) throw new ErrorApi(409, "estado_invalido", "El primer gerente no se puede eliminar.");
+
+    if (u.rol === "gerente" && Boolean(u.activo)) {
+      const [otros] = await filas(
+        cx,
+        `SELECT COUNT(*) AS n FROM usuario u JOIN rol r ON r.id_rol = u.id_rol
+          WHERE LOWER(r.nombre) = 'gerente' AND u.activo = TRUE AND u.eliminado_en IS NULL AND u.id_usuario <> ?`,
+        [id],
+      );
+      if (Number(otros?.n ?? 0) === 0) throw new ErrorApi(409, "estado_invalido", "Debe quedar al menos un gerente activo.");
+    }
+
+    await ejecutar(
+      cx,
+      "UPDATE usuario SET activo = FALSE, eliminado_en = NOW(), eliminado_por = ? WHERE id_usuario = ? AND eliminado_en IS NULL",
+      [req.usuario?.id ?? null, id],
+    );
+  });
+  res.json(await cargarUsuario(pool, id));
+};
+
+/** POST /api/usuarios/:id/restaurar  →  el usuario vigente otra vez, pero inactivo (el gerente lo activa cuando quiera). */
+export const restaurarUsuario = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const u = await cargarUsuario(pool, id);
+  if (!u) throw new ErrorApi(404, "no_encontrado", "El usuario no existe.");
+  if (!u.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El usuario no está eliminado.");
+  await ejecutar(pool, "UPDATE usuario SET eliminado_en = NULL, eliminado_por = NULL WHERE id_usuario = ?", [id]);
+  res.json(await cargarUsuario(pool, id));
 };
