@@ -60,7 +60,7 @@ describe('mock: recuperar contraseña con enlace', () => {
     expect(await codigoDeError(auth.restablecerContrasena(token, '123'))).toBe('estado_invalido')
     await resolver(auth.restablecerContrasena(token, 'nueva123'))
 
-    expect(await codigoDeError(auth.restablecerContrasena(token, 'otra456'))).toBe('enlace_invalido')
+    expect(await codigoDeError(auth.restablecerContrasena(token, 'otra4567x'))).toBe('enlace_invalido')
     expect(await codigoDeError(auth.iniciarSesion({ nombreUsuario: 'mesero', contrasena: '1234' }))).toBe('credenciales_invalidas')
     expect((await resolver(auth.iniciarSesion({ nombreUsuario: 'mesero', contrasena: 'nueva123' }))).nombre).toBe('Ana Torres')
   })

@@ -166,7 +166,7 @@ Salen de lo que pidió el equipo y de la revisión del proyecto. El detalle, las
 | RF-USR-003 / RF-CLI-003 | El ERS pide **eliminar** | Los usuarios se **desactivan** (no se borran). Falta decidir qué pasa con clientes |
 | Estados de mesa | El ERS dice «disponible u ocupada» | La BD usa `libre`, `ocupada` y `reservada` |
 | Estados de pedido | El ERS: pendiente, en preparación, listo, entregado | La BD agrega `Registrado`, `Cancelado` y `Pagado`; `Pendiente` se usa como «enviado a cocina» |
-| RNF-011 | Expiración a los 15 min de inactividad | El JWT dura 8 horas |
+| RNF-011 | Expiración a los 15 min de inactividad | Se cumple con una sesión en el servidor; el token sigue durando 8 horas como tope |
 | RNF-025 | Actualización en < 2 s | Consulta periódica cada 10 s |
 | Hostess | — | Las rutas de Salón, Reservaciones, clientes y asignación están implementadas; solo falta `PATCH /api/lista-espera/:id` |
 
@@ -199,15 +199,15 @@ Aplican a todos los módulos del sistema.
 | --- | --- | --- | --- |
 | `RNF-007` | Requerir usuario y contraseña para cualquier funcionalidad | ✅ | Login con JWT; el resto de la API exige `Authorization: Bearer` |
 | `RNF-008` | Validar las credenciales contra la base de datos | ✅ |  |
-| `RNF-009` | Bloquear temporalmente la cuenta tras 5 intentos fallidos de inicio de sesión | 🚧 | No se encontró en el código |
+| `RNF-009` | Bloquear temporalmente la cuenta tras 5 intentos fallidos de inicio de sesión | ✅ | Bloqueo de 5 minutos (migración 031); `services/seguridadAcceso.ts` |
 | `RNF-010` | Almacenar las contraseñas con un hash seguro | ✅ | `bcryptjs` |
-| `RNF-011` | Sesiones con expiración por inactividad (por ejemplo, 15 minutos) | 🟡 | El token JWT dura 8 horas fijas, sin control por inactividad |
-| `RNF-012` | Cierre de sesión seguro que invalide la sesión activa | 🟡 | El cliente borra el token; el servidor no lo invalida (JWT sin estado) |
+| `RNF-011` | Sesiones con expiración por inactividad (por ejemplo, 15 minutos) | ✅ | 15 minutos (cocina: 480); aviso en pantalla un minuto antes. Las consultas automáticas no mantienen viva la sesión |
+| `RNF-012` | Cierre de sesión seguro que invalide la sesión activa | ✅ | `POST /api/auth/logout` cierra la sesión en el servidor (personal); las sesiones de clientes del portal siguen sin estado |
 | `RNF-013` | Control de acceso basado en roles (RBAC) | ✅ | `requiereAuth(...roles)` en el backend y guardas por rol en el router |
 | `RNF-014` | Restringir las funcionalidades según el rol | ✅ |  |
 | `RNF-015` | Validar los permisos antes de ejecutar cualquier operación | ✅ |  |
 | `RNF-016` | Impedir el acceso a recursos no autorizados, incluso por URL o manipulando solicitudes | ✅ | La validación de rol está en el backend, no solo en el frontend |
-| `RNF-017` | Registrar los intentos de acceso no autorizado para auditoría | 🚧 | No se encontró en el código |
+| `RNF-017` | Registrar los intentos de acceso no autorizado para auditoría | ✅ | Tabla `registro_acceso` (sin pantalla: se consulta con SQL) |
 | `RNF-018` | Restringir la información y funcionalidades a usuarios autorizados | ✅ |  |
 
 #### Usabilidad

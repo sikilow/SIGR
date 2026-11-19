@@ -64,8 +64,8 @@ El actor autenticado se establece en la sesión MySQL que ejecuta la transacció
 | --- | --- | --- | --- |
 | P-01 | **Resuelto: cierre de cuenta al cobrar** | `POST /api/caja/cuentas/:id/cobrar` registra la venta y los pagos y, en la misma transacción, marca pedidos pagados, llena `cerrada_en`, cierra la cuenta y libera la mesa. No permite cobrar cuentas no solicitadas ni pedidos sin entregar. | Resuelto |
 | P-02 | **Auditoría de cancelaciones** | La migración 013 audita quién y cuándo modificó el pedido, incluidos estado y valores anterior/nuevo. No hay campos dedicados `pedido.id_cancelado_por` ni `pedido.cancelado_en`; la auditoría no se expone en la respuesta del pedido. | Implementado en migración; falta aplicarla en cada base y probar MySQL |
-| P-03 | **Seguridad del ERS sin cubrir** | RNF-009 (bloqueo tras 5 intentos), RNF-011 (expiración por inactividad: hoy el token dura 8 horas fijas), RNF-012 (invalidar la sesión al salir) y registro de accesos fallidos/no autorizados. La auditoría 013 cubre cambios exitosos en datos, no intentos de acceso fallidos. | Parcial |
-| P-04 | **Sin protecciones básicas de la API** | El backend no usa límite de peticiones (contra fuerza bruta) ni cabeceras de seguridad. No hay HTTPS configurado en el proyecto. | Verificado en `package.json`; el HTTPS es por validar |
+| P-03 | **Resuelto: seguridad de acceso del ERS** | Bloqueo tras 5 intentos fallidos (RNF-009), cierre por inactividad (RNF-011), cierre de sesión en el servidor (RNF-012) y registro de accesos fallidos y no autorizados (RNF-017). Migración 031; ver [`auditoria-seguridad.md`](auditoria-seguridad.md#acceso-sesiones-y-límites-migración-031). Quedan: sesiones de clientes del portal sin cierre por inactividad y bitácora de accesos sin pantalla. | Resuelto |
+| P-04 | **Resuelto: protecciones básicas de la API** | `helmet` (cabeceras de seguridad) y límite de peticiones por IP. El HTTPS no lo configura el proyecto: va en el proxy o servidor donde se despliegue (`TRUST_PROXY=1` detrás de un proxy). | Resuelto, salvo HTTPS |
 | P-05 | **Las pruebas del backend son unitarias** | `backend/tests/` tiene 97 pruebas en 13 archivos (dominio, caja, correo, horario, disponibilidad, reporte de ventas…) y el frontend 619. Falta probar las rutas contra MySQL. | Verificado |
 | P-06 | **Pantallas pendientes** | Caja (`/cajero/caja`) y Reporte de ventas (`/gerente/ventas`) ya existen. Falta solo el comprobante con datos fiscales (RF-VEN-002). | Parcial |
 | P-07 | **Resuelto: `PATCH /api/lista-espera/:id`** | Quita a un grupo de la lista (`estado: cancelada`) o cambia cuántas personas son, solo mientras sigue esperando. | Resuelto |
@@ -110,8 +110,8 @@ La migración 013 debe aplicarse y probarse en cada base. También queda por def
 
 | Id | Pendiente | Verificación |
 | --- | --- | --- |
-| P-13 | Todos los usuarios de prueba usan la contraseña `1234`; hay que eliminarlos o cambiarlas. No se obliga a cambiar la contraseña inicial. | Verificado |
-| P-14 | Política de contraseñas: hoy solo se exige de 6 a 72 caracteres, sin complejidad. | Verificado |
+| P-13 | Los usuarios de prueba usan la contraseña `1234`: hay que cambiarlos o eliminarlos antes de entregar. La API **avisa al arrancar** cuántos siguen así. No se obliga a cambiar la contraseña inicial (el personal no puede cambiar la suya; solo Gerencia). | Verificado; aviso agregado |
+| P-14 | **Resuelto: política de contraseñas.** De 8 a 72 caracteres, con letras y números, sin contraseñas comunes ni el nombre de usuario (servidor y formularios). | Resuelto |
 | P-15 | No hay integración continua (carpeta `.github`) ni respaldos de la base documentados. | Verificado |
 | P-16 | Documentación de Gerencia (API de pedidos y pantallas de usuarios/productos) | Ya existen `docs/contrato-api-gerente.md` y `docs/pantallas-gerente.md`. | Resuelto |
 

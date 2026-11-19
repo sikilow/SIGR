@@ -140,6 +140,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `028_eliminado_logico_clientes.sql` | Columnas `eliminado_en` y `eliminado_por` en `cliente` (eliminado lógico, fase 3); la auditoría las registra | Tras 027; puede repetirse |
 | `029_eliminado_logico_catalogos.sql` | Columnas `eliminado_en` y `eliminado_por` en `mesa`, `seccion`, `caracteristica_mesa`, `canal_pedido`, `categoria_metodo_pago` y `metodo_pago` (eliminado lógico, fase 4); la auditoría las registra | Tras 028; puede repetirse |
 | `030_horario_reservaciones_por_dia.sql` | Tabla `horario_reservacion_dia` (siete filas: abierto, primera y última hora de cada día); copia el horario general que había y **quita** de `configuracion_reservacion` las columnas `hora_apertura`, `hora_ultima_reservacion` y `dias_abiertos`; la auditoría registra la tabla nueva | Tras 029; **hacer respaldo antes**; puede repetirse |
+| `031_seguridad_acceso.sql` | Tablas `sesion_empleado` (sesiones del personal: cierre al salir y por inactividad) y `registro_acceso` (intentos de acceso, bloqueos y accesos no autorizados) | Tras 030; puede repetirse |
 | `027_eliminado_logico_usuarios.sql` | Columnas `eliminado_en` y `eliminado_por` en `usuario` (eliminado lógico, fase 2); protege al primer gerente también de ser eliminado; la auditoría las registra | Tras 026; puede repetirse |
 | `026_eliminado_logico_productos.sql` | Columnas `eliminado_en` y `eliminado_por` en `producto` y `categoria_menu` (eliminado lógico, fase 1); la auditoría las registra | Tras 025; puede repetirse |
 | `025_lada_telefono.sql` | Columna `lada` (código de país, «52» por defecto) en `cliente` y `perfil_usuario`; la auditoría de ambas la registra | Tras 024; puede repetirse |
@@ -458,6 +459,18 @@ mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT dia, abierto, hora_apertur
 ```
 
 La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**. Se edita en Gerente → Reservaciones.
+
+## Migración 031: seguridad de acceso
+
+Crea `sesion_empleado` y `registro_acceso`. Con ellas la API bloquea el acceso tras 5 intentos fallidos, cierra la sesión al salir y tras 15 minutos de inactividad, y guarda un registro de los accesos (ver [`auditoria-seguridad.md`](auditoria-seguridad.md)). Puede repetirse; solo agrega tablas.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-031.sql"
+Get-Content -Raw ".\database\migrations\031_seguridad_acceso.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**. Al reiniciar, **todas las sesiones abiertas se cierran** (los tokens anteriores no llevan sesión): el personal debe iniciar sesión otra vez.
 
 ## Base nueva o entorno de demostración
 

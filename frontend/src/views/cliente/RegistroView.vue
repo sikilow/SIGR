@@ -1,6 +1,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { errorContrasena } from '../../utils/campos'
 import { useRouter } from 'vue-router'
 import AccesoGoogle from '../../components/cliente/AccesoGoogle.vue'
 import { errorCorreo, errorNombrePersona, errorTelefono, vPermitir } from '../../utils/campos'
@@ -45,8 +46,9 @@ async function registrarCliente() {
     return
   }
 
-  if (contrasena.value.length < 8) {
-    error.value = 'La contraseña debe tener al menos 8 caracteres.'
+  const errContrasena = errorContrasena(contrasena.value)
+  if (errContrasena) {
+    error.value = errContrasena
     return
   }
 
@@ -159,7 +161,7 @@ async function registrarCliente() {
             id="contrasena"
             v-model="contrasena"
             type="password"
-            placeholder="Mínimo 8 caracteres"
+            placeholder="8 caracteres, letras y números"
             autocomplete="new-password"
             minlength="8"
             maxlength="72"

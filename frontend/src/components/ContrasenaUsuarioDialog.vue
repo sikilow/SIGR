@@ -2,7 +2,8 @@
 // Gerencia inicia el cambio; el usuario afectado confirma su contraseña anterior.
 import { computed, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
-import { CONTRASENA_MAX, CONTRASENA_MIN, type UsuarioAdmin } from '../types'
+import type { UsuarioAdmin } from '../types'
+import { CONTRASENA_AYUDA, errorContrasena } from '../utils/campos'
 import DialogoModal from './DialogoModal.vue'
 
 const props = defineProps<{ abierto: boolean; usuario: UsuarioAdmin | null; origenFoco?: HTMLElement | null }>()
@@ -37,9 +38,7 @@ watch(
 
 const errorNueva = computed(() => {
   if (!tocado.value) return ''
-  if (nueva.value.length < CONTRASENA_MIN) return `Mínimo ${CONTRASENA_MIN} caracteres.`
-  if (nueva.value.length > CONTRASENA_MAX) return `Máximo ${CONTRASENA_MAX} caracteres.`
-  return ''
+  return errorContrasena(nueva.value, props.usuario?.nombreUsuario)
 })
 const errorActual = computed(() => (tocado.value && !actual.value ? 'Escribe la contraseña anterior del usuario.' : ''))
 const errorRepetir = computed(() => (tocado.value && !errorNueva.value && repetir.value !== nueva.value ? 'Las contraseñas no coinciden.' : ''))
@@ -52,7 +51,7 @@ async function guardar() {
     document.getElementById('pw-actual')?.focus()
     return
   }
-  if (nueva.value.length < CONTRASENA_MIN || nueva.value.length > CONTRASENA_MAX) {
+  if (errorContrasena(nueva.value, u.nombreUsuario)) {
     document.getElementById('pw-nueva')?.focus()
     return
   }
@@ -94,6 +93,7 @@ async function guardar() {
           <button type="button" class="btn btn--secundario" :aria-pressed="ver" @click="ver = !ver">{{ ver ? 'Ocultar' : 'Mostrar' }}</button>
         </div>
         <p v-if="errorNueva" id="pw-nueva-e" class="texto-error form__error">{{ errorNueva }}</p>
+        <p v-else class="form__ayuda">{{ CONTRASENA_AYUDA }}</p>
       </div>
 
       <div class="campo">

@@ -63,11 +63,11 @@ export function crearServiciosApi(): Servicios {
   return {
     auth: {
       async iniciarSesion(credenciales) {
-        const r = await solicitar<{ token: string; usuario: UsuarioDto }>('POST', '/auth/login', {
+        const r = await solicitar<{ token: string; usuario: UsuarioDto; sesion?: { inactividad_minutos?: number } }>('POST', '/auth/login', {
           cuerpo: deCredenciales(credenciales),
         })
         guardarToken(r.token)
-        return aUsuario(r.usuario)
+        return { ...aUsuario(r.usuario), inactividadMinutos: Number(r.sesion?.inactividad_minutos ?? 0) }
       },
 
       async solicitarRecuperacion(usuarioOCorreo) {
@@ -90,16 +90,27 @@ export function crearServiciosApi(): Servicios {
       },
 
       async cerrarSesion() {
-        // El token es un JWT sin estado en el servidor: cerrar sesión es olvidarlo aquí.
-        limpiarToken()
+        // Se cierra la sesión en el servidor (el token deja de servir) y se olvida el token aquí. Si el servidor no
+        // responde, igual se sale: el token vence solo.
+        try {
+          if (leerToken()) await solicitar<{ ok: boolean }>('POST', '/auth/logout')
+        } catch {
+          // Sin conexión o sesión ya cerrada: no impide salir.
+        } finally {
+          limpiarToken()
+        }
+      },
+
+      async registrarActividad() {
+        await solicitar<{ ok: boolean }>('POST', '/auth/actividad')
       },
 
       async obtenerSesion() {
         // Sin token no hay nada que recuperar (y nos ahorramos una petición).
         if (!leerToken()) return null
         try {
-          const r = await solicitar<{ usuario: UsuarioDto }>('GET', '/auth/me')
-          return aUsuario(r.usuario)
+          const r = await solicitar<{ usuario: UsuarioDto; sesion?: { inactividad_minutos?: number } }>('GET', '/auth/me')
+          return { ...aUsuario(r.usuario), inactividadMinutos: Number(r.sesion?.inactividad_minutos ?? 0) }
         } catch (error) {
           // Sin sesión no es un fallo: simplemente no hay usuario.
           if (error instanceof ErrorServicio && error.codigo === 'no_autenticado') return null

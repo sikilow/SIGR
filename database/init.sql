@@ -410,6 +410,33 @@ CREATE TABLE factura (
   CONSTRAINT fk_factura_id_datos_fiscales FOREIGN KEY (id_datos_fiscales) REFERENCES datos_fiscales (id_datos_fiscales) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+-- Seguridad de acceso (migración 031): sesiones del personal y registro de accesos.
+CREATE TABLE sesion_empleado (
+  id_sesion CHAR(32) PRIMARY KEY,
+  id_usuario INT NOT NULL,
+  creada_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ultima_actividad DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  cerrada_en DATETIME NULL,
+  motivo_cierre VARCHAR(20) NULL,
+  ip VARCHAR(45) NULL,
+  INDEX idx_sesion_empleado_usuario (id_usuario, cerrada_en),
+  INDEX idx_sesion_empleado_actividad (ultima_actividad),
+  CONSTRAINT fk_sesion_empleado_usuario FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE registro_acceso (
+  id_registro BIGINT AUTO_INCREMENT PRIMARY KEY,
+  ambito ENUM('empleado', 'cliente') NOT NULL,
+  identificador VARCHAR(120) NOT NULL,
+  resultado ENUM('ok', 'fallido', 'bloqueado', 'no_autorizado', 'sesion_expirada', 'salida') NOT NULL,
+  detalle VARCHAR(200) NULL,
+  ip VARCHAR(45) NULL,
+  ruta VARCHAR(120) NULL,
+  creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_registro_acceso_identificador (ambito, identificador, creado_en),
+  INDEX idx_registro_acceso_fecha (creado_en)
+) ENGINE=InnoDB;
+
 CREATE TABLE idempotencia (
   clave VARCHAR(100) NOT NULL,
   id_usuario INT NOT NULL,

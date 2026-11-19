@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  errorContrasena,
   errorCorreo,
   errorNombrePersona,
   errorNota,
@@ -106,5 +107,26 @@ describe('textos fijos del sistema cumplen las reglas', () => {
     for (const s of ['Junto a la ventana', 'Terraza techada', 'Área infantil cerca', 'Silla para bebé', 'Zona tranquila', 'Vista al jardín']) {
       expect(REGEX_TEXTO_CATALOGO.test(s)).toBe(true)
     }
+  })
+})
+
+describe('errorContrasena (igual que el servidor)', () => {
+  it('acepta 8 o más caracteres con letras y números', () => {
+    expect(errorContrasena('Madalena2026')).toBe('')
+    expect(errorContrasena('cafe1234')).toBe('')
+  })
+
+  it('rechaza cortas, sin números o sin letras', () => {
+    expect(errorContrasena('Ab1cdef')).toMatch(/8 caracteres/)
+    expect(errorContrasena('sololetrasaqui')).toMatch(/letra y un número/)
+    expect(errorContrasena('1234567890123')).toMatch(/letra y un número/)
+    expect(errorContrasena('a1'.repeat(37))).toMatch(/72/)
+  })
+
+  it('rechaza las comunes y las que llevan el usuario', () => {
+    expect(errorContrasena('Password1')).toMatch(/común/)
+    expect(errorContrasena('1234')).not.toBe('')
+    expect(errorContrasena('Mesero2026x', 'mesero')).toMatch(/nombre de usuario/)
+    expect(errorContrasena('Cafe2026ok', 'ab')).toBe('')
   })
 })

@@ -1,5 +1,7 @@
 import cors from "cors";
 import express from "express";
+import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
 import { ORIGENES_PERMITIDOS, PUERTO } from "./utils/config";
 import { ErrorApi, manejarErrores } from "./utils/errores";
 import { authRouter } from "./routes/auth";
@@ -17,11 +19,54 @@ import { reservacionesRouter } from "./routes/reservaciones";
 import { reservacionesClientesRouter } from "./routes/reservacionesClientes";
 import { usuariosRouter } from "./routes/usuarios";
 import { iniciarProcesadorReservaciones } from "./services/notificacionesReservacion";
+import { avisarContrasenasDePrueba, revisarConfiguracionSegura } from "./services/avisosSeguridad";
+import { depurarSeguridadAcceso } from "./services/seguridadAcceso";
 import { filas, pool } from "./services/db";
 
 const app = express();
+
+// Detrás de un proxy (Nginx, etc.) la IP real viene en X-Forwarded-For: TRUST_PROXY=1 (cuántos proxies hay). Sin esto, los
+// límites y los bloqueos verían la IP del proxy y todos los usuarios contarían como una sola persona.
+if (process.env.TRUST_PROXY?.trim()) {
+  const valor = process.env.TRUST_PROXY.trim();
+  app.set("trust proxy", /^\d+$/.test(valor) ? Number(valor) : valor === "true" ? true : valor);
+}
+
+// Cabeceras de seguridad (nosniff, HSTS, sin X-Powered-By, etc.). El front vive en otro origen y lee la API por CORS.
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors({ origin: ORIGENES_PERMITIDOS }));
-app.use(express.json());
+app.use(express.json({ limit: "200kb" }));
+
+// ---------- Límites de peticiones por IP ----------
+// Todo el personal de un restaurante suele salir a internet con la misma IP, y cada pantalla consulta cada pocos segundos:
+// el límite general es amplio (solo frena inundaciones). Los de inicio de sesión sí son estrictos.
+const enteroEnv = (nombre: string, porOmision: number) => {
+  const n = Number(process.env[nombre]);
+  return Number.isInteger(n) && n > 0 ? n : porOmision;
+};
+const limite = (opciones: { ventanaMs: number; maximo: number; soloFallos?: boolean; mensaje: string }) =>
+  rateLimit({
+    windowMs: opciones.ventanaMs,
+    limit: opciones.maximo,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    skipSuccessfulRequests: opciones.soloFallos ?? false,
+    handler: (req, res) => {
+      const reinicio = (req as unknown as { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime;
+      const reintentar = Math.max(1, Math.ceil((reinicio ? reinicio.getTime() - Date.now() : opciones.ventanaMs) / 1000));
+      res.status(429).json({ codigo: "demasiadas_peticiones", mensaje: opciones.mensaje, reintentar_en_segundos: reintentar });
+    },
+  });
+
+app.use("/api", limite({ ventanaMs: 60_000, maximo: enteroEnv("RATE_LIMIT_POR_MINUTO", 1500), mensaje: "Demasiadas peticiones. Espera un momento." }));
+// Inicio de sesión y registro: solo cuentan las peticiones que fallan (4xx/5xx).
+const limiteAcceso = limite({ ventanaMs: 15 * 60_000, maximo: enteroEnv("RATE_LIMIT_ACCESO", 40), soloFallos: true, mensaje: "Demasiados intentos desde esta red. Espera unos minutos." });
+app.use("/api/auth/login", limiteAcceso);
+app.use("/api/auth-clientes", limiteAcceso);
+// Recuperar contraseña manda correos: cuenta todo.
+const limiteRecuperar = limite({ ventanaMs: 15 * 60_000, maximo: 15, mensaje: "Demasiadas solicitudes de recuperación. Espera unos minutos." });
+app.use("/api/auth/recuperar", limiteRecuperar);
+app.use("/api/auth/restablecer", limiteRecuperar);
 // Los datos de la API cambian entre peticiones (métodos de pago, mesas, pedidos…): ningún navegador ni proxy
 // (por ejemplo Nginx en el servidor compartido) debe servir una respuesta guardada.
 app.use("/api", (_req, res, next) => {
@@ -105,6 +150,8 @@ async function iniciarAPI(): Promise<void> {
     { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM metodo_pago LIMIT 0" },
     { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM categoria_metodo_pago LIMIT 0" },
     { archivo: "030_horario_reservaciones_por_dia.sql", consulta: "SELECT dia, abierto, hora_apertura, hora_ultima_reservacion FROM horario_reservacion_dia LIMIT 0" },
+    { archivo: "031_seguridad_acceso.sql", consulta: "SELECT id_sesion, ultima_actividad, cerrada_en FROM sesion_empleado LIMIT 0" },
+    { archivo: "031_seguridad_acceso.sql", consulta: "SELECT ambito, identificador, resultado, creado_en FROM registro_acceso LIMIT 0" },
   ];
   for (const { archivo, consulta } of migraciones) {
     try {
@@ -158,8 +205,13 @@ async function iniciarAPI(): Promise<void> {
     throw new Error("Falta aplicar database/migrations/017_categorias_metodos_pago.sql para actualizar la auditoría de métodos de pago.");
   }
 
+  revisarConfiguracionSegura();
   app.listen(PUERTO, () => console.log(`API en http://localhost:${PUERTO}`));
   iniciarProcesadorReservaciones();
+  // Una vez al arrancar y cada 24 h: borra registros de acceso y sesiones viejos.
+  void depurarSeguridadAcceso();
+  setInterval(() => void depurarSeguridadAcceso(), 24 * 60 * 60_000).unref();
+  void avisarContrasenasDePrueba();
 }
 
 void iniciarAPI().catch((error: unknown) => {

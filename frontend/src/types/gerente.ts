@@ -161,7 +161,7 @@ export const MESA_ZONA_MAX = 40
 /** Roles que el gerente puede asignar. */
 export const ROLES_ASIGNABLES: readonly Rol[] = ['gerente', 'mesero', 'cocinero', 'cajero', 'hostess']
 
-export const CONTRASENA_MIN = 6
+export const CONTRASENA_MIN = 8
 export const CONTRASENA_MAX = 72
 
 /** Cliente visto por el gerente (Gerente → Clientes). Tabla `cliente` + datos calculados por la API. */

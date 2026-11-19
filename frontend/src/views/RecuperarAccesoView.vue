@@ -4,6 +4,7 @@
 //   /restablecer?token=...   → desde ese enlace crea su contraseña nueva.
 // También llega aquí el enlace que manda el gerente desde Usuarios → Restablecer.
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { CONTRASENA_AYUDA, errorContrasena } from '../utils/campos'
 import { RouterLink, useRoute } from 'vue-router'
 import FranjaDemo from '../components/FranjaDemo.vue'
 import LogoMarca from '../components/LogoMarca.vue'
@@ -51,11 +52,7 @@ const nueva = ref('')
 const repetir = ref('')
 const verContrasena = ref(false)
 
-const errorNueva = computed(() => {
-  if (nueva.value.length < 6) return 'Usa al menos 6 caracteres.'
-  if (nueva.value.length > 72) return 'Usa como máximo 72 caracteres.'
-  return ''
-})
+const errorNueva = computed(() => errorContrasena(nueva.value, cuenta.value?.nombreUsuario))
 
 async function validarEnlace() {
   if (!token.value) {
@@ -221,7 +218,7 @@ watch(() => route.fullPath, iniciar)
                   autocomplete="new-password"
                   aria-describedby="restablecer-ayuda"
                 />
-                <p id="restablecer-ayuda" class="recuperar__ayuda">Mínimo 6 caracteres.</p>
+                <p id="restablecer-ayuda" class="recuperar__ayuda">{{ CONTRASENA_AYUDA }}</p>
               </div>
               <div class="campo">
                 <label for="restablecer-repetir">Repite la contraseña</label>

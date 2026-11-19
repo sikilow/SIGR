@@ -1,3 +1,4 @@
+import { errorContrasena } from '../../utils/campos'
 import type { Usuario } from '../../types'
 import { ErrorServicio } from '../errores'
 import type { AuthService } from '../interfaces'
@@ -64,6 +65,11 @@ export function crearAuthMock(): AuthService {
       })
     },
 
+    // La demo no cierra la sesión por inactividad.
+    registrarActividad() {
+      return Promise.resolve()
+    },
+
     obtenerSesion() {
       return conRetraso(() => usuarioActual())
     },
@@ -89,7 +95,8 @@ export function crearAuthMock(): AuthService {
 
     restablecerContrasena(token, contrasena) {
       return conRetraso(() => {
-        if (contrasena.length < 6) throw new ErrorServicio('estado_invalido', 'contrasena: mínimo 6 caracteres', 422)
+        const errContrasena = errorContrasena(contrasena)
+        if (errContrasena) throw new ErrorServicio('estado_invalido', errContrasena, 422)
         usarEnlaceMock(token, contrasena)
       })
     },

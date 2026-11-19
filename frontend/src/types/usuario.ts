@@ -5,6 +5,8 @@ export const ROLES = ['gerente', 'mesero', 'cocinero', 'cajero', 'hostess'] as c
 export type Rol = (typeof ROLES)[number]
 
 export interface Usuario {
+  /** Minutos sin actividad tras los que la API cierra la sesión (0 o ausente = sin límite). Los manda la API al iniciar sesión. */
+  inactividadMinutos?: number
   /** usuario.id_usuario */
   idUsuario: number
   /** usuario.id_rol */

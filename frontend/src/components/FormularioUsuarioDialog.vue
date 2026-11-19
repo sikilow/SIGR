@@ -6,8 +6,6 @@ import { computed, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import { normalizarTelefono } from '../utils/reservaciones'
 import {
-  CONTRASENA_MAX,
-  CONTRASENA_MIN,
   ETIQUETA_ROL,
   ROLES_ASIGNABLES,
   type CambioUsuario,
@@ -15,7 +13,7 @@ import {
   type UsuarioAdmin,
 } from '../types'
 import DialogoModal from './DialogoModal.vue'
-import { errorCorreo, errorNombrePersona, errorTelefono, REGEX_USUARIO, vPermitir } from '../utils/campos'
+import { CONTRASENA_AYUDA, errorContrasena, errorCorreo, errorNombrePersona, errorTelefono, REGEX_USUARIO, vPermitir } from '../utils/campos'
 import { LADA_PREDETERMINADA, rangoTelefono, textoDigitos } from '../utils/lada'
 import SelectorLada from './SelectorLada.vue'
 
@@ -76,8 +74,8 @@ const errores = computed(() => {
   const errTelefono = errorTelefono(telefono.value, false, lada.value)
   if (errTelefono) e.telefono = errTelefono
   if (!editando.value) {
-    if (contrasena.value.length < CONTRASENA_MIN) e.contrasena = `Mínimo ${CONTRASENA_MIN} caracteres.`
-    else if (contrasena.value.length > CONTRASENA_MAX) e.contrasena = `Máximo ${CONTRASENA_MAX} caracteres.`
+    const errContrasena = errorContrasena(contrasena.value, u)
+    if (errContrasena) e.contrasena = errContrasena
   }
   return e
 })
@@ -204,7 +202,7 @@ async function guardar() {
             {{ verContrasena ? 'Ocultar' : 'Mostrar' }}
           </button>
         </div>
-        <p id="usr-contrasena-ayuda" class="form__ayuda">De {{ CONTRASENA_MIN }} a {{ CONTRASENA_MAX }} caracteres. La persona podrá pedir que se la cambien después.</p>
+        <p id="usr-contrasena-ayuda" class="form__ayuda">{{ CONTRASENA_AYUDA }} Sin el nombre de usuario ni contraseñas comunes. La persona podrá pedir que se la cambien después.</p>
         <p v-if="campoErr('contrasena')" id="usr-contrasena-e" class="texto-error form__error">{{ campoErr('contrasena') }}</p>
       </div>
 

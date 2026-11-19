@@ -201,3 +201,28 @@ export function errorCorreo(texto: string, obligatorio = true): string {
 export function bloquearTeclasNoNumericas(e: KeyboardEvent): void {
   if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault()
 }
+
+// ---------- Contraseñas ----------
+// La MISMA regla que aplica el servidor (`backend/src/utils/contrasenas.ts`): de 8 a 72 caracteres, con al menos una letra y
+// un número, que no sea de las más comunes y que no contenga el nombre de usuario.
+
+export const CONTRASENA_AYUDA = 'Mínimo 8 caracteres, con al menos una letra y un número.'
+
+const CONTRASENAS_COMUNES = new Set([
+  '12345678', '123456789', '1234567890', '11111111', '00000000', '87654321', '12341234', '1234abcd', 'abcd1234', 'a1234567',
+  'password', 'password1', 'password123', 'passw0rd', 'contrasena', 'contrasena1', 'contraseña1', 'contrasena123',
+  'qwerty123', 'qwertyui', 'admin123', 'admin1234', 'administrador1', 'bienvenido1', 'restaurante1', 'madalena123',
+  'iloveyou1', 'welcome1', 'welcome123', 'letmein123', 'sigr1234', 'sigr2026',
+])
+
+/** Motivo por el que la contraseña no sirve, o `''` si cumple. `usuario`: su nombre de usuario (si ya se conoce). */
+export function errorContrasena(valor: string, usuario?: string): string {
+  if (valor.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
+  if (valor.length > 72) return 'La contraseña no puede pasar de 72 caracteres.'
+  if (!/\p{L}/u.test(valor) || !/\d/.test(valor)) return 'La contraseña debe tener al menos una letra y un número.'
+  const plano = valor.toLowerCase().replace(/\s/g, '')
+  if (CONTRASENAS_COMUNES.has(plano)) return 'Esa contraseña es muy común. Elige otra más difícil de adivinar.'
+  const u = usuario?.trim().toLowerCase()
+  if (u && u.length >= 3 && plano.includes(u)) return 'La contraseña no puede contener el nombre de usuario.'
+  return ''
+}

@@ -31,7 +31,7 @@ interface CuerpoError {
   error?: string
   /** En errores `producto_agotado`, los productos agotados (`id_producto`, `disponible`). */
   productos?: DisponibilidadDto[]
-  /** En un 401 de sesión: `cuenta_inactiva` = el usuario fue desactivado o eliminado. */
+  /** En un 401 de sesión: `cuenta_inactiva` (desactivado o eliminado), `inactividad`, `sesion_cerrada` o `sesion_antigua`. */
   motivo?: string
 }
 
@@ -46,12 +46,16 @@ const CODIGOS_CONOCIDOS: readonly CodigoError[] = [
   'mesa_no_disponible',
   'enlace_invalido',
   'correo_no_enviado',
+  'cuenta_bloqueada',
+  'demasiadas_peticiones',
+  'sesion_expirada',
 ]
 
 function codigoPorEstadoHttp(estado: number): CodigoError {
   if (estado === 401) return 'no_autenticado'
   if (estado === 403) return 'sin_permiso'
   if (estado === 404) return 'no_encontrado'
+  if (estado === 429) return 'demasiadas_peticiones'
   if (estado === 409 || estado === 422) return 'estado_invalido'
   return 'desconocido'
 }
@@ -104,10 +108,15 @@ export async function solicitar<T>(metodo: Metodo, ruta: string, opciones: Opcio
     // Token vencido o inválido en plena sesión: se limpia y se manda al login.
     // (En login y /auth/me un 401 es normal y lo maneja quien llama.)
     const esRutaDeSesion =
-      ruta === '/auth/login' || ruta === '/auth/me' || ruta === '/auth/recuperar' || ruta.startsWith('/auth/restablecer')
+      ruta === '/auth/login' ||
+      ruta === '/auth/me' ||
+      ruta === '/auth/logout' ||
+      ruta === '/auth/recuperar' ||
+      ruta.startsWith('/auth/restablecer')
     if (respuesta.status === 401 && !esRutaDeSesion) {
       limpiarToken()
-      const motivo = (json as CuerpoError | null)?.motivo === 'cuenta_inactiva' ? 'desactivada' : 'expirada'
+      const motivoApi = (json as CuerpoError | null)?.motivo
+      const motivo = motivoApi === 'cuenta_inactiva' ? 'desactivada' : motivoApi === 'inactividad' ? 'inactividad' : 'expirada'
       if (window.location.pathname !== '/login') window.location.assign(`/login?motivo=${motivo}`)
     }
     throw aErrorServicio(respuesta.status, json as CuerpoError | null)

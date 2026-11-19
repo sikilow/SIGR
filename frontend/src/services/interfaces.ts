@@ -44,8 +44,10 @@ import type { HostessService } from './hostess/interfaces'
 export interface AuthService {
   /** POST /auth/login */
   iniciarSesion(credenciales: Credenciales): Promise<Usuario>
-  /** POST /auth/logout */
+  /** POST /auth/logout: cierra la sesión también en el servidor (el token deja de servir). */
   cerrarSesion(): Promise<void>
+  /** POST /auth/actividad: avisa que la persona sigue ahí (la API cierra la sesión tras un rato sin actividad). */
+  registrarActividad(): Promise<void>
   /** GET /auth/me. Devuelve `null` si no hay sesión activa. */
   obtenerSesion(): Promise<Usuario | null>
   /**

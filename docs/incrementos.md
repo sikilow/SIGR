@@ -40,11 +40,11 @@ este documento ya está hecho. Al terminar un punto, se marca aquí y en su fila
 
 | # | Qué falta | Requisito | Dónde |
 |---|---|---|---|
-| A1 | Bloquear la cuenta 5 minutos (o el tiempo que se acuerde) tras 5 intentos fallidos de inicio de sesión | RNF-009, contrato M5 | `backend/src/controllers/auth.ts` |
-| A2 | Cerrar la sesión tras 15 minutos sin actividad (hoy el token dura 8 h fijas) | RNF-011, contrato M5 | backend (token) y frontend (aviso de inactividad) |
-| A3 | Cerrar sesión que invalide el token en el servidor (hoy solo se borra en el navegador) | RNF-012 | nueva ruta `POST /api/auth/logout` |
-| A4 | Registrar intentos de acceso fallidos o no autorizados | RNF-017 | bitácora |
-| A5 | Límite de peticiones (fuerza bruta) y cabeceras de seguridad; política de contraseñas más fuerte | P-04, P-14 | `backend/src/index.ts` |
+| ~~A1~~ | ✅ Hecho: bloqueo de 5 minutos tras 5 intentos fallidos (personal y clientes), aunque el usuario no exista (migración 031; ver [`auditoria-seguridad.md`](auditoria-seguridad.md)) | RNF-009 | `services/seguridadAcceso.ts` |
+| ~~A2~~ | ✅ Hecho: la sesión del personal se cierra tras 15 minutos sin actividad (cocina: 480) y la pantalla avisa un minuto antes | RNF-011 | `utils/auth.ts`, `components/GuardaInactividad.vue` |
+| ~~A3~~ | ✅ Hecho: «Salir» cierra la sesión en el servidor (`POST /api/auth/logout`) y el token deja de servir | RNF-012 | `controllers/auth.ts` |
+| ~~A4~~ | ✅ Hecho: tabla `registro_acceso` con intentos correctos, fallidos, bloqueados, salidas y accesos no autorizados, con IP | RNF-017 | `services/seguridadAcceso.ts` |
+| ~~A5~~ | ✅ Hecho: límite de peticiones por IP, cabeceras de seguridad (`helmet`), política de contraseñas (8+, letras y números, sin comunes ni el usuario) y avisos de arranque (`JWT_SECRET`, contraseñas `1234`) | P-04, P-14 | `index.ts`, `utils/contrasenas.ts` |
 | ~~A6~~ | ✅ Hecho: dar de baja (eliminado lógico) a un cliente y restaurarlo, desde Gerente → Clientes (migración 028; ver [`eliminado-logico.md`](eliminado-logico.md)) | RF-CLI-003 | `controllers/clientesAdmin.ts` |
 | A7 | Que el cajero registre y actualice clientes (hoy solo hostess y gerente) | RF-CLI-001/002 | rutas de clientes y pantalla de Caja |
 | A8 | Teléfono de cliente único en la base (hoy solo lo revisa la API) | Regla de dominio 22 | migración |

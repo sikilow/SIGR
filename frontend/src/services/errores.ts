@@ -14,6 +14,9 @@ export type CodigoError =
   | 'mesa_no_disponible'
   | 'enlace_invalido'
   | 'correo_no_enviado'
+  | 'cuenta_bloqueada'
+  | 'demasiadas_peticiones'
+  | 'sesion_expirada'
   | 'red'
   | 'desconocido'
 

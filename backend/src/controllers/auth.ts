@@ -9,6 +9,16 @@ import { ErrorApi } from "../utils/errores";
 import { type Rol } from "../utils/auth";
 import { conActorAuditoria } from "../services/contextoAuditoria";
 import { enviarEnlaceRestablecer, huellaToken, origenApp } from "../services/restablecerContrasena";
+import {
+  cerrarSesionEmpleado,
+  crearSesionEmpleado,
+  exigirAccesoNoBloqueado,
+  ipDe,
+  minutosInactividad,
+  registrarAcceso,
+  registrarIntentoFallido,
+} from "../services/seguridadAcceso";
+import { Contrasena } from "../utils/contrasenas";
 
 // El front manda { nombre_usuario, contrasena } (credenciales.nombre_usuario). La contraseña se compara con
 // credenciales.password_hash; también se acepta `password` para probar con Invoke-RestMethod.
@@ -37,9 +47,18 @@ function aPerfil(f: Record<string, unknown>) {
   };
 }
 
-/** POST /api/auth/login  →  { token, usuario: { id_usuario, id_rol, nombre, correo, activo, rol } } */
+/** Hash de relleno: si el usuario no existe se compara contra él, para que tardar lo mismo no delate qué usuarios hay. */
+const HASH_RELLENO = bcrypt.hashSync("relleno-sin-usuario", 10);
+
+/**
+ * POST /api/auth/login  →  { token, usuario: {...}, sesion: { inactividad_minutos } }
+ * Tras 5 intentos fallidos seguidos el acceso se bloquea unos minutos (`429 cuenta_bloqueada`), exista o no el usuario.
+ * Cada intento queda en `registro_acceso`. El token lleva el id de su sesión en el servidor (`sid`).
+ */
 export const iniciarSesion = async (req: Request, res: Response) => {
   const { usuario, contrasena } = validar(Login, req.body ?? {});
+  const ip = ipDe(req);
+  await exigirAccesoNoBloqueado("empleado", usuario, ip);
 
   const [fila] = await filas(
     pool,
@@ -51,9 +70,12 @@ export const iniciarSesion = async (req: Request, res: Response) => {
     [usuario],
   );
 
-  if (!fila || !(await bcrypt.compare(contrasena, fila.password_hash as string))) {
+  const correcta = await bcrypt.compare(contrasena, fila ? (fila.password_hash as string) : HASH_RELLENO);
+  if (!fila || !correcta) {
+    await registrarIntentoFallido("empleado", usuario, ip, fila ? "contraseña incorrecta" : "usuario desconocido");
     throw new ErrorApi(401, "credenciales_invalidas", "Usuario o contraseña incorrectos.");
   }
+  await registrarAcceso({ ambito: "empleado", identificador: usuario, resultado: "ok", ip });
 
   await conActorAuditoria(fila.id_usuario as number, () =>
     ejecutar(pool, "UPDATE credenciales SET ultimo_acceso = NOW() WHERE id_usuario = ?", [fila.id_usuario]),
@@ -61,9 +83,25 @@ export const iniciarSesion = async (req: Request, res: Response) => {
 
   // En la BD el rol es "Mesero"; dentro del token (uso interno de la API) se guarda en minúsculas.
   const rol = (fila.rol as string).toLowerCase() as Rol;
-  const token = jwt.sign({ id: fila.id_usuario as number, rol }, JWT_SECRET, { expiresIn: "8h" });
+  const sid = await crearSesionEmpleado(fila.id_usuario as number, ip);
+  const token = jwt.sign({ id: fila.id_usuario as number, rol, sid }, JWT_SECRET, { expiresIn: "8h" });
 
-  res.json({ token, usuario: aPerfil(fila) });
+  res.json({ token, usuario: aPerfil(fila), sesion: { inactividad_minutos: minutosInactividad(rol) } });
+};
+
+/** POST /api/auth/logout  →  { ok: true }. Cierra la sesión en el servidor: el token deja de servir. */
+export const cerrarSesion = async (req: Request, res: Response) => {
+  if (req.sesionId) await cerrarSesionEmpleado(req.sesionId, "salio");
+  await registrarAcceso({ ambito: "empleado", identificador: `id:${req.usuario?.id ?? 0}`, resultado: "salida", ip: ipDe(req) });
+  res.json({ ok: true });
+};
+
+/**
+ * POST /api/auth/actividad  →  { ok: true, inactividad_minutos }. La pantalla lo manda mientras la persona la toca; al ser
+ * una petición que no es de solo lectura, `requiereAuth` ya renovó la actividad de la sesión.
+ */
+export const registrarActividad = async (req: Request, res: Response) => {
+  res.json({ ok: true, inactividad_minutos: minutosInactividad(req.usuario!.rol) });
 };
 
 /** GET /api/auth/me  →  { usuario }. El front lo usa para recuperar la sesión al recargar. */
@@ -76,12 +114,11 @@ export const obtenerPerfil = async (req: Request, res: Response) => {
     [req.usuario?.id],
   );
   if (!fila) throw new ErrorApi(401, "no_autenticado", "El usuario ya no está activo.");
-  res.json({ usuario: aPerfil(fila) });
+  res.json({ usuario: aPerfil(fila), sesion: { inactividad_minutos: minutosInactividad(String(fila.rol).toLowerCase() as Rol) } });
 };
 
 // ---------- Recuperación de contraseña (enlace de un solo uso por correo) ----------
 
-const Contrasena = z.string().min(6, "mínimo 6 caracteres").max(72, "máximo 72 caracteres");
 const Recuperar = z.object({ usuario_o_correo: z.string().trim().min(1, "escribe tu usuario o tu correo").max(120) });
 const Token = z.string().trim().min(20, "enlace inválido").max(100, "enlace inválido");
 const Restablecer = z.object({ token: Token, contrasena: Contrasena });

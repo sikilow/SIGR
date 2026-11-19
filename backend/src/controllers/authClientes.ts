@@ -9,9 +9,14 @@ import { googleHabilitado, verificarTokenGoogle } from "../services/google";
 import { GOOGLE_CLIENT_ID } from "../utils/config";
 import { validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
+import { exigirAccesoNoBloqueado, ipDe, registrarAcceso, registrarIntentoFallido } from "../services/seguridadAcceso";
+import { Contrasena } from "../utils/contrasenas";
 import { correo as correoValido, lada as ladaValida, LADA_MEXICO, limpiarNombrePersona, nombrePersona, refinarTelefonoConLada, telefono as telefonoValido } from "../utils/campos";
 
 const MENSAJE_CUENTA_ELIMINADA = "Esta cuenta ya no está activa. Si crees que es un error, consulta con el restaurante.";
+
+/** Hash de relleno: si el correo no existe se compara contra él, para que tardar lo mismo no delate qué correos hay. */
+const HASH_RELLENO = bcrypt.hashSync("relleno-sin-cuenta", 10);
 
 // Validaciones para registrar clientes
 // (mismo formato de telefono que exige la hostess)
@@ -20,7 +25,7 @@ const RegistroCliente = z.object({
   correo: correoValido,
   telefono: telefonoValido,
   lada: ladaValida.optional(),
-  contrasena: z.string().min(8).max(72),
+  contrasena: Contrasena,
 }).superRefine(refinarTelefonoConLada);
 
 // Validaciones de inicio de sesion
@@ -162,6 +167,8 @@ export const iniciarSesionCliente = async (
   res: Response
 ) => {
   const datos = validar(LoginCliente, req.body);
+  const ip = ipDe(req);
+  await exigirAccesoNoBloqueado("cliente", datos.correo, ip);
 
   const [cliente] = await filas(
     pool,
@@ -180,6 +187,7 @@ export const iniciarSesionCliente = async (
 
   // Una cuenta creada con Google no tiene contraseña: se le indica el camino correcto.
   if (cliente && !cliente.password_hash) {
+    await registrarIntentoFallido("cliente", datos.correo, ip, "cuenta de Google sin contraseña");
     throw new ErrorApi(
       401,
       "credenciales_invalidas",
@@ -187,13 +195,9 @@ export const iniciarSesionCliente = async (
     );
   }
 
-  if (
-    !cliente ||
-    !(await bcrypt.compare(
-      datos.contrasena,
-      cliente.password_hash as string
-    ))
-  ) {
+  const correcta = await bcrypt.compare(datos.contrasena, cliente ? (cliente.password_hash as string) : HASH_RELLENO);
+  if (!cliente || !correcta) {
+    await registrarIntentoFallido("cliente", datos.correo, ip, cliente ? "contraseña incorrecta" : "correo desconocido");
     throw new ErrorApi(
       401,
       "credenciales_invalidas",
@@ -204,6 +208,7 @@ export const iniciarSesionCliente = async (
   // La contraseña ya es correcta: ahora sí se avisa que la cuenta fue dada de baja (así no se revela qué correos existen).
   if (cliente.eliminado_en) throw new ErrorApi(401, "no_autenticado", MENSAJE_CUENTA_ELIMINADA);
 
+  await registrarAcceso({ ambito: "cliente", identificador: datos.correo, resultado: "ok", ip });
   res.json(sesionCliente(cliente));
 };
 

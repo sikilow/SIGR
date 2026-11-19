@@ -118,9 +118,14 @@ El frontend no consume `id_estado` ni `detalle[].id_detalle` (la API los envía 
 // petición
 { "nombre_usuario": "mesero", "contrasena": "1234" }
 // 200
-{ "token": "<JWT>", "usuario": { "id_usuario": 1, "id_rol": 2, "nombre": "Ana Torres", "correo": "ana@madalena.mx", "activo": true, "rol": "Mesero" } }
+{ "token": "<JWT>", "usuario": { "id_usuario": 1, "id_rol": 2, "nombre": "Ana Torres", "correo": "ana@madalena.mx", "activo": true, "rol": "Mesero" },
+  "sesion": { "inactividad_minutos": 15 } }
 ```
 
+- `sesion.inactividad_minutos`: minutos sin actividad tras los que la API cierra la sesión (0 = sin límite; Cocina: 480). El token
+  lleva el id de su sesión en el servidor (`sid`, migración 031).
+- **Bloqueo:** al 5.º intento fallido el acceso se bloquea 5 minutos: `429 { "codigo": "cuenta_bloqueada", "mensaje": "…", "reintentar_en_segundos": 300 }`.
+  Vale aunque el usuario no exista. Muchos fallos desde una IP: `429 { "codigo": "demasiadas_peticiones", … }`.
 - `nombre_usuario` = `credenciales.nombre_usuario`. `contrasena` es el texto que escribe la persona; la API lo compara con
   `credenciales.password_hash` (el frontend nunca lo guarda).
 - `rol` = `rol.nombre` (JOIN por `usuario.id_rol`): **calculado por la API, no es columna**. Un rol que no sea uno de los cinco
@@ -130,7 +135,15 @@ Error 401: `{ "codigo": "credenciales_invalidas", "mensaje": "Usuario o contrase
 
 ### POST /auth/logout
 
-Sin cuerpo. Responde 204.
+Sin cuerpo. Responde `200 { "ok": true }` y **cierra la sesión en el servidor**: el mismo token deja de servir.
+
+### POST /auth/actividad
+
+Sin cuerpo. Responde `200 { "ok": true, "inactividad_minutos": 15 }`. La pantalla lo manda mientras la persona la toca (como
+mucho cada 30 s) para que la sesión no se cierre por inactividad. Las consultas automáticas (GET) **no** cuentan como actividad.
+
+Un `401` de sesión trae `codigo` y `motivo`: `sesion_expirada` con `inactividad`, `sesion_cerrada` o `sesion_antigua`
+(token de antes de la migración 031), o `no_autenticado` con `cuenta_inactiva` (usuario desactivado o eliminado).
 
 ### GET /auth/me
 

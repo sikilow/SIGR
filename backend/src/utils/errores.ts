@@ -14,6 +14,9 @@ export type CodigoError =
   | "producto_agotado"
   | "mesa_no_disponible"
   | "enlace_invalido"
+  | "cuenta_bloqueada"
+  | "demasiadas_peticiones"
+  | "sesion_expirada"
   | "correo_no_enviado"
   | "desconocido";
 

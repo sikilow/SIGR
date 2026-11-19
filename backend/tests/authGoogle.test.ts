@@ -145,7 +145,11 @@ describe("acceso de clientes con Google", () => {
   });
 
   it("el inicio de sesión con contraseña explica que la cuenta se creó con Google", async () => {
-    filasMock.mockResolvedValueOnce([{ id_cliente: 7, nombre: "Ana", correo: "ana@gmail.com", password_hash: null }]);
+    filasMock.mockImplementation(async (_ex: unknown, sql: string) => {
+      if (sql.includes("registro_acceso") && sql.includes("faltan")) return [{ faltan: null }]; // sin bloqueo
+      if (sql.includes("registro_acceso")) return [{ n: 0 }]; // intentos fallidos recientes
+      return [{ id_cliente: 7, nombre: "Ana", correo: "ana@gmail.com", password_hash: null }];
+    });
     const e = await errorDe(iniciarSesionCliente(req({ correo: "ana@gmail.com", contrasena: "cualquiera1" }), res().r));
     expect(e.estado).toBe(401);
     expect(e.message).toContain("Google");

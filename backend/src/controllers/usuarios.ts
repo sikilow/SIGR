@@ -7,6 +7,7 @@ import { ErrorApi } from "../utils/errores";
 import { correo, errorTelefonoLada, lada as ladaValida, LADA_MEXICO, nombrePersona, refinarTelefonoConLada, REGEX_USUARIO } from "../utils/campos";
 import { enmascararCorreo } from "../services/correo";
 import { enviarEnlaceRestablecer, MAXIMO_ENLACES_POR_HORA, origenApp } from "../services/restablecerContrasena";
+import { Contrasena, errorContrasena } from "../utils/contrasenas";
 
 // Todo este módulo es solo del gerente (se valida aquí, en el servidor, no en el front).
 
@@ -24,8 +25,6 @@ const NombreUsuario = z
   .min(3, "mínimo 3 caracteres")
   .max(60, "máximo 60 caracteres")
   .regex(REGEX_USUARIO, "solo letras, números, punto, guion y guion bajo");
-// bcrypt solo usa los primeros 72 bytes: se limita para que no haya contraseñas "recortadas" sin avisar.
-const Contrasena = z.string().min(6, "mínimo 6 caracteres").max(72, "máximo 72 caracteres");
 
 /** Claves = columnas: usuario.*, credenciales.nombre_usuario/ultimo_acceso, perfil_usuario.telefono. `rol` es calculado (rol.nombre). */
 export interface UsuarioAdminDto {
@@ -150,7 +149,11 @@ const Crear = z.object({
   rol: Rol,
   telefono: Telefono.optional(),
   lada: ladaValida.optional(),
-}).superRefine(refinarTelefonoConLada);
+}).superRefine(refinarTelefonoConLada).superRefine((d, ctx) => {
+  // La contraseña no puede llevar el nombre de usuario.
+  const motivo = errorContrasena(d.contrasena, d.nombre_usuario);
+  if (motivo) ctx.addIssue({ code: "custom", path: ["contrasena"], message: motivo });
+});
 
 /** POST /api/usuarios  →  201 con el usuario creado. La contraseña se guarda con bcrypt. */
 export const crearUsuario = async (req: Request, res: Response) => {
@@ -303,8 +306,10 @@ export const cambiarContrasena = async (req: Request, res: Response) => {
   const { contrasena, contrasena_actual } = validar(CambiarContrasena, req.body);
   const hash = await bcrypt.hash(contrasena, 10);
   await transaccion(async (cx) => {
-    const [fila] = await filas(cx, "SELECT password_hash FROM credenciales WHERE id_usuario = ? FOR UPDATE", [id]);
+    const [fila] = await filas(cx, "SELECT password_hash, nombre_usuario FROM credenciales WHERE id_usuario = ? FOR UPDATE", [id]);
     if (!fila) throw new ErrorApi(404, "no_encontrado", "El usuario no existe.");
+    const motivo = errorContrasena(contrasena, String(fila.nombre_usuario));
+    if (motivo) throw new ErrorApi(422, "estado_invalido", motivo);
     if (!(await bcrypt.compare(contrasena_actual, fila.password_hash as string))) {
       throw new ErrorApi(401, "credenciales_invalidas", "La contraseña anterior del usuario es incorrecta.");
     }
