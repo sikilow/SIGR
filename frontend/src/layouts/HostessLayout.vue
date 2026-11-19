@@ -102,6 +102,13 @@ async function salir() {
         </svg>
         <span>Espera</span>
       </RouterLink>
+      <RouterLink class="nav__enlace" :to="{ name: 'hostess-para-llevar' }">
+        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 8h12l-1 12H7L6 8Z" />
+          <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+        </svg>
+        <span>Para llevar</span>
+      </RouterLink>
     </nav>
   </div>
 </template>
@@ -190,7 +197,9 @@ async function salir() {
 
 .nav {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Una columna por pestaña, sea cual sea su cantidad */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }
@@ -287,6 +296,26 @@ async function salir() {
   position: relative;
 }
 
+/* Con cuatro pestañas en un teléfono: píldora y texto más compactos para que «Reservaciones» quepa en su columna */
+@media (max-width: 30em) {
+  .nav {
+    padding-inline: 0;
+  }
+
+  .nav .nav__enlace {
+    min-width: 0;
+    font-size: 0.75rem;
+  }
+
+  .nav .nav__enlace svg {
+    padding: 4px 12px;
+  }
+
+  .nav__insignia {
+    right: calc(50% - 2rem);
+  }
+}
+
 /* Cantidad de reservaciones por confirmar: número + color (no solo color) */
 .nav__insignia {
   position: absolute;
@@ -303,5 +332,35 @@ async function salir() {
   font-size: var(--texto-sm);
   font-weight: 700;
   line-height: 1;
+}
+
+/* Teléfonos muy angostos (320 px): la barra superior no se parte en dos líneas */
+@media (max-width: 22em) {
+  .barra {
+    flex-wrap: nowrap;
+    gap: var(--espacio-2);
+    padding-inline: var(--espacio-2);
+  }
+
+  .barra__marca {
+    min-width: 0;
+    gap: var(--espacio-2);
+  }
+
+  .barra__restaurante {
+    overflow: hidden;
+    font-size: 1.05rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .barra__usuario {
+    flex: none;
+    gap: var(--espacio-2);
+  }
+
+  .barra .btn {
+    padding-inline: var(--espacio-3);
+  }
 }
 </style>

@@ -3,13 +3,21 @@ import mysql from "mysql2/promise";
 import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { actorAuditoriaActual } from "./contextoAuditoria";
 
+/** Tamaño del pool: DB_POOL_LIMIT (4 a 200); por omisión 30. */
+export const LIMITE_POOL = (() => {
+  const n = Number(process.env.DB_POOL_LIMIT);
+  return Number.isInteger(n) && n >= 4 && n <= 200 ? n : 30;
+})();
+
 export const pool = mysql.createPool({
   host: process.env.DB_HOST ?? "localhost",
   user: process.env.DB_USER ?? "root",
   password: process.env.DB_PASSWORD ?? "",
   database: process.env.DB_NAME ?? "SIGR",
   waitForConnections: true,
-  connectionLimit: 10,
+  // Conexiones simultáneas con MySQL (DB_POOL_LIMIT). Una petición con Idempotency-Key usa DOS a la vez (una para su
+  // candado y otra para su transacción); ver LIMITE_IDEMPOTENTES en idempotencia.ts.
+  connectionLimit: LIMITE_POOL,
   // Sin esto, mysql2 devuelve los DECIMAL (precios, totales) como texto ("95.00") y el front mostraría NaN.
   decimalNumbers: true,
   // Los DATETIME salen como texto "2026-10-15 16:34:00" (sin zona horaria), tal como los guarda MySQL.
@@ -51,8 +59,30 @@ export async function ejecutar(ex: Ejecutor, sql: string, params: unknown[] = []
   });
 }
 
-/** Corre `fn` dentro de una transacción: si lanza un error, se deshace todo (ROLLBACK). */
+/** MySQL canceló la transacción por un interbloqueo (error 1213): ya se deshizo sola y es seguro repetirla. */
+function esInterbloqueo(error: unknown): boolean {
+  return (error as { errno?: number } | null)?.errno === 1213;
+}
+
+const REINTENTOS_INTERBLOQUEO = 2;
+
+/**
+ * Corre `fn` dentro de una transacción: si lanza un error, se deshace todo (ROLLBACK). Si MySQL cancela la transacción
+ * por un interbloqueo con otra (dos personas tocando lo mismo a la vez), se repite hasta 2 veces; por eso `fn` solo debe
+ * tocar la base de datos (sin enviar correos ni otros efectos que no se deshagan).
+ */
 export async function transaccion<T>(fn: (cx: PoolConnection) => Promise<T>): Promise<T> {
+  for (let intento = 0; ; intento++) {
+    try {
+      return await transaccionUnica(fn);
+    } catch (error) {
+      if (!esInterbloqueo(error) || intento >= REINTENTOS_INTERBLOQUEO) throw error;
+      await new Promise((r) => setTimeout(r, 25 * (intento + 1) + Math.random() * 25));
+    }
+  }
+}
+
+async function transaccionUnica<T>(fn: (cx: PoolConnection) => Promise<T>): Promise<T> {
   const cx = await pool.getConnection();
   let actorRestablecido = false;
   try {

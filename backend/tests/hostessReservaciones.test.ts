@@ -35,6 +35,7 @@ vi.mock("../src/services/notificacionesReservacion", async (original) => ({
 // La comprobación de mesas disponibles tiene sus propias pruebas (disponibilidadReservacion.test.ts).
 vi.mock("../src/services/disponibilidadReservacion", () => ({
   exigirMesaDisponible: vi.fn(async () => {}),
+  bloquearDisponibilidadReservaciones: vi.fn(async () => {}),
 }));
 
 import { crearReservacion, editarReservacion } from "../src/controllers/hostess";

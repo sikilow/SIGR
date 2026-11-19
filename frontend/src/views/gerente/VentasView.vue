@@ -641,11 +641,14 @@ async function descargar() {
 .kpi__valor {
   font-size: clamp(1.4rem, 1.1rem + 1vw, 1.9rem);
   line-height: 1.15;
-  white-space: nowrap;
+  /* El importe no se parte (no tiene espacios); si «MXN» no cabe al lado, baja a la línea siguiente */
+  white-space: normal;
 }
 
 .kpi__moneda {
+  display: inline-block;
   margin-left: 0.3em;
+  white-space: nowrap;
   color: var(--color-muted);
   font-size: var(--texto-sm);
   font-weight: 650;

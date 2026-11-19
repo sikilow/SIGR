@@ -473,11 +473,11 @@ calcula como `producto.disponible AND (controla_existencia = 0 OR existencia > 0
 
 ## Pedidos para llevar (mesas virtuales y canales)
 
-Un pedido para llevar usa una **mesa virtual** de la sección «Para llevar» (`seccion.es_para_llevar`). Las mesas virtuales aparecen en `GET /api/mesas` con `es_para_llevar: true` (y `canal` y `referencia` cuando están ocupadas); **la hostess no las ve** (no se sientan, no se reservan y `POST /mesas/:id/asignar` responde `409 mesa_no_disponible`). La cuenta, los pedidos, la cocina y el cobro funcionan igual que en una mesa.
+Un pedido para llevar usa una **mesa virtual** de la sección «Para llevar» (`seccion.es_para_llevar`). Las mesas virtuales aparecen en `GET /api/mesas` con `es_para_llevar: true` (y `canal` y `referencia` cuando están ocupadas); **el Salón de la hostess no las muestra** como mesas (no se sientan, no se reservan y `POST /mesas/:id/asignar` responde `409 mesa_no_disponible`); la hostess las ve en su pestaña «Para llevar». La cuenta, los pedidos, la cocina y el cobro funcionan igual que en una mesa.
 
 ### `POST /api/mesas/para-llevar`
 
-Roles: `mesero`, `hostess` y `gerente`. Acepta `Idempotency-Key`. Ocupa la primera mesa virtual libre y abre su cuenta con el canal elegido. La **hostess** lo usa cuando recibe un pedido de una plataforma (Didi, Rappi…) o por teléfono: lo asigna a una mesa virtual y el mesero lo ve ocupado en su panel y le toma el pedido (la hostess no toma pedidos).
+Roles: `hostess` y `gerente` (el **mesero ya no** puede abrirlos: `403`). Acepta `Idempotency-Key`. Ocupa la primera mesa virtual libre y abre su cuenta con el canal elegido. La **hostess** lo usa en su pestaña «Para llevar» cuando recibe un pedido de una plataforma (Didi, Rappi…) o por teléfono: lo asigna a una mesa virtual y el mesero lo ve ocupado en su panel y le toma el pedido con `POST /api/pedidos` (la hostess no toma pedidos).
 
 ```json
 { "id_canal": 3, "referencia": "Juan P." }

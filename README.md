@@ -433,7 +433,7 @@ El árbol de arriba es el modelo; las carpetas ya existen y contienen lo siguien
 | `backend/src/utils/` | `config.ts`, `errores.ts`, `auth.ts` (JWT y permisos por rol) y `seed.ts` (usuarios de prueba). |
 | `backend/tests/` | Pruebas unitarias con Vitest: dominio, mocks, caja, transporte, plantillas de correo y cola de notificaciones. |
 | `database/` | `docker-compose.yml`, `init.sql` (tablas, catálogos y datos base) y `migrations/` (`001` a `013`). |
-| `docs/` | `arquitectura.md` y el resto de la documentación (contratos de API, equivalencias, pendientes, guía de código, [seguridad y auditoría](docs/auditoria-seguridad.md) y [actualización de la base](docs/actualizar-base-datos.md)). |
+| `docs/` | `arquitectura.md` y el resto de la documentación (contratos de API, equivalencias, pendientes, guía de código, [seguridad y auditoría](docs/auditoria-seguridad.md), [varias personas a la vez](docs/concurrencia.md) y [actualización de la base](docs/actualizar-base-datos.md)). |
 
 ### Archivos y carpetas adicionales
 

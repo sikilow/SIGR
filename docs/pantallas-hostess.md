@@ -1,7 +1,7 @@
 # Pantallas del rol hostess
 
 Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×1024). Hay tres pantallas:
-**Salón** (H1), **Reservaciones** (H2) y **Espera** (H3). Las capturas están en
+**Salón** (H1), **Reservaciones** (H2), **Espera** (H3) y **Para llevar** (fila 1a). Las capturas están en
 [`capturas/`](capturas/) y se tomaron con el servidor de desarrollo en modo mock (`VITE_USE_MOCK=true`, usuario
 `hostess` / `1234`). El contrato de API que necesita está en [`contrato-api-hostess.md`](contrato-api-hostess.md).
 
@@ -10,11 +10,11 @@ Interfaz de "La Madalena" para tablet (base 1024×768 horizontal; también 768×
 
 | # | Pantalla | Ruta | Qué cubre | Captura |
 |---|---|---|---|---|
-| 1 | Salón (1024×768) | `/hostess/salon` | Estado de las mesas (Libres, Ocupadas, Reservadas), filtros, próximas reservaciones y lista de espera a un lado. Solo lectura, salvo «Asignar mesa» y el panel **Para llevar** (abajo) | [h1-01-salon-1024x768](capturas/h1-01-salon-1024x768.png) |
+| 1 | Salón (1024×768) | `/hostess/salon` | Estado de las mesas (Libres, Ocupadas, Reservadas), filtros, próximas reservaciones y lista de espera a un lado. Solo lectura, salvo «Asignar mesa» | [h1-01-salon-1024x768](capturas/h1-01-salon-1024x768.png) |
 | 2 | Hoja de acciones de una mesa | _(diálogo del Salón)_ | Estado y capacidad de la mesa; «Asignar mesa» (en una mesa ocupada queda con `aria-disabled` y explica el motivo) | [h1-02-hoja-acciones-1024x768](capturas/h1-02-hoja-acciones-1024x768.png) |
 | 3 | Asignar mesa | _(segundo paso del mismo diálogo)_ | Elegir el grupo (reservación, lista de espera o grupo sin registro), aviso de capacidad que no bloquea y confirmar | [h1-03-asignar-mesa-1024x768](capturas/h1-03-asignar-mesa-1024x768.png) |
 | 4 | Mesa asignada | `/hostess/salon` | Resultado: la mesa pasa a Ocupada, el grupo sale de las listas y se anuncia «Mesa 4 asignada a Familia González» | [h1-04-mesa-asignada-1024x768](capturas/h1-04-mesa-asignada-1024x768.png) |
-| 1a | Panel «Para llevar» del Salón | `/hostess/salon` | Cuando llega un pedido de Didi, Rappi, Uber Eats… (o por teléfono), la hostess usa «Nuevo pedido»: elige el canal y, si quiere, un nombre o folio; el sistema lo asigna a una mesa virtual de «Para llevar» y el mesero la ve ocupada en su panel para tomar el pedido. El panel lista los pedidos para llevar abiertos (mesa virtual, canal, referencia y si el mesero ya tomó el pedido) y permite «Liberar» uno abierto por error mientras no tenga productos. La hostess no ve pedidos ni cuentas | _(sin captura)_ |
+| 1a | Para llevar | `/hostess/para-llevar` (pestaña «Para llevar» de la barra inferior) | Cuando llega un pedido de Didi, Rappi, Uber Eats… (o por teléfono), la hostess usa «Nuevo pedido»: elige el canal y, si quiere, un nombre o folio; el sistema lo asigna a una mesa virtual de «Para llevar» y el mesero la ve ocupada en su panel para tomar el pedido (el mesero no puede abrir pedidos para llevar). La pantalla lista los pedidos abiertos (mesa virtual, canal, referencia y si el mesero ya tomó el pedido) y permite «Liberar» uno abierto por error mientras no tenga productos. La hostess no ve pedidos ni cuentas | _(sin captura)_ |
 | 5 | Salón (768×1024) | `/hostess/salon` | Igual que la 1, con las reservaciones y la espera **debajo** de las mesas | [h1-05-salon-768x1024](capturas/h1-05-salon-768x1024.png) · [panel inferior](capturas/h1-06-panel-inferior-768x1024.png) |
 | 5a | Salón agrupado por sección | `/hostess/salon` | **RF-MES-007**: un grupo por sección con encabezado «Barra · 3 libres de 3 mesas» y la sección en cada tarjeta | [h1-07-salon-secciones-1024x768](capturas/h1-07-salon-secciones-1024x768.png) · [768×1024](capturas/h1-10-salon-secciones-768x1024.png) · [zoom 200 %](capturas/h1-11-salon-zoom-200.png) |
 | 5b | Salón filtrado por sección | `/hostess/salon?seccion=Barra` | Select «Sección» combinable con los chips de estado; el resumen sigue contando todas las mesas | [h1-08-salon-filtro-barra-1024x768](capturas/h1-08-salon-filtro-barra-1024x768.png) |

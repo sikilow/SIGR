@@ -179,7 +179,9 @@ async function salir() {
 
 .nav {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* Una columna por pestaña, sea cual sea su cantidad */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }
@@ -270,5 +272,35 @@ async function salir() {
 
 .nav .nav__enlace.router-link-active svg {
   background: var(--color-primary-suave);
+}
+
+/* Teléfonos muy angostos (320 px): la barra superior no se parte en dos líneas */
+@media (max-width: 22em) {
+  .barra {
+    flex-wrap: nowrap;
+    gap: var(--espacio-2);
+    padding-inline: var(--espacio-2);
+  }
+
+  .barra__marca {
+    min-width: 0;
+    gap: var(--espacio-2);
+  }
+
+  .barra__restaurante {
+    overflow: hidden;
+    font-size: 1.05rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .barra__usuario {
+    flex: none;
+    gap: var(--espacio-2);
+  }
+
+  .barra .btn {
+    padding-inline: var(--espacio-3);
+  }
 }
 </style>

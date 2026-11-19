@@ -887,5 +887,19 @@ onMounted(() => void cargar())
   .metodos li {
     flex-wrap: wrap;
   }
+
+  /* El nombre ocupa toda la línea; el interruptor y «Eliminar» pasan debajo */
+  .metodos__nombre {
+    flex: 1 1 100%;
+  }
+
+  /* Encabezado de la categoría: título completo y los controles (interruptor, «Eliminar») en su propia línea */
+  .categoria__encabezado {
+    flex-wrap: wrap;
+  }
+
+  .categoria__titulo {
+    flex: 1 1 calc(100% - 44px - var(--espacio-4));
+  }
 }
 </style>

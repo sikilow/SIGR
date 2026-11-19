@@ -7,7 +7,7 @@ import { correo as CorreoValido, lada as LadaValida, LADA_MEXICO, nombrePersona,
 import { conIdempotencia } from "../services/idempotencia";
 import { esCorreoValido } from "../services/correo";
 import { encolarNotificacionReservacion, solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
-import { exigirMesaDisponible } from "../services/disponibilidadReservacion";
+import { bloquearDisponibilidadReservaciones, exigirMesaDisponible } from "../services/disponibilidadReservacion";
 import { cargarHorario, exigirHorarioReservacion } from "../models/horarioReservacion";
 import {
   conCaracteristicasDeMesa,
@@ -377,6 +377,9 @@ export const editarReservacion = async (req: Request, res: Response) => {
 
   await conIdempotencia(req, res, 200, () =>
     transaccion(async (cx) => {
+      // Confirmar o cambiar fecha, hora o personas compromete mesas: primero el candado de disponibilidad (siempre antes
+      // de bloquear la reservación, para no formar interbloqueos con otra edición). Cancelar no lo necesita.
+      if (cambio.estado !== "cancelada") await bloquearDisponibilidadReservaciones(cx);
       const [reservacion] = await filas(
         cx,
         "SELECT id_reservacion, id_mesa, fecha_hora, personas, estado FROM reservacion WHERE id_reservacion = ? FOR UPDATE",

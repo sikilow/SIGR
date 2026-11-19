@@ -329,6 +329,9 @@ onMounted(cargarReservaciones)
   text-decoration: none;
   font-size: 14px;
   font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px; /* área táctil cómoda en el teléfono */
 }
 
 .contenido {

@@ -151,6 +151,11 @@ export const router = createRouter({
           name: 'hostess-espera',
           component: () => import('../views/hostess/EsperaView.vue'),
         },
+        {
+          path: 'para-llevar',
+          name: 'hostess-para-llevar',
+          component: () => import('../views/hostess/ParaLlevarView.vue'),
+        },
       ],
     },
     {

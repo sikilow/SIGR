@@ -1,7 +1,31 @@
 import { createHash } from "node:crypto";
 import type { Request, Response } from "express";
-import { ejecutar, filas, pool } from "./db";
+import { ejecutar, filas, LIMITE_POOL, pool } from "./db";
 import { ErrorApi } from "../utils/errores";
+
+/**
+ * Cuántas acciones con Idempotency-Key pueden correr a la vez. Cada una ocupa DOS conexiones del pool (la del candado y la
+ * de su transacción); si todas las conexiones quedaran como «candado» esperando la segunda, la API se congelaría. Con este
+ * tope siempre sobran conexiones: las que pasan del tope esperan su turno (en orden de llegada).
+ */
+const LIMITE_IDEMPOTENTES = Math.max(1, Math.floor(LIMITE_POOL / 2) - 2);
+let idempotentesEnCurso = 0;
+const turnos: Array<() => void> = [];
+
+async function tomarTurno(): Promise<void> {
+  if (idempotentesEnCurso < LIMITE_IDEMPOTENTES) {
+    idempotentesEnCurso++;
+    return;
+  }
+  // El turno se hereda: quien termina pasa su lugar al siguiente sin soltarlo (el contador no cambia).
+  await new Promise<void>((resolver) => turnos.push(resolver));
+}
+
+function soltarTurno(): void {
+  const siguiente = turnos.shift();
+  if (siguiente) siguiente();
+  else idempotentesEnCurso--;
+}
 
 /**
  * Soporte de la cabecera `Idempotency-Key` que manda el front en crear / enviar / cancelar /
@@ -27,6 +51,21 @@ export async function conIdempotencia<T>(
     throw new ErrorApi(422, "estado_invalido", "La clave de idempotencia es demasiado larga (máximo 100).");
   }
 
+  await tomarTurno();
+  try {
+    await ejecutarConClave(req, res, estadoOk, accion, clave);
+  } finally {
+    soltarTurno();
+  }
+}
+
+async function ejecutarConClave<T>(
+  req: Request,
+  res: Response,
+  estadoOk: number,
+  accion: () => Promise<T>,
+  clave: string,
+): Promise<void> {
   const usuarioId = req.usuario!.id;
   const ruta = `${req.method} ${req.originalUrl.split("?")[0]}`;
   const candado = `idem_${createHash("sha1").update(`${usuarioId}:${clave}`).digest("hex")}`;

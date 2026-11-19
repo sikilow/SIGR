@@ -500,6 +500,39 @@ onBeforeRouteUpdate((a, b) =>
   min-width: 160px;
 }
 
+/* Teléfonos: el total en una sola línea y el botón más angosto, para que la barra no se coma la pantalla */
+@media (max-width: 30em) {
+  .barra-pedido {
+    gap: var(--espacio-3);
+    padding: var(--espacio-2) var(--espacio-6);
+  }
+
+  .barra-pedido__datos {
+    min-width: 0;
+  }
+
+  .barra-pedido__datos strong {
+    font-size: var(--texto-lg);
+    white-space: nowrap;
+  }
+
+  .barra-pedido .btn {
+    flex: none;
+    min-width: 0;
+    padding-inline: var(--espacio-4);
+  }
+
+  /* «Total estimado» solo para lectores de pantalla: el importe grande ya se entiende como el total */
+  .barra-pedido__etiqueta {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 53.75em), (max-height: 37.5em) {
   .editor {
     display: flex;

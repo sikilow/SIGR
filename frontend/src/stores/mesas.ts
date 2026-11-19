@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { servicios } from '../services'
-import type { AperturaParaLlevar, EstadoMesa, Mesa } from '../types'
+import type { EstadoMesa, Mesa } from '../types'
 import {
   TODAS_LAS_SECCIONES,
   agruparPorSeccion,
@@ -127,15 +127,6 @@ export const useMesasStore = defineStore('mesas', () => {
     await cargar()
   }
 
-  /** Abre un pedido para llevar (ocupa una mesa virtual) y recarga el panel. */
-  async function abrirParaLlevar(idCanal: number, referencia: string | null, clave?: string): Promise<AperturaParaLlevar> {
-    try {
-      return await servicios.mesas.abrirParaLlevar(idCanal, referencia, clave)
-    } finally {
-      await invalidar()
-    }
-  }
-
   /** Libera una mesa virtual sin pedidos y recarga el panel. */
   async function liberarParaLlevar(idMesa: number): Promise<void> {
     try {
@@ -156,7 +147,6 @@ export const useMesasStore = defineStore('mesas', () => {
   return {
     mesas,
     paraLlevarLibres,
-    abrirParaLlevar,
     liberarParaLlevar,
     cargando,
     actualizando,

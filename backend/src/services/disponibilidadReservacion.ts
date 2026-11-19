@@ -56,7 +56,21 @@ export function hayMesaParaReservacion(
 }
 
 /**
+ * Candado de «¿cabe esta reservación?»: mientras una transacción lo tiene, otra que también vaya a comprobar si queda
+ * mesa espera a que la primera termine (COMMIT o ROLLBACK). Sin esto, dos personas que confirman a la vez la última mesa
+ * libre pasan las dos la revisión (cada una ve la base sin la reservación de la otra) y se confirman más reservaciones
+ * que mesas. Es la fila única de `configuracion_reservacion`; el candado se libera solo al terminar la transacción.
+ *
+ * Hay que pedirlo ANTES de bloquear reservaciones o mesas en la misma transacción (siempre el mismo orden), para que no
+ * se formen interbloqueos. `exigirMesaDisponible` lo pide por su cuenta si aún no lo tiene.
+ */
+export async function bloquearDisponibilidadReservaciones(cx: Ejecutor): Promise<void> {
+  await filas(cx, "SELECT id FROM configuracion_reservacion WHERE id = 1 FOR UPDATE");
+}
+
+/**
  * Comprueba que haya una mesa para la reservación (hostess al registrarla o confirmarla, y portal de clientes).
+ * Debe llamarse dentro de una transacción: se serializa con `bloquearDisponibilidadReservaciones`.
  * Solo cuentan las mesas del salón disponibles (no las virtuales de «Para llevar») y las reservaciones confirmadas
  * o con llegada: las solicitudes pendientes todavía no comprometen mesa.
  */
@@ -64,6 +78,7 @@ export async function exigirMesaDisponible(
   cx: Ejecutor,
   reservacion: { idReservacion?: number; fechaHora: string; personas: number },
 ): Promise<void> {
+  await bloquearDisponibilidadReservaciones(cx);
   const duracion = await cargarDuracionReservacion(cx);
   // Si la reservación empieza dentro de la duración desde ahora, las mesas ocupadas en este momento (por ejemplo, por
   // clientes que llegaron sin reservación) todavía no estarán libres: no cuentan.
@@ -92,7 +107,8 @@ export async function exigirMesaDisponible(
       WHERE r.estado IN ('confirmada', 'llego')
         AND r.id_reservacion <> ?
         AND r.fecha_hora > DATE_SUB(?, INTERVAL ? MINUTE)
-        AND r.fecha_hora < DATE_ADD(?, INTERVAL ? MINUTE)`,
+        AND r.fecha_hora < DATE_ADD(?, INTERVAL ? MINUTE)
+      FOR SHARE`, // lectura con candado: ve lo ya confirmado por otras transacciones, aunque empezaran antes
     [
       reservacion.fechaHora,
       reservacion.idReservacion ?? 0,

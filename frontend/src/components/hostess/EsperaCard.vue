@@ -203,6 +203,9 @@ const hace = computed(() => textoHaceCuanto(props.espera.registradoEn, fechaAhor
   }
 
   .espera__marcas {
+    /* Va en su propia línea y se encoge a lo que queda (las insignias bajan de línea en vez de salirse de la tarjeta) */
+    flex: 1 1 100%;
+    min-width: 0;
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;

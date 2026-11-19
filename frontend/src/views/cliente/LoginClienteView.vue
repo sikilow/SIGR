@@ -152,6 +152,9 @@ async function iniciarSesion() {
   color: #a73a14;
   text-decoration: none;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px; /* área táctil cómoda en el teléfono */
 }
 
 .contenedor-login {

@@ -349,7 +349,10 @@ watch(() => route.fullPath, iniciar)
 }
 
 .recuperar__volver {
+  display: inline-flex;
+  align-items: center;
   align-self: center;
+  min-height: var(--tactil-min);
   color: var(--color-muted);
   font-size: var(--texto-sm);
   font-weight: 600;

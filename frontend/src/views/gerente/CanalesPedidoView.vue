@@ -455,5 +455,10 @@ onMounted(() => void cargar())
   .canales li {
     flex-wrap: wrap;
   }
+
+  /* El nombre ocupa toda la línea; el estado, el interruptor y «Eliminar» pasan debajo (no aprietan el texto) */
+  .canales__nombre {
+    flex: 1 1 100%;
+  }
 }
 </style>

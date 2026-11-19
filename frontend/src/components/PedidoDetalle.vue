@@ -493,6 +493,30 @@ const cancelando = ref(false)
   font-weight: 800;
 }
 
+/* Teléfonos: cinco pasos en 320-360 px; textos y marcas más chicos para que no se toquen ni se salgan */
+@media (max-width: 30em) {
+  .avance__paso {
+    gap: var(--espacio-1);
+    min-width: 0;
+  }
+
+  .avance__marca {
+    width: 32px;
+    height: 32px;
+  }
+
+  .avance__paso + .avance__paso::before {
+    top: 14px;
+  }
+
+  .avance__texto {
+    max-width: 100%;
+    padding-inline: 2px;
+    font-size: 0.72rem;
+    overflow-wrap: anywhere;
+  }
+}
+
 /* ---------- Líneas y total ---------- */
 .lineas {
   margin: 0;

@@ -11,20 +11,15 @@ import IndicadorActualizacion from '../../components/IndicadorActualizacion.vue'
 import FiltrosSalon from '../../components/hostess/FiltrosSalon.vue'
 import HojaAccionesSalon from '../../components/hostess/HojaAccionesSalon.vue'
 import MesaSalonCard from '../../components/hostess/MesaSalonCard.vue'
-import NuevoParaLlevarDialog from '../../components/NuevoParaLlevarDialog.vue'
-import PanelParaLlevar from '../../components/hostess/PanelParaLlevar.vue'
 import PanelEspera from '../../components/hostess/PanelEspera.vue'
 import PanelReservaciones from '../../components/hostess/PanelReservaciones.vue'
 import ResumenSalon from '../../components/hostess/ResumenSalon.vue'
 import { usePolling } from '../../composables/usePolling'
-import { ErrorServicio } from '../../services'
-import { useAnunciosStore } from '../../stores/anuncios'
 import { filtroSalonDesdeConsulta, useSalonStore, type FiltroSalon } from '../../stores/salon'
-import type { AperturaParaLlevar, Mesa, MesaSalon, Reservacion } from '../../types'
+import type { MesaSalon, Reservacion } from '../../types'
 import { TODAS_LAS_SECCIONES, describirFiltroMesas, seccionDesdeConsulta, sufijoSeccion } from '../../utils/secciones'
 
 const store = useSalonStore()
-const anuncios = useAnunciosStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -135,40 +130,6 @@ watch(
   },
 )
 
-// ---------- Pedido para llevar ----------
-// La hostess recibe el pedido de una plataforma (Didi, Rappi…) o por teléfono y lo asigna a una mesa virtual; el mesero lo ve
-// ocupado en su panel y le toma el pedido.
-const dialogoLlevar = ref(false)
-const origenLlevar = ref<HTMLElement | null>(null)
-const liberando = ref(false)
-const avisoLlevar = ref('')
-
-function nuevoParaLlevar(e: Event) {
-  origenLlevar.value = e.currentTarget as HTMLElement
-  avisoLlevar.value = ''
-  dialogoLlevar.value = true
-}
-
-async function alAbrirParaLlevar(apertura: AperturaParaLlevar) {
-  dialogoLlevar.value = false
-  void anuncios.anunciar(`Pedido para llevar asignado a la mesa ${apertura.numero} · ${apertura.canal}. El mesero lo toma desde Mesas.`)
-  await store.invalidar()
-}
-
-async function liberarParaLlevar(mesa: Mesa) {
-  if (liberando.value) return
-  liberando.value = true
-  avisoLlevar.value = ''
-  try {
-    await store.liberarParaLlevar(mesa.idMesa)
-    void anuncios.anunciar(`Mesa para llevar ${mesa.numero} liberada`)
-  } catch (e) {
-    avisoLlevar.value = e instanceof ErrorServicio ? e.message : 'No se pudo liberar la mesa para llevar.'
-  } finally {
-    liberando.value = false
-  }
-}
-
 onMounted(() => {
   reloj = setInterval(() => (ahora.value = Date.now()), 30_000)
   iniciar()
@@ -255,7 +216,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Panel lateral (tablet horizontal) o inferior (tablet vertical): un solo bloque, lo reubica el CSS -->
-    <aside class="salon__lateral" aria-label="Pedidos para llevar, reservaciones y lista de espera">
+    <aside class="salon__lateral" aria-label="Reservaciones y lista de espera">
       <div v-if="store.errorLateral" class="aviso aviso--error" role="alert">
         <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="9" />
@@ -270,13 +231,9 @@ onBeforeUnmount(() => {
         :reservaciones="store.solicitudesPendientes"
         :error="!!store.errorLateral"
       />
-      <PanelParaLlevar :pedidos="store.paraLlevar" :error="!!store.errorLateral" :ocupado="liberando" @nuevo="nuevoParaLlevar" @liberar="liberarParaLlevar" />
-      <p v-if="avisoLlevar" class="aviso aviso--error" role="alert">{{ avisoLlevar }}</p>
       <PanelReservaciones :reservaciones="store.proximasReservaciones" :error="!!store.errorLateral" />
       <PanelEspera :espera="store.enEspera" :ahora="ahora" :error="!!store.errorLateral" />
     </aside>
-
-    <NuevoParaLlevarDialog :abierto="dialogoLlevar" :origen-foco="origenLlevar" @cerrar="dialogoLlevar = false" @abierto="alAbrirParaLlevar" />
 
     <HojaAccionesSalon
       :mesa="mesaSeleccionada"
