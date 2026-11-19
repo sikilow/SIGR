@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import BarrasRanking from '../../components/BarrasRanking.vue'
 import InsigniaEstado from '../../components/InsigniaEstado.vue'
 import { usePolling } from '../../composables/usePolling'
 import ResumenCorte from '../../components/ResumenCorte.vue'
@@ -50,6 +51,16 @@ const puedeCobrar = computed(
     Math.abs(faltante.value) < 0.005 &&
     pagos.value.length > 0 &&
     pagos.value.every((pago) => pago.monto > 0 && pago.montoRecibido >= pago.monto),
+)
+
+/** Métodos de pago del turno para el panel lateral (mismo formato que el reporte del gerente). */
+const metodosTurno = computed(() =>
+  (estado.value?.corte?.desglose ?? []).map((m) => ({
+    clave: m.metodo,
+    nombre: m.metodo,
+    detalle: `${m.cobros} ${m.cobros === 1 ? 'pago' : 'pagos'}`,
+    total: m.monto,
+  })),
 )
 
 function moneda(cantidad: number): string {
@@ -257,7 +268,8 @@ onMounted(() => {
       <p class="solo-lectores" role="status">Cargando caja…</p>
     </template>
 
-    <template v-else-if="estado">
+    <div v-else-if="estado" class="caja__distribucion" :class="{ 'caja__distribucion--turno': estado.corte }">
+    <div class="caja__principal">
       <section class="corte panel" aria-labelledby="corte-titulo">
         <div class="corte__info">
           <div class="corte__titulo">
@@ -275,10 +287,6 @@ onMounted(() => {
               <div class="corte__cifra">
                 <span>Fondo inicial</span>
                 <strong class="numero">{{ moneda(estado.corte.fondoInicial) }}</strong>
-              </div>
-              <div class="corte__cifra">
-                <span>Cobros del turno</span>
-                <strong class="numero">{{ estado.corte.cobros }}</strong>
               </div>
             </template>
             <div class="corte__cifra">
@@ -520,7 +528,25 @@ onMounted(() => {
           </div>
         </section>
       </div>
-    </template>
+    </div>
+
+    <!-- Ventas del turno: lo cobrado en el corte abierto, por método de pago -->
+    <aside v-if="estado.corte" class="turno panel no-imprimir" aria-labelledby="turno-titulo">
+      <h3 id="turno-titulo">Ventas del turno</h3>
+      <div class="turno__cifras">
+        <div class="turno__cifra">
+          <span>Total vendido</span>
+          <strong class="numero">{{ moneda(estado.corte.totalVentas) }}<small>MXN</small></strong>
+        </div>
+        <div class="turno__cifra">
+          <span>Cuentas cobradas</span>
+          <strong class="numero">{{ estado.corte.cobros }}</strong>
+        </div>
+      </div>
+      <h4 class="turno__subtitulo">Métodos de pago</h4>
+      <BarrasRanking :filas="metodosTurno" :total-general="estado.corte.totalVentas" numerada vacio="Todavía no hay cobros en este turno." />
+    </aside>
+    </div>
 
     <section v-else class="vacio no-imprimir" role="alert">
       <h3>No se pudo mostrar la caja</h3>
@@ -616,7 +642,81 @@ onMounted(() => {
 
 <style scoped>
 .caja {
-  max-width: 1200px;
+  max-width: 1500px;
+}
+
+/* Con caja iniciada: contenido a la izquierda y «Ventas del turno» a un costado. */
+.caja__distribucion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--espacio-5);
+}
+
+.caja__distribucion--turno {
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 19rem);
+}
+
+.caja__principal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-5);
+  min-width: 0;
+}
+
+.turno {
+  position: sticky;
+  top: var(--espacio-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+  border-top: 6px solid var(--color-primary);
+}
+
+.turno h3 {
+  margin: 0;
+  font-size: var(--texto-lg);
+}
+
+.turno__cifras {
+  display: grid;
+  gap: var(--espacio-3);
+  padding-bottom: var(--espacio-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.turno__cifra {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.turno__cifra span {
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+}
+
+.turno__cifra strong {
+  white-space: nowrap;
+  font-family: var(--fuente-titulo);
+  font-size: var(--texto-2xl);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.turno__cifra small {
+  margin-left: 0.3em;
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.turno__subtitulo {
+  margin: 0;
+  font-size: var(--texto-base);
 }
 
 .caja h2 {
@@ -1189,6 +1289,56 @@ onMounted(() => {
   color: #555;
   text-align: center;
   font-size: 9.5px;
+}
+
+@media (max-width: 70em) {
+  /* En tabletas el panel del turno pasa arriba, a lo ancho: cifras lado a lado y métodos en dos columnas. */
+  .caja__distribucion--turno {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .turno {
+    position: static;
+    order: -1;
+    display: grid;
+    grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.2fr);
+    column-gap: var(--espacio-6);
+  }
+
+  .turno h3,
+  .turno__cifras {
+    grid-column: 1;
+  }
+
+  .turno__subtitulo,
+  .turno :deep(.ranking),
+  .turno :deep(.ranking__vacio),
+  .turno :deep(.ranking__mas) {
+    grid-column: 2;
+  }
+
+  .turno__subtitulo {
+    grid-row: 1;
+  }
+
+  .turno :deep(.ranking),
+  .turno :deep(.ranking__vacio) {
+    grid-row: 2 / span 2;
+  }
+
+  .turno__cifras {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espacio-3) var(--espacio-6);
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 40em) {
+  .turno {
+    display: flex;
+  }
 }
 
 @media (max-width: 64em) {

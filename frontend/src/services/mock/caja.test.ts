@@ -24,8 +24,12 @@ describe('caja demo', () => {
     const estado = await caja.obtenerEstado()
     expect(estado.cuentas.some((item) => item.cuenta.idCuenta === 3)).toBe(false)
     expect(estado.corte?.cobros).toBe(1)
-    // El estado del corte abierto no revela totales: el efectivo se cuenta sin conocer lo esperado.
-    expect(estado.corte).not.toHaveProperty('totalVentas')
+    // Panel «Ventas del turno»: lo cobrado en el corte abierto, por método de pago (de mayor a menor).
+    expect(estado.corte?.totalVentas).toBe(480)
+    expect(estado.corte?.desglose).toEqual([
+      { metodo: 'Efectivo', cobros: 1, monto: 300 },
+      { metodo: 'Tarjeta', cobros: 1, monto: 180 },
+    ])
 
     // Esperado = fondo 500 + efectivo 300 (el cambio de 20 ya salió de la caja); la tarjeta no se cuenta.
     const cierre = await caja.cerrarCorte(790)

@@ -36,7 +36,13 @@ export function crearCajaMock(): CajaService {
   return {
     obtenerEstado() {
       return conRetraso(() => ({
-        corte: corte ? structuredClone(corte) : null,
+        corte: corte
+          ? {
+              ...structuredClone(corte),
+              totalVentas: pagosDelCorte.reduce((suma, pago) => suma + centavos(pago.monto), 0) / 100,
+              desglose: desglose().filter((m) => m.cobros > 0).sort((a, b) => b.monto - a.monto),
+            }
+          : null,
         cuentas: baseDatos.cuentas
           .filter((cuenta) => cuenta.estado === 'por_pagar')
           .map((cuenta) => {
@@ -75,7 +81,7 @@ export function crearCajaMock(): CajaService {
         if (!Number.isFinite(fondoInicial) || fondoInicial < 0) {
           throw new ErrorServicio('estado_invalido', 'El fondo inicial debe ser un importe de 0 o más.', 422)
         }
-        corte = { idCorte: siguienteCorte++, inicio: new Date(), fondoInicial, cobros: 0 }
+        corte = { idCorte: siguienteCorte++, inicio: new Date(), fondoInicial, cobros: 0, totalVentas: 0, desglose: [] }
         pagosDelCorte = []
         ventasDelCorte = 0
         return structuredClone(corte)

@@ -104,10 +104,10 @@ async function corteAbierto(cx: PoolConnection, idCajero: number) {
 /** GET /api/caja/estado: corte actual, cuentas solicitadas (incluidas las bloqueadas) y métodos disponibles. */
 export const estadoCaja = async (req: Request, res: Response) => {
   const idCajero = req.usuario!.id;
-  // Sin totales de venta: el cajero cuenta el efectivo al cerrar sin conocer lo esperado.
+  // Incluye lo vendido en el turno y su desglose por método (panel «Ventas del turno» del cajero).
   const [corte] = await filas(
     pool,
-    `SELECT cc.id_corte, cc.inicio, cc.fondo_inicial, COUNT(v.id_venta) AS cobros
+    `SELECT cc.id_corte, cc.inicio, cc.fondo_inicial, COUNT(v.id_venta) AS cobros, COALESCE(SUM(v.total), 0) AS total_ventas
        FROM corte_caja cc LEFT JOIN venta v ON v.id_corte = cc.id_corte
       WHERE cc.id_cajero = ? AND cc.fin IS NULL
       GROUP BY cc.id_corte, cc.inicio, cc.fondo_inicial
@@ -153,6 +153,12 @@ export const estadoCaja = async (req: Request, res: Response) => {
           inicio: corte.inicio,
           fondo_inicial: Number(corte.fondo_inicial),
           cobros: Number(corte.cobros),
+          total_ventas: Number(corte.total_ventas),
+          // Solo los métodos con cobros, del que más vendió al que menos.
+          desglose: (await desgloseCorte(pool, Number(corte.id_corte)))
+            .filter((m) => m.cobros > 0)
+            .sort((a, b) => b.monto - a.monto)
+            .map(({ metodo, cobros, monto }) => ({ metodo, cobros, monto })),
         }
       : null,
     cuentas,

@@ -40,6 +40,10 @@ export interface CorteCaja {
   inicio: Date
   fondoInicial: number
   cobros: number
+  /** Total cobrado en el turno (ventas del corte abierto). */
+  totalVentas: number
+  /** Cobros del turno por método de pago (solo los métodos con cobros, de mayor a menor). */
+  desglose: CobroPorMetodo[]
 }
 
 export interface CobroPorMetodo {
