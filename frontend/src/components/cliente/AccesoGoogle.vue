@@ -277,12 +277,18 @@ onMounted(async () => {
 }
 
 .google__telefono .selector-lada {
-  flex: 0 1 190px;
-  padding: 14px 10px;
+  flex: 0 1 200px;
+  padding: 14px 12px;
   border: 1px solid #ddcfc5;
   border-radius: 8px;
   background: #fff;
   font-size: 14px;
+}
+
+@media (max-width: 30em) {
+  .google__telefono .selector-lada {
+    flex-basis: 100%;
+  }
 }
 
 .google__telefono .telefono-fila input {

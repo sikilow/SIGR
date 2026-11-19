@@ -3,12 +3,13 @@
 // producto nuevo o un precio editado se ven en el menú del mesero. Se reinicia al recargar la página.
 import { validarHorario } from '../../utils/horarioReservacion'
 import { rangoTelefono, textoDigitos } from '../../utils/lada'
-import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CaracteristicaAdmin, type CategoriaAdmin, type MesaAdmin, type ProductoAdmin, type SeccionAdmin, type UsuarioAdmin } from '../../types'
+import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CaracteristicaAdmin, type CategoriaAdmin, type MesaAdmin, type Producto, type ProductoAdmin, type SeccionAdmin, type UsuarioAdmin } from '../../types'
 import { ErrorServicio } from '../errores'
 import type { CatalogoService, UsuariosService } from '../interfaces'
 import { baseDatos, type MesaGuardada } from './baseDatos'
 import { categoriasMetodoPagoMock, metodosPagoMock } from './metodosPago'
 import { conRetraso } from './utiles'
+import { estaSinEntregar } from '../../utils/reglas'
 import { crearEnlaceMock, enmascararCorreo } from './restablecerMock'
 
 const duplicado = (campo: string) => new ErrorServicio('estado_invalido', `Ya existe otro usuario con ese ${campo}.`, 409)
@@ -214,6 +215,7 @@ function aProductoAdmin(id: number): ProductoAdmin {
         stockMinimo: i.stockMinimo,
         controlaExistencia: i.controla,
         disponible: activo && (!i.controla || i.existencia > 0),
+        eliminadoEn: null,
       }
     }
   }
@@ -235,10 +237,48 @@ function sincronizarDisponible(id: number): void {
 }
 const activos = new Map<number, boolean>()
 
+// «Papelera» de la demo: lo eliminado sale de `baseDatos` (así desaparece del menú del mesero y de las listas) y se
+// guarda aquí para poder verlo y restaurarlo, como hace la API con `eliminado_en`.
+interface ProductoEliminado {
+  producto: Producto
+  eliminadoEn: Date
+}
+interface CategoriaEliminada {
+  idCategoria: number
+  nombre: string
+  eliminadoEn: Date
+}
+const productosEliminados: ProductoEliminado[] = []
+const categoriasEliminadas: CategoriaEliminada[] = []
+
+function nombreDeCategoria(id: number): string {
+  return baseDatos.categorias.find((c) => c.idCategoria === id)?.nombre ?? categoriasEliminadas.find((c) => c.idCategoria === id)?.nombre ?? ''
+}
+
+function aProductoEliminado(e: ProductoEliminado): ProductoAdmin {
+  const p = e.producto
+  const i = inv(p.idProducto, false)
+  return {
+    idProducto: p.idProducto,
+    idCategoria: p.idCategoria,
+    categoria: nombreDeCategoria(p.idCategoria),
+    nombre: p.nombre,
+    presentacion: p.presentacion ?? '',
+    descripcion: p.descripcion,
+    precio: p.precio,
+    activo: activos.get(p.idProducto) ?? false,
+    existencia: i.existencia,
+    stockMinimo: i.stockMinimo,
+    controlaExistencia: i.controla,
+    disponible: false,
+    eliminadoEn: e.eliminadoEn,
+  }
+}
+
 function aCategoria(id: number): CategoriaAdmin {
   const c = baseDatos.categorias.find((x) => x.idCategoria === id)
   if (!c) throw noExiste('La categoría')
-  return { idCategoria: c.idCategoria, nombre: c.nombre, totalProductos: c.productos.length }
+  return { idCategoria: c.idCategoria, nombre: c.nombre, totalProductos: c.productos.length, eliminadoEn: null }
 }
 
 function validarNombreCategoria(nombre: string, id?: number): void {
@@ -482,10 +522,6 @@ export function crearCatalogoMock(): CatalogoService {
       })
     },
 
-    listarCategorias() {
-      return conRetraso(() => baseDatos.categorias.map((c) => aCategoria(c.idCategoria)))
-    },
-
     listarCaracteristicas() {
       return conRetraso(() => baseDatos.caracteristicas
         .map((c) => aCaracteristicaAdmin(c.idCaracteristica))
@@ -643,6 +679,14 @@ export function crearCatalogoMock(): CatalogoService {
       })
     },
 
+    listarCategorias(opciones) {
+      return conRetraso(() =>
+        opciones?.eliminados
+          ? categoriasEliminadas.map((c): CategoriaAdmin => ({ idCategoria: c.idCategoria, nombre: c.nombre, totalProductos: 0, eliminadoEn: c.eliminadoEn }))
+          : baseDatos.categorias.map((c) => aCategoria(c.idCategoria)),
+      )
+    },
+
     crearCategoria(nombre) {
       return conRetraso(() => {
         validarNombreCategoria(nombre)
@@ -667,14 +711,30 @@ export function crearCatalogoMock(): CatalogoService {
         const c = baseDatos.categorias.find((x) => x.idCategoria === id)
         if (!c) throw noExiste('La categoría')
         if (c.productos.length > 0) {
-          throw new ErrorServicio('estado_invalido', `La categoría tiene ${c.productos.length} producto(s). Muévelos a otra categoría o desactívalos antes de borrarla.`, 409)
+          throw new ErrorServicio('estado_invalido', `La categoría tiene ${c.productos.length} producto(s). Elimínalos o muévelos a otra categoría antes de eliminarla.`, 409)
         }
         baseDatos.categorias.splice(baseDatos.categorias.indexOf(c), 1)
+        categoriasEliminadas.push({ idCategoria: c.idCategoria, nombre: c.nombre, eliminadoEn: new Date() })
       })
     },
 
-    listarProductos() {
-      return conRetraso(() => baseDatos.categorias.flatMap((c) => c.productos.map((p) => aProductoAdmin(p.idProducto))))
+    restaurarCategoria(id) {
+      return conRetraso(() => {
+        const e = categoriasEliminadas.find((x) => x.idCategoria === id)
+        if (!e) throw noExiste('La categoría eliminada')
+        categoriasEliminadas.splice(categoriasEliminadas.indexOf(e), 1)
+        baseDatos.categorias.push({ idCategoria: e.idCategoria, nombre: e.nombre, productos: [] })
+        baseDatos.categorias.sort((a, b) => a.idCategoria - b.idCategoria)
+        return aCategoria(id)
+      })
+    },
+
+    listarProductos(opciones) {
+      return conRetraso(() =>
+        opciones?.eliminados
+          ? productosEliminados.map(aProductoEliminado)
+          : baseDatos.categorias.flatMap((c) => c.productos.map((p) => aProductoAdmin(p.idProducto))),
+      )
     },
 
     crearProducto(n) {
@@ -687,7 +747,10 @@ export function crearCatalogoMock(): CatalogoService {
         if (existente) {
           throw new ErrorServicio('estado_invalido', 'Ya existe un producto con esa categoría, nombre y presentación. Búscalo y edita sus datos o existencias.', 409)
         }
-        const id = Math.max(0, ...baseDatos.categorias.flatMap((k) => k.productos.map((p) => p.idProducto))) + 1
+        if (productosEliminados.some((e) => e.producto.idCategoria === n.idCategoria && claveProducto(e.producto.nombre) === nombre && claveProducto(e.producto.presentacion ?? '') === presentacion)) {
+          throw new ErrorServicio('estado_invalido', 'Hay un producto eliminado con esa categoría, nombre y presentación. Restáuralo desde «Eliminados» en lugar de crear otro.', 409)
+        }
+        const id = Math.max(0, ...baseDatos.categorias.flatMap((k) => k.productos.map((p) => p.idProducto)), ...productosEliminados.map((e) => e.producto.idProducto)) + 1
         c.productos.push({ idProducto: id, idCategoria: c.idCategoria, nombre: n.nombre.trim(), presentacion: n.presentacion.trim(), descripcion: n.descripcion.trim(), precio: n.precio, disponible: n.activo && (!n.controlaExistencia || n.existencia > 0), ...(n.controlaExistencia ? { existencia: n.existencia } : {}) })
         activos.set(id, n.activo)
         inventario.set(id, { existencia: n.existencia, stockMinimo: n.stockMinimo, controla: n.controlaExistencia })
@@ -725,6 +788,40 @@ export function crearCatalogoMock(): CatalogoService {
         if (c.stockMinimo !== undefined) i.stockMinimo = c.stockMinimo
         if (c.controlaExistencia !== undefined) i.controla = c.controlaExistencia
         activos.set(id, c.activo ?? activos.get(id) ?? actual.activo)
+        sincronizarDisponible(id)
+        return aProductoAdmin(id)
+      })
+    },
+
+    eliminarProducto(id) {
+      return conRetraso(() => {
+        if (productosEliminados.some((e) => e.producto.idProducto === id)) throw new ErrorServicio('estado_invalido', 'El producto ya está eliminado.', 409)
+        const actual = aProductoAdmin(id) // 404 si no existe
+        const enPedido = baseDatos.pedidos.filter((p) => estaSinEntregar(p.estado) && p.detalle.some((l) => l.idProducto === id)).length
+        if (enPedido > 0) {
+          throw new ErrorServicio(
+            'estado_invalido',
+            `«${actual.nombre}» está en ${enPedido} pedido(s) que aún no se entregan. Espera a que se entreguen o cancélalos; mientras tanto puedes desactivarlo.`,
+            409,
+          )
+        }
+        const origen = baseDatos.categorias.find((k) => k.idCategoria === actual.idCategoria)!
+        const p = origen.productos.find((x) => x.idProducto === id)!
+        origen.productos.splice(origen.productos.indexOf(p), 1)
+        const e: ProductoEliminado = { producto: p, eliminadoEn: new Date() }
+        productosEliminados.push(e)
+        return aProductoEliminado(e)
+      })
+    },
+
+    restaurarProducto(id) {
+      return conRetraso(() => {
+        const e = productosEliminados.find((x) => x.producto.idProducto === id)
+        if (!e) throw new ErrorServicio('estado_invalido', 'El producto no está eliminado.', 409)
+        const categoria = baseDatos.categorias.find((k) => k.idCategoria === e.producto.idCategoria)
+        if (!categoria) throw new ErrorServicio('estado_invalido', 'Su categoría está eliminada. Restaura primero la categoría.', 409)
+        productosEliminados.splice(productosEliminados.indexOf(e), 1)
+        categoria.productos.push(e.producto)
         sincronizarDisponible(id)
         return aProductoAdmin(id)
       })

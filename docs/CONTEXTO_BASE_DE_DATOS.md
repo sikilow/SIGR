@@ -134,7 +134,7 @@ Notas importantes:
 ## 7. Lista de comprobación rápida
 
 - [ ] Hice respaldo antes de aplicar la migración.
-- [ ] Migración nueva con el siguiente número (026 o más) y repetible si fue posible.
+- [ ] Migración nueva con el siguiente número (027 o más) y repetible si fue posible.
 - [ ] La apliqué a la base de desarrollo y la API sigue funcionando.
 - [ ] `init.sql` tiene el mismo cambio en su forma final (tablas, datos base y triggers de auditoría).
 - [ ] `node database/verificar_init.mjs` termina con `exit 0`.

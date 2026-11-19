@@ -15,6 +15,7 @@ const route = useRoute()
 const compacto = useCompacto()
 
 const contenido = ref<HTMLElement | null>(null)
+const navInferior = ref<HTMLElement | null>(null)
 
 // Al cambiar de pantalla el foco pasa al contenido, para teclado y lectores de pantalla.
 // Se compara el registro de la ruta (no la ruta completa): abrir un pedido dentro de "Pedidos"
@@ -28,6 +29,22 @@ watch(
 )
 
 onMounted(() => contenido.value?.focus({ preventScroll: true }))
+
+// La barra inferior tiene ocho secciones: en un teléfono se desliza de lado, y la sección activa se deja a la vista.
+function mostrarSeccionActiva() {
+  const activa = navInferior.value?.querySelector<HTMLElement>('.router-link-active')
+  activa?.scrollIntoView({ inline: 'center', block: 'nearest' })
+}
+watch(
+  () => route.name,
+  async () => {
+    await nextTick()
+    mostrarSeccionActiva()
+  },
+)
+watch(navInferior, (nav) => {
+  if (nav) void nextTick().then(mostrarSeccionActiva)
+})
 
 const rolVisible = computed(() => (sesion.rol ? ETIQUETA_ROL[sesion.rol] : ''))
 const inicial = computed(() => (sesion.usuario?.nombre?.trim().charAt(0) ?? 'G').toUpperCase())
@@ -165,7 +182,7 @@ async function salir() {
         <RouterView />
       </main>
 
-      <nav v-if="compacto" class="nav" aria-label="Navegación principal">
+      <nav v-if="compacto" ref="navInferior" class="nav" aria-label="Navegación principal">
         <RouterLink v-for="enlace in enlaces" :key="enlace.nombre" class="nav__enlace" :to="{ name: enlace.nombre }" :class="{ 'router-link-active': enlaceActivo(enlace.nombre) }">
           <svg v-if="enlace.icono === 'usuarios'" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="9" cy="8" r="3.5" />
@@ -418,15 +435,24 @@ async function salir() {
 }
 
 .nav {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  display: flex;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }
 
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
 .nav .nav__enlace {
+  flex: 1 0 4.75rem;
   flex-direction: column;
   justify-content: center;
+  scroll-snap-align: center;
   gap: var(--espacio-1);
   padding: var(--espacio-1) var(--espacio-1);
   border-radius: 0;
@@ -547,15 +573,15 @@ async function salir() {
 
 /* La navegación lateral de escritorio ya la define el rediseño A (`.sidebar`). */
 
-/* Siete pestañas en un teléfono: píldora más angosta y etiquetas que no se enciman. */
+/* Ocho pestañas en un teléfono: se deslizan de lado, con la etiqueta completa y una píldora más angosta. */
 @media (max-width: 30em) {
   .nav {
     padding: 0 var(--espacio-1);
   }
 
   .nav .nav__enlace {
-    min-width: 0;
-    padding-inline: 0;
+    flex-basis: 5rem;
+    padding-inline: var(--espacio-1);
     font-size: 0.6875rem;
   }
 
@@ -563,11 +589,12 @@ async function salir() {
     padding: 4px 10px;
   }
 
+  /* Etiquetas largas («Métodos de pago»): bajan a una segunda línea en lugar de pegarse con la vecina. */
   .nav .nav__enlace span {
     max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.15;
+    text-align: center;
+    text-wrap: balance;
   }
 }
 </style>

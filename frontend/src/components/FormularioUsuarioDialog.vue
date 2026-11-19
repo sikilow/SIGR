@@ -253,15 +253,6 @@ async function guardar() {
   min-width: 0;
 }
 
-.campo select {
-  min-height: var(--tactil-min);
-  padding: 0 var(--espacio-4);
-  border: 1.5px solid var(--color-borde-control);
-  border-radius: var(--radio-sm);
-  background: var(--color-surface);
-  font-weight: 400;
-}
-
 .campo select:disabled {
   border-color: var(--color-deshabilitado-borde);
   background: var(--color-deshabilitado-fondo);

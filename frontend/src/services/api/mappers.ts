@@ -361,8 +361,10 @@ export interface UsuarioAdminDto {
 export interface CategoriaAdminDto {
   id_categoria: Numerico
   nombre: string
-  /** CALCULADO por la API: cantidad de productos de la categoría. */
+  /** CALCULADO por la API: cantidad de productos vigentes de la categoría. */
   total_productos: Numerico
+  /** categoria_menu.eliminado_en (migración 026); null = vigente. Una API anterior no lo envía. */
+  eliminado_en?: string | null
 }
 
 export interface SeccionAdminDto {
@@ -478,6 +480,8 @@ export interface ProductoAdminDto {
   controla_existencia?: Booleano
   /** CALCULADO por la API: activo y, si controla existencia, con existencia mayor a 0 (lo que ve el mesero). */
   disponible: Booleano
+  /** producto.eliminado_en (migración 026); null = vigente. Una API anterior no lo envía. */
+  eliminado_en?: string | null
 }
 
 export function aUsuarioAdmin(dto: UsuarioAdminDto): UsuarioAdmin {
@@ -503,6 +507,7 @@ export function aCategoriaAdmin(dto: CategoriaAdminDto): CategoriaAdmin {
     idCategoria: aNumero(dto.id_categoria, 'id_categoria'),
     nombre: dto.nombre,
     totalProductos: aNumero(dto.total_productos, 'total_productos'),
+    eliminadoEn: parseFechaMySQLONula(dto.eliminado_en ?? null, 'eliminado_en'),
   }
 }
 
@@ -542,6 +547,7 @@ export function aProductoAdmin(dto: ProductoAdminDto): ProductoAdmin {
     stockMinimo: aNumero(dto.stock_minimo, 'stock_minimo'),
     controlaExistencia: dto.controla_existencia == null ? true : aBooleano(dto.controla_existencia, 'controla_existencia'),
     disponible: aBooleano(dto.disponible, 'disponible'),
+    eliminadoEn: parseFechaMySQLONula(dto.eliminado_en ?? null, 'eliminado_en'),
   }
 }
 

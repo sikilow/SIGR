@@ -240,6 +240,7 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   padding-inline: var(--espacio-3);
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
   color: var(--color-primary-dark);
   text-decoration: underline;
   text-decoration-thickness: 1.5px;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Productos e inventario (/gerente/productos): consultar, crear, editar (precio, categoría, existencia,
-// stock mínimo) y activar/desactivar. Los productos no se borran (hay pedidos que los usan): se desactivan.
+// stock mínimo), activar/desactivar y eliminar. «Eliminar» es lógico (solo el gerente): el producto deja de mostrarse,
+// pero se conserva para el historial y se restaura desde «Eliminados».
 import { computed, onMounted, ref } from 'vue'
 import CategoriasDialog from '../../components/CategoriasDialog.vue'
 import ConfirmarAccionDialog from '../../components/ConfirmarAccionDialog.vue'
@@ -16,6 +17,7 @@ import { vPermitir } from '../../utils/campos'
 const anuncios = useAnunciosStore()
 
 const productos = ref<ProductoAdmin[]>([])
+const eliminados = ref<ProductoAdmin[]>([])
 const categorias = ref<CategoriaAdmin[]>([])
 const cargando = ref(true)
 const error = ref('')
@@ -24,6 +26,13 @@ type Estado = 'todos' | 'activos' | 'inactivos' | 'poco_stock' | 'agotados'
 const estado = ref<Estado>('todos')
 const categoriaFiltro = ref<number | 'todas'>('todas')
 const busqueda = ref('')
+/** Muestra solo lo eliminado (con «Restaurar») en lugar de los productos vigentes. */
+const verEliminados = ref(false)
+
+function elegirEstado(clave: Estado) {
+  verEliminados.value = false
+  estado.value = clave
+}
 
 const agotado = (p: ProductoAdmin) => estadoInventario(p) === 'agotado'
 const pocoStock = (p: ProductoAdmin) => estadoInventario(p) === 'poco_stock'
@@ -31,6 +40,12 @@ const detallePendiente = (p: ProductoAdmin) => !p.descripcion.trim() || p.descri
 
 const lista = computed(() => {
   const q = busqueda.value.trim().toLowerCase()
+  if (verEliminados.value) {
+    return eliminados.value.filter((p) => {
+      if (categoriaFiltro.value !== 'todas' && p.idCategoria !== categoriaFiltro.value) return false
+      return !q || `${p.nombre} ${p.descripcion}`.toLowerCase().includes(q)
+    })
+  }
   return productos.value.filter((p) => {
     if (estado.value === 'activos' && !p.activo) return false
     if (estado.value === 'inactivos' && p.activo) return false
@@ -53,8 +68,15 @@ const cuenta = computed(() => ({
 async function cargar(conEsqueleto = false) {
   if (conEsqueleto) cargando.value = true
   try {
-    const [prods, cats] = await Promise.all([servicios.catalogo.listarProductos(), servicios.catalogo.listarCategorias()])
+    const [prods, borrados, cats] = await Promise.all([
+      servicios.catalogo.listarProductos(),
+      servicios.catalogo.listarProductos({ eliminados: true }),
+      servicios.catalogo.listarCategorias(),
+    ])
     productos.value = prods
+    eliminados.value = borrados
+    // Si ya no queda nada eliminado, se vuelve a la lista normal.
+    if (borrados.length === 0) verEliminados.value = false
     categorias.value = cats
     // Si la categoría filtrada ya no existe (se borró), se vuelve a "todas".
     if (categoriaFiltro.value !== 'todas' && !cats.some((c) => c.idCategoria === categoriaFiltro.value)) categoriaFiltro.value = 'todas'
@@ -100,6 +122,55 @@ function abrirCategorias(e: Event) {
   origenCat.value = e.currentTarget as HTMLElement
   catAbierto.value = true
 }
+
+// ---------- Eliminar / restaurar ----------
+const aEliminar = ref<ProductoAdmin | null>(null)
+const origenEliminar = ref<HTMLElement | null>(null)
+const eliminando = ref(false)
+const errorEliminar = ref('')
+const rechazoEliminar = ref('')
+
+function pedirEliminar(p: ProductoAdmin, e: Event) {
+  aEliminar.value = p
+  origenEliminar.value = e.currentTarget as HTMLElement
+  eliminando.value = false
+  errorEliminar.value = ''
+  rechazoEliminar.value = ''
+}
+
+async function confirmarEliminar() {
+  const p = aEliminar.value
+  if (!p || eliminando.value) return
+  eliminando.value = true
+  errorEliminar.value = ''
+  try {
+    await servicios.catalogo.eliminarProducto(p.idProducto)
+    aEliminar.value = null
+    void anuncios.anunciar(`«${p.nombre}» eliminado. Puedes restaurarlo desde «Eliminados»`)
+    await cargar()
+  } catch (e) {
+    if (e instanceof ErrorServicio && e.codigo === 'red') {
+      errorEliminar.value = 'No se pudo conectar con el servidor. Vuelve a intentarlo.'
+    } else {
+      rechazoEliminar.value = e instanceof ErrorServicio ? e.message : 'Ocurrió un error inesperado.'
+      void cargar()
+    }
+  } finally {
+    eliminando.value = false
+  }
+}
+
+async function restaurar(p: ProductoAdmin) {
+  try {
+    await servicios.catalogo.restaurarProducto(p.idProducto)
+    void anuncios.anunciar(`«${p.nombre}» restaurado`)
+    await cargar()
+  } catch (e) {
+    error.value = e instanceof ErrorServicio ? e.message : 'No se pudo restaurar el producto.'
+  }
+}
+
+const fechaCorta = (d: Date | null | undefined) => (d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
 
 // ---------- Activar / desactivar ----------
 const objetivo = ref<ProductoAdmin | null>(null)
@@ -169,13 +240,27 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
           :key="f.clave"
           type="button"
           class="chip"
-          :class="{ 'chip--activo': estado === f.clave }"
-          :aria-pressed="estado === f.clave"
-          @click="estado = f.clave"
+          :class="{ 'chip--activo': !verEliminados && estado === f.clave }"
+          :aria-pressed="!verEliminados && estado === f.clave"
+          @click="elegirEstado(f.clave)"
         >
           {{ f.texto }} <span class="numero">({{ cuenta[f.clave] }})</span>
         </button>
+        <button
+          v-if="eliminados.length > 0"
+          type="button"
+          class="chip"
+          :class="{ 'chip--activo': verEliminados }"
+          :aria-pressed="verEliminados"
+          @click="verEliminados = true"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13" />
+          </svg>
+          Eliminados <span class="numero">({{ eliminados.length }})</span>
+        </button>
       </div>
+      <p v-if="verEliminados" class="filtros__nota">Estos productos no aparecen en el menú ni en las listas. Su historial se conserva; restáuralos para volver a usarlos.</p>
       <div class="filtros__campos">
         <div class="campo">
           <label for="prod-buscar">Buscar</label>
@@ -206,7 +291,7 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
     </div>
 
     <div v-else-if="!error && lista.length === 0" class="vacio">
-      <p v-if="productos.length === 0">Todavía no hay productos. Crea una categoría y luego tu primer producto.</p>
+      <p v-if="productos.length === 0 && !verEliminados">Todavía no hay productos. Crea una categoría y luego tu primer producto.</p>
       <p v-else>Ningún producto coincide con los filtros.</p>
     </div>
 
@@ -228,7 +313,16 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
           <p v-else class="fila__linea fila__meta">Sin control de existencia (se prepara al momento)</p>
         </div>
 
-        <div class="fila__lado">
+        <div v-if="verEliminados" class="fila__lado">
+          <div class="fila__insignias">
+            <InsigniaEstado tono="cancelado" :texto="`Eliminado el ${fechaCorta(p.eliminadoEn)}`" />
+          </div>
+          <div class="fila__acciones">
+            <button type="button" class="btn" :aria-label="`Restaurar ${p.nombre}`" @click="restaurar(p)">Restaurar</button>
+          </div>
+        </div>
+
+        <div v-else class="fila__lado">
           <div class="fila__insignias">
             <InsigniaEstado :tono="p.activo ? 'activo' : 'cancelado'" :texto="p.activo ? 'Activo' : 'Inactivo'" />
             <InsigniaEstado v-if="agotado(p)" tono="agotado" texto="Agotado" />
@@ -240,13 +334,14 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
             <button
               v-if="p.activo"
               type="button"
-              class="btn btn--peligro-suave"
+              class="btn btn--secundario"
               :aria-label="`Desactivar ${p.nombre}`"
               @click="pedirCambioEstado(p, $event)"
             >
               Desactivar
             </button>
             <button v-else type="button" class="btn" :aria-label="`Activar ${p.nombre}`" @click="pedirCambioEstado(p, $event)">Activar</button>
+            <button type="button" class="btn btn--peligro-suave" :aria-label="`Eliminar ${p.nombre}`" @click="pedirEliminar(p, $event)">Eliminar</button>
           </div>
         </div>
       </li>
@@ -263,6 +358,20 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
     />
 
     <CategoriasDialog :abierto="catAbierto" :origen-foco="origenCat" @cerrar="catAbierto = false" @cambio="cargar()" />
+
+    <ConfirmarAccionDialog
+      :abierto="aEliminar !== null"
+      id-base="eliminar-producto"
+      :titulo="`¿Eliminar «${aEliminar?.nombre}»?`"
+      descripcion="Dejará de aparecer en el menú y en las listas. El historial (pedidos y ventas anteriores) se conserva y podrás restaurarlo desde «Eliminados»."
+      texto-confirmar="Eliminar"
+      :en-curso="eliminando"
+      :error-reintentable="errorEliminar"
+      :rechazo="rechazoEliminar"
+      :origen-foco="origenEliminar"
+      @confirmar="confirmarEliminar"
+      @cerrar="aEliminar = null"
+    />
 
     <ConfirmarAccionDialog
       :abierto="objetivo !== null"
@@ -290,8 +399,8 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
 .pantalla__acciones { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
 .filtros { display: flex; flex-direction: column; gap: var(--espacio-3); }
 .filtros__chips { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
+.filtros__nota { margin: 0; color: var(--color-muted); font-size: var(--texto-sm); }
 .filtros__campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--espacio-3); }
-.campo select { min-height: var(--tactil-min); padding: 0 var(--espacio-4); border: 1.5px solid var(--color-borde-control); border-radius: var(--radio-sm); background: var(--color-surface); font-weight: 400; }
 .campo input[type='search'] { min-height: var(--tactil-min); }
 
 .lista { display: flex; flex-direction: column; gap: var(--espacio-3); margin: 0; padding: 0; list-style: none; }

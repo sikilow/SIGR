@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requiereAuth } from "../utils/auth";
-import { actualizarConfiguracionReservacion, obtenerConfiguracionReservacion, listarCategorias, crearCategoria, editarCategoria, borrarCategoria, listarProductos, crearProducto, editarProducto, listarCaracteristicas, crearCaracteristica, editarCaracteristica, borrarCaracteristica, listarSeccionesAdmin, crearSeccionAdmin, editarSeccionAdmin, borrarSeccionAdmin, listarMesasAdmin, crearMesaAdmin, editarMesaAdmin, listarMetodosPago, listarMetodosPagoDisponibles, listarCanales, listarCanalesDisponibles, crearCanal, actualizarCanal, crearCategoriaMetodoPago, actualizarCategoriaMetodoPago, crearMetodoPago, actualizarMetodoPago } from "../controllers/catalogo";
+import { actualizarConfiguracionReservacion, obtenerConfiguracionReservacion, listarCategorias, crearCategoria, editarCategoria, borrarCategoria, restaurarCategoria, listarProductos, crearProducto, editarProducto, eliminarProducto, restaurarProducto, listarCaracteristicas, crearCaracteristica, editarCaracteristica, borrarCaracteristica, listarSeccionesAdmin, crearSeccionAdmin, editarSeccionAdmin, borrarSeccionAdmin, listarMesasAdmin, crearMesaAdmin, editarMesaAdmin, listarMetodosPago, listarMetodosPagoDisponibles, listarCanales, listarCanalesDisponibles, crearCanal, actualizarCanal, crearCategoriaMetodoPago, actualizarCategoriaMetodoPago, crearMetodoPago, actualizarMetodoPago } from "../controllers/catalogo";
 
 export const catalogoRouter = Router();
 
@@ -12,6 +12,7 @@ catalogoRouter.get("/categorias", listarCategorias);
 catalogoRouter.post("/categorias", crearCategoria);
 catalogoRouter.patch("/categorias/:id", editarCategoria);
 catalogoRouter.delete("/categorias/:id", borrarCategoria);
+catalogoRouter.post("/categorias/:id/restaurar", restaurarCategoria);
 catalogoRouter.get("/caracteristicas", listarCaracteristicas);
 catalogoRouter.post("/caracteristicas", crearCaracteristica);
 catalogoRouter.patch("/caracteristicas/:id", editarCaracteristica);
@@ -23,6 +24,8 @@ catalogoRouter.delete("/secciones/:nombre", borrarSeccionAdmin);
 catalogoRouter.get("/productos", listarProductos);
 catalogoRouter.post("/productos", crearProducto);
 catalogoRouter.patch("/productos/:id", editarProducto);
+catalogoRouter.delete("/productos/:id", eliminarProducto);
+catalogoRouter.post("/productos/:id/restaurar", restaurarProducto);
 catalogoRouter.get("/mesas", listarMesasAdmin);
 catalogoRouter.post("/mesas", crearMesaAdmin);
 catalogoRouter.patch("/mesas/:id", editarMesaAdmin);

@@ -115,7 +115,7 @@ export async function productosPorId(ex: Ejecutor, ids: number[]): Promise<Map<n
   const rows = await filas(
     ex,
     `SELECT p.id_producto AS id, p.nombre, p.precio,
-            (p.disponible AND (p.controla_existencia = 0 OR COALESCE(i.existencia, 0) > 0)) AS disponible
+            (p.eliminado_en IS NULL AND p.disponible AND (p.controla_existencia = 0 OR COALESCE(i.existencia, 0) > 0)) AS disponible
        FROM producto p
        LEFT JOIN disponibilidadProducto i ON i.id_producto = p.id_producto
       WHERE p.id_producto IN (?)`,
@@ -174,7 +174,7 @@ export async function verificarExistencia(ex: Ejecutor, lineas: LineaCantidad[],
 
   const productos = await filas(
     ex,
-    "SELECT id_producto, nombre, disponible, controla_existencia FROM producto WHERE id_producto IN (?)",
+    "SELECT id_producto, nombre, (disponible AND eliminado_en IS NULL) AS disponible, controla_existencia FROM producto WHERE id_producto IN (?)",
     [ids],
   );
   const infoProducto = new Map(

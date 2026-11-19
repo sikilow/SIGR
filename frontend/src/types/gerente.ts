@@ -43,7 +43,10 @@ export interface CategoriaAdmin {
   /** categoria_menu.id_categoria */
   idCategoria: number
   nombre: string
+  /** Productos vigentes de la categoría (los eliminados no cuentan). */
   totalProductos: number
+  /** Cuándo se eliminó; `null` = vigente (migración 026). Solo lo ve el gerente en «Eliminados». */
+  eliminadoEn?: Date | null
 }
 
 export interface SeccionAdmin {
@@ -78,8 +81,10 @@ export interface ProductoAdmin {
   stockMinimo: number
   /** `false` = se prepara al momento: no tiene existencia que controlar (el mesero puede pedir cualquier cantidad). */
   controlaExistencia: boolean
-  /** Lo que ve el mesero: activo Y (no controla existencia, o existencia mayor a 0). */
+  /** Lo que ve el mesero: activo, no eliminado y (no controla existencia, o existencia mayor a 0). */
   disponible: boolean
+  /** Cuándo se eliminó; `null` = vigente (migración 026). Solo lo ve el gerente en «Eliminados». */
+  eliminadoEn?: Date | null
 }
 
 export interface NuevoProducto {

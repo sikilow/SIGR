@@ -234,7 +234,7 @@ onMounted(() => void cargar())
             </p>
           </div>
           <div class="campo">
-            <label for="recordatorio">Recordatorio antes de la reservación (minutos)</label>
+            <label for="recordatorio">Recordatorio previo (minutos)</label>
             <input id="recordatorio" v-model="recordatorio" v-permitir="'digitos'" type="text" inputmode="numeric" maxlength="4" autocomplete="off" required :disabled="cargando || guardando" />
             <p class="campo__ayuda">
               El cliente recibe un correo este tiempo antes de su hora. De 1 a 30 minutos; predeterminado: 5.

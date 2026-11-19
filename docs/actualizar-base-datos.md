@@ -137,6 +137,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `022_horario_reservaciones.sql` | Horario de reservaciones en `configuracion_reservacion` (primera y última hora, intervalo y días abiertos) | Tras 021; puede repetirse |
 | `023_caracteristicas_mesa_y_duracion.sql` | Catálogo de características de mesa (`caracteristica_mesa`, `mesa_caracteristica`, `reservacion_caracteristica`), quita las columnas fijas de acceso y agrega `duracion_reservacion_minutos` | Tras 022; puede repetirse |
 | `024_restablecer_contrasena.sql` | Tabla `restablecimiento_contrasena`: enlaces de un solo uso (1 hora) para que el personal cree una contraseña nueva por correo | Tras 023; puede repetirse |
+| `026_eliminado_logico_productos.sql` | Columnas `eliminado_en` y `eliminado_por` en `producto` y `categoria_menu` (eliminado lógico, fase 1); la auditoría las registra | Tras 025; puede repetirse |
 | `025_lada_telefono.sql` | Columna `lada` (código de país, «52» por defecto) en `cliente` y `perfil_usuario`; la auditoría de ambas la registra | Tras 024; puede repetirse |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
@@ -400,6 +401,16 @@ Get-Content -Raw ".\database\migrations\025_lada_telefono.sql" | mysql --default
 ```
 
 Usa `--default-character-set=utf8mb4`: la restricción CHECK guarda el juego de caracteres de la conexión y, con otro, `verificar_init.mjs` marcaría una diferencia aparente. La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**.
+
+## Migración 026: eliminado lógico de productos y categorías
+
+Agrega `eliminado_en` (cuándo) y `eliminado_por` (quién) a `producto` y `categoria_menu`; vacío significa vigente. «Eliminar» en Gerente → Productos ya no borra: marca el registro, deja de mostrarse y se puede restaurar desde «Eliminados». Los pedidos y ventas anteriores siguen mostrando el producto. Puede repetirse.
+
+```powershell
+Get-Content -Raw ".\database\migrations\026_eliminado_logico_productos.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+Diseño y fases siguientes (usuarios, clientes, mesas…): [`eliminado-logico.md`](eliminado-logico.md). La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**.
 
 ## Base nueva o entorno de demostración
 

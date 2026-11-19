@@ -31,6 +31,7 @@ export const obtenerMenu = async (_req: Request, res: Response) => {
        FROM categoria_menu cm
        JOIN producto p ON p.id_categoria = cm.id_categoria
        LEFT JOIN disponibilidadProducto i ON i.id_producto = p.id_producto
+      WHERE p.eliminado_en IS NULL AND cm.eliminado_en IS NULL
       ORDER BY cm.id_categoria, p.id_producto`,
   );
 

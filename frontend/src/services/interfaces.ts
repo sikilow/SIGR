@@ -182,14 +182,16 @@ export interface CatalogoService {
   crearMetodoPago(nombre: string, idCategoriaMetodoPago: number, esEfectivo: boolean): Promise<MetodoPagoAdmin>
   /** PATCH /catalogo/metodos-pago/{id} */
   actualizarMetodoPago(id: number, cambio: { activo?: boolean; esEfectivo?: boolean }): Promise<MetodoPagoAdmin>
-  /** GET /catalogo/categorias */
-  listarCategorias(): Promise<CategoriaAdmin[]>
+  /** GET /catalogo/categorias (`eliminados: true` = solo las eliminadas) */
+  listarCategorias(opciones?: { eliminados?: boolean }): Promise<CategoriaAdmin[]>
   /** POST /catalogo/categorias */
   crearCategoria(nombre: string): Promise<CategoriaAdmin>
   /** PATCH /catalogo/categorias/{id} */
   renombrarCategoria(id: number, nombre: string): Promise<CategoriaAdmin>
-  /** DELETE /catalogo/categorias/{id}. Solo si no tiene productos (si no, `estado_invalido`). */
+  /** DELETE /catalogo/categorias/{id}. Eliminado lógico (se conserva y se puede restaurar). Solo si no tiene productos vigentes (si no, `estado_invalido`). */
   eliminarCategoria(id: number): Promise<void>
+  /** POST /catalogo/categorias/{id}/restaurar */
+  restaurarCategoria(id: number): Promise<CategoriaAdmin>
   /** GET /catalogo/caracteristicas: catálogo de características de mesa (activas e inactivas). */
   listarCaracteristicas(): Promise<CaracteristicaAdmin[]>
   /** POST /catalogo/caracteristicas. Nombre único (si no, `estado_invalido`). */
@@ -208,12 +210,16 @@ export interface CatalogoService {
   actualizarSeccion(nombre: string, cambio: { activa: boolean }): Promise<SeccionAdmin>
   /** DELETE /catalogo/secciones/{nombre}. Solo si no tiene mesas asignadas. */
   eliminarSeccion(nombre: string): Promise<void>
-  /** GET /catalogo/productos (también los inactivos, con su inventario) */
-  listarProductos(): Promise<ProductoAdmin[]>
+  /** GET /catalogo/productos (también los inactivos, con su inventario; `eliminados: true` = solo los eliminados) */
+  listarProductos(opciones?: { eliminados?: boolean }): Promise<ProductoAdmin[]>
   /** POST /catalogo/productos */
   crearProducto(producto: NuevoProducto): Promise<ProductoAdmin>
-  /** PATCH /catalogo/productos/{id}. Desactivar = `{ activo: false }` (los productos no se borran). */
+  /** PATCH /catalogo/productos/{id}. Desactivar = `{ activo: false }` (sigue visible para el gerente). */
   actualizarProducto(id: number, cambio: CambioProducto): Promise<ProductoAdmin>
+  /** DELETE /catalogo/productos/{id}. Eliminado lógico: deja de mostrarse pero se conserva y se puede restaurar. No si está en un pedido sin entregar. */
+  eliminarProducto(id: number): Promise<ProductoAdmin>
+  /** POST /catalogo/productos/{id}/restaurar */
+  restaurarProducto(id: number): Promise<ProductoAdmin>
   /** GET /catalogo/mesas (también las no disponibles) */
   listarMesas(): Promise<MesaAdmin[]>
   /** POST /catalogo/mesas */

@@ -124,8 +124,12 @@ INSERT INTO caracteristica_mesa (nombre) VALUES ('Planta baja'), ('Espacio para 
 
 CREATE TABLE categoria_menu (
   id_categoria INT AUTO_INCREMENT PRIMARY KEY,
-  nombre VARCHAR(80) NOT NULL UNIQUE
+  nombre VARCHAR(80) NOT NULL UNIQUE,
+  eliminado_en DATETIME NULL,
+  eliminado_por INT NULL,
+  CONSTRAINT fk_categoria_menu_eliminado_por FOREIGN KEY (eliminado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB;
+-- eliminado_en: NULL = vigente. Eliminar es solo marcar (el historial conserva la categoria); lo hace el gerente y se puede restaurar.
 
 CREATE TABLE producto (
   id_producto INT AUTO_INCREMENT PRIMARY KEY,
@@ -137,7 +141,10 @@ CREATE TABLE producto (
   disponible BOOLEAN NOT NULL DEFAULT TRUE,
   -- FALSE = se prepara al momento: no tiene existencia que controlar (ni se limita ni se descuenta).
   controla_existencia BOOLEAN NOT NULL DEFAULT TRUE,
+  eliminado_en DATETIME NULL,
+  eliminado_por INT NULL,
   INDEX idx_producto_variante (id_categoria, nombre, presentacion),
+  CONSTRAINT fk_producto_eliminado_por FOREIGN KEY (eliminado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL,
   CONSTRAINT fk_producto_id_categoria FOREIGN KEY (id_categoria) REFERENCES categoria_menu (id_categoria) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -688,17 +695,17 @@ DROP TRIGGER IF EXISTS `trg_aud_categoria_menu_ad`$$
 CREATE TRIGGER `trg_aud_categoria_menu_ai` AFTER INSERT ON `categoria_menu` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'categoria_menu', 'INSERT', JSON_OBJECT('id_categoria', NEW.`id_categoria`), JSON_OBJECT('id_categoria', NEW.`id_categoria`, 'nombre', NEW.`nombre`), USER());
+  VALUES (@sigr_actor_id, 'categoria_menu', 'INSERT', JSON_OBJECT('id_categoria', NEW.`id_categoria`), JSON_OBJECT('id_categoria', NEW.`id_categoria`, 'nombre', NEW.`nombre`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
 END$$
 CREATE TRIGGER `trg_aud_categoria_menu_au` AFTER UPDATE ON `categoria_menu` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'categoria_menu', 'UPDATE', JSON_OBJECT('id_categoria', NEW.`id_categoria`), JSON_OBJECT('id_categoria', OLD.`id_categoria`, 'nombre', OLD.`nombre`), JSON_OBJECT('id_categoria', NEW.`id_categoria`, 'nombre', NEW.`nombre`), USER());
+  VALUES (@sigr_actor_id, 'categoria_menu', 'UPDATE', JSON_OBJECT('id_categoria', NEW.`id_categoria`), JSON_OBJECT('id_categoria', OLD.`id_categoria`, 'nombre', OLD.`nombre`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), JSON_OBJECT('id_categoria', NEW.`id_categoria`, 'nombre', NEW.`nombre`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
 END$$
 CREATE TRIGGER `trg_aud_categoria_menu_ad` AFTER DELETE ON `categoria_menu` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
-  VALUES (@sigr_actor_id, 'categoria_menu', 'DELETE', JSON_OBJECT('id_categoria', OLD.`id_categoria`), JSON_OBJECT('id_categoria', OLD.`id_categoria`, 'nombre', OLD.`nombre`), USER());
+  VALUES (@sigr_actor_id, 'categoria_menu', 'DELETE', JSON_OBJECT('id_categoria', OLD.`id_categoria`), JSON_OBJECT('id_categoria', OLD.`id_categoria`, 'nombre', OLD.`nombre`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), USER());
 END$$
 DROP TRIGGER IF EXISTS `trg_aud_producto_ai`$$
 DROP TRIGGER IF EXISTS `trg_aud_producto_au`$$
@@ -706,17 +713,17 @@ DROP TRIGGER IF EXISTS `trg_aud_producto_ad`$$
 CREATE TRIGGER `trg_aud_producto_ai` AFTER INSERT ON `producto` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'producto', 'INSERT', JSON_OBJECT('id_producto', NEW.`id_producto`), JSON_OBJECT('id_producto', NEW.`id_producto`, 'id_categoria', NEW.`id_categoria`, 'nombre', NEW.`nombre`, 'presentacion', NEW.`presentacion`, 'descripcion', NEW.`descripcion`, 'precio', NEW.`precio`, 'disponible', NEW.`disponible`, 'controla_existencia', NEW.`controla_existencia`), USER());
+  VALUES (@sigr_actor_id, 'producto', 'INSERT', JSON_OBJECT('id_producto', NEW.`id_producto`), JSON_OBJECT('id_producto', NEW.`id_producto`, 'id_categoria', NEW.`id_categoria`, 'nombre', NEW.`nombre`, 'presentacion', NEW.`presentacion`, 'descripcion', NEW.`descripcion`, 'precio', NEW.`precio`, 'disponible', NEW.`disponible`, 'controla_existencia', NEW.`controla_existencia`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
 END$$
 CREATE TRIGGER `trg_aud_producto_au` AFTER UPDATE ON `producto` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'producto', 'UPDATE', JSON_OBJECT('id_producto', NEW.`id_producto`), JSON_OBJECT('id_producto', OLD.`id_producto`, 'id_categoria', OLD.`id_categoria`, 'nombre', OLD.`nombre`, 'presentacion', OLD.`presentacion`, 'descripcion', OLD.`descripcion`, 'precio', OLD.`precio`, 'disponible', OLD.`disponible`, 'controla_existencia', OLD.`controla_existencia`), JSON_OBJECT('id_producto', NEW.`id_producto`, 'id_categoria', NEW.`id_categoria`, 'nombre', NEW.`nombre`, 'presentacion', NEW.`presentacion`, 'descripcion', NEW.`descripcion`, 'precio', NEW.`precio`, 'disponible', NEW.`disponible`, 'controla_existencia', NEW.`controla_existencia`), USER());
+  VALUES (@sigr_actor_id, 'producto', 'UPDATE', JSON_OBJECT('id_producto', NEW.`id_producto`), JSON_OBJECT('id_producto', OLD.`id_producto`, 'id_categoria', OLD.`id_categoria`, 'nombre', OLD.`nombre`, 'presentacion', OLD.`presentacion`, 'descripcion', OLD.`descripcion`, 'precio', OLD.`precio`, 'disponible', OLD.`disponible`, 'controla_existencia', OLD.`controla_existencia`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), JSON_OBJECT('id_producto', NEW.`id_producto`, 'id_categoria', NEW.`id_categoria`, 'nombre', NEW.`nombre`, 'presentacion', NEW.`presentacion`, 'descripcion', NEW.`descripcion`, 'precio', NEW.`precio`, 'disponible', NEW.`disponible`, 'controla_existencia', NEW.`controla_existencia`, 'eliminado_en', NEW.`eliminado_en`, 'eliminado_por', NEW.`eliminado_por`), USER());
 END$$
 CREATE TRIGGER `trg_aud_producto_ad` AFTER DELETE ON `producto` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
-  VALUES (@sigr_actor_id, 'producto', 'DELETE', JSON_OBJECT('id_producto', OLD.`id_producto`), JSON_OBJECT('id_producto', OLD.`id_producto`, 'id_categoria', OLD.`id_categoria`, 'nombre', OLD.`nombre`, 'presentacion', OLD.`presentacion`, 'descripcion', OLD.`descripcion`, 'precio', OLD.`precio`, 'disponible', OLD.`disponible`, 'controla_existencia', OLD.`controla_existencia`), USER());
+  VALUES (@sigr_actor_id, 'producto', 'DELETE', JSON_OBJECT('id_producto', OLD.`id_producto`), JSON_OBJECT('id_producto', OLD.`id_producto`, 'id_categoria', OLD.`id_categoria`, 'nombre', OLD.`nombre`, 'presentacion', OLD.`presentacion`, 'descripcion', OLD.`descripcion`, 'precio', OLD.`precio`, 'disponible', OLD.`disponible`, 'controla_existencia', OLD.`controla_existencia`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), USER());
 END$$
 DROP TRIGGER IF EXISTS `trg_aud_disponibilidadproducto_ai`$$
 DROP TRIGGER IF EXISTS `trg_aud_disponibilidadproducto_au`$$

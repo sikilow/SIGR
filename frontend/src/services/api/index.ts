@@ -415,8 +415,8 @@ export function crearServiciosApi(): Servicios {
         }
       },
 
-      async listarCategorias() {
-        const r = await solicitar<CategoriaAdminDto[]>('GET', '/catalogo/categorias')
+      async listarCategorias(opciones) {
+        const r = await solicitar<CategoriaAdminDto[]>('GET', '/catalogo/categorias', { consulta: opciones?.eliminados ? { eliminados: '1' } : undefined })
         return r.map(aCategoriaAdmin)
       },
 
@@ -432,6 +432,10 @@ export function crearServiciosApi(): Servicios {
 
       async eliminarCategoria(id) {
         await solicitar<{ ok: boolean }>('DELETE', `/catalogo/categorias/${id}`)
+      },
+
+      async restaurarCategoria(id) {
+        return aCategoriaAdmin(await solicitar<CategoriaAdminDto>('POST', `/catalogo/categorias/${id}/restaurar`))
       },
 
       async listarCaracteristicas() {
@@ -491,8 +495,8 @@ export function crearServiciosApi(): Servicios {
         await solicitar<{ ok: boolean }>('DELETE', `/catalogo/secciones/${encodeURIComponent(nombre)}`)
       },
 
-      async listarProductos() {
-        const r = await solicitar<ProductoAdminDto[]>('GET', '/catalogo/productos')
+      async listarProductos(opciones) {
+        const r = await solicitar<ProductoAdminDto[]>('GET', '/catalogo/productos', { consulta: opciones?.eliminados ? { eliminados: '1' } : undefined })
         return r.map(aProductoAdmin)
       },
 
@@ -504,6 +508,14 @@ export function crearServiciosApi(): Servicios {
       async actualizarProducto(id, cambio) {
         const cuerpo = deCambioProducto(cambio)
         return aProductoAdmin(await solicitar<ProductoAdminDto>('PATCH', `/catalogo/productos/${id}`, { cuerpo }))
+      },
+
+      async eliminarProducto(id) {
+        return aProductoAdmin(await solicitar<ProductoAdminDto>('DELETE', `/catalogo/productos/${id}`))
+      },
+
+      async restaurarProducto(id) {
+        return aProductoAdmin(await solicitar<ProductoAdminDto>('POST', `/catalogo/productos/${id}/restaurar`))
       },
 
       async listarMesas() {

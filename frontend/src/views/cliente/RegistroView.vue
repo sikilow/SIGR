@@ -310,12 +310,18 @@ label {
 }
 
 .telefono-fila .selector-lada {
-  flex: 0 1 190px;
-  padding: 13px 10px;
+  flex: 0 1 200px;
+  padding: 13px 12px;
   border: 1px solid #ddcfc5;
   border-radius: 8px;
   background: #fff;
   font-size: 14px;
+}
+
+@media (max-width: 30em) {
+  .telefono-fila .selector-lada {
+    flex-basis: 100%;
+  }
 }
 
 .telefono-fila input {

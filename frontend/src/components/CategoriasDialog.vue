@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Administra las categorías del menú: crear, renombrar y borrar (solo las vacías).
+// Administra las categorías del menú: crear, renombrar y eliminar (solo las que no tienen productos vigentes).
+// «Eliminar» es lógico: la categoría deja de mostrarse, pero se conserva y se restaura desde «Eliminadas».
 // Cada cambio se guarda de inmediato; al cerrar, la pantalla recarga sus listas.
 import { nextTick, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
@@ -16,6 +17,8 @@ const nueva = ref('')
 const editandoId = ref<number | null>(null)
 const nombreEditado = ref('')
 const aBorrar = ref<CategoriaAdmin | null>(null)
+const verEliminadas = ref(false)
+const totalEliminadas = ref(0)
 const enCurso = ref(false)
 const error = ref('')
 const campoNueva = ref<HTMLInputElement | null>(null)
@@ -23,7 +26,13 @@ const campoNueva = ref<HTMLInputElement | null>(null)
 async function cargar() {
   cargando.value = true
   try {
-    categorias.value = await servicios.catalogo.listarCategorias()
+    const [vigentes, borradas] = await Promise.all([
+      servicios.catalogo.listarCategorias(),
+      servicios.catalogo.listarCategorias({ eliminados: true }),
+    ])
+    totalEliminadas.value = borradas.length
+    if (borradas.length === 0) verEliminadas.value = false
+    categorias.value = verEliminadas.value ? borradas : vigentes
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudieron cargar las categorías.'
   } finally {
@@ -35,6 +44,7 @@ watch(
   () => props.abierto,
   async (abierto) => {
     if (!abierto) return
+    verEliminadas.value = false
     nueva.value = ''
     editandoId.value = null
     aBorrar.value = null
@@ -99,6 +109,21 @@ async function borrar() {
   await correr(() => servicios.catalogo.eliminarCategoria(c.idCategoria))
   aBorrar.value = null
 }
+
+async function restaurar(c: CategoriaAdmin) {
+  await correr(() => servicios.catalogo.restaurarCategoria(c.idCategoria))
+}
+
+async function cambiarVista(eliminadas: boolean) {
+  if (verEliminadas.value === eliminadas) return
+  verEliminadas.value = eliminadas
+  aBorrar.value = null
+  editandoId.value = null
+  error.value = ''
+  await cargar()
+}
+
+const fechaCorta = (d: Date | null | undefined) => (d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
 </script>
 
 <template>
@@ -106,7 +131,14 @@ async function borrar() {
     <div class="cat">
       <h2 id="cat-titulo">Categorías del menú</h2>
 
-      <form class="cat__nueva" novalidate @submit.prevent="crear">
+      <div v-if="totalEliminadas > 0" class="cat__vistas" role="group" aria-label="Ver categorías">
+        <button type="button" class="chip" :class="{ 'chip--activo': !verEliminadas }" :aria-pressed="!verEliminadas" @click="cambiarVista(false)">Vigentes</button>
+        <button type="button" class="chip" :class="{ 'chip--activo': verEliminadas }" :aria-pressed="verEliminadas" @click="cambiarVista(true)">
+          Eliminadas <span class="numero">({{ totalEliminadas }})</span>
+        </button>
+      </div>
+
+      <form v-if="!verEliminadas" class="cat__nueva" novalidate @submit.prevent="crear">
         <div class="campo">
           <label for="cat-nueva">Nueva categoría</label>
           <input id="cat-nueva" v-permitir="'texto'" ref="campoNueva" v-model="nueva" type="text" maxlength="80" autocomplete="off" autofocus />
@@ -129,13 +161,22 @@ async function borrar() {
               <button type="button" class="btn btn--secundario" @click="editandoId = null">Cancelar</button>
             </form>
           </template>
+          <template v-else-if="verEliminadas">
+            <div class="cat__datos">
+              <strong>{{ c.nombre }}</strong>
+              <span class="cat__cuenta">Eliminada el {{ fechaCorta(c.eliminadoEn) }}</span>
+            </div>
+            <div class="cat__acciones">
+              <button type="button" class="btn" :aria-label="`Restaurar ${c.nombre}`" :aria-disabled="enCurso ? 'true' : undefined" @click="restaurar(c)">Restaurar</button>
+            </div>
+          </template>
           <template v-else-if="aBorrar?.idCategoria === c.idCategoria">
             <p class="cat__confirmar" role="alert">
-              ¿Borrar «{{ c.nombre }}»? No se puede deshacer.
+              ¿Eliminar «{{ c.nombre }}»? Dejará de mostrarse. Se conserva y podrás restaurarla desde «Eliminadas».
             </p>
             <div class="cat__acciones">
-              <button type="button" class="btn btn--peligro" :aria-disabled="enCurso ? 'true' : undefined" @click="borrar">Sí, borrar</button>
-              <button type="button" class="btn btn--secundario" autofocus @click="aBorrar = null">No borrar</button>
+              <button type="button" class="btn btn--peligro" :aria-disabled="enCurso ? 'true' : undefined" @click="borrar">Sí, eliminar</button>
+              <button type="button" class="btn btn--secundario" autofocus @click="aBorrar = null">No eliminar</button>
             </div>
           </template>
           <template v-else>
@@ -148,12 +189,12 @@ async function borrar() {
               <button
                 type="button"
                 class="btn btn--peligro-suave"
-                :aria-label="`Borrar ${c.nombre}`"
+                :aria-label="`Eliminar ${c.nombre}`"
                 :aria-disabled="c.totalProductos > 0 ? 'true' : undefined"
-                :title="c.totalProductos > 0 ? 'Solo se pueden borrar categorías sin productos' : undefined"
-                @click="c.totalProductos === 0 ? (aBorrar = c) : (error = `«${c.nombre}» tiene productos. Muévelos a otra categoría o desactívalos antes de borrarla.`)"
+                :title="c.totalProductos > 0 ? 'Solo se pueden eliminar categorías sin productos' : undefined"
+                @click="c.totalProductos === 0 ? (aBorrar = c) : (error = `«${c.nombre}» tiene productos. Elimínalos o muévelos a otra categoría antes de eliminarla.`)"
               >
-                Borrar
+                Eliminar
               </button>
             </div>
           </template>
@@ -169,6 +210,7 @@ async function borrar() {
 
 <style scoped>
 .cat { display: flex; flex-direction: column; gap: var(--espacio-3); }
+.cat__vistas { display: flex; flex-wrap: wrap; gap: var(--espacio-2); }
 .cat__nueva { display: flex; align-items: flex-end; gap: var(--espacio-3); }
 .cat__nueva .campo { flex: 1; min-width: 0; }
 .cat__lista { margin: 0; padding: 0; list-style: none; border: 1px solid var(--color-border); border-radius: var(--radio); }

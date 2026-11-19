@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
-import { idDeRuta, validar } from "../models/dominio";
+import { ESTADO_PEDIDO_DB, idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 import { MENSAJE_NOTA, MENSAJE_TEXTO_CATALOGO, REGEX_NOTA, REGEX_TEXTO_CATALOGO, textoCatalogo, textoCatalogoOpcional } from "../utils/campos";
 import { aHoraCorta, aMinutos, INTERVALOS_RESERVACION } from "../models/horarioReservacion";
@@ -342,35 +342,50 @@ function esDuplicado(error: unknown): boolean {
 
 // ======================= Categorías =======================
 
-/** categoria_menu.* + total_productos (calculado: COUNT de producto.id_categoria). */
+/**
+ * categoria_menu.* + total_productos (calculado: COUNT de los productos vigentes de la categoría).
+ * `eliminado_en`: NULL = vigente; con fecha = eliminada (migración 026, solo la ve el gerente en «Eliminados»).
+ */
 interface CategoriaAdminDto {
   id_categoria: number;
   nombre: string;
   total_productos: number;
+  eliminado_en: string | null;
+}
+
+const SELECT_CATEGORIA = `
+  SELECT c.id_categoria, c.nombre, COUNT(p.id_producto) AS total_productos,
+         DATE_FORMAT(c.eliminado_en, '%Y-%m-%d %H:%i:%s') AS eliminado_en
+    FROM categoria_menu c LEFT JOIN producto p ON p.id_categoria = c.id_categoria AND p.eliminado_en IS NULL`;
+
+function aCategoriaDto(f: Record<string, unknown>): CategoriaAdminDto {
+  return {
+    id_categoria: f.id_categoria as number,
+    nombre: f.nombre as string,
+    total_productos: Number(f.total_productos),
+    eliminado_en: (f.eliminado_en as string | null) ?? null,
+  };
 }
 
 async function cargarCategoria(ex: Ejecutor, id: number): Promise<CategoriaAdminDto | null> {
-  const [f] = await filas(
-    ex,
-    `SELECT c.id_categoria, c.nombre, COUNT(p.id_producto) AS total_productos
-       FROM categoria_menu c LEFT JOIN producto p ON p.id_categoria = c.id_categoria
-      WHERE c.id_categoria = ? GROUP BY c.id_categoria, c.nombre`,
-    [id],
-  );
-  return f ? { id_categoria: f.id_categoria as number, nombre: f.nombre as string, total_productos: Number(f.total_productos) } : null;
+  const [f] = await filas(ex, `${SELECT_CATEGORIA} WHERE c.id_categoria = ? GROUP BY c.id_categoria, c.nombre, c.eliminado_en`, [id]);
+  return f ? aCategoriaDto(f) : null;
 }
 
-/** GET /api/catalogo/categorias */
-export const listarCategorias = async (_req: Request, res: Response) => {
+/** `?eliminados=1` → solo lo eliminado (para «Eliminados»); si no, solo lo vigente. */
+function pideEliminados(req: Request): boolean {
+  return req.query.eliminados === "1" || req.query.eliminados === "true";
+}
+
+/** GET /api/catalogo/categorias[?eliminados=1] */
+export const listarCategorias = async (req: Request, res: Response) => {
   const rows = await filas(
     pool,
-    `SELECT c.id_categoria, c.nombre, COUNT(p.id_producto) AS total_productos
-       FROM categoria_menu c LEFT JOIN producto p ON p.id_categoria = c.id_categoria
-      GROUP BY c.id_categoria, c.nombre ORDER BY c.id_categoria`,
+    `${SELECT_CATEGORIA}
+      WHERE c.eliminado_en IS ${pideEliminados(req) ? "NOT NULL" : "NULL"}
+      GROUP BY c.id_categoria, c.nombre, c.eliminado_en ORDER BY c.id_categoria`,
   );
-  res.json(
-    rows.map((f) => ({ id_categoria: f.id_categoria as number, nombre: f.nombre as string, total_productos: Number(f.total_productos) })),
-  );
+  res.json(rows.map(aCategoriaDto));
 };
 
 const CategoriaCuerpo = z.object({ nombre: Texto(80) });
@@ -382,7 +397,12 @@ export const crearCategoria = async (req: Request, res: Response) => {
     const r = await ejecutar(pool, "INSERT INTO categoria_menu (nombre) VALUES (?)", [nombre]);
     res.status(201).json(await cargarCategoria(pool, r.insertId));
   } catch (e) {
-    if (esDuplicado(e)) throw new ErrorApi(409, "estado_invalido", "Ya existe una categoría con ese nombre.");
+    if (esDuplicado(e)) {
+      const [igual] = await filas(pool, "SELECT eliminado_en FROM categoria_menu WHERE nombre = ?", [nombre]);
+      throw new ErrorApi(409, "estado_invalido", igual?.eliminado_en
+        ? "Ya hay una categoría eliminada con ese nombre. Restáurala desde «Eliminados»."
+        : "Ya existe una categoría con ese nombre.");
+    }
     throw e;
   }
 };
@@ -391,10 +411,18 @@ export const crearCategoria = async (req: Request, res: Response) => {
 export const editarCategoria = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
   const { nombre } = validar(CategoriaCuerpo, req.body);
+  const actual = await cargarCategoria(pool, id);
+  if (!actual) throw new ErrorApi(404, "no_encontrado", "La categoría no existe.");
+  if (actual.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La categoría está eliminada. Restáurala para poder editarla.");
   try {
     await ejecutar(pool, "UPDATE categoria_menu SET nombre = ? WHERE id_categoria = ?", [nombre, id]);
   } catch (e) {
-    if (esDuplicado(e)) throw new ErrorApi(409, "estado_invalido", "Ya existe una categoría con ese nombre.");
+    if (esDuplicado(e)) {
+      const [igual] = await filas(pool, "SELECT eliminado_en FROM categoria_menu WHERE nombre = ?", [nombre]);
+      throw new ErrorApi(409, "estado_invalido", igual?.eliminado_en
+        ? "Ya hay una categoría eliminada con ese nombre. Restáurala desde «Eliminados»."
+        : "Ya existe una categoría con ese nombre.");
+    }
     throw e;
   }
   const categoria = await cargarCategoria(pool, id);
@@ -404,21 +432,37 @@ export const editarCategoria = async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/catalogo/categorias/:id  →  { ok: true }
- * Solo se puede borrar una categoría vacía (los productos de una categoría no se reasignan solos).
+ * «Eliminar» es lógico (migración 026): la categoría deja de mostrarse pero se conserva, con quién y cuándo. Solo se
+ * puede eliminar una categoría sin productos vigentes (los productos no se reasignan solos). Se restaura con
+ * POST /categorias/:id/restaurar.
  */
 export const borrarCategoria = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
   const categoria = await cargarCategoria(pool, id);
   if (!categoria) throw new ErrorApi(404, "no_encontrado", "La categoría no existe.");
+  if (categoria.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La categoría ya está eliminada.");
   if (categoria.total_productos > 0) {
     throw new ErrorApi(
       409,
       "estado_invalido",
-      `La categoría tiene ${categoria.total_productos} producto(s). Muévelos a otra categoría o desactívalos antes de borrarla.`,
+      `La categoría tiene ${categoria.total_productos} producto(s). Elimínalos o muévelos a otra categoría antes de eliminarla.`,
     );
   }
-  await ejecutar(pool, "DELETE FROM categoria_menu WHERE id_categoria = ?", [id]);
+  await ejecutar(pool, "UPDATE categoria_menu SET eliminado_en = NOW(), eliminado_por = ? WHERE id_categoria = ? AND eliminado_en IS NULL", [
+    req.usuario?.id ?? null,
+    id,
+  ]);
   res.json({ ok: true });
+};
+
+/** POST /api/catalogo/categorias/:id/restaurar  →  la categoría vigente otra vez. */
+export const restaurarCategoria = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const categoria = await cargarCategoria(pool, id);
+  if (!categoria) throw new ErrorApi(404, "no_encontrado", "La categoría no existe.");
+  if (!categoria.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La categoría no está eliminada.");
+  await ejecutar(pool, "UPDATE categoria_menu SET eliminado_en = NULL, eliminado_por = NULL WHERE id_categoria = ?", [id]);
+  res.json(await cargarCategoria(pool, id));
 };
 
 // ======================= Productos + inventario =======================
@@ -439,14 +483,17 @@ interface ProductoAdminDto {
   stock_minimo: number;
   /** false = se prepara al momento: no tiene existencia que controlar (el mesero puede pedir cualquier cantidad). */
   controla_existencia: boolean;
-  /** Calculado: lo que ve el mesero (activo Y, si controla existencia, con existencia > 0). */
+  /** Calculado: lo que ve el mesero (activo, no eliminado y, si controla existencia, con existencia > 0). */
   disponible: boolean;
+  /** NULL = vigente; con fecha = eliminado (migración 026, solo lo ve el gerente en «Eliminados»). */
+  eliminado_en: string | null;
 }
 
 const SELECT_PRODUCTO = `
   SELECT p.id_producto, p.id_categoria, c.nombre AS categoria, p.nombre, COALESCE(p.presentacion, '') AS presentacion,
          COALESCE(p.descripcion, '') AS descripcion, p.precio, p.disponible AS activo, p.controla_existencia,
-         COALESCE(i.existencia, 0) AS existencia, COALESCE(i.stock_minimo, 0) AS stock_minimo
+         COALESCE(i.existencia, 0) AS existencia, COALESCE(i.stock_minimo, 0) AS stock_minimo,
+         DATE_FORMAT(p.eliminado_en, '%Y-%m-%d %H:%i:%s') AS eliminado_en
     FROM producto p
     JOIN categoria_menu c ON c.id_categoria = p.id_categoria
     LEFT JOIN disponibilidadProducto i ON i.id_producto = p.id_producto`;
@@ -455,6 +502,7 @@ function aProductoDto(f: Record<string, unknown>): ProductoAdminDto {
   const activo = Boolean(f.activo);
   const existencia = Number(f.existencia);
   const controla = Boolean(f.controla_existencia);
+  const eliminadoEn = (f.eliminado_en as string | null) ?? null;
   return {
     id_producto: f.id_producto as number,
     id_categoria: f.id_categoria as number,
@@ -467,7 +515,8 @@ function aProductoDto(f: Record<string, unknown>): ProductoAdminDto {
     existencia,
     stock_minimo: Number(f.stock_minimo),
     controla_existencia: controla,
-    disponible: activo && (!controla || existencia > 0),
+    disponible: eliminadoEn === null && activo && (!controla || existencia > 0),
+    eliminado_en: eliminadoEn,
   };
 }
 
@@ -477,13 +526,25 @@ async function cargarProducto(ex: Ejecutor, id: number): Promise<ProductoAdminDt
 }
 
 async function exigirCategoria(ex: Ejecutor, id: number, bloquear = false): Promise<void> {
-  const [f] = await filas(ex, `SELECT 1 AS x FROM categoria_menu WHERE id_categoria = ?${bloquear ? " FOR UPDATE" : ""}`, [id]);
+  const [f] = await filas(ex, `SELECT eliminado_en FROM categoria_menu WHERE id_categoria = ?${bloquear ? " FOR UPDATE" : ""}`, [id]);
   if (!f) throw new ErrorApi(422, "estado_invalido", "La categoría indicada no existe.");
+  if (f.eliminado_en) throw new ErrorApi(422, "estado_invalido", "La categoría indicada está eliminada. Restáurala o elige otra.");
 }
 
-/** GET /api/catalogo/productos  →  TODOS los productos (también los inactivos) con su inventario. */
-export const listarProductos = async (_req: Request, res: Response) => {
-  const rows = await filas(pool, `${SELECT_PRODUCTO} ORDER BY c.id_categoria, p.nombre, p.presentacion`);
+/** Mensaje cuando ya hay un producto con la misma categoría, nombre y presentación. */
+function mensajeProductoRepetido(eliminado: boolean, otro = false): string {
+  if (eliminado) return "Hay un producto eliminado con esa categoría, nombre y presentación. Restáuralo desde «Eliminados» en lugar de crear otro.";
+  return otro
+    ? "Ya existe otro producto con la misma categoría, nombre y presentación."
+    : "Ya existe un producto con esa categoría, nombre y presentación. Búscalo y edita sus datos o existencias.";
+}
+
+/** GET /api/catalogo/productos[?eliminados=1]  →  los vigentes (también los inactivos) con su inventario, o solo los eliminados. */
+export const listarProductos = async (req: Request, res: Response) => {
+  const rows = await filas(
+    pool,
+    `${SELECT_PRODUCTO} WHERE p.eliminado_en IS ${pideEliminados(req) ? "NOT NULL" : "NULL"} ORDER BY c.id_categoria, p.nombre, p.presentacion`,
+  );
   res.json(rows.map(aProductoDto));
 };
 
@@ -513,13 +574,11 @@ export const crearProducto = async (req: Request, res: Response) => {
   const d = validar(CrearProducto, req.body);
   const id = await transaccion(async (cx) => {
     await exigirCategoria(cx, d.id_categoria, true);
-    const [existente] = await filas(cx, `SELECT p.id_producto
+    const [existente] = await filas(cx, `SELECT p.id_producto, p.eliminado_en
        FROM producto p
       WHERE p.id_categoria = ? AND p.nombre = ? AND COALESCE(p.presentacion, '') = ?
       ORDER BY p.id_producto LIMIT 1 FOR UPDATE`, [d.id_categoria, d.nombre, d.presentacion ?? ""]);
-    if (existente) {
-      throw new ErrorApi(409, "estado_invalido", "Ya existe un producto con esa categoría, nombre y presentación. Búscalo y edita sus datos o existencias.");
-    }
+    if (existente) throw new ErrorApi(409, "estado_invalido", mensajeProductoRepetido(Boolean(existente.eliminado_en)));
 
     const p = await ejecutar(
       cx,
@@ -563,8 +622,9 @@ export const editarProducto = async (req: Request, res: Response) => {
   if (Object.keys(d).length === 0) throw new ErrorApi(422, "estado_invalido", "No hay nada que cambiar.");
 
   await transaccion(async (cx) => {
-    const [preExiste] = await filas(cx, "SELECT id_categoria FROM producto WHERE id_producto = ?", [id]);
+    const [preExiste] = await filas(cx, "SELECT id_categoria, eliminado_en FROM producto WHERE id_producto = ?", [id]);
     if (!preExiste) throw new ErrorApi(404, "no_encontrado", "El producto no existe.");
+    if (preExiste.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El producto está eliminado. Restáuralo para poder editarlo.");
     const categoriaObjetivo = d.id_categoria ?? Number(preExiste.id_categoria);
     const categoriasBloqueo = [...new Set([Number(preExiste.id_categoria), categoriaObjetivo])].sort((a, b) => a - b);
     for (const idCategoria of categoriasBloqueo) await exigirCategoria(cx, idCategoria, true);
@@ -581,12 +641,12 @@ export const editarProducto = async (req: Request, res: Response) => {
     if (cambioIdentidad) {
       const [duplicado] = await filas(
         cx,
-        `SELECT id_producto FROM producto
+        `SELECT id_producto, eliminado_en FROM producto
           WHERE id_producto <> ? AND id_categoria = ? AND nombre = ? AND COALESCE(presentacion, '') = ?
           LIMIT 1 FOR UPDATE`,
         [id, categoria, nombre, presentacion],
       );
-      if (duplicado) throw new ErrorApi(409, "estado_invalido", "Ya existe otro producto con la misma categoría, nombre y presentación.");
+      if (duplicado) throw new ErrorApi(409, "estado_invalido", mensajeProductoRepetido(Boolean(duplicado.eliminado_en), true));
     }
 
     const sets: string[] = [];
@@ -613,6 +673,65 @@ export const editarProducto = async (req: Request, res: Response) => {
     }
   });
 
+  res.json(await cargarProducto(pool, id));
+};
+
+/**
+ * DELETE /api/catalogo/productos/:id  →  el producto, ya eliminado.
+ * «Eliminar» es lógico (migración 026): el producto deja de mostrarse en el menú y en las listas, pero se conserva para
+ * el historial (pedidos y ventas viejos siguen mostrando su nombre). Se registra quién y cuándo. No se puede eliminar
+ * mientras esté en un pedido que aún no se entrega. Distinto de «desactivar» (`activo: false`), que lo oculta al
+ * personal pero el gerente lo sigue viendo. Se restaura con POST /productos/:id/restaurar.
+ */
+export const eliminarProducto = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  await transaccion(async (cx) => {
+    const [p] = await filas(cx, "SELECT nombre, eliminado_en FROM producto WHERE id_producto = ? FOR UPDATE", [id]);
+    if (!p) throw new ErrorApi(404, "no_encontrado", "El producto no existe.");
+    if (p.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El producto ya está eliminado.");
+
+    const sinEntregar = [ESTADO_PEDIDO_DB.registrado, ESTADO_PEDIDO_DB.enviado, ESTADO_PEDIDO_DB.en_preparacion, ESTADO_PEDIDO_DB.listo];
+    const [uso] = await filas(
+      cx,
+      `SELECT COUNT(DISTINCT pe.id_pedido) AS pedidos
+         FROM detalle_pedido dp
+         JOIN pedido pe ON pe.id_pedido = dp.id_pedido
+         JOIN estado_pedido ep ON ep.id_estado = pe.id_estado
+        WHERE dp.id_producto = ? AND ep.nombre IN (?)`,
+      [id, sinEntregar],
+    );
+    const pedidos = Number(uso?.pedidos ?? 0);
+    if (pedidos > 0) {
+      throw new ErrorApi(
+        409,
+        "estado_invalido",
+        `«${String(p.nombre)}» está en ${pedidos} pedido(s) que aún no se entregan. Espera a que se entreguen o cancélalos; mientras tanto puedes desactivarlo.`,
+      );
+    }
+    await ejecutar(cx, "UPDATE producto SET eliminado_en = NOW(), eliminado_por = ? WHERE id_producto = ? AND eliminado_en IS NULL", [
+      req.usuario?.id ?? null,
+      id,
+    ]);
+  });
+  res.json(await cargarProducto(pool, id));
+};
+
+/** POST /api/catalogo/productos/:id/restaurar  →  el producto vigente otra vez (sigue con su estado activo/inactivo). */
+export const restaurarProducto = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  await transaccion(async (cx) => {
+    const [p] = await filas(
+      cx,
+      `SELECT p.eliminado_en, c.eliminado_en AS categoria_eliminada
+         FROM producto p JOIN categoria_menu c ON c.id_categoria = p.id_categoria
+        WHERE p.id_producto = ? FOR UPDATE`,
+      [id],
+    );
+    if (!p) throw new ErrorApi(404, "no_encontrado", "El producto no existe.");
+    if (!p.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El producto no está eliminado.");
+    if (p.categoria_eliminada) throw new ErrorApi(409, "estado_invalido", "Su categoría está eliminada. Restaura primero la categoría.");
+    await ejecutar(cx, "UPDATE producto SET eliminado_en = NULL, eliminado_por = NULL WHERE id_producto = ?", [id]);
+  });
   res.json(await cargarProducto(pool, id));
 };
 
