@@ -5,6 +5,7 @@ import { nextTick, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import type { CategoriaAdmin } from '../types'
 import DialogoModal from './DialogoModal.vue'
+import { vPermitir } from '../utils/campos'
 
 const props = defineProps<{ abierto: boolean; origenFoco?: HTMLElement | null }>()
 const emit = defineEmits<{ cerrar: []; cambio: [] }>()
@@ -108,7 +109,7 @@ async function borrar() {
       <form class="cat__nueva" novalidate @submit.prevent="crear">
         <div class="campo">
           <label for="cat-nueva">Nueva categoría</label>
-          <input id="cat-nueva" ref="campoNueva" v-model="nueva" type="text" maxlength="80" autocomplete="off" autofocus />
+          <input id="cat-nueva" v-permitir="'texto'" ref="campoNueva" v-model="nueva" type="text" maxlength="80" autocomplete="off" autofocus />
         </div>
         <button type="submit" class="btn" :aria-disabled="enCurso ? 'true' : undefined">Agregar</button>
       </form>
@@ -123,7 +124,7 @@ async function borrar() {
           <template v-if="editandoId === c.idCategoria">
             <form class="cat__edicion" novalidate @submit.prevent="guardarEdicion">
               <label class="solo-lectores" :for="`cat-edit-${c.idCategoria}`">Nuevo nombre de {{ c.nombre }}</label>
-              <input :id="`cat-edit-${c.idCategoria}`" v-model="nombreEditado" type="text" maxlength="80" autocomplete="off" autofocus />
+              <input :id="`cat-edit-${c.idCategoria}`" v-model="nombreEditado" v-permitir="'texto'" type="text" maxlength="80" autocomplete="off" autofocus />
               <button type="submit" class="btn" :aria-disabled="enCurso ? 'true' : undefined">Guardar</button>
               <button type="button" class="btn btn--secundario" @click="editandoId = null">Cancelar</button>
             </form>

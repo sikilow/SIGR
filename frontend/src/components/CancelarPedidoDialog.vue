@@ -18,6 +18,7 @@ import { formatearHora, formatearMoneda } from '../utils/formato'
 import { crearClaveIdempotencia, esFalloReintentable } from '../utils/idempotencia'
 import DialogoModal from './DialogoModal.vue'
 import InsigniaEstado from './InsigniaEstado.vue'
+import { vPermitir } from '../utils/campos'
 
 const props = defineProps<{
   abierto: boolean
@@ -197,7 +198,7 @@ async function cancelar() {
             Motivo de la cancelación <span class="cancelar__requerido">(obligatorio)</span>
           </label>
           <textarea
-            id="motivo-cancelacion"
+            id="motivo-cancelacion" v-permitir="'nota'"
             ref="campoDescripcion"
             v-model="descripcion"
             :maxlength="DESCRIPCION_MOTIVO_MAX"

@@ -4,6 +4,7 @@
 import { ref } from 'vue'
 import type { TonoEstado } from '../../components/IconoEstado.vue'
 import InsigniaEstado from '../../components/InsigniaEstado.vue'
+import { vPermitir } from '../../utils/campos'
 
 interface Muestra {
   nombre: string
@@ -248,7 +249,7 @@ const moneda = (cantidad: number) =>
 
           <div class="campo">
             <label for="demo-usuario">Nombre del cliente</label>
-            <input id="demo-usuario" v-model="usuario" type="text" placeholder="Ej. María López" autocomplete="off" />
+            <input id="demo-usuario" v-permitir="'nombre'" v-model="usuario" type="text" placeholder="Ej. María López" autocomplete="off" />
             <p class="campo__ayuda">Como aparecerá en la lista de espera.</p>
           </div>
 
@@ -263,7 +264,7 @@ const moneda = (cantidad: number) =>
 
           <div class="campo">
             <label for="demo-nota">Nota para el equipo</label>
-            <textarea id="demo-nota" v-model="nota" rows="3" placeholder="Cumpleaños, alergias, movilidad…" />
+            <textarea id="demo-nota" v-permitir="'nota'" v-model="nota" rows="3" placeholder="Cumpleaños, alergias, movilidad…" />
           </div>
 
           <label class="interruptor">

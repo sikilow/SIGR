@@ -41,6 +41,7 @@ import {
 } from '../../utils/horarioReservacion'
 import PreferenciasMesaCampos from './PreferenciasMesaCampos.vue'
 import SelectorCliente from './SelectorCliente.vue'
+import { vPermitir } from '../../utils/campos'
 
 const props = defineProps<{
   /** `null` = reservación nueva. */
@@ -278,7 +279,7 @@ async function guardar() {
         idCliente = cliente.value.seleccionado.idCliente
       } else {
         if (!clienteCreado.value) {
-          const datos = { nombre: cliente.value.nombre, telefono: cliente.value.telefono, correo: cliente.value.correo.trim() || null }
+          const datos = { nombre: cliente.value.nombre, telefono: cliente.value.telefono, lada: cliente.value.lada, correo: cliente.value.correo.trim() || null }
           try {
             clienteCreado.value = await store.crearCliente(datos, clavesCliente.para(`cliente|${JSON.stringify(datos)}`))
             clavesCliente.soltar()
@@ -413,7 +414,7 @@ async function guardar() {
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 12h12" /></svg>
           </button>
           <input
-            id="res-personas"
+            id="res-personas" v-permitir="'digitos'"
             v-model="personasTexto"
             class="personas__campo numero"
             type="text"

@@ -6,8 +6,9 @@ import { cuadrarCorte, Pagos, validarImportes, validarMetodoSolicitado, type Cob
 import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
 import { conIdempotencia } from "../services/idempotencia";
 import { ErrorApi } from "../utils/errores";
+import { importe } from "../utils/campos";
 
-const Importe = z.number().finite().min(0).max(9_999_999_999.99);
+const Importe = importe(9_999_999_999.99);
 const AbrirCorte = z.object({ fondo_inicial: Importe }).strict();
 const CerrarCorte = z.object({ efectivo_contado: Importe }).strict();
 

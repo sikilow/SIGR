@@ -16,6 +16,7 @@ import DialogoModal from '../DialogoModal.vue'
 import FormularioAsignarEspera from './FormularioAsignarEspera.vue'
 import FormularioEspera from './FormularioEspera.vue'
 import InsigniaEspera from './InsigniaEspera.vue'
+import { vPermitir } from '../../utils/campos'
 
 type Paso = 'acciones' | 'nueva' | 'asignar' | 'personas' | 'quitar'
 
@@ -263,13 +264,14 @@ async function guardarCambio(cambio: CambioEspera, clave: string, anuncio: strin
           <div class="personas__control">
             <button type="button" class="btn btn--secundario personas__paso" aria-label="Una persona menos" :disabled="trabajando" @click="cambiarPersonasEn(-1)">−</button>
             <input
-              id="esp-cambio-personas"
+              id="esp-cambio-personas" v-permitir="'digitos'"
               v-model="personasTexto"
               class="personas__campo numero"
-              type="number"
+              type="text"
               inputmode="numeric"
-              :min="MIN_PERSONAS_RESERVACION"
-              :max="MAX_PERSONAS_RESERVACION"
+              pattern="[0-9]*"
+              maxlength="2"
+              autocomplete="off"
               autofocus
               :disabled="trabajando"
               :aria-invalid="errorPersonas ? 'true' : undefined"

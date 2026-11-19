@@ -137,6 +137,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `022_horario_reservaciones.sql` | Horario de reservaciones en `configuracion_reservacion` (primera y última hora, intervalo y días abiertos) | Tras 021; puede repetirse |
 | `023_caracteristicas_mesa_y_duracion.sql` | Catálogo de características de mesa (`caracteristica_mesa`, `mesa_caracteristica`, `reservacion_caracteristica`), quita las columnas fijas de acceso y agrega `duracion_reservacion_minutos` | Tras 022; puede repetirse |
 | `024_restablecer_contrasena.sql` | Tabla `restablecimiento_contrasena`: enlaces de un solo uso (1 hora) para que el personal cree una contraseña nueva por correo | Tras 023; puede repetirse |
+| `025_lada_telefono.sql` | Columna `lada` (código de país, «52» por defecto) en `cliente` y `perfil_usuario`; la auditoría de ambas la registra | Tras 024; puede repetirse |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
@@ -389,6 +390,16 @@ Get-Content -Raw ".\database\migrations\024_restablecer_contrasena.sql" | mysql 
 ```
 
 Necesita el correo configurado (Resend o SMTP, igual que las reservaciones). El enlace apunta al front desde el que se pidió; si se pide desde otro lado se usa `URL_APP` de `backend/.env` (por omisión `http://localhost:5173`). En producción define `URL_APP` con la dirección pública del front. La API no arranca sin esta migración.
+
+## Migración 025: lada del teléfono
+
+Agrega `lada` (código de país sin «+», por defecto `52`) a `cliente` y `perfil_usuario`, y vuelve a crear sus triggers de auditoría para que la registren. El teléfono se guarda solo con dígitos y cuántos son depende del país (tabla `PAISES_LADA` del código, sin cambios en la base); los registros existentes quedan con `52`, que pide 10 dígitos. Puede repetirse.
+
+```powershell
+Get-Content -Raw ".\database\migrations\025_lada_telefono.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+Usa `--default-character-set=utf8mb4`: la restricción CHECK guarda el juego de caracteres de la conexión y, con otro, `verificar_init.mjs` marcaría una diferencia aparente. La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**.
 
 ## Base nueva o entorno de demostración
 

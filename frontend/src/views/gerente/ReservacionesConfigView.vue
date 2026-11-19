@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ErrorServicio, servicios } from '../../services'
+import { vPermitir } from '../../utils/campos'
 import type { ConfiguracionReservacion } from '../../types'
 import {
   alternarDia,
@@ -210,7 +211,7 @@ onMounted(() => void cargar())
         <div class="config__campos">
           <div class="campo">
             <label for="anticipacion">Anticipación mínima para reservar (minutos)</label>
-            <input id="anticipacion" v-model="anticipacion" type="number" min="0" max="1440" step="5" required :disabled="cargando || guardando" />
+            <input id="anticipacion" v-model="anticipacion" v-permitir="'digitos'" type="text" inputmode="numeric" maxlength="4" autocomplete="off" required :disabled="cargando || guardando" />
             <p class="campo__ayuda">
               Tiempo que debe faltar, como mínimo, para la hora reservada. Aplica a la hostess y al portal de clientes.
               De 0 (sin mínimo) a 1440 minutos; predeterminado: 60 (1 hora).
@@ -218,7 +219,7 @@ onMounted(() => void cargar())
           </div>
           <div class="campo">
             <label for="duracion">Duración de cada reservación (minutos)</label>
-            <input id="duracion" v-model="duracion" type="number" min="30" max="360" step="15" required :disabled="cargando || guardando" />
+            <input id="duracion" v-model="duracion" v-permitir="'digitos'" type="text" inputmode="numeric" maxlength="4" autocomplete="off" required :disabled="cargando || guardando" />
             <p class="campo__ayuda">
               Cuánto tiempo aparta una reservación su mesa. Con 90, una mesa reservada a las 14:00 no se da a otra reservación
               entre 12:30 y 15:30. De 30 a 360 minutos; predeterminado: 90.
@@ -226,7 +227,7 @@ onMounted(() => void cargar())
           </div>
           <div class="campo">
             <label for="tolerancia">Tolerancia de llegada (minutos)</label>
-            <input id="tolerancia" v-model="tolerancia" type="number" min="5" max="180" step="1" required :disabled="cargando || guardando" />
+            <input id="tolerancia" v-model="tolerancia" v-permitir="'digitos'" type="text" inputmode="numeric" maxlength="4" autocomplete="off" required :disabled="cargando || guardando" />
             <p class="campo__ayuda">
               Empieza a contar desde la hora reservada. Al vencer, la reservación se marca como vencida y la mesa se libera.
               De 5 a 180 minutos; predeterminado: 15.
@@ -234,7 +235,7 @@ onMounted(() => void cargar())
           </div>
           <div class="campo">
             <label for="recordatorio">Recordatorio antes de la reservación (minutos)</label>
-            <input id="recordatorio" v-model="recordatorio" type="number" min="1" max="30" step="1" required :disabled="cargando || guardando" />
+            <input id="recordatorio" v-model="recordatorio" v-permitir="'digitos'" type="text" inputmode="numeric" maxlength="4" autocomplete="off" required :disabled="cargando || guardando" />
             <p class="campo__ayuda">
               El cliente recibe un correo este tiempo antes de su hora. De 1 a 30 minutos; predeterminado: 5.
             </p>

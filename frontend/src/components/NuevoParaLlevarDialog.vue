@@ -7,6 +7,7 @@ import { ErrorServicio, servicios } from '../services'
 import type { AperturaParaLlevar, CanalPedido } from '../types'
 import { crearClaveIdempotencia, esFalloReintentable } from '../utils/idempotencia'
 import DialogoModal from './DialogoModal.vue'
+import { vPermitir } from '../utils/campos'
 
 const props = defineProps<{
   abierto: boolean
@@ -125,7 +126,7 @@ async function abrir() {
       <div class="campo">
         <label for="llevar-referencia">Nombre o folio <span class="llevar__requerido">(opcional)</span></label>
         <input
-          id="llevar-referencia"
+          id="llevar-referencia" v-permitir="'texto'"
           v-model="referencia"
           type="text"
           autocomplete="off"

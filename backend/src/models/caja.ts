@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ErrorApi } from "../utils/errores";
+import { importePositivo } from "../utils/campos";
 
 export const Pagos = z
   .object({
@@ -9,8 +10,8 @@ export const Pagos = z
         z
           .object({
             id_metodo: z.number().int().positive(),
-            monto: z.number().finite().positive(),
-            monto_recibido: z.number().finite().positive().optional(),
+            monto: importePositivo(9_999_999_999.99),
+            monto_recibido: importePositivo(9_999_999_999.99).optional(),
           })
           .strict(),
       )

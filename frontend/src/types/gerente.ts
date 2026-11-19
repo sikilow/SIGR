@@ -18,6 +18,8 @@ export interface UsuarioAdmin {
   activo: boolean
   /** perfil_usuario.telefono (tabla fuera del alcance del mesero). */
   telefono: string | null
+  /** perfil_usuario.lada: código de país del teléfono, sin «+» (por defecto «52»). */
+  lada?: string
   /** usuario.creado_en (DATETIME, hora local). */
   creadoEn: Date
   /** credenciales.ultimo_acceso (DATETIME, NULL si nunca entró). */
@@ -31,10 +33,11 @@ export interface NuevoUsuario {
   contrasena: string
   rol: Rol
   telefono?: string
+  lada?: string
 }
 
 /** Cualquier subconjunto de campos editables. */
-export type CambioUsuario = Partial<Pick<UsuarioAdmin, 'nombre' | 'correo' | 'nombreUsuario' | 'rol' | 'activo' | 'telefono'>>
+export type CambioUsuario = Partial<Pick<UsuarioAdmin, 'nombre' | 'correo' | 'nombreUsuario' | 'rol' | 'activo' | 'telefono' | 'lada'>>
 
 export interface CategoriaAdmin {
   /** categoria_menu.id_categoria */

@@ -1,5 +1,7 @@
 // Reglas de las reservaciones (rol hostess). Funciones puras: las usan la pantalla Reservaciones, el mock y las pruebas.
 import type { CaracteristicaMesa, Cliente, EstadoReservacion, MesaSalon, PreferenciasReservacion, Reservacion } from '../types'
+import { REGEX_CORREO, REGEX_NOMBRE_PERSONA } from './campos'
+import { LADA_PREDETERMINADA, rangoTelefono, textoDigitos } from './lada'
 
 export const MIN_PERSONAS_RESERVACION = 1
 export const MAX_PERSONAS_RESERVACION = 20
@@ -311,17 +313,21 @@ export interface ClienteForm {
   modo: 'existente' | 'nuevo'
   seleccionado: Cliente | null
   nombre: string
+  /** Código de país del teléfono (sin «+»). */
+  lada: string
   telefono: string
   correo: string
 }
 
 export function clienteFormVacio(): ClienteForm {
-  return { modo: 'existente', seleccionado: null, nombre: '', telefono: '', correo: '' }
+  return { modo: 'existente', seleccionado: null, nombre: '', lada: LADA_PREDETERMINADA, telefono: '', correo: '' }
 }
 
 export interface DatosCliente {
   nombre: string
   telefono: string
+  /** Código de país; si falta, México. */
+  lada?: string
   correo: string
 }
 
@@ -351,22 +357,25 @@ export function normalizarTelefono(texto: string): string {
   return texto.replace(/\D/g, '')
 }
 
-const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 /** Valida un cliente nuevo: nombre (hasta 100), teléfono de 10 dígitos y correo opcional (hasta 120). */
 export function validarCliente(datos: DatosCliente): ErroresCliente {
   const errores: ErroresCliente = {}
   const nombre = datos.nombre.trim()
   if (nombre === '') errores.nombre = 'Escribe el nombre del cliente.'
   else if (nombre.length > 100) errores.nombre = 'El nombre es demasiado largo (máximo 100 letras).'
+  else if (!REGEX_NOMBRE_PERSONA.test(nombre)) errores.nombre = 'El nombre solo puede llevar letras y espacios.'
 
   const telefono = normalizarTelefono(datos.telefono)
   if (datos.telefono.trim() === '') errores.telefono = 'Escribe el teléfono del cliente.'
-  else if (telefono.length !== 10) errores.telefono = 'Escribe un teléfono de 10 dígitos.'
+  else {
+    const lada = datos.lada ?? LADA_PREDETERMINADA
+    const { min, max } = rangoTelefono(lada)
+    if (telefono.length < min || telefono.length > max) errores.telefono = `Escribe un teléfono de ${textoDigitos(lada)}.`
+  }
 
   const correo = datos.correo.trim()
   if (correo !== '') {
-    if (!CORREO.test(correo)) errores.correo = 'Escribe un correo válido, por ejemplo nombre@correo.com.'
+    if (!REGEX_CORREO.test(correo)) errores.correo = 'Escribe un correo válido, por ejemplo nombre@correo.com.'
     else if (correo.length > 120) errores.correo = 'El correo es demasiado largo (máximo 120 caracteres).'
   }
   return errores

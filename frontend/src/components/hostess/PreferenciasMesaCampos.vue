@@ -107,7 +107,7 @@ function cambiarZona(zona: string) {
 
 .preferencias__opciones {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr));
   gap: var(--espacio-2);
 }
 
@@ -128,7 +128,15 @@ function cambiarZona(zona: string) {
   background: var(--color-surface);
   font-size: var(--texto-sm);
   font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
   cursor: pointer;
+}
+
+.opcion-acceso span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .opcion-acceso input {
@@ -142,7 +150,7 @@ function cambiarZona(zona: string) {
 .opcion-acceso svg {
   flex: none;
   color: var(--color-primary-dark);
-  visibility: hidden;
+  display: none;
 }
 
 .opcion-acceso:has(input:checked) {
@@ -152,7 +160,7 @@ function cambiarZona(zona: string) {
 }
 
 .opcion-acceso:has(input:checked) svg {
-  visibility: visible;
+  display: block;
 }
 
 .opcion-acceso:has(input:focus-visible) {

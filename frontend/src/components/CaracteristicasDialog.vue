@@ -6,6 +6,7 @@ import { nextTick, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import type { CaracteristicaAdmin } from '../types'
 import DialogoModal from './DialogoModal.vue'
+import { vPermitir } from '../utils/campos'
 
 const props = defineProps<{ abierto: boolean; origenFoco?: HTMLElement | null }>()
 const emit = defineEmits<{ cerrar: []; cambio: [] }>()
@@ -128,7 +129,7 @@ const sugerenciasLibres = () => SUGERENCIAS.filter((s) => !lista.value.some((c) 
       <form class="caracteristicas__nueva" novalidate @submit.prevent="crear()">
         <div class="campo">
           <label for="caracteristica-nueva">Nueva característica</label>
-          <input id="caracteristica-nueva" ref="campoNueva" v-model="nueva" type="text" maxlength="40" autocomplete="off" placeholder="Ej. Junto a la ventana" />
+          <input id="caracteristica-nueva" v-permitir="'texto'" ref="campoNueva" v-model="nueva" type="text" maxlength="40" autocomplete="off" placeholder="Ej. Junto a la ventana" />
         </div>
         <button type="submit" class="btn" :aria-disabled="enCurso ? 'true' : undefined">Agregar</button>
       </form>
@@ -146,7 +147,7 @@ const sugerenciasLibres = () => SUGERENCIAS.filter((s) => !lista.value.some((c) 
           <template v-if="editando === c.idCaracteristica">
             <form class="caracteristicas__edicion" novalidate @submit.prevent="guardarEdicion">
               <label class="solo-lectores" :for="`caracteristica-edit-${c.idCaracteristica}`">Nuevo nombre de {{ c.nombre }}</label>
-              <input :id="`caracteristica-edit-${c.idCaracteristica}`" v-model="nombreEditado" type="text" maxlength="40" autocomplete="off" autofocus />
+              <input :id="`caracteristica-edit-${c.idCaracteristica}`" v-model="nombreEditado" v-permitir="'texto'" type="text" maxlength="40" autocomplete="off" autofocus />
               <button type="submit" class="btn" :aria-disabled="enCurso ? 'true' : undefined">Guardar</button>
               <button type="button" class="btn btn--secundario" @click="editando = null">Cancelar</button>
             </form>

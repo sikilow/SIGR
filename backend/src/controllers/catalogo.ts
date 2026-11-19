@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
 import { idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
+import { MENSAJE_NOTA, MENSAJE_TEXTO_CATALOGO, REGEX_NOTA, REGEX_TEXTO_CATALOGO, textoCatalogo, textoCatalogoOpcional } from "../utils/campos";
 import { aHoraCorta, aMinutos, INTERVALOS_RESERVACION } from "../models/horarioReservacion";
 import { guardarCaracteristicasMesa, IdsCaracteristicas, idsCaracteristicasDeMesas } from "../models/caracteristicasMesa";
 
@@ -80,7 +81,7 @@ export const actualizarConfiguracionReservacion = async (req: Request, res: Resp
 };
 
 const TipoCategoriaPago = z.enum(["fisico", "digital"]);
-const NombreMetodoPago = z.string().trim().min(1, "es obligatorio").max(40, "máximo 40 caracteres");
+const NombreMetodoPago = textoCatalogo(40);
 const NuevaCategoriaPago = z.object({ nombre: NombreMetodoPago, tipo: TipoCategoriaPago }).strict();
 const CambioCategoriaPago = z.object({ activo: z.boolean() }).strict();
 const NuevoMetodoPago = z.object({
@@ -286,7 +287,7 @@ export const actualizarMetodoPago = async (req: Request, res: Response) => {
 };
 
 // ---------- Canales de pedido (para llevar): mostrador, teléfono, plataformas… ----------
-const NombreCanal = z.string().trim().min(1, "es obligatorio").max(40, "máximo 40 caracteres");
+const NombreCanal = textoCatalogo(40);
 const NuevoCanal = z.object({ nombre: NombreCanal }).strict();
 const CambioCanal = z.object({ activo: z.boolean() }).strict();
 
@@ -329,8 +330,8 @@ export const actualizarCanal = async (req: Request, res: Response) => {
   res.json(canalDto(fila));
 };
 
-const Texto = (max: number) => z.string().trim().min(1, "es obligatorio").max(max, `máximo ${max} caracteres`);
-const DescripcionProducto = Texto(255).refine(
+const Texto = textoCatalogo;
+const DescripcionProducto = z.string().trim().min(1, "es obligatorio").max(255, "máximo 255 caracteres").regex(REGEX_NOTA, MENSAJE_NOTA).refine(
   (descripcion) => descripcion.toLocaleLowerCase() !== "detalle pendiente de completar",
   "describe la presentación, porción o características del producto",
 );
@@ -497,7 +498,7 @@ const Entero = z.number().int("debe ser un número entero").min(0, "no puede ser
 const CrearProducto = z.object({
   id_categoria: z.number().int().positive(),
   nombre: Texto(100),
-  presentacion: z.string().trim().max(100, "máximo 100 caracteres").optional(),
+  presentacion: textoCatalogoOpcional(100).optional(),
   descripcion: DescripcionProducto,
   precio: Precio,
   activo: z.boolean().optional(),
@@ -541,7 +542,7 @@ const EditarProducto = z
   .object({
     id_categoria: z.number().int().positive(),
     nombre: Texto(100),
-    presentacion: z.string().trim().max(100, "máximo 100 caracteres"),
+    presentacion: textoCatalogoOpcional(100),
     descripcion: DescripcionProducto,
     precio: Precio,
     activo: z.boolean(),
@@ -773,7 +774,7 @@ export const listarMesasAdmin = async (_req: Request, res: Response) => {
 
 const NumeroMesa = z.number().int().min(1, "debe ser mayor a 0").max(999, "máximo 999");
 const CapacidadMesa = z.number().int().min(1, "debe ser mayor a 0").max(50, "máximo 50 personas");
-const ZonaMesa = z.string().trim().max(40, "máximo 40 caracteres");
+const ZonaMesa = z.string().trim().max(40, "máximo 40 caracteres").regex(REGEX_TEXTO_CATALOGO, MENSAJE_TEXTO_CATALOGO);
 
 const CrearMesa = z.object({
   numero: NumeroMesa,
@@ -893,7 +894,7 @@ export const editarMesaAdmin = async (req: Request, res: Response) => {
 // hostess las piden en la reservación. Desactivar una la oculta para nuevas asignaciones y del portal, sin borrarla de
 // las mesas; borrar solo se permite si ninguna mesa ni reservación la usa.
 
-const NombreCaracteristica = z.string().trim().min(1, "es obligatorio").max(40, "máximo 40 caracteres");
+const NombreCaracteristica = textoCatalogo(40);
 
 const SELECT_CARACTERISTICA = `
   SELECT c.id_caracteristica, c.nombre, c.activa,

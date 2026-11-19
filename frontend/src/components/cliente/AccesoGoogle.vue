@@ -9,6 +9,9 @@
 // componente no dibuja nada: el formulario de correo y contraseña sigue funcionando solo.
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { errorNombrePersona, errorTelefono, vPermitir } from '../../utils/campos'
+import { LADA_PREDETERMINADA, rangoTelefono, textoDigitos } from '../../utils/lada'
+import SelectorLada from '../SelectorLada.vue'
 
 const props = defineProps<{ modo: 'login' | 'registro' }>()
 
@@ -40,6 +43,7 @@ const tokenRegistro = ref('')
 const nombre = ref('')
 const correo = ref('')
 const telefono = ref('')
+const lada = ref(LADA_PREDETERMINADA)
 
 function cargarScript(): Promise<void> {
   return new Promise((resolver, rechazar) => {
@@ -104,8 +108,14 @@ async function alElegirCuenta(respuesta: RespuestaCredencial) {
 
 async function completar() {
   error.value = ''
-  if (!/^\d{10}$/.test(telefono.value.trim())) {
-    error.value = 'El teléfono debe tener 10 dígitos, sin espacios ni guiones.'
+  const errNombre = nombre.value.trim() === '' ? '' : errorNombrePersona(nombre.value)
+  if (errNombre) {
+    error.value = errNombre
+    return
+  }
+  const errTelefono = errorTelefono(telefono.value, true, lada.value)
+  if (errTelefono) {
+    error.value = errTelefono
     return
   }
   enviando.value = true
@@ -113,6 +123,7 @@ async function completar() {
     const sesion = await publicar<Sesion>('/google/completar', {
       token_registro: tokenRegistro.value,
       telefono: telefono.value.trim(),
+      lada: lada.value,
       ...(nombre.value.trim().length >= 2 ? { nombre: nombre.value.trim() } : {}),
     })
     await iniciarSesion(sesion)
@@ -175,21 +186,23 @@ onMounted(async () => {
       <p>Elegiste la cuenta <strong>{{ correo }}</strong>. Solo falta tu teléfono para contactarte sobre tus reservaciones.</p>
 
       <label for="google-nombre">Nombre</label>
-      <input id="google-nombre" v-model="nombre" type="text" autocomplete="name" maxlength="100" />
+      <input id="google-nombre" v-permitir="'nombre'" v-model="nombre" type="text" autocomplete="name" maxlength="100" />
 
       <label for="google-telefono">Teléfono</label>
-      <input
-        id="google-telefono"
-        v-model="telefono"
-        type="tel"
-        inputmode="numeric"
-        placeholder="10 dígitos, ej. 3111234567"
-        autocomplete="tel-national"
-        maxlength="10"
-        pattern="\d{10}"
-        title="10 dígitos, sin espacios ni guiones"
-        required
-      />
+      <div class="telefono-fila">
+        <SelectorLada v-model="lada" />
+        <input
+          id="google-telefono" v-permitir="'digitos'"
+          v-model="telefono"
+          type="tel"
+          inputmode="numeric"
+          :placeholder="textoDigitos(lada)"
+          autocomplete="tel-national"
+          :maxlength="rangoTelefono(lada).max"
+          :title="`${textoDigitos(lada)}, sin espacios ni guiones`"
+          required
+        />
+      </div>
 
       <p v-if="error" class="google__error" role="alert">{{ error }}</p>
 
@@ -254,6 +267,28 @@ onMounted(async () => {
   margin-bottom: 6px;
   font-weight: 600;
   font-size: 14px;
+}
+
+.google__telefono .telefono-fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.google__telefono .selector-lada {
+  flex: 0 1 190px;
+  padding: 14px 10px;
+  border: 1px solid #ddcfc5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+}
+
+.google__telefono .telefono-fila input {
+  flex: 1 1 150px;
+  min-width: 0;
+  margin-bottom: 0;
 }
 
 .google__telefono input {

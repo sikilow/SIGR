@@ -125,7 +125,7 @@ describe("acceso de clientes con Google", () => {
 
     expect(salida.estado).toBe(201);
     const sqls = ejecutarMock.mock.calls.map((c) => String(c[1]));
-    expect(sqls.some((q) => q.includes("INSERT INTO cliente (nombre, correo, telefono)"))).toBe(true);
+    expect(sqls.some((q) => q.includes("INSERT INTO cliente (nombre, correo, telefono, lada)"))).toBe(true);
     expect(sqls.some((q) => q.includes("INSERT INTO cliente_credencial (id_cliente, google_sub)"))).toBe(true);
     expect((salida.cuerpo as { cliente: { correo: string } }).cliente.correo).toBe("ana@gmail.com");
   });

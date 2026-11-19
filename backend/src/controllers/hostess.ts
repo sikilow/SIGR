@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
 import { exigirAnticipacionMinima, idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
+import { correo as CorreoValido, lada as LadaValida, LADA_MEXICO, nombrePersona, refinarTelefonoConLada, REGEX_TEXTO_CATALOGO, telefono as TelefonoValido } from "../utils/campos";
 import { conIdempotencia } from "../services/idempotencia";
 import { esCorreoValido } from "../services/correo";
 import { encolarNotificacionReservacion, solicitarProcesamientoReservaciones } from "../services/notificacionesReservacion";
@@ -20,16 +21,17 @@ const FiltroReservaciones = z.object({ fecha: z.string().optional() });
 const FiltroEspera = z.object({ estado: z.enum(["esperando", "asignada", "cancelada"]).optional() });
 const FiltroClientes = z.object({ q: z.string().trim().optional() });
 const ClienteNuevo = z.object({
-  nombre: z.string().trim().min(1).max(100),
-  telefono: z.string().trim().regex(/^\d{10}$/, "el teléfono debe tener 10 dígitos"),
-  correo: z.union([z.string().trim().email().max(120), z.literal("")]).nullable().optional(),
-}).strict();
+  nombre: nombrePersona(100),
+  telefono: TelefonoValido,
+  lada: LadaValida.optional(),
+  correo: z.union([CorreoValido, z.literal("")]).nullable().optional(),
+}).strict().superRefine(refinarTelefonoConLada);
 /**
  * Preferencias de mesa de una reservación: sección (`pref_zona`, migración 021) y características del catálogo que
  * administra Gerencia (`pref_caracteristicas`: ids de caracteristica_mesa, migración 023). Todas opcionales.
  */
 export const CamposPreferencias = {
-  pref_zona: z.string().trim().max(40).nullable().optional(),
+  pref_zona: z.string().trim().max(40).regex(REGEX_TEXTO_CATALOGO, "sección no válida").nullable().optional(),
   pref_caracteristicas: IdsCaracteristicas.optional(),
 };
 const ReservacionNueva = z.object({
@@ -102,7 +104,7 @@ function esFechaHoraMySQLValida(fechaHora: string): boolean {
 }
 
 async function cargarCliente(ex: Ejecutor, id: number) {
-  const [cliente] = await filas(ex, "SELECT id_cliente, nombre, telefono, correo FROM cliente WHERE id_cliente = ?", [id]);
+  const [cliente] = await filas(ex, "SELECT id_cliente, nombre, telefono, lada, correo FROM cliente WHERE id_cliente = ?", [id]);
   return cliente ?? null;
 }
 
@@ -185,7 +187,7 @@ export const listarClientes = async (req: Request, res: Response) => {
   const porTelefono = digitos.length >= 3;
   const rows = await filas(
     pool,
-    `SELECT id_cliente, nombre, telefono, correo
+    `SELECT id_cliente, nombre, telefono, lada, correo
        FROM cliente
       WHERE LOCATE(?, nombre) > 0${porTelefono ? " OR LOCATE(?, telefono) > 0" : ""}
       ORDER BY nombre, id_cliente
@@ -208,8 +210,8 @@ export const registrarCliente = async (req: Request, res: Response) => {
     try {
       const insertado = await ejecutar(
         pool,
-        "INSERT INTO cliente (nombre, telefono, correo) VALUES (?, ?, ?)",
-        [datos.nombre, datos.telefono, correo],
+        "INSERT INTO cliente (nombre, telefono, lada, correo) VALUES (?, ?, ?, ?)",
+        [datos.nombre, datos.telefono, datos.lada ?? LADA_MEXICO, correo],
       );
       return exigirRegistro(await cargarCliente(pool, insertado.insertId), "cliente");
     } catch (error) {
@@ -222,7 +224,7 @@ export const registrarCliente = async (req: Request, res: Response) => {
   });
 };
 
-const CorreoCliente = z.object({ correo: z.string().trim().email().max(120) }).strict();
+const CorreoCliente = z.object({ correo: CorreoValido }).strict();
 
 /** PATCH /api/clientes/:id: agrega o corrige el correo de un cliente para permitir reservaciones. */
 export const actualizarCorreoCliente = async (req: Request, res: Response) => {
@@ -238,7 +240,7 @@ export const actualizarCorreoCliente = async (req: Request, res: Response) => {
       if (esCorreoDuplicado(error)) throw new ErrorApi(409, "estado_invalido", MENSAJE_CORREO_DUPLICADO);
       throw error;
     }
-    const [actualizado] = await filas(cx, "SELECT id_cliente, nombre, telefono, correo FROM cliente WHERE id_cliente = ?", [id]);
+    const [actualizado] = await filas(cx, "SELECT id_cliente, nombre, telefono, lada, correo FROM cliente WHERE id_cliente = ?", [id]);
     return actualizado ?? null;
   });
   res.json(exigirRegistro(cliente, "cliente"));

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
 import { idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
+import { correo, errorTelefonoLada, lada as ladaValida, LADA_MEXICO, nombrePersona, refinarTelefonoConLada, REGEX_USUARIO } from "../utils/campos";
 import { enmascararCorreo } from "../services/correo";
 import { enviarEnlaceRestablecer, MAXIMO_ENLACES_POR_HORA, origenApp } from "../services/restablecerContrasena";
 
@@ -16,18 +17,13 @@ const Rol = z
   .transform((r) => r.trim().toLowerCase())
   .pipe(z.enum(ROLES));
 
-const Texto = (max: number) => z.string().trim().min(1, "es obligatorio").max(max, `máximo ${max} caracteres`);
-const Correo = z
-  .string()
-  .trim()
-  .max(120, "máximo 120 caracteres")
-  .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "no es un correo válido");
+const Correo = correo;
 const NombreUsuario = z
   .string()
   .trim()
   .min(3, "mínimo 3 caracteres")
   .max(60, "máximo 60 caracteres")
-  .regex(/^[A-Za-z0-9._-]+$/, "solo letras, números, punto, guion y guion bajo");
+  .regex(REGEX_USUARIO, "solo letras, números, punto, guion y guion bajo");
 // bcrypt solo usa los primeros 72 bytes: se limita para que no haya contraseñas "recortadas" sin avisar.
 const Contrasena = z.string().min(6, "mínimo 6 caracteres").max(72, "máximo 72 caracteres");
 
@@ -43,6 +39,8 @@ export interface UsuarioAdminDto {
   rol: string;
   activo: boolean;
   telefono: string | null;
+  /** perfil_usuario.lada: código de país del teléfono («52»). */
+  lada: string;
   creado_en: string;
   ultimo_acceso: string | null;
 }
@@ -50,7 +48,7 @@ export interface UsuarioAdminDto {
 const SELECT_USUARIO = `
   SELECT u.id_usuario, u.id_rol, u.nombre, u.correo, c.nombre_usuario, r.nombre AS rol, u.activo,
          (u.id_usuario = (SELECT id_primer_gerente FROM configuracion_seguridad WHERE id = 1)) AS es_primer_gerente,
-         p.telefono, u.creado_en, c.ultimo_acceso
+         p.telefono, p.lada, u.creado_en, c.ultimo_acceso
     FROM usuario u
     JOIN rol r ON r.id_rol = u.id_rol
     LEFT JOIN credenciales c ON c.id_usuario = u.id_usuario
@@ -67,6 +65,7 @@ function aDto(r: Record<string, unknown>): UsuarioAdminDto {
     rol: r.rol as string,
     activo: Boolean(r.activo),
     telefono: (r.telefono as string | null) ?? null,
+    lada: (r.lada as string | null) ?? LADA_MEXICO,
     // DATETIME tal cual ("2026-10-15 16:34:00"); el pool usa dateStrings.
     creado_en: r.creado_en as string,
     ultimo_acceso: (r.ultimo_acceso as string | null) ?? null,
@@ -101,23 +100,20 @@ export const listarUsuarios = async (_req: Request, res: Response) => {
 };
 
 /**
- * Teléfono: opcional. Si se captura debe tener 10 dígitos (se aceptan espacios, guiones y paréntesis al escribirlo)
- * y se guarda solo con dígitos; no puede repetirse entre usuarios (índice único uq_perfil_usuario_telefono).
+ * Teléfono: opcional. Si se captura son solo dígitos y su cantidad depende de la lada (México: 10); no puede repetirse
+ * entre usuarios (índice único uq_perfil_usuario_telefono). La cantidad se comprueba junto con la lada.
  */
-const Telefono = z
-  .string()
-  .trim()
-  .transform((t) => t.replace(/[\s().-]/g, ""))
-  .refine((t) => t === "" || /^\d{10}$/.test(t), "debe tener 10 dígitos");
+const Telefono = z.string().trim().refine((t) => t === "" || /^\d+$/.test(t), "solo dígitos");
 
 const Crear = z.object({
-  nombre: Texto(100),
+  nombre: nombrePersona(100),
   correo: Correo,
   nombre_usuario: NombreUsuario,
   contrasena: Contrasena,
   rol: Rol,
   telefono: Telefono.optional(),
-});
+  lada: ladaValida.optional(),
+}).superRefine(refinarTelefonoConLada);
 
 /** POST /api/usuarios  →  201 con el usuario creado. La contraseña se guarda con bcrypt. */
 export const crearUsuario = async (req: Request, res: Response) => {
@@ -138,9 +134,10 @@ export const crearUsuario = async (req: Request, res: Response) => {
         d.nombre_usuario,
         hash,
       ]);
-      await ejecutar(cx, "INSERT INTO perfil_usuario (id_usuario, telefono) VALUES (?, ?)", [
+      await ejecutar(cx, "INSERT INTO perfil_usuario (id_usuario, telefono, lada) VALUES (?, ?, ?)", [
         u.insertId,
         d.telefono || null,
+        d.lada ?? LADA_MEXICO,
       ]);
       return u.insertId;
     } catch (e) {
@@ -153,12 +150,13 @@ export const crearUsuario = async (req: Request, res: Response) => {
 
 const Editar = z
   .object({
-    nombre: Texto(100),
+    nombre: nombrePersona(100),
     correo: Correo,
     nombre_usuario: NombreUsuario,
     rol: Rol,
     activo: z.boolean(),
     telefono: Telefono.nullable(),
+    lada: ladaValida,
   })
   .partial();
 
@@ -183,6 +181,15 @@ export const editarUsuario = async (req: Request, res: Response) => {
       [id],
     );
     if (!actual) throw new ErrorApi(404, "no_encontrado", "El usuario no existe.");
+
+    // El teléfono y la lada se validan juntos; si solo llega uno, se toma el otro de lo guardado.
+    if (d.telefono !== undefined || d.lada !== undefined) {
+      const [perfil] = await filas(cx, "SELECT telefono, lada FROM perfil_usuario WHERE id_usuario = ?", [id]);
+      const telefonoFinal = d.telefono !== undefined ? d.telefono : ((perfil?.telefono as string | null) ?? "");
+      const ladaFinal = d.lada ?? ((perfil?.lada as string | null) ?? LADA_MEXICO);
+      const mensaje = telefonoFinal ? errorTelefonoLada(ladaFinal, telefonoFinal) : null;
+      if (mensaje) throw new ErrorApi(422, "estado_invalido", `Datos inválidos (telefono: ${mensaje}).`);
+    }
 
     if (
       Boolean(actual.es_primer_gerente) &&
@@ -228,6 +235,13 @@ export const editarUsuario = async (req: Request, res: Response) => {
           cx,
           "INSERT INTO perfil_usuario (id_usuario, telefono) VALUES (?, ?) ON DUPLICATE KEY UPDATE telefono = VALUES(telefono)",
           [id, d.telefono || null],
+        );
+      }
+      if (d.lada !== undefined) {
+        await ejecutar(
+          cx,
+          "INSERT INTO perfil_usuario (id_usuario, lada) VALUES (?, ?) ON DUPLICATE KEY UPDATE lada = VALUES(lada)",
+          [id, d.lada],
         );
       }
     } catch (e) {

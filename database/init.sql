@@ -55,8 +55,10 @@ CREATE TABLE restablecimiento_contrasena (
 CREATE TABLE perfil_usuario (
   id_usuario INT PRIMARY KEY,
   telefono VARCHAR(20) NULL,
+  lada VARCHAR(4) NOT NULL DEFAULT '52',
   direccion VARCHAR(180) NULL,
   CONSTRAINT uq_perfil_usuario_telefono UNIQUE (telefono),
+  CONSTRAINT chk_perfil_usuario_lada CHECK (lada REGEXP '^[0-9]{1,4}$'),
   CONSTRAINT fk_perfil_usuario_id_usuario FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -64,8 +66,10 @@ CREATE TABLE cliente (
   id_cliente INT AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(100) NOT NULL,
   telefono VARCHAR(20) NULL,
+  lada VARCHAR(4) NOT NULL DEFAULT '52',
   correo VARCHAR(120) NULL,
-  CONSTRAINT uq_cliente_correo UNIQUE (correo)
+  CONSTRAINT uq_cliente_correo UNIQUE (correo),
+  CONSTRAINT chk_cliente_lada CHECK (lada REGEXP '^[0-9]{1,4}$')
 ) ENGINE=InnoDB;
 -- correo: único y en minúsculas; lo usa el portal de clientes para iniciar sesión.
 
@@ -612,17 +616,17 @@ DROP TRIGGER IF EXISTS `trg_aud_perfil_usuario_ad`$$
 CREATE TRIGGER `trg_aud_perfil_usuario_ai` AFTER INSERT ON `perfil_usuario` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'perfil_usuario', 'INSERT', JSON_OBJECT('id_usuario', NEW.`id_usuario`), JSON_OBJECT('id_usuario', NEW.`id_usuario`, 'telefono', NEW.`telefono`, 'direccion', NEW.`direccion`), USER());
+  VALUES (@sigr_actor_id, 'perfil_usuario', 'INSERT', JSON_OBJECT('id_usuario', NEW.`id_usuario`), JSON_OBJECT('id_usuario', NEW.`id_usuario`, 'telefono', NEW.`telefono`, 'lada', NEW.`lada`, 'direccion', NEW.`direccion`), USER());
 END$$
 CREATE TRIGGER `trg_aud_perfil_usuario_au` AFTER UPDATE ON `perfil_usuario` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'perfil_usuario', 'UPDATE', JSON_OBJECT('id_usuario', NEW.`id_usuario`), JSON_OBJECT('id_usuario', OLD.`id_usuario`, 'telefono', OLD.`telefono`, 'direccion', OLD.`direccion`), JSON_OBJECT('id_usuario', NEW.`id_usuario`, 'telefono', NEW.`telefono`, 'direccion', NEW.`direccion`), USER());
+  VALUES (@sigr_actor_id, 'perfil_usuario', 'UPDATE', JSON_OBJECT('id_usuario', NEW.`id_usuario`), JSON_OBJECT('id_usuario', OLD.`id_usuario`, 'telefono', OLD.`telefono`, 'lada', OLD.`lada`, 'direccion', OLD.`direccion`), JSON_OBJECT('id_usuario', NEW.`id_usuario`, 'telefono', NEW.`telefono`, 'lada', NEW.`lada`, 'direccion', NEW.`direccion`), USER());
 END$$
 CREATE TRIGGER `trg_aud_perfil_usuario_ad` AFTER DELETE ON `perfil_usuario` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
-  VALUES (@sigr_actor_id, 'perfil_usuario', 'DELETE', JSON_OBJECT('id_usuario', OLD.`id_usuario`), JSON_OBJECT('id_usuario', OLD.`id_usuario`, 'telefono', OLD.`telefono`, 'direccion', OLD.`direccion`), USER());
+  VALUES (@sigr_actor_id, 'perfil_usuario', 'DELETE', JSON_OBJECT('id_usuario', OLD.`id_usuario`), JSON_OBJECT('id_usuario', OLD.`id_usuario`, 'telefono', OLD.`telefono`, 'lada', OLD.`lada`, 'direccion', OLD.`direccion`), USER());
 END$$
 DROP TRIGGER IF EXISTS `trg_aud_cliente_ai`$$
 DROP TRIGGER IF EXISTS `trg_aud_cliente_au`$$
@@ -630,17 +634,17 @@ DROP TRIGGER IF EXISTS `trg_aud_cliente_ad`$$
 CREATE TRIGGER `trg_aud_cliente_ai` AFTER INSERT ON `cliente` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'cliente', 'INSERT', JSON_OBJECT('id_cliente', NEW.`id_cliente`), JSON_OBJECT('id_cliente', NEW.`id_cliente`, 'nombre', NEW.`nombre`, 'telefono', NEW.`telefono`, 'correo', NEW.`correo`), USER());
+  VALUES (@sigr_actor_id, 'cliente', 'INSERT', JSON_OBJECT('id_cliente', NEW.`id_cliente`), JSON_OBJECT('id_cliente', NEW.`id_cliente`, 'nombre', NEW.`nombre`, 'telefono', NEW.`telefono`, 'lada', NEW.`lada`, 'correo', NEW.`correo`), USER());
 END$$
 CREATE TRIGGER `trg_aud_cliente_au` AFTER UPDATE ON `cliente` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
-  VALUES (@sigr_actor_id, 'cliente', 'UPDATE', JSON_OBJECT('id_cliente', NEW.`id_cliente`), JSON_OBJECT('id_cliente', OLD.`id_cliente`, 'nombre', OLD.`nombre`, 'telefono', OLD.`telefono`, 'correo', OLD.`correo`), JSON_OBJECT('id_cliente', NEW.`id_cliente`, 'nombre', NEW.`nombre`, 'telefono', NEW.`telefono`, 'correo', NEW.`correo`), USER());
+  VALUES (@sigr_actor_id, 'cliente', 'UPDATE', JSON_OBJECT('id_cliente', NEW.`id_cliente`), JSON_OBJECT('id_cliente', OLD.`id_cliente`, 'nombre', OLD.`nombre`, 'telefono', OLD.`telefono`, 'lada', OLD.`lada`, 'correo', OLD.`correo`), JSON_OBJECT('id_cliente', NEW.`id_cliente`, 'nombre', NEW.`nombre`, 'telefono', NEW.`telefono`, 'lada', NEW.`lada`, 'correo', NEW.`correo`), USER());
 END$$
 CREATE TRIGGER `trg_aud_cliente_ad` AFTER DELETE ON `cliente` FOR EACH ROW
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
-  VALUES (@sigr_actor_id, 'cliente', 'DELETE', JSON_OBJECT('id_cliente', OLD.`id_cliente`), JSON_OBJECT('id_cliente', OLD.`id_cliente`, 'nombre', OLD.`nombre`, 'telefono', OLD.`telefono`, 'correo', OLD.`correo`), USER());
+  VALUES (@sigr_actor_id, 'cliente', 'DELETE', JSON_OBJECT('id_cliente', OLD.`id_cliente`), JSON_OBJECT('id_cliente', OLD.`id_cliente`, 'nombre', OLD.`nombre`, 'telefono', OLD.`telefono`, 'lada', OLD.`lada`, 'correo', OLD.`correo`), USER());
 END$$
 DROP TRIGGER IF EXISTS `trg_aud_seccion_ai`$$
 DROP TRIGGER IF EXISTS `trg_aud_seccion_au`$$

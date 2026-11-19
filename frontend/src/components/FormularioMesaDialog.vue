@@ -6,6 +6,7 @@ import { computed, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CambioMesa, type CaracteristicaAdmin, type MesaAdmin, type SeccionAdmin } from '../types'
 import DialogoModal from './DialogoModal.vue'
+import { vPermitir } from '../utils/campos'
 
 const props = defineProps<{
   abierto: boolean
@@ -145,14 +146,14 @@ async function guardar() {
       <div class="form__fila">
         <div class="campo">
           <label for="mesa-numero">Número de mesa</label>
-          <input id="mesa-numero" v-model="numero" type="text" inputmode="numeric" autocomplete="off" autofocus
+          <input id="mesa-numero" v-permitir="'digitos'" v-model="numero" type="text" inputmode="numeric" autocomplete="off" autofocus
             :aria-invalid="campoErr('numero') ? 'true' : undefined" :aria-describedby="campoErr('numero') ? 'mesa-numero-e' : undefined" />
           <p v-if="campoErr('numero')" id="mesa-numero-e" class="texto-error form__error">{{ campoErr('numero') }}</p>
         </div>
 
         <div class="campo">
           <label for="mesa-capacidad">Cantidad de personas</label>
-          <input id="mesa-capacidad" v-model="capacidad" type="text" inputmode="numeric" autocomplete="off"
+          <input id="mesa-capacidad" v-permitir="'digitos'" v-model="capacidad" type="text" inputmode="numeric" autocomplete="off"
             :aria-invalid="campoErr('capacidad') ? 'true' : undefined" :aria-describedby="campoErr('capacidad') ? 'mesa-capacidad-e' : undefined" />
           <p v-if="campoErr('capacidad')" id="mesa-capacidad-e" class="texto-error form__error">{{ campoErr('capacidad') }}</p>
         </div>
@@ -238,7 +239,7 @@ async function guardar() {
 
 .form__accesos {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr));
   gap: var(--espacio-2);
 }
 
@@ -253,7 +254,15 @@ async function guardar() {
   background: var(--color-surface);
   font-size: var(--texto-sm);
   font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
   cursor: pointer;
+}
+
+.opcion-acceso span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .opcion-acceso input {
@@ -266,7 +275,7 @@ async function guardar() {
 .opcion-acceso svg {
   flex: none;
   color: var(--color-primary-dark);
-  visibility: hidden;
+  display: none;
 }
 
 .opcion-acceso--inactiva {
@@ -286,7 +295,7 @@ async function guardar() {
 }
 
 .opcion-acceso:has(input:checked) svg {
-  visibility: visible;
+  display: block;
 }
 
 .opcion-acceso:has(input:focus-visible) {

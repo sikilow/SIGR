@@ -5,6 +5,7 @@ import { computed, nextTick, ref } from 'vue'
 import { formatearMoneda } from '../utils/formato'
 import { MAX_INDICACIONES, subtotalDe, topeCantidad, type LineaCarrito } from '../utils/carrito'
 import InsigniaEstado from './InsigniaEstado.vue'
+import { vPermitir } from '../utils/campos'
 
 /** Atajos que solo rellenan el texto de indicaciones (no son datos del modelo). */
 const SUGERENCIAS = ['Sin cebolla', 'Extra queso', 'Sin picante']
@@ -172,7 +173,7 @@ defineExpose({ enfocarTitulo: () => titulo.value?.focus() })
           <div class="campo">
             <label :for="`obs-texto-${linea.idProducto}`">Observaciones de {{ linea.nombre }}</label>
             <input
-              :id="`obs-texto-${linea.idProducto}`"
+              :id="`obs-texto-${linea.idProducto}`" v-permitir="'nota'"
               type="text"
               :value="linea.indicaciones"
               :maxlength="MAX_INDICACIONES"

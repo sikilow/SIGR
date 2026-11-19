@@ -3,12 +3,16 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AccesoGoogle from '../../components/cliente/AccesoGoogle.vue'
+import { errorCorreo, errorNombrePersona, errorTelefono, vPermitir } from '../../utils/campos'
+import { LADA_PREDETERMINADA, rangoTelefono, textoDigitos } from '../../utils/lada'
+import SelectorLada from '../../components/SelectorLada.vue'
 
 const router = useRouter()
 
 const nombre = ref('')
 const correo = ref('')
 const telefono = ref('')
+const lada = ref(LADA_PREDETERMINADA)
 const contrasena = ref('')
 const confirmarContrasena = ref('')
 
@@ -23,8 +27,21 @@ async function registrarCliente() {
     return
   }
 
-  if (!/^\d{10}$/.test(telefono.value.trim())) {
-    error.value = 'El teléfono debe tener 10 dígitos, sin espacios ni guiones.'
+  const errNombre = errorNombrePersona(nombre.value)
+  if (errNombre) {
+    error.value = errNombre
+    return
+  }
+
+  const errCorreo = errorCorreo(correo.value)
+  if (errCorreo) {
+    error.value = errCorreo
+    return
+  }
+
+  const errTelefono = errorTelefono(telefono.value, true, lada.value)
+  if (errTelefono) {
+    error.value = errTelefono
     return
   }
 
@@ -45,6 +62,7 @@ async function registrarCliente() {
         nombre: nombre.value.trim(),
         correo: correo.value.trim(),
         telefono: telefono.value.trim(),
+        lada: lada.value,
         contrasena: contrasena.value
       })
     })
@@ -100,7 +118,7 @@ async function registrarCliente() {
         <form @submit.prevent="registrarCliente">
           <label for="nombre">Nombre completo</label>
           <input
-            id="nombre"
+            id="nombre" v-permitir="'nombre'"
             v-model="nombre"
             type="text"
             placeholder="Tu nombre completo"
@@ -111,7 +129,7 @@ async function registrarCliente() {
 
           <label for="correo">Correo electrónico</label>
           <input
-            id="correo"
+            id="correo" v-permitir="'correo'"
             v-model="correo"
             type="email"
             placeholder="ejemplo@correo.com"
@@ -121,18 +139,20 @@ async function registrarCliente() {
           />
 
           <label for="telefono">Teléfono</label>
-          <input
-            id="telefono"
-            v-model="telefono"
-            type="tel"
-            inputmode="numeric"
-            placeholder="10 dígitos, ej. 3111234567"
-            autocomplete="tel-national"
-            maxlength="10"
-            pattern="\d{10}"
-            title="10 dígitos, sin espacios ni guiones"
-            required
-          />
+          <div class="telefono-fila">
+            <SelectorLada v-model="lada" />
+            <input
+              id="telefono" v-permitir="'digitos'"
+              v-model="telefono"
+              type="tel"
+              inputmode="numeric"
+              :placeholder="textoDigitos(lada)"
+              autocomplete="tel-national"
+              :maxlength="rangoTelefono(lada).max"
+              :title="`${textoDigitos(lada)}, sin espacios ni guiones`"
+              required
+            />
+          </div>
 
           <label for="contrasena">Contraseña</label>
           <input
@@ -279,6 +299,29 @@ label {
   font-weight: 600;
   color: #443229;
   margin-bottom: 8px;
+}
+
+/* Lada + teléfono */
+.telefono-fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.telefono-fila .selector-lada {
+  flex: 0 1 190px;
+  padding: 13px 10px;
+  border: 1px solid #ddcfc5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+}
+
+.telefono-fila input {
+  flex: 1 1 150px;
+  min-width: 0;
+  margin-bottom: 0;
 }
 
 input {

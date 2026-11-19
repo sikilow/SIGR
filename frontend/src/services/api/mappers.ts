@@ -351,6 +351,8 @@ export interface UsuarioAdminDto {
   activo: Booleano
   /** perfil_usuario.telefono */
   telefono: string | null
+  /** perfil_usuario.lada */
+  lada?: string
   creado_en: string
   /** credenciales.ultimo_acceso */
   ultimo_acceso: string | null
@@ -490,6 +492,7 @@ export function aUsuarioAdmin(dto: UsuarioAdminDto): UsuarioAdmin {
     rol,
     activo: aBooleano(dto.activo, 'activo'),
     telefono: dto.telefono ?? null,
+    lada: dto.lada ?? undefined,
     creadoEn: parseFechaMySQL(dto.creado_en, 'creado_en'),
     ultimoAcceso: parseFechaMySQLONula(dto.ultimo_acceso, 'ultimo_acceso'),
   }
@@ -571,6 +574,7 @@ export function deNuevoUsuario(u: NuevoUsuario) {
     contrasena: u.contrasena,
     rol: u.rol,
     ...(u.telefono?.trim() ? { telefono: u.telefono.trim() } : {}),
+    ...(u.lada ? { lada: u.lada } : {}),
   }
 }
 
@@ -583,6 +587,7 @@ export function deCambioUsuario(c: CambioUsuario) {
     ...(c.rol !== undefined ? { rol: c.rol } : {}),
     ...(c.activo !== undefined ? { activo: c.activo } : {}),
     ...(c.telefono !== undefined ? { telefono: c.telefono?.trim() ? c.telefono.trim() : null } : {}),
+    ...(c.lada !== undefined ? { lada: c.lada } : {}),
   }
 }
 

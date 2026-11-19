@@ -2,6 +2,7 @@
 // Los cambios se hacen sobre la misma "base de datos" en memoria que usa el mesero, así que un
 // producto nuevo o un precio editado se ven en el menú del mesero. Se reinicia al recargar la página.
 import { validarHorario } from '../../utils/horarioReservacion'
+import { rangoTelefono, textoDigitos } from '../../utils/lada'
 import { MESA_CAPACIDAD_MAX, MESA_NUMERO_MAX, MESA_ZONA_MAX, type CaracteristicaAdmin, type CategoriaAdmin, type MesaAdmin, type ProductoAdmin, type SeccionAdmin, type UsuarioAdmin } from '../../types'
 import { ErrorServicio } from '../errores'
 import type { CatalogoService, UsuariosService } from '../interfaces'
@@ -20,6 +21,7 @@ const noExiste = (que: string) => new ErrorServicio('no_encontrado', `${que} no 
 interface DatosExtra {
   correo: string
   telefono: string | null
+  lada: string
   creadoEn: Date
   ultimoAcceso: Date | null
 }
@@ -28,17 +30,20 @@ const extra = new Map<number, DatosExtra>()
 function datosExtra(id: number, usuario: string): DatosExtra {
   let d = extra.get(id)
   if (!d) {
-    d = { correo: `${usuario}@sigr.com`, telefono: null, creadoEn: new Date(), ultimoAcceso: null }
+    d = { correo: `${usuario}@sigr.com`, telefono: null, lada: '52', creadoEn: new Date(), ultimoAcceso: null }
     extra.set(id, d)
   }
   return d
 }
 
 /** Misma regla que la API: teléfono opcional; si viene, 10 dígitos (acepta espacios, guiones y paréntesis) y no se repite. */
-function telefonoValido(texto: string | null | undefined, idPropio?: number): string | null {
+function telefonoValido(texto: string | null | undefined, idPropio?: number, lada = '52'): string | null {
   const limpio = (texto ?? '').trim().replace(/[\s().-]/g, '')
   if (limpio === '') return null
-  if (!/^\d{10}$/.test(limpio)) throw new ErrorServicio('estado_invalido', 'El teléfono debe tener 10 dígitos.', 422)
+  const { min, max } = rangoTelefono(lada)
+  if (!/^\d+$/.test(limpio) || limpio.length < min || limpio.length > max) {
+    throw new ErrorServicio('estado_invalido', `El teléfono debe tener ${textoDigitos(lada)}.`, 422)
+  }
   const repetido = baseDatos.usuarios.some(
     (u) => u.idUsuario !== idPropio && datosExtra(u.idUsuario, u.nombreUsuario).telefono === limpio,
   )
@@ -61,6 +66,7 @@ function aAdmin(id: number): UsuarioAdmin {
     rol: u.rol,
     activo: u.activo !== false,
     telefono: e.telefono,
+    lada: e.lada,
     creadoEn: e.creadoEn,
     ultimoAcceso: e.ultimoAcceso,
   }
@@ -87,7 +93,7 @@ export function crearUsuariosMock(): UsuariosService {
         if (baseDatos.usuarios.some((u) => u.nombreUsuario.toLowerCase() === n.nombreUsuario.trim().toLowerCase())) throw duplicado('nombre de usuario')
         if (baseDatos.usuarios.some((u) => datosExtra(u.idUsuario, u.nombreUsuario).correo.toLowerCase() === n.correo.trim().toLowerCase())) throw duplicado('correo')
         const id = Math.max(0, ...baseDatos.usuarios.map((u) => u.idUsuario)) + 1
-        const telefono = telefonoValido(n.telefono)
+        const telefono = telefonoValido(n.telefono, undefined, n.lada || '52')
         baseDatos.usuarios.push({
           idUsuario: id,
           idRol: ROL_ID[n.rol],
@@ -98,7 +104,7 @@ export function crearUsuariosMock(): UsuariosService {
           contrasena: n.contrasena,
           activo: true,
         })
-        extra.set(id, { correo: n.correo.trim(), telefono, creadoEn: new Date(), ultimoAcceso: null })
+        extra.set(id, { correo: n.correo.trim(), telefono, lada: n.lada || '52', creadoEn: new Date(), ultimoAcceso: null })
         return aAdmin(id)
       })
     },
@@ -130,7 +136,8 @@ export function crearUsuariosMock(): UsuariosService {
         if (c.rol !== undefined) u.rol = c.rol
         if (c.activo !== undefined) u.activo = c.activo
         if (c.correo !== undefined) e.correo = c.correo.trim()
-        if (c.telefono !== undefined) e.telefono = telefonoValido(c.telefono, id)
+        if (c.telefono !== undefined) e.telefono = telefonoValido(c.telefono, id, c.lada ?? e.lada)
+        if (c.lada !== undefined) e.lada = c.lada
         return aAdmin(id)
       })
     },

@@ -342,7 +342,7 @@ export function crearHostessMock(): HostessService {
 
     crearCliente(cliente, claveIdempotencia) {
       return conRetrasoIdempotente(claveIdempotencia, () => {
-        const errores = validarCliente({ nombre: cliente.nombre, telefono: cliente.telefono, correo: cliente.correo ?? '' })
+        const errores = validarCliente({ nombre: cliente.nombre, telefono: cliente.telefono, lada: cliente.lada ?? '52', correo: cliente.correo ?? '' })
         const primero = errores.nombre ?? errores.telefono ?? errores.correo
         if (primero) throw new ErrorServicio('estado_invalido', primero, 422)
 
@@ -354,6 +354,7 @@ export function crearHostessMock(): HostessService {
           idCliente: siguienteId(baseDatos.clientes.map((c) => c.idCliente)),
           nombre: cliente.nombre.trim(),
           telefono,
+          lada: cliente.lada || '52',
           correo: cliente.correo?.trim() ? cliente.correo.trim() : null,
         }
         baseDatos.clientes.push(nuevo)

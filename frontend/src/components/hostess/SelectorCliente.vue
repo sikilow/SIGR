@@ -6,6 +6,9 @@ import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { ErrorServicio, servicios } from '../../services'
 import type { Cliente } from '../../types'
 import { type ClienteForm, type ErroresCliente, normalizarTelefono } from '../../utils/reservaciones'
+import { vPermitir } from '../../utils/campos'
+import { rangoTelefono, textoDigitos, textoTelefono } from '../../utils/lada'
+import SelectorLada from '../SelectorLada.vue'
 
 const props = defineProps<{
   modelValue: ClienteForm
@@ -153,13 +156,13 @@ const descripcionBusqueda = computed(() => ['ayuda-busqueda', props.errores.clie
       </svg>
       <p class="elegido__texto">
         <strong>{{ modelValue.seleccionado.nombre }}</strong>
-        <span>{{ modelValue.seleccionado.telefono ?? 'Sin teléfono' }}</span>
+        <span>{{ textoTelefono(modelValue.seleccionado.telefono, modelValue.seleccionado.lada) ?? 'Sin teléfono' }}</span>
       </p>
       <button ref="botonCambiar" type="button" class="btn btn--secundario" @click="cambiarCliente">Cambiar cliente</button>
       <div class="campo elegido__correo">
         <label for="cliente-correo">Correo para la reservación</label>
         <div class="elegido__correo-fila">
-          <input id="cliente-correo" v-model="correoEditado" type="email" inputmode="email" autocomplete="email" maxlength="120" @input="errorCorreo = ''"
+          <input id="cliente-correo" v-permitir="'correo'" v-model="correoEditado" type="email" inputmode="email" autocomplete="email" maxlength="120" @input="errorCorreo = ''"
             :aria-invalid="errores.correo || errorCorreo ? 'true' : undefined"
             :aria-describedby="errores.correo ? 'error-cliente-correo' : errorCorreo ? 'error-cliente-correo-servidor' : undefined" />
           <button type="button" class="btn btn--secundario" :disabled="guardandoCorreo || correoEditado.trim() === (modelValue.seleccionado.correo ?? '')" @click="guardarCorreo">
@@ -188,7 +191,7 @@ const descripcionBusqueda = computed(() => ['ayuda-busqueda', props.errores.clie
         <label class="campo" for="cliente-busqueda">
           Buscar por nombre o teléfono
           <input
-            id="cliente-busqueda"
+            id="cliente-busqueda" v-permitir="'busqueda'"
             v-model="texto"
             type="search"
             inputmode="search"
@@ -210,7 +213,7 @@ const descripcionBusqueda = computed(() => ['ayuda-busqueda', props.errores.clie
           <li v-for="c in resultados" :key="c.idCliente">
             <button type="button" class="resultado" @click="elegir(c)">
               <span class="resultado__nombre">{{ c.nombre }}</span>
-              <span class="resultado__telefono">{{ c.telefono ?? 'Sin teléfono' }}</span>
+              <span class="resultado__telefono">{{ textoTelefono(c.telefono, c.lada) ?? 'Sin teléfono' }}</span>
             </button>
           </li>
         </ul>
@@ -226,7 +229,7 @@ const descripcionBusqueda = computed(() => ['ayuda-busqueda', props.errores.clie
         <div class="campo">
           <label for="cliente-nombre">Nombre completo</label>
           <input
-            id="cliente-nombre"
+            id="cliente-nombre" v-permitir="'nombre'"
             :value="modelValue.nombre"
             type="text"
             autocomplete="off"
@@ -239,25 +242,28 @@ const descripcionBusqueda = computed(() => ['ayuda-busqueda', props.errores.clie
         </div>
 
         <div class="campo">
-          <label for="cliente-telefono">Teléfono (10 dígitos)</label>
-          <input
-            id="cliente-telefono"
-            :value="modelValue.telefono"
-            type="tel"
-            inputmode="tel"
-            autocomplete="off"
-            maxlength="20"
-            :aria-invalid="errores.telefono ? 'true' : undefined"
-            :aria-describedby="errores.telefono ? 'error-cliente-telefono' : undefined"
-            @input="cambiar({ telefono: ($event.target as HTMLInputElement).value })"
-          />
+          <label for="cliente-telefono">Teléfono ({{ textoDigitos(modelValue.lada) }})</label>
+          <div class="telefono-fila">
+            <SelectorLada :model-value="modelValue.lada" @update:model-value="cambiar({ lada: $event })" />
+            <input
+              id="cliente-telefono" v-permitir="'digitos'"
+              :value="modelValue.telefono"
+              type="tel"
+              inputmode="numeric"
+              autocomplete="off"
+              :maxlength="rangoTelefono(modelValue.lada).max"
+              :aria-invalid="errores.telefono ? 'true' : undefined"
+              :aria-describedby="errores.telefono ? 'error-cliente-telefono' : undefined"
+              @input="cambiar({ telefono: ($event.target as HTMLInputElement).value })"
+            />
+          </div>
           <p v-if="errores.telefono" id="error-cliente-telefono" class="texto-error">{{ errores.telefono }}</p>
         </div>
 
         <div class="campo">
           <label for="cliente-correo">Correo para la reservación <span aria-hidden="true">*</span></label>
           <input
-            id="cliente-correo"
+            id="cliente-correo" v-permitir="'correo'"
             :value="modelValue.correo"
             type="email"
             inputmode="email"
@@ -300,6 +306,7 @@ const descripcionBusqueda = computed(() => ['ayuda-busqueda', props.errores.clie
 
 .elegido {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--espacio-3);
   padding: var(--espacio-3) var(--espacio-4);
@@ -315,12 +322,35 @@ const descripcionBusqueda = computed(() => ['ayuda-busqueda', props.errores.clie
 
 .elegido__texto {
   display: flex;
-  flex: 1;
+  flex: 1 1 12rem;
   flex-direction: column;
   min-width: 0;
   margin: 0;
   color: var(--color-text);
   overflow-wrap: anywhere;
+}
+
+/* El correo ocupa su propia fila completa; el campo y el botón se acomodan en columna si no caben. */
+.elegido__correo {
+  flex: 1 1 100%;
+  min-width: 0;
+  color: var(--color-text);
+}
+
+.elegido__correo-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--espacio-2);
+}
+
+.elegido__correo-fila input {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.elegido__correo-fila .btn {
+  flex: 0 1 auto;
 }
 
 .busqueda {

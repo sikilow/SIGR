@@ -8,6 +8,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import FranjaDemo from '../components/FranjaDemo.vue'
 import LogoMarca from '../components/LogoMarca.vue'
 import { ErrorServicio, servicios } from '../services'
+import { vPermitir } from '../utils/campos'
 
 const route = useRoute()
 const esRestablecer = computed(() => route.name === 'restablecer')
@@ -157,7 +158,7 @@ watch(() => route.fullPath, iniciar)
             <div class="campo">
               <label for="recuperar-usuario">Usuario o correo</label>
               <input
-                id="recuperar-usuario"
+                id="recuperar-usuario" v-permitir="'correo'"
                 ref="campo"
                 v-model="usuarioOCorreo"
                 type="text"

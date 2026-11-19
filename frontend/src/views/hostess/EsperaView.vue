@@ -14,6 +14,7 @@ import { usePolling } from '../../composables/usePolling'
 import { filtroEsperaDesdeConsulta, useEsperaStore } from '../../stores/espera'
 import type { ListaEspera } from '../../types'
 import type { FiltroEspera } from '../../utils/espera'
+import { vPermitir } from '../../utils/campos'
 
 const store = useEsperaStore()
 const route = useRoute()
@@ -139,7 +140,7 @@ onBeforeUnmount(() => {
       <label class="campo busqueda" for="buscar-espera">
         Buscar por nombre o teléfono
         <input
-          id="buscar-espera"
+          id="buscar-espera" v-permitir="'busqueda'"
           v-model="store.busqueda"
           type="search"
           inputmode="search"

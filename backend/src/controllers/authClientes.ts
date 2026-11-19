@@ -9,15 +9,17 @@ import { googleHabilitado, verificarTokenGoogle } from "../services/google";
 import { GOOGLE_CLIENT_ID } from "../utils/config";
 import { validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
+import { correo as correoValido, lada as ladaValida, LADA_MEXICO, limpiarNombrePersona, nombrePersona, refinarTelefonoConLada, telefono as telefonoValido } from "../utils/campos";
 
 // Validaciones para registrar clientes
 // (mismo formato de telefono que exige la hostess)
 const RegistroCliente = z.object({
-  nombre: z.string().trim().min(2).max(100),
-  correo: z.string().trim().email().max(120),
-  telefono: z.string().trim().regex(/^\d{10}$/, "el teléfono debe tener 10 dígitos"),
+  nombre: nombrePersona(100).min(2, "mínimo 2 letras"),
+  correo: correoValido,
+  telefono: telefonoValido,
+  lada: ladaValida.optional(),
   contrasena: z.string().min(8).max(72),
-});
+}).superRefine(refinarTelefonoConLada);
 
 // Validaciones de inicio de sesion
 const LoginCliente = z.object({
@@ -94,15 +96,15 @@ export const registrarCuentaCliente = async (
       idCliente = existente.id_cliente as number;
 
       await conexion.execute(
-        "UPDATE cliente SET telefono = ? WHERE id_cliente = ?",
-        [datos.telefono, idCliente]
+        "UPDATE cliente SET telefono = ?, lada = ? WHERE id_cliente = ?",
+        [datos.telefono, datos.lada ?? LADA_MEXICO, idCliente]
       );
     } else {
       const [resultado] = await conexion.execute(
         `INSERT INTO cliente
-         (nombre, correo, telefono)
-         VALUES (?, ?, ?)`,
-        [datos.nombre, correo, datos.telefono]
+         (nombre, correo, telefono, lada)
+         VALUES (?, ?, ?, ?)`,
+        [datos.nombre, correo, datos.telefono, datos.lada ?? LADA_MEXICO]
       );
 
       idCliente = (resultado as { insertId: number })
@@ -277,7 +279,7 @@ export const iniciarSesionConGoogle = async (req: Request, res: Response) => {
   res.json({
     requiere_telefono: true,
     token_registro: tokenRegistro,
-    nombre: identidad.nombre,
+    nombre: limpiarNombrePersona(identidad.nombre, identidad.correo),
     correo: identidad.correo,
   });
 };
@@ -285,10 +287,12 @@ export const iniciarSesionConGoogle = async (req: Request, res: Response) => {
 const CompletarGoogle = z
   .object({
     token_registro: z.string().min(20).max(4000),
-    telefono: z.string().trim().regex(/^\d{10}$/, "el teléfono debe tener 10 dígitos"),
-    nombre: z.string().trim().min(2).max(100).optional(),
+    telefono: telefonoValido,
+    lada: ladaValida.optional(),
+    nombre: nombrePersona(100).min(2, "mínimo 2 letras").optional(),
   })
-  .strict();
+  .strict()
+  .superRefine(refinarTelefonoConLada);
 
 /**
  * POST /api/auth-clientes/google/completar  { token_registro, telefono, nombre? }
@@ -309,7 +313,7 @@ export const completarRegistroGoogle = async (req: Request, res: Response) => {
     ) {
       throw new Error("token de otro tipo");
     }
-    registro = { sub: payload.sub, correo: payload.correo, nombre: String(payload.nombre ?? payload.correo) };
+    registro = { sub: payload.sub, correo: payload.correo, nombre: limpiarNombrePersona(String(payload.nombre ?? ""), payload.correo) };
   } catch {
     throw new ErrorApi(401, "no_autenticado", "El registro con Google venció. Vuelve a elegir tu cuenta.");
   }
@@ -349,13 +353,14 @@ export const completarRegistroGoogle = async (req: Request, res: Response) => {
       // Reutiliza el cliente que capturó la hostess y conserva su historial.
       idCliente = existente.id_cliente as number;
       nombreFinal = String(existente.nombre);
-      await ejecutar(cx, "UPDATE cliente SET telefono = ? WHERE id_cliente = ?", [datos.telefono, idCliente]);
+      await ejecutar(cx, "UPDATE cliente SET telefono = ?, lada = ? WHERE id_cliente = ?", [datos.telefono, datos.lada ?? LADA_MEXICO, idCliente]);
     } else {
       idCliente = (
-        await ejecutar(cx, "INSERT INTO cliente (nombre, correo, telefono) VALUES (?, ?, ?)", [
+        await ejecutar(cx, "INSERT INTO cliente (nombre, correo, telefono, lada) VALUES (?, ?, ?, ?)", [
           nombre,
           registro.correo,
           datos.telefono,
+          datos.lada ?? LADA_MEXICO,
         ])
       ).insertId;
     }

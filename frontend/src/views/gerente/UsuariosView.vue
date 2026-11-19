@@ -11,6 +11,8 @@ import { ErrorServicio, servicios } from '../../services'
 import { useAnunciosStore } from '../../stores/anuncios'
 import { useSesionStore } from '../../stores/sesion'
 import { ETIQUETA_ROL, type Rol, type UsuarioAdmin } from '../../types'
+import { vPermitir } from '../../utils/campos'
+import { textoTelefono } from '../../utils/lada'
 
 const sesion = useSesionStore()
 const anuncios = useAnunciosStore()
@@ -207,7 +209,7 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
       <div class="filtros__campos">
         <div class="campo">
           <label for="usr-buscar">Buscar</label>
-          <input id="usr-buscar" v-model="busqueda" type="search" placeholder="Nombre, usuario o correo" autocomplete="off" />
+          <input id="usr-buscar" v-permitir="'busqueda'" v-model="busqueda" type="search" placeholder="Nombre, usuario o correo" autocomplete="off" />
         </div>
         <div class="campo">
           <label for="usr-filtro-rol">Rol</label>
@@ -246,7 +248,7 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
             · usuario <strong>{{ u.nombreUsuario }}</strong>
           </p>
           <p v-if="u.esPrimerGerente" class="fila__linea fila__meta">Gerente inicial protegido</p>
-          <p class="fila__linea">{{ u.correo }}<template v-if="u.telefono"> · {{ u.telefono }}</template></p>
+          <p class="fila__linea">{{ u.correo }}<template v-if="u.telefono"> · {{ textoTelefono(u.telefono, u.lada) }}</template></p>
           <p class="fila__linea fila__meta">Último acceso: {{ fechaCorta(u.ultimoAcceso) }}</p>
         </div>
 

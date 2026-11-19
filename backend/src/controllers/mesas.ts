@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ejecutar, filas, pool, transaccion } from "../services/db";
 import { cargarCuenta, idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
+import { textoCatalogoOpcional } from "../utils/campos";
 import { conIdempotencia } from "../services/idempotencia";
 
 /**
@@ -236,7 +237,7 @@ const NuevoParaLlevar = z
   .object({
     id_canal: z.number().int().positive(),
     /** Nombre o folio para entregar el pedido (opcional). */
-    referencia: z.string().trim().max(60).optional(),
+    referencia: textoCatalogoOpcional(60).optional(),
   })
   .strict();
 

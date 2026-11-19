@@ -18,6 +18,7 @@ import {
   validarPersonasReservacion,
 } from '../../utils/reservaciones'
 import SelectorCliente from './SelectorCliente.vue'
+import { vPermitir } from '../../utils/campos'
 
 const emit = defineEmits<{
   /** Cancelar sin guardar: cierra el diálogo. */
@@ -141,7 +142,7 @@ async function guardar() {
       idCliente = cliente.value.seleccionado.idCliente
     } else {
       if (!clienteCreado.value) {
-        const datos = { nombre: cliente.value.nombre, telefono: cliente.value.telefono, correo: cliente.value.correo.trim() || null }
+        const datos = { nombre: cliente.value.nombre, telefono: cliente.value.telefono, lada: cliente.value.lada, correo: cliente.value.correo.trim() || null }
         try {
           clienteCreado.value = await store.crearCliente(datos, clavesCliente.para(`cliente|${JSON.stringify(datos)}`))
           clavesCliente.soltar()
@@ -211,7 +212,7 @@ async function guardar() {
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 12h12" /></svg>
           </button>
           <input
-            id="esp-personas"
+            id="esp-personas" v-permitir="'digitos'"
             v-model="personasTexto"
             class="personas__campo numero"
             type="text"

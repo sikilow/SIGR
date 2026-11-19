@@ -15,6 +15,9 @@ import {
   type UsuarioAdmin,
 } from '../types'
 import DialogoModal from './DialogoModal.vue'
+import { errorCorreo, errorNombrePersona, errorTelefono, REGEX_USUARIO, vPermitir } from '../utils/campos'
+import { LADA_PREDETERMINADA, rangoTelefono, textoDigitos } from '../utils/lada'
+import SelectorLada from './SelectorLada.vue'
 
 const props = defineProps<{
   abierto: boolean
@@ -33,6 +36,7 @@ const correo = ref('')
 const usuarioLogin = ref('')
 const rol = ref<Rol>('mesero')
 const telefono = ref('')
+const lada = ref(LADA_PREDETERMINADA)
 const contrasena = ref('')
 const verContrasena = ref(false)
 const tocado = ref(false)
@@ -50,6 +54,7 @@ watch(
     usuarioLogin.value = props.usuario?.nombreUsuario ?? ''
     rol.value = props.usuario?.rol ?? 'mesero'
     telefono.value = props.usuario?.telefono ?? ''
+    lada.value = props.usuario?.lada ?? LADA_PREDETERMINADA
     contrasena.value = ''
     verContrasena.value = false
     tocado.value = false
@@ -58,22 +63,18 @@ watch(
   },
 )
 
-const REGEX_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const REGEX_USUARIO = /^[A-Za-z0-9._-]+$/
-
 const errores = computed(() => {
   const e: Record<string, string> = {}
-  const n = nombre.value.trim()
-  if (!n) e.nombre = 'Escribe el nombre.'
-  else if (n.length > 100) e.nombre = 'Máximo 100 caracteres.'
-  const c = correo.value.trim()
-  if (!c) e.correo = 'Escribe el correo.'
-  else if (!REGEX_CORREO.test(c)) e.correo = 'El correo no es válido (ejemplo: ana@correo.com).'
+  const errNombre = errorNombrePersona(nombre.value)
+  if (errNombre) e.nombre = errNombre
+  const errCorreo = errorCorreo(correo.value)
+  if (errCorreo) e.correo = errCorreo
   const u = usuarioLogin.value.trim()
   if (!u) e.usuario = 'Escribe el nombre de usuario.'
   else if (u.length < 3) e.usuario = 'Mínimo 3 caracteres.'
   else if (!REGEX_USUARIO.test(u)) e.usuario = 'Solo letras, números, punto, guion y guion bajo (sin espacios).'
-  if (telefono.value.trim() !== '' && normalizarTelefono(telefono.value).length !== 10) e.telefono = 'Escribe un teléfono de 10 dígitos.'
+  const errTelefono = errorTelefono(telefono.value, false, lada.value)
+  if (errTelefono) e.telefono = errTelefono
   if (!editando.value) {
     if (contrasena.value.length < CONTRASENA_MIN) e.contrasena = `Mínimo ${CONTRASENA_MIN} caracteres.`
     else if (contrasena.value.length > CONTRASENA_MAX) e.contrasena = `Máximo ${CONTRASENA_MAX} caracteres.`
@@ -93,6 +94,7 @@ function cambios(): CambioUsuario {
   if (usuarioLogin.value.trim() !== u.nombreUsuario) c.nombreUsuario = usuarioLogin.value
   if (rol.value !== u.rol) c.rol = rol.value
   if (normalizarTelefono(telefono.value) !== normalizarTelefono(u.telefono ?? '')) c.telefono = telefono.value
+  if (lada.value !== (u.lada ?? LADA_PREDETERMINADA)) c.lada = lada.value
   return c
 }
 
@@ -125,6 +127,7 @@ async function guardar() {
           contrasena: contrasena.value,
           rol: rol.value,
           telefono: telefono.value,
+          lada: lada.value,
         }),
         true,
       )
@@ -151,14 +154,14 @@ async function guardar() {
 
       <div class="campo">
         <label for="usr-nombre">Nombre completo</label>
-        <input id="usr-nombre" v-model="nombre" type="text" autocomplete="off" autofocus maxlength="100"
+        <input id="usr-nombre" v-permitir="'nombre'" v-model="nombre" type="text" autocomplete="off" autofocus maxlength="100"
           :aria-invalid="campoErr('nombre') ? 'true' : undefined" :aria-describedby="campoErr('nombre') ? 'usr-nombre-e' : undefined" />
         <p v-if="campoErr('nombre')" id="usr-nombre-e" class="texto-error form__error">{{ campoErr('nombre') }}</p>
       </div>
 
       <div class="campo">
         <label for="usr-correo">Correo</label>
-        <input id="usr-correo" v-model="correo" type="email" autocomplete="off" maxlength="120" spellcheck="false"
+        <input id="usr-correo" v-permitir="'correo'" v-model="correo" type="email" autocomplete="off" maxlength="120" spellcheck="false"
           :aria-invalid="campoErr('correo') ? 'true' : undefined" :aria-describedby="campoErr('correo') ? 'usr-correo-e' : undefined" />
         <p v-if="campoErr('correo')" id="usr-correo-e" class="texto-error form__error">{{ campoErr('correo') }}</p>
       </div>
@@ -166,7 +169,7 @@ async function guardar() {
       <div class="form__fila">
         <div class="campo">
           <label for="usr-usuario">Nombre de usuario (para iniciar sesión)</label>
-          <input id="usr-usuario" v-model="usuarioLogin" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="60"
+          <input id="usr-usuario" v-permitir="'usuario'" v-model="usuarioLogin" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="60"
             :aria-invalid="campoErr('usuario') ? 'true' : undefined" :aria-describedby="campoErr('usuario') ? 'usr-usuario-e' : undefined" />
           <p v-if="campoErr('usuario')" id="usr-usuario-e" class="texto-error form__error">{{ campoErr('usuario') }}</p>
         </div>
@@ -183,8 +186,11 @@ async function guardar() {
 
       <div class="campo">
         <label for="usr-telefono">Teléfono <span class="form__opcional">(opcional)</span></label>
-        <input id="usr-telefono" v-model="telefono" type="tel" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="10 dígitos"
-          :aria-invalid="campoErr('telefono') ? 'true' : undefined" :aria-describedby="campoErr('telefono') ? 'usr-telefono-e' : undefined" />
+        <div class="telefono-fila">
+          <SelectorLada v-model="lada" />
+          <input id="usr-telefono" v-permitir="'digitos'" v-model="telefono" type="tel" inputmode="numeric" autocomplete="off" :maxlength="rangoTelefono(lada).max" :placeholder="textoDigitos(lada)"
+            :aria-invalid="campoErr('telefono') ? 'true' : undefined" :aria-describedby="campoErr('telefono') ? 'usr-telefono-e' : undefined" />
+        </div>
         <p v-if="campoErr('telefono')" id="usr-telefono-e" class="texto-error form__error">{{ campoErr('telefono') }}</p>
       </div>
 

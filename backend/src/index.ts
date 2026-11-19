@@ -92,6 +92,8 @@ async function iniciarAPI(): Promise<void> {
     { archivo: "023_caracteristicas_mesa_y_duracion.sql", consulta: "SELECT id_caracteristica FROM mesa_caracteristica LIMIT 0" },
     { archivo: "023_caracteristicas_mesa_y_duracion.sql", consulta: "SELECT duracion_reservacion_minutos FROM configuracion_reservacion LIMIT 0" },
     { archivo: "024_restablecer_contrasena.sql", consulta: "SELECT token_hash FROM restablecimiento_contrasena LIMIT 0" },
+    { archivo: "025_lada_telefono.sql", consulta: "SELECT lada FROM cliente LIMIT 0" },
+    { archivo: "025_lada_telefono.sql", consulta: "SELECT lada FROM perfil_usuario LIMIT 0" },
   ];
   for (const { archivo, consulta } of migraciones) {
     try {

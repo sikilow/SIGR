@@ -14,6 +14,7 @@ import { usePolling } from '../../composables/usePolling'
 import { filtroReservacionesDesdeConsulta, useReservacionesStore } from '../../stores/reservaciones'
 import type { Reservacion } from '../../types'
 import { aDiaISO, combinarFechaHora, type FiltroReservaciones } from '../../utils/reservaciones'
+import { vPermitir } from '../../utils/campos'
 
 const store = useReservacionesStore()
 const route = useRoute()
@@ -149,7 +150,7 @@ onBeforeUnmount(() => {
       <label class="campo busqueda" for="buscar-reservacion">
         Buscar por nombre o teléfono
         <input
-          id="buscar-reservacion"
+          id="buscar-reservacion" v-permitir="'busqueda'"
           v-model="store.busqueda"
           type="search"
           inputmode="search"

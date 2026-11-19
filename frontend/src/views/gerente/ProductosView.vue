@@ -11,6 +11,7 @@ import { useAnunciosStore } from '../../stores/anuncios'
 import type { CategoriaAdmin, ProductoAdmin } from '../../types'
 import { formatearMoneda } from '../../utils/formato'
 import { estadoInventario } from '../../utils/inventario'
+import { vPermitir } from '../../utils/campos'
 
 const anuncios = useAnunciosStore()
 
@@ -178,7 +179,7 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
       <div class="filtros__campos">
         <div class="campo">
           <label for="prod-buscar">Buscar</label>
-          <input id="prod-buscar" v-model="busqueda" type="search" placeholder="Nombre o descripción" autocomplete="off" />
+          <input id="prod-buscar" v-permitir="'busqueda'" v-model="busqueda" type="search" placeholder="Nombre o descripción" autocomplete="off" />
         </div>
         <div class="campo">
           <label for="prod-filtro-cat">Categoría</label>

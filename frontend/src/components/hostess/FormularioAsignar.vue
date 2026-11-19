@@ -23,6 +23,7 @@ import {
 } from '../../utils/asignacion'
 import { formatearCapacidad, formatearEspera, formatearHora } from '../../utils/formato'
 import { crearClaveIdempotencia, esFalloReintentable } from '../../utils/idempotencia'
+import { vPermitir } from '../../utils/campos'
 
 const props = defineProps<{
   mesa: MesaSalon
@@ -261,7 +262,7 @@ async function confirmar() {
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 12h12" /></svg>
           </button>
           <input
-            id="personas-sin-registro"
+            id="personas-sin-registro" v-permitir="'digitos'"
             ref="campoPersonas"
             v-model="personasTexto"
             class="personas__campo numero"

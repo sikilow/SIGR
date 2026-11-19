@@ -4,6 +4,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AccesoGoogle from '../../components/cliente/AccesoGoogle.vue'
+import { vPermitir } from '../../utils/campos'
 
 const router = useRouter()
 
@@ -96,6 +97,7 @@ async function iniciarSesion() {
           <input
             id="correo"
             v-model="correo"
+            v-permitir="'correo'"
             type="email"
             placeholder="ejemplo@correo.com"
             autocomplete="email"

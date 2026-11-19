@@ -9,6 +9,8 @@ export interface Cliente {
   nombre: string
   /** cliente.telefono (puede ser NULL). */
   telefono: string | null
+  /** cliente.lada: código de país del teléfono, sin «+» (por defecto «52»). */
+  lada?: string
   /** cliente.correo (puede ser NULL). */
   correo: string | null
 }
@@ -101,6 +103,8 @@ export interface ResultadoAsignacion {
 export interface NuevoCliente {
   nombre: string
   telefono: string
+  /** Código de país sin «+»; si falta, la API usa «52». */
+  lada?: string
   /** Opcional: `null` si no se captura. */
   correo: string | null
 }

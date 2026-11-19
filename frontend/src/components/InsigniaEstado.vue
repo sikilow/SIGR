@@ -34,12 +34,17 @@ defineProps<{
   color: var(--tono-texto);
   font-size: var(--texto-sm);
   font-weight: 700;
-  white-space: nowrap;
+  /* Cabe en una línea si hay espacio; si no (tarjeta angosta), el texto pasa a otra línea en vez de salirse. */
+  min-width: 0;
   max-width: 100%;
   line-height: 1.25;
 }
 
-/* Textos largos: pasan a otra línea en vez de desbordar la tarjeta */
+.insignia > span:not(.insignia__icono) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .insignia--ajustar {
   white-space: normal;
 }

@@ -135,7 +135,7 @@ Las rutas de Salón, reservaciones, clientes y asignación descritas en esta sec
 |---|---|---|---|---|
 | `MesaSalon` | `mesa.id_mesa`, `numero`, `capacidad`, `estado` | `idMesa`, `numero`, `capacidad`, `estado` | `id_mesa`, `numero`, `capacidad`, `estado` | columnas (el resumen de cuenta de `GET /mesas` se ignora) |
 | `Cliente` | `cliente.id_cliente`, `nombre` | `idCliente`, `nombre` | `id_cliente`, `nombre` | columnas |
-| `Cliente` | `cliente.telefono`, `cliente.correo` | `telefono`, `correo` (`string \| null`) | `telefono`, `correo` | columnas (VARCHAR 20 / 120, **admiten NULL**) |
+| `Cliente` | `cliente.telefono`, `cliente.lada`, `cliente.correo` | `telefono`, `correo` (`string \| null`) | `telefono`, `correo` | columnas (VARCHAR 20 / 120, **admiten NULL**) |
 | `Reservacion` | `reservacion.id_reservacion`, `id_cliente`, `personas` | `idReservacion`, `idCliente`, `personas` | igual en snake_case | columnas. **No existe folio** |
 | `Reservacion` | `reservacion.id_mesa` | `idMesa` (`number \| null`) | `id_mesa` | columna (NULL = aún sin mesa) |
 | `Reservacion` | `reservacion.fecha_hora`, `llegada_en` | `fechaHora` (`Date`), `llegadaEn` (`Date \| null`) | `fecha_hora`, `llegada_en` | columnas DATETIME (`llegada_en` NULL hasta que llega) |
@@ -166,6 +166,7 @@ La configuración se consulta y actualiza mediante `GET/PATCH /api/catalogo/conf
 | `UsuarioAdmin.esPrimerGerente` | `configuracion_seguridad.id_primer_gerente` (comparado con `usuario.id_usuario`) | `esPrimerGerente` | `es_primer_gerente` | calculado; requiere la migración `013_auditoria_seguridad.sql` |
 | `UsuarioAdmin.nombreUsuario` | `credenciales.nombre_usuario` | `nombreUsuario` | `nombre_usuario` | columna |
 | `UsuarioAdmin.telefono` | `perfil_usuario.telefono` | `telefono` | `telefono` | columna de una tabla fuera del alcance del mesero |
+| `UsuarioAdmin.lada` | `perfil_usuario.lada` | `lada` | `lada` | columna (VARCHAR 4, solo dígitos, por defecto `52`; migración 025) |
 | `UsuarioAdmin.creadoEn` | `usuario.creado_en` | `creadoEn` (`Date`) | `creado_en` | columna |
 | `UsuarioAdmin.ultimoAcceso` | `credenciales.ultimo_acceso` | `ultimoAcceso` (`Date \| null`) | `ultimo_acceso` | columna |
 | `CategoriaAdmin.idCategoria`, `totalProductos` | `categoria_menu.id_categoria`; conteo de `producto` | `idCategoria`, `totalProductos` | `id_categoria`, `total_productos` | columna / calculado |

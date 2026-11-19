@@ -211,12 +211,16 @@ function quitar() {
 .producto__etiquetas {
   display: flex;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
   gap: var(--espacio-1) var(--espacio-2);
   margin-top: var(--espacio-1);
 }
 
 .producto__motivo {
+  max-width: 100%;
   margin-top: var(--espacio-1);
+  overflow-wrap: anywhere;
   color: var(--color-peligro-texto);
   font-size: var(--texto-sm);
   font-weight: 600;

@@ -96,6 +96,20 @@ const contadores = (): Contador[] => [
   }
 }
 
+/* Celular: ícono y cifra arriba, y la etiqueta completa debajo (no cabe al lado sin cortarse) */
+@media (max-width: 30em) {
+  .resumen__item {
+    flex-wrap: wrap;
+    row-gap: var(--espacio-1);
+    padding: var(--espacio-3);
+  }
+
+  .resumen__etiqueta {
+    flex: 1 1 100%;
+    overflow-wrap: anywhere;
+  }
+}
+
 /* ───────── Rediseño v2 «Madalena» ───────── */
 .resumen__item {
   box-shadow: var(--sombra);

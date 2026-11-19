@@ -4,13 +4,14 @@ import { z } from "zod";
 import { ejecutar, filas, pool, transaccion } from "../services/db";
 import { ESTADO_PEDIDO_DB, ESTADOS_PEDIDO, cargarPedido, cargarPedidos, exigirDisponibles, idDeRuta, idEstadoPedido, idMotivoTexto, devolverExistencia, nombreEstadoDeFiltro, validar, verificarExistencia, type PedidoDto } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
+import { MENSAJE_NOTA, nota, REGEX_NOTA } from "../utils/campos";
 import { conIdempotencia } from "../services/idempotencia";
 
 // detalle_pedido: id_producto, cantidad (CHECK > 0) e indicaciones (VARCHAR(255)). El cliente NUNCA envía precios.
 const Linea = z.object({
   id_producto: z.number().int().positive(),
   cantidad: z.number().int().min(1).max(99),
-  indicaciones: z.string().max(255).default(""),
+  indicaciones: nota(255).default(""),
 });
 type LineaPedido = z.infer<typeof Linea>;
 
@@ -22,7 +23,8 @@ const Cancelacion = z.object({
     .string()
     .trim()
     .min(5, "El motivo debe tener al menos 5 caracteres")
-    .max(200, "El motivo no puede pasar de 200 caracteres"),
+    .max(200, "El motivo no puede pasar de 200 caracteres")
+    .regex(REGEX_NOTA, MENSAJE_NOTA),
 });
 const CambioCocina = z.object({ estado: z.enum(["en_preparacion", "listo"]) });
 const Filtros = z.object({

@@ -31,6 +31,7 @@ import {
   type FiltrosPedidosGerente,
 } from '../../utils/reglasGerente'
 import { aDiaISO } from '../../utils/reservaciones'
+import { vPermitir } from '../../utils/campos'
 
 const route = useRoute()
 const store = usePedidosGerenteStore()
@@ -182,7 +183,7 @@ onMounted(() => polling.iniciar())
         <div class="campo">
           <label for="pedido-buscar">Número de pedido</label>
           <input
-            id="pedido-buscar"
+            id="pedido-buscar" v-permitir="'digitos'"
             v-model="filtros.busqueda"
             type="search"
             inputmode="numeric"

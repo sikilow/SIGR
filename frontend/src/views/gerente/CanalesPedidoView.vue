@@ -5,6 +5,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ErrorServicio, servicios } from '../../services'
 import type { CanalPedido } from '../../types'
+import { vPermitir } from '../../utils/campos'
 
 const canales = ref<CanalPedido[]>([])
 const nombre = ref('')
@@ -104,7 +105,7 @@ onMounted(() => void cargar())
       <form class="nuevo panel" @submit.prevent="crear">
         <div class="campo nuevo__nombre">
           <label for="canal-nombre">Nuevo canal</label>
-          <input id="canal-nombre" v-model="nombre" type="text" maxlength="40" autocomplete="off" required placeholder="Ej.: Cornershop" :disabled="guardando">
+          <input id="canal-nombre" v-permitir="'texto'" v-model="nombre" type="text" maxlength="40" autocomplete="off" required placeholder="Ej.: Cornershop" :disabled="guardando">
         </div>
         <button class="btn" type="submit" :disabled="guardando || !nombre.trim()">Agregar canal</button>
       </form>

@@ -6,6 +6,7 @@ import { computed, ref, watch } from 'vue'
 import { ErrorServicio, servicios } from '../services'
 import type { CambioProducto, CategoriaAdmin, ProductoAdmin } from '../types'
 import DialogoModal from './DialogoModal.vue'
+import { vPermitir } from '../utils/campos'
 
 const props = defineProps<{
   abierto: boolean
@@ -148,14 +149,14 @@ async function guardar() {
 
       <div class="campo">
         <label for="prod-nombre">Nombre</label>
-        <input id="prod-nombre" v-model="nombre" type="text" autocomplete="off" autofocus maxlength="100"
+        <input id="prod-nombre" v-permitir="'texto'" v-model="nombre" type="text" autocomplete="off" autofocus maxlength="100"
           :aria-invalid="campoErr('nombre') ? 'true' : undefined" :aria-describedby="campoErr('nombre') ? 'prod-nombre-e' : undefined" />
         <p v-if="campoErr('nombre')" id="prod-nombre-e" class="texto-error form__error">{{ campoErr('nombre') }}</p>
       </div>
 
       <div class="campo">
         <label for="prod-presentacion">Presentación o variante</label>
-        <input id="prod-presentacion" v-model="presentacion" type="text" autocomplete="off" maxlength="100"
+        <input id="prod-presentacion" v-permitir="'texto'" v-model="presentacion" type="text" autocomplete="off" maxlength="100"
           placeholder="Ej.: lata de 355 ml, botella de 1 litro, rebanada individual"
           :aria-invalid="campoErr('presentacion') ? 'true' : undefined"
           :aria-describedby="campoErr('presentacion') ? 'prod-presentacion-ayuda prod-presentacion-e' : 'prod-presentacion-ayuda'" />
@@ -165,7 +166,7 @@ async function guardar() {
 
       <div class="campo">
         <label for="prod-descripcion">Descripción <span aria-hidden="true">*</span></label>
-        <input id="prod-descripcion" v-model="descripcion" type="text" autocomplete="off" maxlength="255" required
+        <input id="prod-descripcion" v-permitir="'nota'" v-model="descripcion" type="text" autocomplete="off" maxlength="255" required
           placeholder="Ej.: contiene nuez, servido con hielo, acompañado de ensalada"
           :aria-invalid="campoErr('descripcion') ? 'true' : undefined"
           :aria-describedby="campoErr('descripcion') ? 'prod-descripcion-ayuda prod-descripcion-e' : 'prod-descripcion-ayuda'" />
@@ -186,7 +187,7 @@ async function guardar() {
 
         <div class="campo">
           <label for="prod-precio">Precio (MXN)</label>
-          <input id="prod-precio" v-model="precio" type="text" inputmode="decimal" autocomplete="off"
+          <input id="prod-precio" v-permitir="'decimal'" v-model="precio" type="text" inputmode="decimal" autocomplete="off"
             :aria-invalid="campoErr('precio') ? 'true' : undefined" :aria-describedby="campoErr('precio') ? 'prod-precio-e' : undefined" />
           <p v-if="campoErr('precio')" id="prod-precio-e" class="texto-error form__error">{{ campoErr('precio') }}</p>
         </div>
@@ -205,14 +206,14 @@ async function guardar() {
         <div class="form__fila">
           <div class="campo">
             <label for="prod-existencia">Existencia</label>
-            <input id="prod-existencia" v-model="existencia" type="text" inputmode="numeric" autocomplete="off"
+            <input id="prod-existencia" v-permitir="'digitos'" v-model="existencia" type="text" inputmode="numeric" autocomplete="off"
               required
               :aria-invalid="campoErr('existencia') ? 'true' : undefined" :aria-describedby="campoErr('existencia') ? 'prod-existencia-e' : undefined" />
             <p v-if="campoErr('existencia')" id="prod-existencia-e" class="texto-error form__error">{{ campoErr('existencia') }}</p>
           </div>
           <div class="campo">
             <label for="prod-stockMinimo">Stock mínimo (para avisar)</label>
-            <input id="prod-stockMinimo" v-model="stockMinimo" type="text" inputmode="numeric" autocomplete="off"
+            <input id="prod-stockMinimo" v-permitir="'digitos'" v-model="stockMinimo" type="text" inputmode="numeric" autocomplete="off"
               :aria-invalid="campoErr('stockMinimo') ? 'true' : undefined" :aria-describedby="campoErr('stockMinimo') ? 'prod-stockMinimo-e' : undefined" />
             <p v-if="campoErr('stockMinimo')" id="prod-stockMinimo-e" class="texto-error form__error">{{ campoErr('stockMinimo') }}</p>
           </div>

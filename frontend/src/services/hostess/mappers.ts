@@ -89,6 +89,8 @@ export interface ClienteDto {
   id_cliente: Numerico
   nombre: string
   telefono: string | null
+  /** cliente.lada (migración 025). Una API anterior no la envía. */
+  lada?: string
   correo: string | null
 }
 
@@ -166,6 +168,7 @@ export function aCliente(dto: ClienteDto): Cliente {
     idCliente: aNumero(dto.id_cliente, 'id_cliente'),
     nombre: aTexto(dto.nombre),
     telefono: aTelefono(dto.telefono),
+    lada: typeof dto.lada === 'string' && dto.lada !== '' ? dto.lada : undefined,
     correo: correo === '' ? null : correo,
   }
 }
@@ -195,7 +198,7 @@ export function deAsignacion(grupo: GrupoAsignacion): Record<string, number> {
 /** Cuerpo de POST /clientes. El correo vacío viaja como `null`. */
 export function deNuevoCliente(c: NuevoCliente): Record<string, string | null> {
   const correo = c.correo?.trim() ?? ''
-  return { nombre: c.nombre.trim(), telefono: c.telefono.trim(), correo: correo === '' ? null : correo }
+  return { nombre: c.nombre.trim(), telefono: c.telefono.trim(), ...(c.lada ? { lada: c.lada } : {}), correo: correo === '' ? null : correo }
 }
 
 /** Cuerpo de POST /reservaciones. */

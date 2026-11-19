@@ -11,6 +11,7 @@ import SeccionesDialog from '../../components/SeccionesDialog.vue'
 import { ErrorServicio, servicios } from '../../services'
 import { useAnunciosStore } from '../../stores/anuncios'
 import { ETIQUETA_ESTADO_MESA, type CaracteristicaAdmin, type MesaAdmin, type SeccionAdmin } from '../../types'
+import { vPermitir } from '../../utils/campos'
 
 const anuncios = useAnunciosStore()
 
@@ -209,7 +210,7 @@ const personas = (n: number) => (n === 1 ? '1 persona' : `${n} personas`)
       <div class="filtros__campos">
         <div class="campo">
           <label for="mesa-buscar">Buscar</label>
-          <input id="mesa-buscar" v-model="busqueda" type="search" placeholder="Número o sección" autocomplete="off" />
+          <input id="mesa-buscar" v-permitir="'busqueda'" v-model="busqueda" type="search" placeholder="Número o sección" autocomplete="off" />
         </div>
         <div class="campo">
           <label for="mesa-filtro-seccion">Sección</label>

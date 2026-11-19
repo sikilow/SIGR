@@ -4,6 +4,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ErrorServicio, servicios } from '../../services'
 import type { CategoriaMetodoPagoAdmin, MetodoPagoAdmin } from '../../types'
+import { vPermitir } from '../../utils/campos'
 
 type Tipo = 'fisico' | 'digital'
 
@@ -200,7 +201,7 @@ onMounted(() => void cargar())
         <div class="nueva__fila">
           <div class="campo nueva__nombre">
             <label for="categoria-pago-nombre">Nombre</label>
-            <input id="categoria-pago-nombre" v-model="nombreCategoria" type="text" maxlength="40" autocomplete="off" required placeholder="Ej.: Vales de despensa" :disabled="guardando">
+            <input id="categoria-pago-nombre" v-permitir="'texto'" v-model="nombreCategoria" type="text" maxlength="40" autocomplete="off" required placeholder="Ej.: Vales de despensa" :disabled="guardando">
           </div>
           <fieldset class="tipos" :disabled="guardando">
             <legend>Tipo de cobro</legend>
@@ -287,7 +288,7 @@ onMounted(() => void cargar())
               <label :for="`nuevo-metodo-${categoria.idCategoriaMetodoPago}`">Agregar método a «{{ categoria.nombre }}»</label>
               <input
                 :id="`nuevo-metodo-${categoria.idCategoriaMetodoPago}`"
-                v-model="nombresMetodo[categoria.idCategoriaMetodoPago]"
+                v-model="nombresMetodo[categoria.idCategoriaMetodoPago]" v-permitir="'texto'"
                 type="text"
                 maxlength="40"
                 autocomplete="off"

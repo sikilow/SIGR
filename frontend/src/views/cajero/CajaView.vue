@@ -5,6 +5,7 @@ import InsigniaEstado from '../../components/InsigniaEstado.vue'
 import { usePolling } from '../../composables/usePolling'
 import ResumenCorte from '../../components/ResumenCorte.vue'
 import { servicios } from '../../services'
+import { bloquearTeclasNoNumericas, vPermitir } from '../../utils/campos'
 import {
   ETIQUETA_ESTADO_PEDIDO,
   type CorteDetalle,
@@ -305,7 +306,7 @@ onMounted(() => {
           <form v-if="!estado.corte" class="form-corte" @submit.prevent="abrirCorte">
             <div class="campo">
               <label for="fondo-inicial">Efectivo inicial en caja</label>
-              <input id="fondo-inicial" v-model.number="fondoInicial" type="number" min="0" step="0.01" inputmode="decimal" required>
+              <input id="fondo-inicial" v-model.number="fondoInicial" v-permitir="'decimal'" type="text" inputmode="decimal" autocomplete="off" maxlength="13" placeholder="0.00" required>
               <p class="campo__ayuda">Cuenta los billetes y monedas con los que empiezas el turno.</p>
             </div>
             <button class="btn btn--grande" type="submit" :disabled="procesando">Iniciar caja</button>
@@ -313,7 +314,7 @@ onMounted(() => {
           <form v-else-if="!confirmandoCierre" class="form-corte" @submit.prevent="pedirConfirmacionCierre">
             <div class="campo">
               <label for="efectivo-contado">Efectivo contado en caja</label>
-              <input id="efectivo-contado" v-model.number="efectivoContado" type="number" min="0" step="0.01" inputmode="decimal" required>
+              <input id="efectivo-contado" v-model.number="efectivoContado" v-permitir="'decimal'" type="text" inputmode="decimal" autocomplete="off" maxlength="13" placeholder="0.00" required>
               <p class="campo__ayuda">Incluye el fondo inicial. El faltante o sobrante aparece después de cerrar.</p>
             </div>
             <button class="btn" type="submit" :disabled="procesando">Cerrar corte</button>
@@ -458,6 +459,7 @@ onMounted(() => {
                       type="number"
                       min="0.01"
                       step="0.01"
+                      @keydown="bloquearTeclasNoNumericas"
                       :aria-label="`Importe aplicado: ${nombreMetodo(pago.idMetodo)}`"
                       @input="cambiarMonto(pago, Number(($event.target as HTMLInputElement).value))"
                     >
@@ -484,6 +486,7 @@ onMounted(() => {
                       type="number"
                       :min="pago.monto"
                       step="0.01"
+                      @keydown="bloquearTeclasNoNumericas"
                       aria-label="Efectivo recibido"
                     >
                   </div>

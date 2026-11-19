@@ -25,6 +25,7 @@ import {
   type TipoPeriodo,
 } from '../../utils/periodos'
 import { descargarVentasExcel, HOJAS_VENTAS, type HojaVentas } from '../../utils/ventasExcel'
+import { vPermitir } from '../../utils/campos'
 
 const MAX_DIAS = 731
 const POR_PAGINA = 50
@@ -422,7 +423,7 @@ async function descargar() {
             <form class="historial__filtros" role="search" aria-label="Filtrar historial" @submit.prevent>
               <div class="campo">
                 <label for="ventas-buscar">Venta, cuenta o mesa</label>
-                <input id="ventas-buscar" v-model="busqueda" type="search" inputmode="numeric" placeholder="Ej. 128" />
+                <input id="ventas-buscar" v-permitir="'digitos'" v-model="busqueda" type="search" inputmode="numeric" placeholder="Ej. 128" />
               </div>
               <div class="campo">
                 <label for="ventas-metodo">Método de pago</label>

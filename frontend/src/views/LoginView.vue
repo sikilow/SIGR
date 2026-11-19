@@ -9,6 +9,7 @@ import LogoMarca from '../components/LogoMarca.vue'
 import { rutaInicial } from '../router'
 import { ErrorServicio, usandoMock } from '../services'
 import { useSesionStore } from '../stores/sesion'
+import { vPermitir } from '../utils/campos'
 
 const sesion = useSesionStore()
 const route = useRoute()
@@ -124,7 +125,7 @@ async function entrar() {
                   <path d="M4.5 20c0-3.8 3.2-6.2 7.5-6.2s7.5 2.4 7.5 6.2" />
                 </svg>
                 <input
-                  id="login-usuario"
+                  id="login-usuario" v-permitir="'usuario'"
                   ref="campoUsuario"
                   v-model="nombreUsuario"
                   type="text"

@@ -84,8 +84,16 @@ describe('mock reservaciones: clientes', () => {
   it('crea un cliente, normaliza el teléfono y deja el correo vacío en null', async () => {
     const { hostess, baseDatos } = await nuevoMock()
     const c = await resolver(hostess.crearCliente({ nombre: ' Laura Pérez ', telefono: '(311) 555-0999', correo: '' }))
-    expect(c).toEqual({ idCliente: 9, nombre: 'Laura Pérez', telefono: '3115550999', correo: null })
+    expect(c).toEqual({ idCliente: 9, nombre: 'Laura Pérez', telefono: '3115550999', lada: '52', correo: null })
     expect(baseDatos.clientes).toHaveLength(9)
+  })
+
+  it('guarda la lada del cliente nuevo (52 si no se manda)', async () => {
+    const { hostess } = await nuevoMock()
+    const conLada = await resolver(hostess.crearCliente({ nombre: 'John Smith', telefono: '2125550123', lada: '1', correo: null }))
+    expect(conLada.lada).toBe('1')
+    const sinLada = await resolver(hostess.crearCliente({ nombre: 'Laura Pérez', telefono: '3115550999', correo: null }))
+    expect(sinLada.lada).toBe('52')
   })
 
   it('rechaza un teléfono repetido y datos inválidos', async () => {

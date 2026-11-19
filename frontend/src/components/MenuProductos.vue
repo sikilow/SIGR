@@ -5,6 +5,7 @@
 import { computed, ref } from 'vue'
 import type { CategoriaMenu, Producto } from '../types'
 import ProductoCard from './ProductoCard.vue'
+import { vPermitir } from '../utils/campos'
 
 const props = defineProps<{
   categorias: CategoriaMenu[]
@@ -46,7 +47,7 @@ function elegirCategoria(idCategoria: number) {
       <div class="campo menu__buscar">
         <label for="menu-busqueda">Buscar producto</label>
         <input
-          id="menu-busqueda"
+          id="menu-busqueda" v-permitir="'busqueda'"
           v-model="busqueda"
           type="search"
           autocomplete="off"

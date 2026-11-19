@@ -388,6 +388,23 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   background-size: 20px;
 }
 
+/* Lada + teléfono en una fila; en pantallas angostas la lada pasa arriba */
+.telefono-fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+}
+
+.telefono-fila > .selector-lada {
+  flex: 0 1 11.5rem;
+  width: auto;
+}
+
+.telefono-fila > input {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
 .campo textarea {
   min-height: 112px;
   padding: var(--espacio-3) var(--espacio-4);
@@ -520,6 +537,7 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 .aviso,
 .aviso--error {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--espacio-4);
@@ -534,8 +552,10 @@ input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
 }
 
 .aviso p {
-  flex: 1;
+  flex: 1 1 12rem;
+  min-width: 0;
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--color-peligro-texto);
   font-weight: 600;
 }
