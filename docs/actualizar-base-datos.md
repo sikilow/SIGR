@@ -472,6 +472,55 @@ Get-Content -Raw ".\database\migrations\031_seguridad_acceso.sql" | mysql --defa
 
 La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**. Al reiniciar, **todas las sesiones abiertas se cierran** (los tokens anteriores no llevan sesión): el personal debe iniciar sesión otra vez.
 
+## Migración 032: teléfono de cliente único
+
+El par (lada, teléfono) de un cliente no se puede repetir: lo garantiza la base con el índice único `uq_cliente_telefono` (antes solo lo revisaba la API, y dos altas simultáneas podían duplicarlo). Un cliente sin teléfono no choca con otros. Un cliente eliminado (lógico) sigue ocupando su teléfono. Un teléfono vacío (`''`) se guarda como `NULL`. **Si ya hay teléfonos repetidos, la migración se detiene con un mensaje y no cambia nada**: busca los repetidos, corrígelos en Gerente → Clientes (o con `UPDATE`) y vuelve a ejecutarla. Puede repetirse.
+
+```powershell
+mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT lada, telefono, COUNT(*) AS veces FROM cliente WHERE telefono IS NOT NULL GROUP BY lada, telefono HAVING COUNT(*) > 1;"
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-032.sql"
+Get-Content -Raw ".\database\migrations\032_telefono_cliente_unico.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+La primera consulta debe salir vacía. La API no arranca sin este índice; si ya estaba encendida, **reinícialo**.
+
+## Migración 033: recuperar la contraseña del cliente
+
+Crea `restablecimiento_contrasena_cliente` (solo guarda la huella SHA-256 del enlace, que caduca a la hora y sirve una sola vez). Habilita «¿Olvidaste tu contraseña?» en el portal de clientes. Puede repetirse; solo agrega una tabla. Para que el correo salga, el servidor necesita el proveedor de correo configurado (ver [`resend-reservaciones.md`](resend-reservaciones.md)).
+
+```powershell
+Get-Content -Raw ".\database\migrations\033_recuperar_contrasena_cliente.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+La API no arranca sin esta tabla; si ya estaba encendida, **reinícialo**.
+
+## Migración 034: tickets pasados, devoluciones y referencia fiscal
+
+Crea `devolucion` (con `devolucion_linea` y `devolucion_pago`), `venta_reimpresion` y `venta_fiscal`, y los triggers de auditoría de todas menos `venta_reimpresion`. Con ellas el cajero solicita devoluciones y el gerente las autoriza, el efectivo devuelto baja el efectivo esperado del corte, se puede reponer el inventario y el gerente guarda la referencia para el contador. Puede repetirse; solo agrega tablas.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-034.sql"
+Get-Content -Raw ".\database\migrations\034_devoluciones_y_referencia_fiscal.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+La API no arranca sin estas tablas; si ya estaba encendida, **reinícialo**. Ver [`pantallas-caja.md`](pantallas-caja.md) y [`contrato-api-caja.md`](contrato-api-caja.md).
+
+## Migración 035: mermas
+
+Crea `merma` (qué producto, cuántas unidades, motivo, nota, quién la registró y el precio de venta de ese momento) y su auditoría. Habilita Gerente → Productos → **Mermas**. Puede repetirse; solo agrega una tabla.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-035.sql"
+Get-Content -Raw ".\database\migrations\035_mermas.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+La API no arranca sin esta tabla; si ya estaba encendida, **reinícialo**.
+
+**Orden en un servidor que viene de la 024:** aplica de la 025 a la 035 en orden (cada una es repetible), reinicia la API una sola vez al final y comprueba con `node database/verificar_init.mjs` desde una máquina que llegue a esa base.
+
 ## Base nueva o entorno de demostración
 
 - **Base nueva y vacía:** ejecuta `database/init.sql` y el seed de usuarios iniciales. `init.sql` ya es el estado final de las migraciones 001 a 017 (tablas, categorías y métodos de pago, gerente inicial protegido, bitácora y triggers de auditoría), así que **no hay que aplicar ninguna migración**. Para comprobarlo: `node database/verificar_init.mjs` (ver [`CONTEXTO_BASE_DE_DATOS.md`](CONTEXTO_BASE_DE_DATOS.md)).

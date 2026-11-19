@@ -70,11 +70,15 @@ export async function crearLibroVentas(reporte: ReporteVentas, opciones: Opcione
     ['Cuentas cobradas', reporte.resumen.ventas],
     ['Ticket promedio', ticket],
     ['Producto que más vendió', masVendido ? `${masVendido.producto}${masVendido.presentacion ? ` (${masVendido.presentacion})` : ''}` : '—'],
+    ['Devoluciones aprobadas', reporte.resumen.devoluciones],
+    ['Importe devuelto', reporte.resumen.devuelto],
+    ['Neto (vendido menos devuelto)', reporte.resumen.neto],
     ['Generado', new Date()],
   ])
-  for (const fila of [5, 7]) resumen.getCell(fila, 2).numFmt = formatoMoneda
-  resumen.getCell(9, 2).numFmt = 'dd/mm/yyyy hh:mm'
+  for (const fila of [5, 7, 10, 11]) resumen.getCell(fila, 2).numFmt = formatoMoneda
+  resumen.getCell(12, 2).numFmt = 'dd/mm/yyyy hh:mm'
   resumen.getCell(6, 2).numFmt = '0'
+  resumen.getCell(9, 2).numFmt = '0'
   encabezar(resumen, false)
 
   // ---------- Ventas en el tiempo ----------

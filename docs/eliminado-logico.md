@@ -20,7 +20,7 @@ ventas y reportes viejos siguen mostrando el nombre del producto, y se puede res
 3. **Lo eliminado no se puede usar**: no aparece en el menú, `productosPorId` lo marca no disponible y no se puede editar ni crear algo dentro de una categoría eliminada.
 4. **Cuándo se puede eliminar**
    - Producto: no si está en un pedido sin entregar (registrado, enviado, en preparación o listo).
-   - Categoría: no si tiene productos vigentes.
+   - Categoría: elimina **también sus productos vigentes** (ver «Eliminar en cascada»); no si alguno está en un pedido sin entregar.
 5. **Datos únicos**: el nombre de categoría y la combinación categoría + nombre + presentación del producto siguen siendo únicos *aunque estén eliminados*. Si intentas crear uno igual, el sistema avisa «hay uno eliminado, restáuralo».
 6. **Restaurar**: un producto no se restaura si su categoría está eliminada (restaura primero la categoría).
 7. **Auditoría**: los triggers `trg_aud_producto_*` y `trg_aud_categoria_menu_*` registran `eliminado_en` y `eliminado_por`.
@@ -77,12 +77,36 @@ Canales de pedido y Métodos de pago; todas con «Eliminar», la vista «Elimina
 - Listas: `?eliminados=1` devuelve solo lo eliminado; por omisión, solo lo vigente. Los reportes e historial nunca filtran.
 - **Mesa:** no se elimina si está ocupada o tiene cuenta abierta o reservaciones vigentes. No se restaura si su sección
   está eliminada.
-- **Sección:** no se elimina si tiene mesas vigentes ni la sección de sistema «Para llevar».
+- **Sección:** elimina **también sus mesas vigentes** (ver «Eliminar en cascada»); no si alguna está ocupada, con cuenta abierta o con
+  reservaciones vigentes, ni la sección de sistema «Para llevar».
 - **Característica:** no se elimina mientras la usen mesas vigentes o reservaciones vigentes.
 - **Canal:** no se elimina mientras una cuenta sin cobrar lo use.
-- **Categoría de método de pago:** no se elimina con métodos vigentes. **Método de pago:** el de efectivo no se puede
-  eliminar (el cuadre de caja lo necesita); no se restaura si su categoría está eliminada.
-- Orden al restaurar: primero la sección/categoría, luego sus mesas/métodos.
+- **Categoría de método de pago:** elimina **también sus métodos vigentes** (ver «Eliminar en cascada»); no si contiene el método de
+  efectivo o uno que una cuenta abierta tenga solicitado. **Método de pago:** el de efectivo no se puede eliminar (el cuadre de
+  caja lo necesita); no se restaura si su categoría está eliminada.
+
+### Eliminar en cascada (categoría de pago, sección y categoría del menú)
+
+Lo que contiene otras cosas se elimina **con** ellas, no se obliga a eliminarlas una por una antes:
+
+| Contenedor | Se elimina también | Qué lo frena |
+|---|---|---|
+| Categoría de método de pago (p. ej. «Digital») | Todos sus métodos vigentes (Tarjeta, Transferencia…) | El método de efectivo; un método que una cuenta abierta tiene solicitado |
+| Sección de mesas | Todas sus mesas vigentes | Una mesa ocupada, con cuenta abierta o con reservaciones vigentes; la sección «Para llevar» |
+| Categoría del menú | Todos sus productos vigentes | Un producto en un pedido sin entregar |
+
+- **Todo o nada:** va en una sola transacción. Si algo de adentro no se puede eliminar, no se toca nada y el mensaje dice cuál
+  («No se puede eliminar «Digital»: «Tarjeta» lo tienen solicitado 1 cuenta(s) abiertas…»).
+- **Uno por uno sigue igual:** eliminar solo «Transferencia» elimina solo Transferencia; la categoría y los demás métodos no se tocan.
+- **Misma hora:** la categoría y lo que se eliminó con ella llevan la misma hora de eliminación (`eliminado_en`). La API la adelanta
+  1 s si hace falta para que nunca coincida con la de algo que ya se había eliminado por separado.
+- **Restaurar el contenedor** devuelve también lo que se eliminó **con él** (misma hora); lo que ya estaba eliminado antes
+  por separado se queda eliminado y se restaura aparte. Todo vuelve **inactivo**: las mesas no disponibles, los métodos
+  desactivados (los productos conservan su estado), y Gerencia lo activa después.
+- `DELETE /api/catalogo/categorias/:id` responde `{ ok: true, productos_eliminados }` y `DELETE /api/catalogo/secciones/:nombre`
+  responde `{ ok: true, mesas_eliminadas }`.
+- La característica de mesa no es un contenedor (es una etiqueta de las mesas): sigue sin poder eliminarse mientras algo la use.
+- Orden al restaurar un elemento suelto: primero la sección/categoría, luego sus mesas/métodos/productos.
 
 Para cada fase: migración nueva (columnas + triggers de auditoría + `init.sql`), filtro «vigente» en las consultas vivas,
 rutas `DELETE` y `restaurar`, y la interfaz («Eliminar», «Eliminados», «Restaurar»).

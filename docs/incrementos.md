@@ -8,7 +8,7 @@ Para ubicar los contratos, guías por rol y documentación técnica relacionada,
 
 ## Estado verificado de los requisitos
 
-Revisión del código y la documentación del proyecto actualizada el 17 de noviembre de 2026. Las transcripciones del [Incremento 1](incrementos_audios_transcritos/incremento-1-2026-10-31.md), del [Incremento 2](incrementos_audios_transcritos/incremento-2-2026-11-03.md) y del [Incremento 3](incrementos_audios_transcritos/incremento-3-2026-11-15.md) se generaron automáticamente y pueden contener errores de reconocimiento; las frases dudosas no se interpretan como reglas definitivas.
+Revisión del código y la documentación del proyecto actualizada el 19 de noviembre de 2026. Las transcripciones del [Incremento 1](incrementos_audios_transcritos/incremento-1-2026-10-31.md), del [Incremento 2](incrementos_audios_transcritos/incremento-2-2026-11-03.md) y del [Incremento 3](incrementos_audios_transcritos/incremento-3-2026-11-15.md) se generaron automáticamente y pueden contener errores de reconocimiento; las frases dudosas no se interpretan como reglas definitivas.
 
 | Área | Estado | Qué hace el proyecto y qué falta |
 |---|---|---|
@@ -31,7 +31,7 @@ Revisión del código y la documentación del proyecto actualizada el 17 de novi
 | Reservaciones futuras y capacidad | ✅ Hecho | Anticipación mínima, horario y **duración de cada reservación** configurables por Gerencia (migraciones 018, 022 y 023). Antes de aceptar o confirmar se comprueba que quede una mesa para el grupo a esa hora, contando las reservaciones confirmadas que se traslapan y, si la hora es próxima, las mesas ocupadas por clientes sin reservación. |
 | Detalle de productos y alérgenos | ✅ Resuelto | Decisión: no hay campo aparte. La descripción del producto indica ingredientes y alérgenos, y el mesero escribe una indicación **por producto** de cada pedido (`detalle_pedido.indicaciones`, hasta 120 caracteres en pantalla), que cocina ve en cada línea.
 
-## Lo que falta (lista única, 17 de noviembre de 2026)
+## Lo que falta (lista única, actualizada el 19 de noviembre de 2026)
 
 Esta es la lista **completa** de lo que falta, revisada contra el código, el ERS, el contrato y los audios. Todo lo demás de
 este documento ya está hecho. Al terminar un punto, se marca aquí y en su fila.
@@ -46,18 +46,26 @@ este documento ya está hecho. Al terminar un punto, se marca aquí y en su fila
 | ~~A4~~ | ✅ Hecho: tabla `registro_acceso` con intentos correctos, fallidos, bloqueados, salidas y accesos no autorizados, con IP | RNF-017 | `services/seguridadAcceso.ts` |
 | ~~A5~~ | ✅ Hecho: límite de peticiones por IP, cabeceras de seguridad (`helmet`), política de contraseñas (8+, letras y números, sin comunes ni el usuario) y avisos de arranque (`JWT_SECRET`, contraseñas `1234`) | P-04, P-14 | `index.ts`, `utils/contrasenas.ts` |
 | ~~A6~~ | ✅ Hecho: dar de baja (eliminado lógico) a un cliente y restaurarlo, desde Gerente → Clientes (migración 028; ver [`eliminado-logico.md`](eliminado-logico.md)) | RF-CLI-003 | `controllers/clientesAdmin.ts` |
-| A7 | Que el cajero registre y actualice clientes (hoy solo hostess y gerente) | RF-CLI-001/002 | rutas de clientes y pantalla de Caja |
-| A8 | Teléfono de cliente único en la base (hoy solo lo revisa la API) | Regla de dominio 22 | migración |
-| A9 | Comprobante con datos fiscales del cliente (sin CFDI timbrado: el contrato lo excluye) | RF-VEN-002 | tablas `datos_fiscales` y `factura` (ya existen) |
-| A10 | Historial de pedidos por **rango** de fechas (hoy un día) y también para el cajero; paginar `GET /api/pedidos` | RF-PED-005, P-11 | pedidos |
+| ~~A7~~ | 🚫 **No se hace** (decisión del 19 de noviembre): el cajero no registra ni actualiza clientes; lo hacen la hostess y el gerente | RF-CLI-001/002 | — |
+| ~~A8~~ | ✅ Hecho: el par (lada, teléfono) de un cliente es único en la base (índice `uq_cliente_telefono`, migración 032) | Regla de dominio 22 | `database/migrations/032_telefono_cliente_unico.sql` |
+| ~~A9~~ | ✅ Hecho sin factura: el gerente guarda una **referencia para el contador** y datos fiscales opcionales del cliente (migración 034; ver [`pantallas-caja.md`](pantallas-caja.md)) | RF-VEN-002, RF-VEN-007 | `controllers/ventas.ts`, tabla `venta_fiscal` |
+| ~~A10~~ | 🚫 **No se hace** (decisión del 19 de noviembre): historial de pedidos del cajero por rango y paginado. El gerente ya tiene el historial en Pedidos y el cajero consulta sus **tickets** | RF-PED-005, P-11 | — |
 | ~~A12~~ | ✅ Hecho: recuperar contraseña del personal por correo con enlace de un solo uso (1 h): «¿Olvidaste tu contraseña?» en el inicio de sesión y **Restablecer** en Gerente → Usuarios (migración 024) | RF-USR (seguridad de acceso) | `controllers/auth.ts`, `services/restablecerContrasena.ts` |
 | ~~A11~~ | ✅ Hecho: la duración de la reservación la configura Gerencia (Reservas, migración 023) y se descuentan las mesas ocupadas sin reservación si la hora está dentro de esa duración | Regla de dominio 6 | `disponibilidadReservacion.ts` |
+
+| ~~A13~~ | ✅ Hecho: **tickets pasados, reimpresión y devoluciones** (el cajero solicita, el gerente autoriza; afecta el corte, el inventario y la bitácora; migración 034) | RF-VEN-005, RF-VEN-006 | [`pantallas-caja.md`](pantallas-caja.md) |
+| ~~A14~~ | ✅ Hecho: **recuperar contraseña del cliente** del portal por correo, con enlace de un solo uso (migración 033) | RF-CLI-005 | `/cliente/recuperar` |
+| ~~A15~~ | ✅ Hecho: **reporte de reservaciones e inasistencias** y **mermas** con su reporte (migración 035) | RF-RES-008, RF-PRO-007 | [`pantallas-gerente.md`](pantallas-gerente.md) |
+| ~~A16~~ | ✅ Hecho: la pantalla «Sistema de diseño» ya no se ofrece al gerente con la API real | — | `router/index.ts`, `GerenteLayout.vue` |
+| A17 | **Por decidir:** control de edición simultánea (control optimista). La prueba mostró que dos gerentes pueden pisarse al guardar formularios abiertos; ver [`concurrencia.md`](concurrencia.md) | — | productos, mesas, usuarios, métodos de pago |
+| A18 | **Por elegir:** aviso de stock bajo al gerente (globo en el menú, panel de resumen y/o correo); ver la propuesta en [`PENDIENTES_Y_FALTANTES.md`](PENDIENTES_Y_FALTANTES.md) | — | Productos |
+| A19 | **En espera:** pantalla del registro de accesos y de la bitácora de auditoría (los datos ya se guardan) | RNF-017, RF-AUD-002 | — |
 
 ### B. Pruebas y entorno de entrega (no es código nuevo)
 
 | # | Qué falta |
 |---|---|
-| B1 | Montar el servidor y la base **compartidos**, aplicar las migraciones 001–022 (o `init.sql` en una base nueva) y probar el flujo completo desde varios dispositivos: reservar → sentar → pedir → cocina → cuenta → cobrar → corte → reporte. |
+| B1 | Montar el servidor y la base **compartidos**, aplicar las migraciones 001–035 (o `init.sql` en una base nueva) y probar el flujo completo desde varios dispositivos: reservar → sentar → pedir → cocina → cuenta → cobrar → corte → reporte. |
 | B2 | En ese entorno: cancelar un pedido desde el teléfono (falló en la demo 1) y cobrar con un método de pago nuevo (falló en la demo 3). |
 | B3 | Pruebas automáticas de rutas del backend contra MySQL (hoy son unitarias) e integración continua. |
 | B4 | Antes de entregar: quitar o cambiar las contraseñas `1234` de los usuarios de prueba. |

@@ -121,6 +121,8 @@ async function iniciarSesion() {
           <button type="submit" :disabled="cargando">
             {{ cargando ? 'Ingresando...' : 'Iniciar sesión' }}
           </button>
+
+          <RouterLink to="/cliente/recuperar" class="olvido">¿Olvidaste tu contraseña?</RouterLink>
         </form>
 
         <AccesoGoogle modo="login" />
@@ -281,6 +283,17 @@ button:disabled {
   color: #bb2626;
   font-size: 13px;
   margin-bottom: 15px;
+}
+
+.olvido {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 8px;
+  color: #b9390b;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .registro {

@@ -58,6 +58,10 @@ async function salir() {
     </header>
 
     <main id="contenido-principal" ref="contenido" class="contenido" tabindex="-1">
+      <nav class="pestanas cajero-pestanas no-imprimir" aria-label="Secciones de la caja">
+        <RouterLink class="pestana" :to="{ name: 'cajero-caja' }">Caja</RouterLink>
+        <RouterLink class="pestana" :to="{ name: 'cajero-tickets' }">Tickets y devoluciones</RouterLink>
+      </nav>
       <RouterView />
     </main>
   </div>
@@ -141,6 +145,13 @@ async function salir() {
   overflow: auto;
   outline: none;
   padding: var(--espacio-6);
+}
+
+.cajero-pestanas {
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: var(--espacio-5);
 }
 
 @media (max-width: 40em) {

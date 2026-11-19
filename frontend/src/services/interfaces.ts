@@ -9,6 +9,14 @@ import type {
   CorteDetalle,
   CorteResumen,
   FiltroCortes,
+  FiltroDevoluciones,
+  FiltroVentas,
+  Devolucion,
+  DatosReferenciaFiscal,
+  ReferenciaFiscal,
+  SolicitudDevolucion,
+  VentaDetalle,
+  VentaListado,
   EstadoCaja,
   CambioProducto,
   ConfiguracionReservacion,
@@ -28,6 +36,10 @@ import type {
   NuevaMesa,
   NuevoPedido,
   NuevoProducto,
+  NuevaMerma,
+  Merma,
+  ReporteMermas,
+  ReporteReservaciones,
   NuevoUsuario,
   PagoCajaEntrada,
   ReporteVentas,
@@ -139,6 +151,29 @@ export interface CajaService {
   cobrar(idCuenta: number, pagos: PagoCajaEntrada[], claveIdempotencia?: string): Promise<VentaCaja>
   /** GET /caja/reportes/ventas?desde&hasta (solo gerente). Fechas AAAA-MM-DD; máximo dos años. */
   reporteVentas(desde: string, hasta: string): Promise<ReporteVentas>
+
+  // ---- Tickets pasados, reimpresión y devoluciones (migración 034). Cajero y gerente, salvo lo que se indica. ----
+  /** GET /caja/ventas?desde&hasta&q. Por omisión, los últimos 7 días; máximo 92 días y 200 ventas. */
+  listarVentas(filtro?: FiltroVentas): Promise<VentaListado[]>
+  /** GET /caja/ventas/{id}: el ticket con sus devoluciones y lo que se puede devolver todavía. */
+  obtenerVenta(idVenta: number): Promise<VentaDetalle>
+  /** POST /caja/ventas/{id}/reimpresion: deja constancia de quién reimprimió el ticket y cuándo. */
+  registrarReimpresion(idVenta: number): Promise<{ reimpresiones: number; ultimaReimpresion: Date | null }>
+  /**
+   * POST /caja/ventas/{id}/devoluciones. El cajero crea una SOLICITUD (pendiente); el gerente la registra ya aprobada.
+   * Falla con `estado_invalido` (422/409) si se pasa de lo vendido, de lo cobrado con un método o no hay caja para el efectivo.
+   */
+  solicitarDevolucion(idVenta: number, solicitud: SolicitudDevolucion, claveIdempotencia?: string): Promise<Devolucion>
+  /** GET /caja/devoluciones (gerente: todas; cajero: las que él pidió). Las pendientes salen siempre. */
+  listarDevoluciones(filtro?: FiltroDevoluciones): Promise<Devolucion[]>
+  /** POST /caja/devoluciones/{id}/aprobar (solo gerente). El efectivo sale del corte del cajero que la pidió. */
+  aprobarDevolucion(idDevolucion: number, nota?: string): Promise<Devolucion>
+  /** POST /caja/devoluciones/{id}/rechazar (solo gerente). La nota es obligatoria. */
+  rechazarDevolucion(idDevolucion: number, nota: string): Promise<Devolucion>
+  /** PUT /caja/ventas/{id}/fiscal (solo gerente): referencia para el contador y datos fiscales opcionales. */
+  guardarReferenciaFiscal(idVenta: number, datos: DatosReferenciaFiscal): Promise<ReferenciaFiscal>
+  /** DELETE /caja/ventas/{id}/fiscal (solo gerente). */
+  quitarReferenciaFiscal(idVenta: number): Promise<void>
 }
 
 /** Administración de usuarios. Solo el gerente (la API lo valida con 403 `sin_permiso`). */
@@ -160,6 +195,19 @@ export interface UsuariosService {
    * Devuelve el correo enmascarado (p. ej. `a***@dominio.com`). Falla con `correo_no_enviado` si el envío falló.
    */
   enviarRestablecimiento(id: number): Promise<string>
+}
+
+/** Reportes del gerente que no son de ventas (ver `CajaService.reporteVentas`): reservaciones e inasistencias, y mermas. */
+export interface ReportesService {
+  /** GET /reservaciones/reporte?desde&hasta. Fechas AAAA-MM-DD; máximo dos años. */
+  reporteReservaciones(desde: string, hasta: string): Promise<ReporteReservaciones>
+  /**
+   * POST /catalogo/mermas (con `Idempotency-Key`). Si el producto controla existencia, la descuenta del inventario;
+   * falla con `estado_invalido` si no alcanza, o si el producto está eliminado.
+   */
+  registrarMerma(merma: NuevaMerma, claveIdempotencia?: string): Promise<Merma>
+  /** GET /catalogo/mermas/reporte?desde&hasta. Fechas AAAA-MM-DD; máximo dos años. */
+  reporteMermas(desde: string, hasta: string): Promise<ReporteMermas>
 }
 
 /** Administración del catálogo: categorías, productos e inventario. Solo el gerente. */
@@ -277,4 +325,5 @@ export interface Servicios {
   clientes: ClientesService
   catalogo: CatalogoService
   hostess: HostessService
+  reportes: ReportesService
 }

@@ -7,6 +7,7 @@ import CategoriasDialog from '../../components/CategoriasDialog.vue'
 import ConfirmarAccionDialog from '../../components/ConfirmarAccionDialog.vue'
 import FormularioProductoDialog from '../../components/FormularioProductoDialog.vue'
 import InsigniaEstado from '../../components/InsigniaEstado.vue'
+import ProductosPestanas from '../../components/ProductosPestanas.vue'
 import { ErrorServicio, servicios } from '../../services'
 import { useAnunciosStore } from '../../stores/anuncios'
 import type { CategoriaAdmin, ProductoAdmin } from '../../types'
@@ -232,6 +233,8 @@ const ESTADOS: Array<{ clave: Estado; texto: string }> = [
         </button>
       </div>
     </header>
+
+    <ProductosPestanas />
 
     <div class="filtros">
       <div class="filtros__chips" role="group" aria-label="Estado">

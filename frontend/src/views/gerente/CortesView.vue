@@ -139,7 +139,9 @@ onMounted(() => void cargar())
                 </span>
                 <span class="fila__meta">{{ corte.cajeroNombre }} · {{ fecha(corte.inicio) }}</span>
                 <span class="fila__pie">
-                  <span>{{ corte.cobros }} {{ corte.cobros === 1 ? 'cobro' : 'cobros' }}</span>
+                  <span>
+                    {{ corte.cobros }} {{ corte.cobros === 1 ? 'cobro' : 'cobros' }}<template v-if="corte.totalDevuelto > 0"> · {{ moneda(corte.totalDevuelto) }} devueltos</template>
+                  </span>
                   <strong class="numero">{{ moneda(corte.totalVentas) }}</strong>
                 </span>
               </button>

@@ -4,6 +4,7 @@ import CajaLayout from '../layouts/CajaLayout.vue'
 import GerenteLayout from '../layouts/GerenteLayout.vue'
 import HostessLayout from '../layouts/HostessLayout.vue'
 import MeseroLayout from '../layouts/MeseroLayout.vue'
+import { usandoMock } from '../services'
 import { useSesionStore } from '../stores/sesion'
 import type { Rol } from '../types'
 
@@ -97,6 +98,18 @@ export const router = createRouter({
           component: () => import('../views/gerente/ReservacionesConfigView.vue'),
         },
         {
+          // Reporte de reservaciones e inasistencias; pestaña junto a la configuración de reservaciones.
+          path: 'reservaciones/reporte',
+          name: 'gerente-reservaciones-reporte',
+          component: () => import('../views/gerente/ReporteReservacionesView.vue'),
+        },
+        {
+          // Mermas (producto que se pierde): registrar y reporte; pestaña junto a Productos e inventario.
+          path: 'mermas',
+          name: 'gerente-mermas',
+          component: () => import('../views/gerente/MermasView.vue'),
+        },
+        {
           path: 'metodos-pago',
           name: 'gerente-metodos-pago',
           component: () => import('../views/gerente/MetodosPagoView.vue'),
@@ -124,8 +137,16 @@ export const router = createRouter({
           component: () => import('../views/gerente/VentasView.vue'),
         },
         {
+          // Tickets pasados, reimpresión y devoluciones; el gerente autoriza las que piden los cajeros.
+          path: 'tickets',
+          name: 'gerente-tickets',
+          component: () => import('../views/cajero/TicketsView.vue'),
+        },
+        {
           path: 'sistema',
           name: 'gerente-sistema',
+          // Guía de diseño para desarrollo: solo en la demostración; con la API real se redirige.
+          beforeEnter: () => (usandoMock ? true : { name: 'gerente-usuarios' }),
           component: () => import('../views/gerente/SistemaView.vue'),
         },
       ],
@@ -182,6 +203,11 @@ export const router = createRouter({
           name: 'cajero-caja',
           component: () => import('../views/cajero/CajaView.vue'),
         },
+        {
+          path: 'tickets',
+          name: 'cajero-tickets',
+          component: () => import('../views/cajero/TicketsView.vue'),
+        },
       ],
     },
 
@@ -208,6 +234,18 @@ export const router = createRouter({
       path: '/cliente/login',
       name: 'cliente-login',
       component: () => import('../views/cliente/LoginClienteView.vue'),
+    },
+
+    // Recuperar la contraseña del cliente: pedir el enlace y crear la contraseña nueva desde el enlace del correo
+    {
+      path: '/cliente/recuperar',
+      name: 'cliente-recuperar',
+      component: () => import('../views/cliente/RecuperarClienteView.vue'),
+    },
+    {
+      path: '/cliente/restablecer',
+      name: 'cliente-restablecer',
+      component: () => import('../views/cliente/RecuperarClienteView.vue'),
     },
 
     // Realizar reservaciones

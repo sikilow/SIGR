@@ -77,8 +77,8 @@ export const registrarCuentaCliente = async (
 
   const [otroConTelefono] = await filas(
     pool,
-    "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? AND id_cliente <> ? LIMIT 1",
-    [datos.telefono, existente?.id_cliente ?? 0]
+    "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? AND lada = ? AND id_cliente <> ? LIMIT 1",
+    [datos.telefono, datos.lada ?? LADA_MEXICO, existente?.id_cliente ?? 0]
   );
 
   if (otroConTelefono) {
@@ -358,8 +358,8 @@ export const completarRegistroGoogle = async (req: Request, res: Response) => {
     }
     const [otroConTelefono] = await filas(
       cx,
-      "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? AND id_cliente <> ? LIMIT 1",
-      [datos.telefono, existente?.id_cliente ?? 0]
+      "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? AND lada = ? AND id_cliente <> ? LIMIT 1",
+      [datos.telefono, datos.lada ?? LADA_MEXICO, existente?.id_cliente ?? 0]
     );
     if (otroConTelefono) {
       throw new ErrorApi(409, "estado_invalido", otroConTelefono.eliminado_en ? MENSAJE_CUENTA_ELIMINADA : "Este teléfono ya está registrado con otro correo.");

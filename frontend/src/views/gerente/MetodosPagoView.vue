@@ -169,6 +169,13 @@ interface ObjetivoEliminar {
   tipo: 'categoria' | 'metodo'
   id: number
   nombre: string
+  /** Solo en categorías: los métodos que se eliminarán junto con ella. */
+  metodos?: string[]
+}
+
+/** «Tarjeta y Transferencia» / «Tarjeta, Transferencia y Vale» */
+function lista(nombres: string[]): string {
+  return nombres.length <= 1 ? (nombres[0] ?? '') : `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)}`
 }
 const aEliminar = ref<ObjetivoEliminar | null>(null)
 const origenEliminar = ref<HTMLElement | null>(null)
@@ -194,7 +201,10 @@ async function confirmarEliminar() {
     else await servicios.catalogo.eliminarMetodoPago(objetivo.id)
     aEliminar.value = null
     error.value = ''
-    mensaje.value = `«${objetivo.nombre}» eliminado. Puedes restaurarlo desde «Eliminados».`
+    mensaje.value =
+      objetivo.tipo === 'categoria' && objetivo.metodos?.length
+        ? `«${objetivo.nombre}» eliminada junto con sus métodos (${lista(objetivo.metodos)}). Puedes restaurarla desde «Eliminados».`
+        : `«${objetivo.nombre}» eliminado. Puedes restaurarlo desde «Eliminados».`
     await cargar()
   } catch (e) {
     if (e instanceof ErrorServicio && e.codigo === 'red') {
@@ -216,7 +226,10 @@ async function restaurar(objetivo: ObjetivoEliminar) {
   try {
     if (objetivo.tipo === 'categoria') await servicios.catalogo.restaurarCategoriaMetodoPago(objetivo.id)
     else await servicios.catalogo.restaurarMetodoPago(objetivo.id)
-    mensaje.value = `«${objetivo.nombre}» restaurado. Está desactivado: actívalo para que se vea.`
+    mensaje.value =
+      objetivo.tipo === 'categoria'
+        ? `«${objetivo.nombre}» restaurada, con los métodos que se eliminaron con ella. Todo vuelve desactivado: actívalo para que se vea.`
+        : `«${objetivo.nombre}» restaurado. Está desactivado: actívalo para que se vea.`
     await cargar()
   } catch (e) {
     error.value = e instanceof ErrorServicio ? e.message : 'No se pudo restaurar.'
@@ -302,7 +315,7 @@ onMounted(() => void cargar())
         </div>
 
         <template v-if="verEliminados">
-          <p class="vistas__nota">Estos métodos y categorías no se ofrecen en ningún lado. Los pagos anteriores los conservan; restáuralos para volver a usarlos (si restauras un método, su categoría debe estar vigente).</p>
+          <p class="vistas__nota">Estos métodos y categorías no se ofrecen en ningún lado. Los pagos anteriores los conservan; restáuralos para volver a usarlos. Al restaurar una categoría vuelven también los métodos que se eliminaron con ella; si restauras un método suelto, su categoría debe estar vigente.</p>
           <article v-for="categoria in eliminados" :key="categoria.idCategoriaMetodoPago" class="categoria panel categoria--inactiva">
             <header class="categoria__encabezado">
               <div class="categoria__titulo">
@@ -381,9 +394,9 @@ onMounted(() => void cargar())
               type="button"
               class="btn btn--peligro-suave btn--chico"
               :aria-label="`Eliminar la categoría ${categoria.nombre}`"
-              :disabled="guardando || categoria.metodos.length > 0"
-              :title="categoria.metodos.length > 0 ? 'Elimina primero sus métodos' : undefined"
-              @click="pedirEliminar({ tipo: 'categoria', id: categoria.idCategoriaMetodoPago, nombre: categoria.nombre }, $event)"
+              :disabled="guardando || categoria.metodos.some((m) => m.esEfectivo)"
+              :title="categoria.metodos.some((m) => m.esEfectivo) ? 'Incluye el método de efectivo, que no se puede eliminar: el cuadre de caja lo necesita' : undefined"
+              @click="pedirEliminar({ tipo: 'categoria', id: categoria.idCategoriaMetodoPago, nombre: categoria.nombre, metodos: categoria.metodos.map((m) => m.nombre) }, $event)"
             >
               Eliminar
             </button>
@@ -458,7 +471,7 @@ onMounted(() => void cargar())
       id-base="eliminar-pago"
       :titulo="`¿Eliminar ${aEliminar?.tipo === 'categoria' ? 'la categoría' : 'el método'} «${aEliminar?.nombre}»?`"
       :descripcion="aEliminar?.tipo === 'categoria'
-        ? 'Dejará de aparecer en esta lista y no se ofrecerá en ningún lado. Podrás restaurarla desde «Eliminados» (volverá desactivada).'
+        ? `Dejará de aparecer y no se ofrecerá en ningún lado.${aEliminar.metodos?.length ? ` ${aEliminar.metodos.length === 1 ? 'Se eliminará también su único método' : `Se eliminarán también sus ${aEliminar.metodos.length} métodos`}: ${lista(aEliminar.metodos)}.` : ''} Podrás restaurarla desde «Eliminados» (volverá desactivada, con los métodos que se eliminaron con ella).`
         : 'Dejará de aparecer y ya no se ofrecerá al mesero ni al cajero. Los pagos anteriores lo conservan y podrás restaurarlo desde «Eliminados» (volverá desactivado).'"
       texto-confirmar="Eliminar"
       :en-curso="eliminando"

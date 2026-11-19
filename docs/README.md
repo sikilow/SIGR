@@ -36,7 +36,7 @@
 |---|---|---|
 | Mesero | [Pantallas del mesero](pantallas-mesero.md) | [API del mesero](contrato-api-mesero.md) |
 | Cocina | [Pantalla de Cocina](pantallas-cocinero.md) | Cambios de estado en [API del mesero/pedidos](contrato-api-mesero.md) |
-| Caja | [Recorrido de Caja en frontend y backend](guia-codigo/caja_frontend_backend.md) | [API de Caja](contrato-api-caja.md) |
+| Caja | [Pantallas de Caja: tickets y devoluciones](pantallas-caja.md) · [Recorrido de Caja en frontend y backend](guia-codigo/caja_frontend_backend.md) | [API de Caja](contrato-api-caja.md) |
 | Hostess | [Pantallas de Hostess](pantallas-hostess.md) | [API de Hostess](contrato-api-hostess.md) |
 | Gerente | [Pantallas de Gerencia](pantallas-gerente.md) | [API de Gerencia](contrato-api-gerente.md) |
 

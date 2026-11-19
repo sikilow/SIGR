@@ -9,6 +9,47 @@ import { guardarCaracteristicasMesa, IdsCaracteristicas, idsCaracteristicasDeMes
 
 // Todo este módulo es solo del gerente.
 
+// ---------- Eliminar en cascada (categoría de pago + sus métodos, sección + sus mesas, categoría del menú + sus productos) ----------
+// Eliminar una categoría, sección o categoría del menú elimina TAMBIÉN lo que tiene dentro, todo en una transacción y con la
+// misma fecha: o se elimina todo o no se elimina nada. Si algo de adentro no se puede eliminar (el método de efectivo, una
+// mesa ocupada, un producto en un pedido sin entregar), se explica cuál y no se toca nada. Eliminar un solo método, mesa o
+// producto elimina solo ese. Al restaurar la categoría o sección, vuelven también los que se eliminaron CON ella (los que ya
+// estaban eliminados antes se quedan como estaban); lo restaurado vuelve inactivo.
+
+/** Hora de MySQL «AAAA-MM-DD HH:MM:SS»: una sola para toda la cascada (así se sabe qué se eliminó junto con qué). */
+async function ahoraMySQL(cx: Ejecutor): Promise<string> {
+  const [f] = await filas(cx, "SELECT NOW() AS t");
+  return String(f?.t);
+}
+
+/**
+ * Hora de una cascada: la de ahora, pero nunca igual ni anterior a la de un hijo que ya se había eliminado por separado
+ * (si fue en el mismo segundo, se adelanta 1 s). Así, al restaurar el contenedor, la hora distingue con certeza lo que se
+ * eliminó CON él de lo que ya estaba eliminado antes.
+ */
+async function ahoraDeCascada(cx: Ejecutor, tabla: "metodo_pago" | "mesa" | "producto", columnaPadre: string, valor: unknown): Promise<string> {
+  const [f] = await filas(
+    cx,
+    `SELECT GREATEST(NOW(), DATE_ADD(COALESCE(MAX(eliminado_en), '1970-01-01 00:00:00'), INTERVAL 1 SECOND)) AS t FROM ${tabla} WHERE ${columnaPadre} = ?`,
+    [valor],
+  );
+  return String(f?.t);
+}
+
+/** Ejecuta la eliminación de un hijo; si no se puede, el error dice de qué contenedor se trataba. */
+async function enCascada<T>(padre: string, accion: () => Promise<T>): Promise<T> {
+  try {
+    return await accion();
+  } catch (e) {
+    if (e instanceof ErrorApi && e.estado === 409) {
+      const m = e.message;
+      const texto = /^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]/.test(m) ? m.charAt(0).toLowerCase() + m.slice(1) : m;
+      throw new ErrorApi(e.estado, e.codigo, `No se puede eliminar «${padre}»: ${texto}`, e.extra);
+    }
+    throw e;
+  }
+}
+
 const SELECT_CONFIGURACION = `
   SELECT tolerancia_minutos, recordatorio_minutos, anticipacion_minutos, duracion_reservacion_minutos
     FROM configuracion_reservacion WHERE id = 1`;
@@ -313,8 +354,27 @@ export const actualizarMetodoPago = async (req: Request, res: Response) => {
 };
 
 /**
- * DELETE /api/catalogo/metodos-pago/categorias/:id  →  la categoría, ya eliminada (lógico, migración 029; queda
- * también inactiva). Solo si no tiene métodos vigentes.
+ * Elimina un método de pago dentro de una transacción (lógico, migración 029; queda también inactivo). No se elimina el
+ * método de efectivo (el cuadre de caja lo necesita) ni uno que una cuenta abierta tenga solicitado.
+ */
+async function eliminarMetodoNucleo(cx: Ejecutor, id: number, quien: number | null, ahora: string): Promise<void> {
+  const [m] = await filas(cx, "SELECT nombre, es_efectivo, eliminado_en FROM metodo_pago WHERE id_metodo = ? FOR UPDATE", [id]);
+  if (!m) throw new ErrorApi(404, "no_encontrado", "El método de pago no existe.");
+  if (m.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El método de pago ya está eliminado.");
+  if (Boolean(m.es_efectivo)) {
+    throw new ErrorApi(409, "estado_invalido", `El método «${String(m.nombre)}» está marcado como efectivo y no se puede eliminar: el cuadre de caja lo necesita.`);
+  }
+  const [uso] = await filas(cx, "SELECT COUNT(*) AS n FROM cuenta WHERE id_metodo_pago_solicitado = ? AND estado <> 'cerrada'", [id]);
+  if (Number(uso?.n ?? 0) > 0) {
+    throw new ErrorApi(409, "estado_invalido", `«${String(m.nombre)}» lo tienen solicitado ${Number(uso?.n)} cuenta(s) abiertas. Espera a que se cobren.`);
+  }
+  await ejecutar(cx, "UPDATE metodo_pago SET activo = FALSE, eliminado_en = ?, eliminado_por = ? WHERE id_metodo = ? AND eliminado_en IS NULL", [ahora, quien, id]);
+}
+
+/**
+ * DELETE /api/catalogo/metodos-pago/categorias/:id  →  la categoría, ya eliminada (lógico, migración 029; queda también
+ * inactiva) **junto con todos sus métodos vigentes**, en una sola transacción. Si alguno no se puede eliminar (el de
+ * efectivo, o uno que una cuenta abierta tiene solicitado) no se elimina nada y se dice cuál.
  */
 export const eliminarCategoriaMetodoPago = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
@@ -322,23 +382,30 @@ export const eliminarCategoriaMetodoPago = async (req: Request, res: Response) =
     const [c] = await filas(cx, "SELECT nombre, eliminado_en FROM categoria_metodo_pago WHERE id_categoria_metodo_pago = ? FOR UPDATE", [id]);
     if (!c) throw new ErrorApi(404, "no_encontrado", "La categoría de pago no existe.");
     if (c.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La categoría ya está eliminada.");
-    const [m] = await filas(cx, "SELECT COUNT(*) AS n FROM metodo_pago WHERE id_categoria_metodo_pago = ? AND eliminado_en IS NULL", [id]);
-    if (Number(m?.n ?? 0) > 0) {
-      throw new ErrorApi(409, "estado_invalido", `«${String(c.nombre)}» tiene ${Number(m?.n)} método(s) de pago. Elimínalos antes de eliminar la categoría.`);
+    const ahora = await ahoraDeCascada(cx, "metodo_pago", "id_categoria_metodo_pago", id);
+    const metodos = await filas(cx, "SELECT id_metodo FROM metodo_pago WHERE id_categoria_metodo_pago = ? AND eliminado_en IS NULL ORDER BY id_metodo", [id]);
+    for (const m of metodos) {
+      await enCascada(String(c.nombre), () => eliminarMetodoNucleo(cx, Number(m.id_metodo), req.usuario?.id ?? null, ahora));
     }
-    await ejecutar(cx, "UPDATE categoria_metodo_pago SET activo = FALSE, eliminado_en = NOW(), eliminado_por = ? WHERE id_categoria_metodo_pago = ? AND eliminado_en IS NULL", [req.usuario?.id ?? null, id]);
+    await ejecutar(cx, "UPDATE categoria_metodo_pago SET activo = FALSE, eliminado_en = ?, eliminado_por = ? WHERE id_categoria_metodo_pago = ? AND eliminado_en IS NULL", [ahora, req.usuario?.id ?? null, id]);
   });
   const filasCat = await filas(pool, `${SELECT_METODOS_PAGO} WHERE cmp.id_categoria_metodo_pago = ?`, [id]);
   res.json(categoriaPagoDto(filasCat));
 };
 
-/** POST /api/catalogo/metodos-pago/categorias/:id/restaurar  →  la categoría vigente otra vez, pero inactiva. */
+/**
+ * POST /api/catalogo/metodos-pago/categorias/:id/restaurar  →  la categoría vigente otra vez, pero inactiva, junto con los
+ * métodos que se eliminaron CON ella (los que ya estaban eliminados antes siguen así; los métodos vuelven inactivos).
+ */
 export const restaurarCategoriaMetodoPago = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
-  const [c] = await filas(pool, "SELECT eliminado_en FROM categoria_metodo_pago WHERE id_categoria_metodo_pago = ?", [id]);
-  if (!c) throw new ErrorApi(404, "no_encontrado", "La categoría de pago no existe.");
-  if (!c.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La categoría no está eliminada.");
-  await ejecutar(pool, "UPDATE categoria_metodo_pago SET eliminado_en = NULL, eliminado_por = NULL WHERE id_categoria_metodo_pago = ?", [id]);
+  await transaccion(async (cx) => {
+    const [c] = await filas(cx, "SELECT eliminado_en FROM categoria_metodo_pago WHERE id_categoria_metodo_pago = ? FOR UPDATE", [id]);
+    if (!c) throw new ErrorApi(404, "no_encontrado", "La categoría de pago no existe.");
+    if (!c.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La categoría no está eliminada.");
+    await ejecutar(cx, "UPDATE metodo_pago SET eliminado_en = NULL, eliminado_por = NULL WHERE id_categoria_metodo_pago = ? AND eliminado_en = ?", [id, c.eliminado_en]);
+    await ejecutar(cx, "UPDATE categoria_metodo_pago SET eliminado_en = NULL, eliminado_por = NULL WHERE id_categoria_metodo_pago = ?", [id]);
+  });
   const filasCat = await filas(pool, `${SELECT_METODOS_PAGO} WHERE cmp.id_categoria_metodo_pago = ?`, [id]);
   const dto = categoriaPagoDto(filasCat);
   res.json({ ...dto, metodos: dto.metodos.filter((m) => m.eliminado_en === null) });
@@ -346,24 +413,11 @@ export const restaurarCategoriaMetodoPago = async (req: Request, res: Response) 
 
 /**
  * DELETE /api/catalogo/metodos-pago/:id  →  el método, ya eliminado (lógico, migración 029; queda también inactivo).
- * No se elimina el método de efectivo (el cuadre de caja lo necesita) ni uno que una cuenta abierta tenga solicitado.
- * Los pagos anteriores lo conservan.
+ * Solo ese método: su categoría y los demás métodos no se tocan. Los pagos anteriores lo conservan.
  */
 export const eliminarMetodoPago = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
-  await transaccion(async (cx) => {
-    const [m] = await filas(cx, "SELECT nombre, es_efectivo, eliminado_en FROM metodo_pago WHERE id_metodo = ? FOR UPDATE", [id]);
-    if (!m) throw new ErrorApi(404, "no_encontrado", "El método de pago no existe.");
-    if (m.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El método de pago ya está eliminado.");
-    if (Boolean(m.es_efectivo)) {
-      throw new ErrorApi(409, "estado_invalido", "El método marcado como efectivo no se puede eliminar: el cuadre de caja lo necesita.");
-    }
-    const [uso] = await filas(cx, "SELECT COUNT(*) AS n FROM cuenta WHERE id_metodo_pago_solicitado = ? AND estado <> 'cerrada'", [id]);
-    if (Number(uso?.n ?? 0) > 0) {
-      throw new ErrorApi(409, "estado_invalido", `«${String(m.nombre)}» lo tienen solicitado ${Number(uso?.n)} cuenta(s) abiertas. Espera a que se cobren.`);
-    }
-    await ejecutar(cx, "UPDATE metodo_pago SET activo = FALSE, eliminado_en = NOW(), eliminado_por = ? WHERE id_metodo = ? AND eliminado_en IS NULL", [req.usuario?.id ?? null, id]);
-  });
+  await transaccion(async (cx) => eliminarMetodoNucleo(cx, id, req.usuario?.id ?? null, await ahoraMySQL(cx)));
   const [fila] = await filas(pool, `${SELECT_METODOS_PAGO} WHERE mp.id_metodo = ?`, [id]);
   res.json(metodoPagoDto(fila ?? {}));
 };
@@ -586,37 +640,71 @@ export const editarCategoria = async (req: Request, res: Response) => {
 };
 
 /**
- * DELETE /api/catalogo/categorias/:id  →  { ok: true }
- * «Eliminar» es lógico (migración 026): la categoría deja de mostrarse pero se conserva, con quién y cuándo. Solo se
- * puede eliminar una categoría sin productos vigentes (los productos no se reasignan solos). Se restaura con
- * POST /categorias/:id/restaurar.
+ * Elimina un producto dentro de una transacción (lógico, migración 026). No se puede mientras esté en un pedido que aún
+ * no se entrega.
  */
-export const borrarCategoria = async (req: Request, res: Response) => {
-  const id = idDeRuta(req.params.id);
-  const categoria = await cargarCategoria(pool, id);
-  if (!categoria) throw new ErrorApi(404, "no_encontrado", "La categoría no existe.");
-  if (categoria.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La categoría ya está eliminada.");
-  if (categoria.total_productos > 0) {
+async function eliminarProductoNucleo(cx: Ejecutor, id: number, quien: number | null, ahora: string): Promise<void> {
+  const [p] = await filas(cx, "SELECT nombre, eliminado_en FROM producto WHERE id_producto = ? FOR UPDATE", [id]);
+  if (!p) throw new ErrorApi(404, "no_encontrado", "El producto no existe.");
+  if (p.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El producto ya está eliminado.");
+
+  const sinEntregar = [ESTADO_PEDIDO_DB.registrado, ESTADO_PEDIDO_DB.enviado, ESTADO_PEDIDO_DB.en_preparacion, ESTADO_PEDIDO_DB.listo];
+  const [uso] = await filas(
+    cx,
+    `SELECT COUNT(DISTINCT pe.id_pedido) AS pedidos
+       FROM detalle_pedido dp
+       JOIN pedido pe ON pe.id_pedido = dp.id_pedido
+       JOIN estado_pedido ep ON ep.id_estado = pe.id_estado
+      WHERE dp.id_producto = ? AND ep.nombre IN (?)`,
+    [id, sinEntregar],
+  );
+  const pedidos = Number(uso?.pedidos ?? 0);
+  if (pedidos > 0) {
     throw new ErrorApi(
       409,
       "estado_invalido",
-      `La categoría tiene ${categoria.total_productos} producto(s). Elimínalos o muévelos a otra categoría antes de eliminarla.`,
+      `«${String(p.nombre)}» está en ${pedidos} pedido(s) que aún no se entregan. Espera a que se entreguen o cancélalos; mientras tanto puedes desactivarlo.`,
     );
   }
-  await ejecutar(pool, "UPDATE categoria_menu SET eliminado_en = NOW(), eliminado_por = ? WHERE id_categoria = ? AND eliminado_en IS NULL", [
-    req.usuario?.id ?? null,
-    id,
-  ]);
-  res.json({ ok: true });
+  await ejecutar(cx, "UPDATE producto SET eliminado_en = ?, eliminado_por = ? WHERE id_producto = ? AND eliminado_en IS NULL", [ahora, quien, id]);
+}
+
+/**
+ * DELETE /api/catalogo/categorias/:id  →  { ok: true, productos_eliminados }
+ * «Eliminar» es lógico (migración 026): la categoría deja de mostrarse pero se conserva, con quién y cuándo, y se
+ * eliminan TAMBIÉN todos sus productos vigentes, en una sola transacción (si alguno no se puede eliminar porque está en
+ * un pedido sin entregar, no se elimina nada). Se restaura con POST /categorias/:id/restaurar.
+ */
+export const borrarCategoria = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const eliminados = await transaccion(async (cx) => {
+    const [c] = await filas(cx, "SELECT nombre, eliminado_en FROM categoria_menu WHERE id_categoria = ? FOR UPDATE", [id]);
+    if (!c) throw new ErrorApi(404, "no_encontrado", "La categoría no existe.");
+    if (c.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La categoría ya está eliminada.");
+    const ahora = await ahoraDeCascada(cx, "producto", "id_categoria", id);
+    const productos = await filas(cx, "SELECT id_producto FROM producto WHERE id_categoria = ? AND eliminado_en IS NULL ORDER BY id_producto", [id]);
+    for (const p of productos) {
+      await enCascada(String(c.nombre), () => eliminarProductoNucleo(cx, Number(p.id_producto), req.usuario?.id ?? null, ahora));
+    }
+    await ejecutar(cx, "UPDATE categoria_menu SET eliminado_en = ?, eliminado_por = ? WHERE id_categoria = ? AND eliminado_en IS NULL", [ahora, req.usuario?.id ?? null, id]);
+    return productos.length;
+  });
+  res.json({ ok: true, productos_eliminados: eliminados });
 };
 
-/** POST /api/catalogo/categorias/:id/restaurar  →  la categoría vigente otra vez. */
+/**
+ * POST /api/catalogo/categorias/:id/restaurar  →  la categoría vigente otra vez, junto con los productos que se eliminaron
+ * CON ella (los que ya estaban eliminados antes siguen así).
+ */
 export const restaurarCategoria = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
-  const categoria = await cargarCategoria(pool, id);
-  if (!categoria) throw new ErrorApi(404, "no_encontrado", "La categoría no existe.");
-  if (!categoria.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La categoría no está eliminada.");
-  await ejecutar(pool, "UPDATE categoria_menu SET eliminado_en = NULL, eliminado_por = NULL WHERE id_categoria = ?", [id]);
+  await transaccion(async (cx) => {
+    const [c] = await filas(cx, "SELECT eliminado_en FROM categoria_menu WHERE id_categoria = ? FOR UPDATE", [id]);
+    if (!c) throw new ErrorApi(404, "no_encontrado", "La categoría no existe.");
+    if (!c.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La categoría no está eliminada.");
+    await ejecutar(cx, "UPDATE producto SET eliminado_en = NULL, eliminado_por = NULL WHERE id_categoria = ? AND eliminado_en = ?", [id, c.eliminado_en]);
+    await ejecutar(cx, "UPDATE categoria_menu SET eliminado_en = NULL, eliminado_por = NULL WHERE id_categoria = ?", [id]);
+  });
   res.json(await cargarCategoria(pool, id));
 };
 
@@ -840,34 +928,7 @@ export const editarProducto = async (req: Request, res: Response) => {
  */
 export const eliminarProducto = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
-  await transaccion(async (cx) => {
-    const [p] = await filas(cx, "SELECT nombre, eliminado_en FROM producto WHERE id_producto = ? FOR UPDATE", [id]);
-    if (!p) throw new ErrorApi(404, "no_encontrado", "El producto no existe.");
-    if (p.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El producto ya está eliminado.");
-
-    const sinEntregar = [ESTADO_PEDIDO_DB.registrado, ESTADO_PEDIDO_DB.enviado, ESTADO_PEDIDO_DB.en_preparacion, ESTADO_PEDIDO_DB.listo];
-    const [uso] = await filas(
-      cx,
-      `SELECT COUNT(DISTINCT pe.id_pedido) AS pedidos
-         FROM detalle_pedido dp
-         JOIN pedido pe ON pe.id_pedido = dp.id_pedido
-         JOIN estado_pedido ep ON ep.id_estado = pe.id_estado
-        WHERE dp.id_producto = ? AND ep.nombre IN (?)`,
-      [id, sinEntregar],
-    );
-    const pedidos = Number(uso?.pedidos ?? 0);
-    if (pedidos > 0) {
-      throw new ErrorApi(
-        409,
-        "estado_invalido",
-        `«${String(p.nombre)}» está en ${pedidos} pedido(s) que aún no se entregan. Espera a que se entreguen o cancélalos; mientras tanto puedes desactivarlo.`,
-      );
-    }
-    await ejecutar(cx, "UPDATE producto SET eliminado_en = NOW(), eliminado_por = ? WHERE id_producto = ? AND eliminado_en IS NULL", [
-      req.usuario?.id ?? null,
-      id,
-    ]);
-  });
+  await transaccion(async (cx) => eliminarProductoNucleo(cx, id, req.usuario?.id ?? null, await ahoraMySQL(cx)));
   res.json(await cargarProducto(pool, id));
 };
 
@@ -1001,32 +1062,42 @@ export const editarSeccionAdmin = async (req: Request, res: Response) => {
 };
 
 /**
- * DELETE /api/catalogo/secciones/:nombre  →  { ok: true }
- * «Eliminar» es lógico (migración 029; queda también inhabilitada). Solo secciones sin mesas vigentes y que no sean la
- * de «Para llevar» (la usa el sistema). Se restaura con POST /secciones/:nombre/restaurar.
+ * DELETE /api/catalogo/secciones/:nombre  →  { ok: true, mesas_eliminadas }
+ * «Eliminar» es lógico (migración 029; queda también inhabilitada) y elimina TAMBIÉN todas sus mesas vigentes, en una sola
+ * transacción: si alguna mesa está ocupada, tiene cuenta abierta o reservaciones vigentes, no se elimina nada y se dice
+ * cuál. La sección de «Para llevar» la usa el sistema y no se puede eliminar. Se restaura con POST /secciones/:nombre/restaurar.
  */
 export const borrarSeccionAdmin = async (req: Request, res: Response) => {
   const nombre = validar(NombreSeccion, req.params.nombre);
-  await transaccion(async (cx) => {
+  const eliminadas = await transaccion(async (cx) => {
     const [s] = await filas(cx, "SELECT es_para_llevar, eliminado_en FROM seccion WHERE nombre = ? FOR UPDATE", [nombre]);
     if (!s) throw new ErrorApi(404, "no_encontrado", "La sección no existe.");
     if (s.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La sección ya está eliminada.");
     if (Boolean(s.es_para_llevar)) throw new ErrorApi(409, "estado_invalido", `«${nombre}» la usa el sistema para los pedidos para llevar y no se puede eliminar.`);
-    const [mesas] = await filas(cx, "SELECT COUNT(*) AS n FROM mesa WHERE zona = ? AND eliminado_en IS NULL", [nombre]);
-    if (Number(mesas?.n ?? 0) > 0) {
-      throw new ErrorApi(409, "estado_invalido", `No se puede eliminar «${nombre}» mientras tenga ${Number(mesas?.n)} mesa(s) asignadas. Elimínalas o pásalas a otra sección.`);
+    const ahora = await ahoraDeCascada(cx, "mesa", "zona", nombre);
+    const mesas = await filas(cx, "SELECT id_mesa FROM mesa WHERE zona = ? AND eliminado_en IS NULL ORDER BY numero", [nombre]);
+    for (const m of mesas) {
+      await enCascada(nombre, () => eliminarMesaNucleo(cx, Number(m.id_mesa), req.usuario?.id ?? null, ahora));
     }
-    await ejecutar(cx, "UPDATE seccion SET activa = FALSE, eliminado_en = NOW(), eliminado_por = ? WHERE nombre = ? AND eliminado_en IS NULL", [req.usuario?.id ?? null, nombre]);
+    await ejecutar(cx, "UPDATE seccion SET activa = FALSE, eliminado_en = ?, eliminado_por = ? WHERE nombre = ? AND eliminado_en IS NULL", [ahora, req.usuario?.id ?? null, nombre]);
+    return mesas.length;
   });
-  res.json({ ok: true });
+  res.json({ ok: true, mesas_eliminadas: eliminadas });
 };
 
-/** POST /api/catalogo/secciones/:nombre/restaurar  →  la sección vigente otra vez, pero inhabilitada (Gerencia la habilita). */
+/**
+ * POST /api/catalogo/secciones/:nombre/restaurar  →  la sección vigente otra vez, pero inhabilitada (Gerencia la habilita),
+ * junto con las mesas que se eliminaron CON ella (vuelven no disponibles).
+ */
 export const restaurarSeccionAdmin = async (req: Request, res: Response) => {
   const nombre = validar(NombreSeccion, req.params.nombre);
-  const s = await cargarSeccion(pool, nombre);
-  if (!s.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La sección no está eliminada.");
-  await ejecutar(pool, "UPDATE seccion SET eliminado_en = NULL, eliminado_por = NULL WHERE nombre = ?", [nombre]);
+  await transaccion(async (cx) => {
+    const [s] = await filas(cx, "SELECT eliminado_en FROM seccion WHERE nombre = ? FOR UPDATE", [nombre]);
+    if (!s) throw new ErrorApi(404, "no_encontrado", "La sección no existe.");
+    if (!s.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La sección no está eliminada.");
+    await ejecutar(cx, "UPDATE mesa SET eliminado_en = NULL, eliminado_por = NULL WHERE zona = ? AND eliminado_en = ?", [nombre, s.eliminado_en]);
+    await ejecutar(cx, "UPDATE seccion SET eliminado_en = NULL, eliminado_por = NULL WHERE nombre = ?", [nombre]);
+  });
   res.json(await cargarSeccion(pool, nombre));
 };
 
@@ -1202,19 +1273,22 @@ export const editarMesaAdmin = async (req: Request, res: Response) => {
   res.json(await cargarMesaAdmin(pool, id));
 };
 
+/** Elimina una mesa dentro de una transacción (lógico, migración 029; queda también no disponible). */
+async function eliminarMesaNucleo(cx: Ejecutor, id: number, quien: number | null, ahora: string): Promise<void> {
+  const [mesa] = await filas(cx, "SELECT numero, estado, eliminado_en FROM mesa WHERE id_mesa = ? FOR UPDATE", [id]);
+  if (!mesa) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
+  if (mesa.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La mesa ya está eliminada.");
+  await exigirMesaSinUso(cx, id, mesa, "eliminarla");
+  await ejecutar(cx, "UPDATE mesa SET activa = FALSE, eliminado_en = ?, eliminado_por = ? WHERE id_mesa = ? AND eliminado_en IS NULL", [ahora, quien, id]);
+}
+
 /**
  * DELETE /api/catalogo/mesas/:id  →  la mesa, ya eliminada (lógico, migración 029; queda también no disponible).
  * Mismas condiciones que para marcarla no disponible. Las cuentas y reservaciones anteriores la conservan.
  */
 export const eliminarMesaAdmin = async (req: Request, res: Response) => {
   const id = idDeRuta(req.params.id);
-  await transaccion(async (cx) => {
-    const [mesa] = await filas(cx, "SELECT numero, estado, eliminado_en FROM mesa WHERE id_mesa = ? FOR UPDATE", [id]);
-    if (!mesa) throw new ErrorApi(404, "no_encontrado", "La mesa no existe.");
-    if (mesa.eliminado_en) throw new ErrorApi(409, "estado_invalido", "La mesa ya está eliminada.");
-    await exigirMesaSinUso(cx, id, mesa, "eliminarla");
-    await ejecutar(cx, "UPDATE mesa SET activa = FALSE, eliminado_en = NOW(), eliminado_por = ? WHERE id_mesa = ? AND eliminado_en IS NULL", [req.usuario?.id ?? null, id]);
-  });
+  await transaccion(async (cx) => eliminarMesaNucleo(cx, id, req.usuario?.id ?? null, await ahoraMySQL(cx)));
   res.json(await cargarMesaAdmin(pool, id));
 };
 

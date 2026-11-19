@@ -92,11 +92,10 @@ describe('canales', () => {
 })
 
 describe('categorías y métodos de pago', () => {
-  it('categoría con métodos vigentes no se elimina; el de efectivo tampoco; se restauran en orden', async () => {
+  it('un método se elimina solo; el de efectivo no; el eliminado se restaura inactivo y sigue ocupando su nombre', async () => {
     const { catalogo } = await nuevo()
     const categoria = await resolver(catalogo.crearCategoriaMetodoPago('Vales', 'digital'))
     const metodo = await resolver(catalogo.crearMetodoPago('Vale despensa', categoria.idCategoriaMetodoPago, false))
-    expect(await mensajeDeError(catalogo.eliminarCategoriaMetodoPago(categoria.idCategoriaMetodoPago))).toMatch(/método/)
 
     const efectivo = (await resolver(catalogo.listarMetodosPago())).flatMap((c) => c.metodos).find((m) => m.esEfectivo)!
     expect(await mensajeDeError(catalogo.eliminarMetodoPago(efectivo.idMetodo))).toMatch(/efectivo/)
@@ -111,6 +110,98 @@ describe('categorías y métodos de pago', () => {
     await resolver(catalogo.eliminarCategoriaMetodoPago(categoria.idCategoriaMetodoPago))
     expect(await mensajeDeError(catalogo.restaurarMetodoPago(metodo.idMetodo))).toMatch(/categoría está eliminada/)
     expect((await resolver(catalogo.restaurarCategoriaMetodoPago(categoria.idCategoriaMetodoPago))).eliminadoEn).toBeNull()
+    // El método se eliminó ANTES que la categoría (por separado): no vuelve con ella, se restaura aparte.
     expect((await resolver(catalogo.restaurarMetodoPago(metodo.idMetodo))).activo).toBe(false)
+  })
+})
+
+describe('eliminar en cascada', () => {
+  it('métodos de pago: eliminar uno elimina solo ese; eliminar la categoría elimina todos; restaurarla devuelve los que se fueron con ella', async () => {
+    const { catalogo } = await nuevo()
+    const digital = await resolver(catalogo.crearCategoriaMetodoPago('Digital2', 'digital'))
+    const crear = (nombre: string) => resolver(catalogo.crearMetodoPago(nombre, digital.idCategoriaMetodoPago, false))
+    const tarjeta = await crear('Tarjeta2')
+    const transferencia = await crear('Transferencia2')
+    const vale = await crear('Vale2')
+    const nombresDe = async (eliminados: boolean) =>
+      (await resolver(catalogo.listarMetodosPago({ eliminados }))).find((c) => c.idCategoriaMetodoPago === digital.idCategoriaMetodoPago)?.metodos.map((m) => m.nombre).sort() ?? []
+
+    // Uno solo: la categoría y los demás no se tocan.
+    await resolver(catalogo.eliminarMetodoPago(transferencia.idMetodo))
+    expect(await nombresDe(false)).toEqual(['Tarjeta2', 'Vale2'])
+    expect((await resolver(catalogo.listarMetodosPago())).some((c) => c.idCategoriaMetodoPago === digital.idCategoriaMetodoPago)).toBe(true)
+
+    // La categoría completa: se elimina con lo que le quedaba.
+    const eliminada = await resolver(catalogo.eliminarCategoriaMetodoPago(digital.idCategoriaMetodoPago))
+    expect(eliminada.eliminadoEn).toBeInstanceOf(Date)
+    expect((await resolver(catalogo.listarMetodosPago())).some((c) => c.idCategoriaMetodoPago === digital.idCategoriaMetodoPago)).toBe(false)
+    expect(await nombresDe(true)).toEqual(['Tarjeta2', 'Transferencia2', 'Vale2'])
+    expect((await resolver(catalogo.listarMetodosPagoDisponibles())).some((m) => [tarjeta, vale].some((x) => x.idMetodo === m.idMetodo))).toBe(false)
+
+    // Restaurar: vuelven (inactivos) los que se eliminaron con ella; Transferencia, eliminada antes por separado, no.
+    const restaurada = await resolver(catalogo.restaurarCategoriaMetodoPago(digital.idCategoriaMetodoPago))
+    expect(restaurada.metodos.map((m) => m.nombre).sort()).toEqual(['Tarjeta2', 'Vale2'])
+    expect(restaurada.metodos.every((m) => !m.activo)).toBe(true)
+    expect(await nombresDe(true)).toEqual(['Transferencia2'])
+  })
+
+  it('métodos de pago: el de efectivo o uno con una cuenta abierta frena toda la categoría y no se elimina nada', async () => {
+    const { catalogo, baseDatos } = await nuevo()
+    const pago = await resolver(catalogo.listarMetodosPago())
+    const fisico = pago.find((c) => c.metodos.some((m) => m.esEfectivo))!
+    const mensaje = await mensajeDeError(catalogo.eliminarCategoriaMetodoPago(fisico.idCategoriaMetodoPago))
+    expect(mensaje).toMatch(/No se puede eliminar «Físico»/)
+    expect(mensaje).toMatch(/efectivo/)
+    const despues = (await resolver(catalogo.listarMetodosPago())).find((c) => c.idCategoriaMetodoPago === fisico.idCategoriaMetodoPago)!
+    expect(despues.eliminadoEn).toBeNull()
+    expect(despues.metodos).toHaveLength(fisico.metodos.length)
+
+    const digital = await resolver(catalogo.crearCategoriaMetodoPago('Digital3', 'digital'))
+    const tarjeta = await resolver(catalogo.crearMetodoPago('Tarjeta3', digital.idCategoriaMetodoPago, false))
+    await resolver(catalogo.crearMetodoPago('Otro3', digital.idCategoriaMetodoPago, false))
+    baseDatos.cuentas.push({ idCuenta: 998, idMesa: 1, estado: 'por_pagar', abiertaEn: new Date(), cerradaEn: null, tipoPagoSolicitado: 'digital', idMetodoPagoSolicitado: tarjeta.idMetodo, idCanal: null } as never)
+    const bloqueo = await mensajeDeError(catalogo.eliminarCategoriaMetodoPago(digital.idCategoriaMetodoPago))
+    expect(bloqueo).toMatch(/«Digital3»/)
+    expect(bloqueo).toMatch(/Tarjeta3.*solicitado/)
+    const vigentes = (await resolver(catalogo.listarMetodosPago())).find((c) => c.idCategoriaMetodoPago === digital.idCategoriaMetodoPago)!
+    expect(vigentes.metodos.map((m) => m.nombre).sort()).toEqual(['Otro3', 'Tarjeta3'])
+  })
+
+  it('secciones: eliminar una mesa elimina solo esa; eliminar la sección elimina todas sus mesas; restaurarla devuelve las que se fueron con ella', async () => {
+    const { catalogo } = await nuevo()
+    await resolver(catalogo.crearSeccion('Patio2'))
+    const crear = (numero: number) => resolver(catalogo.crearMesa({ numero, capacidad: 4, zona: 'Patio2', activa: true, caracteristicas: [] }))
+    const m1 = await crear(801)
+    await crear(802)
+    await crear(803)
+    const numerosDe = async (eliminadas: boolean) =>
+      (await resolver(catalogo.listarMesas({ eliminados: eliminadas }))).filter((m) => m.zona === 'Patio2').map((m) => m.numero).sort()
+
+    await resolver(catalogo.eliminarMesa(m1.idMesa))
+    expect(await numerosDe(false)).toEqual([802, 803])
+
+    await resolver(catalogo.eliminarSeccion('Patio2'))
+    expect(await numerosDe(false)).toEqual([])
+    expect(await numerosDe(true)).toEqual([801, 802, 803])
+    expect((await resolver(catalogo.listarSecciones())).some((s) => s.nombre === 'Patio2')).toBe(false)
+
+    const seccion = await resolver(catalogo.restaurarSeccion('Patio2'))
+    expect(seccion.activa).toBe(false)
+    expect(await numerosDe(false)).toEqual([802, 803])
+    expect(await numerosDe(true)).toEqual([801])
+    expect((await resolver(catalogo.listarMesas())).filter((m) => m.zona === 'Patio2').every((m) => !m.activa)).toBe(true)
+  })
+
+  it('secciones: una mesa ocupada frena toda la sección y no se elimina nada', async () => {
+    const { catalogo, baseDatos } = await nuevo()
+    await resolver(catalogo.crearSeccion('Patio3'))
+    const libre = await resolver(catalogo.crearMesa({ numero: 811, capacidad: 4, zona: 'Patio3', activa: true, caracteristicas: [] }))
+    const ocupada = await resolver(catalogo.crearMesa({ numero: 812, capacidad: 4, zona: 'Patio3', activa: true, caracteristicas: [] }))
+    baseDatos.mesas.find((m) => m.idMesa === ocupada.idMesa)!.estado = 'ocupada'
+    const mensaje = await mensajeDeError(catalogo.eliminarSeccion('Patio3'))
+    expect(mensaje).toMatch(/No se puede eliminar «Patio3»/)
+    expect(mensaje).toMatch(/812/)
+    expect((await resolver(catalogo.listarMesas())).filter((m) => m.zona === 'Patio3').map((m) => m.idMesa).sort()).toEqual([libre.idMesa, ocupada.idMesa].sort())
+    expect((await resolver(catalogo.listarSecciones())).some((s) => s.nombre === 'Patio3')).toBe(true)
   })
 })

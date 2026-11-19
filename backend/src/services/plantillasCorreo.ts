@@ -437,3 +437,48 @@ export function plantillaRestablecerContrasena(datos: {
     }),
   };
 }
+
+/**
+ * Enlace de un solo uso para que un cliente del portal cree una contraseña nueva. Nunca lleva la contraseña: solo el
+ * enlace, que caduca en `minutos` y deja de servir en cuanto se usa.
+ */
+export function plantillaRestablecerContrasenaCliente(datos: { nombre: string; enlace: string; minutos: number }): CorreoRestablecer {
+  const asunto = "Crea una nueva contraseña para tu cuenta de La Madalena";
+  const texto =
+    `Hola ${datos.nombre}, recibimos una solicitud para crear una contraseña nueva en tu cuenta de La Madalena. ` +
+    `Abre este enlace (sirve una sola vez y caduca en ${datos.minutos} minutos): ${datos.enlace} ` +
+    "Si no lo pediste, ignora este correo: tu contraseña actual sigue funcionando.";
+  const enlace = escaparHtml(datos.enlace);
+  const panel = `
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 0;background-color:#ffffff;border:1px solid ${MARCA.borde};border-left:4px solid ${MARCA.terracota};">
+                <tr>
+                  <td style="padding:20px 22px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="background-color:${MARCA.terracota};">
+                          <a href="${enlace}" target="_blank" style="display:inline-block;padding:13px 26px;font-family:${SANS};font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">Crear nueva contraseña</a>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="margin:16px 0 0;font-family:${SANS};font-size:12px;line-height:1.6;color:${MARCA.muted};">Si el botón no abre, copia este enlace en el navegador:<br><a href="${enlace}" target="_blank" style="color:${MARCA.terracota};word-break:break-all;">${enlace}</a></p>
+                  </td>
+                </tr>
+              </table>`;
+  return {
+    asunto,
+    texto,
+    html: construirHtml({
+      asunto,
+      preheader: `Crea tu nueva contraseña. El enlace caduca en ${datos.minutos} minutos.`,
+      etiqueta: "Tu cuenta",
+      titulo: "Crea una nueva contraseña",
+      saludo: `Hola ${datos.nombre},`,
+      parrafo: "Recibimos una solicitud para crear una contraseña nueva en tu cuenta de La Madalena. Usa el botón para elegirla.",
+      panel,
+      nota: `El enlace sirve una sola vez y caduca en ${datos.minutos} minutos. Si no lo pediste, ignora este correo: tu contraseña actual sigue funcionando.`,
+      cierre: "Equipo La Madalena.",
+      acento: MARCA.terracota,
+      pie: "Recibes este correo porque tienes una cuenta de cliente en La Madalena.",
+    }),
+  };
+}

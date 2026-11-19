@@ -8,6 +8,12 @@ const efectivoCobrado = computed(
   () => props.corte.desglose.find((fila) => fila.metodo.toLowerCase() === 'efectivo')?.monto ?? 0,
 )
 
+/** Lo que salió de la caja por devoluciones en efectivo (migración 034): baja el efectivo esperado. */
+const efectivoDevuelto = computed(
+  () => props.corte.desglose.find((fila) => fila.metodo.toLowerCase() === 'efectivo')?.devuelto ?? 0,
+)
+const neto = computed(() => Math.round((props.corte.totalVentas - props.corte.totalDevuelto) * 100) / 100)
+
 const resultado = computed(() => {
   const diferencia = props.corte.diferencia
   if (diferencia === null) return null
@@ -57,11 +63,16 @@ function fecha(fechaHora: Date): string {
     </table>
 
     <p class="corte-ticket__total"><span>Total vendido</span><strong class="numero">{{ moneda(corte.totalVentas) }}</strong></p>
+    <dl v-if="corte.totalDevuelto > 0" class="corte-ticket__cuadre corte-ticket__devoluciones">
+      <div><dt>− Devoluciones</dt><dd class="numero">{{ moneda(corte.totalDevuelto) }}</dd></div>
+      <div class="corte-ticket__fuerte"><dt>= Neto</dt><dd class="numero">{{ moneda(neto) }}</dd></div>
+    </dl>
 
     <p class="corte-ticket__titulo">Efectivo en caja</p>
     <dl class="corte-ticket__cuadre">
       <div><dt>Fondo inicial</dt><dd class="numero">{{ moneda(corte.fondoInicial) }}</dd></div>
       <div><dt>+ Cobrado en efectivo</dt><dd class="numero">{{ moneda(efectivoCobrado) }}</dd></div>
+      <div v-if="efectivoDevuelto > 0"><dt>− Devuelto en efectivo</dt><dd class="numero">{{ moneda(efectivoDevuelto) }}</dd></div>
       <div class="corte-ticket__fuerte"><dt>= Esperado</dt><dd class="numero">{{ moneda(corte.efectivoEsperado) }}</dd></div>
       <template v-if="corte.efectivoContado !== null">
         <div><dt>Contado</dt><dd class="numero">{{ moneda(corte.efectivoContado) }}</dd></div>

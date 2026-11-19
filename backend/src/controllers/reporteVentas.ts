@@ -18,7 +18,7 @@ function esFechaISOValida(fecha: string): boolean {
   return Number.isFinite(fechaUTC.getTime()) && fechaUTC.toISOString().slice(0, 10) === fecha;
 }
 
-const FechaISO = z.string().refine(esFechaISOValida, "la fecha debe tener formato AAAA-MM-DD");
+export const FechaISO = z.string().refine(esFechaISOValida, "la fecha debe tener formato AAAA-MM-DD");
 const FiltroReporte = z.object({ desde: FechaISO, hasta: FechaISO });
 
 /** Días entre dos fechas AAAA-MM-DD, contando ambas. */
@@ -155,11 +155,27 @@ export const reporteVentas = async (req: Request, res: Response) => {
     pagosPorVenta.set(id, lista);
   }
 
+  // Devoluciones aprobadas en el periodo (por la fecha en que se aprobaron; migración 034). El «neto» es ventas menos devoluciones.
+  const [devueltas] = await filas(
+    pool,
+    `SELECT COUNT(*) AS cantidad, COALESCE(SUM(d.total), 0) AS total
+       FROM devolucion d
+      WHERE d.estado = 'aprobada' AND d.resuelto_en >= ? AND d.resuelto_en < ? + INTERVAL 1 DAY`,
+    rango,
+  );
+  const totalDevuelto = dinero(devueltas?.total);
+
   const totalVentas = numero(resumen[0]?.ventas);
   res.json({
     desde,
     hasta,
-    resumen: { ventas: totalVentas, total: dinero(resumen[0]?.total) },
+    resumen: {
+      ventas: totalVentas,
+      total: dinero(resumen[0]?.total),
+      devoluciones: numero(devueltas?.cantidad),
+      devuelto: totalDevuelto,
+      neto: Math.round((dinero(resumen[0]?.total) - totalDevuelto) * 100) / 100,
+    },
     por_dia: porDia.map((f) => ({ dia: String(f.dia), ventas: numero(f.ventas), total: dinero(f.total) })),
     por_hora: porHora.map((f) => ({ hora: numero(f.hora), ventas: numero(f.ventas), total: dinero(f.total) })),
     por_metodo: porMetodo.map((f) => ({ metodo: String(f.metodo), pagos: numero(f.pagos), total: dinero(f.total) })),

@@ -61,9 +61,14 @@ export const listarClientesGestion = async (req: Request, res: Response) => {
  * El teléfono y el correo siguen ocupados aunque el cliente esté eliminado. Si lo que se quiere guardar choca con uno
  * eliminado, se avisa que hay que restaurarlo en lugar de crear otro.
  */
-async function exigirLibres(ex: Ejecutor, datos: { telefono?: string | null | undefined; correo?: string | null | undefined }, idPropio: number): Promise<void> {
+async function exigirLibres(
+  ex: Ejecutor,
+  datos: { telefono?: string | null | undefined; lada?: string | undefined; correo?: string | null | undefined },
+  idPropio: number,
+): Promise<void> {
   if (datos.telefono) {
-    const [otro] = await filas(ex, "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? AND id_cliente <> ? LIMIT 1", [datos.telefono, idPropio]);
+    // El par (lada, teléfono) es único (índice uq_cliente_telefono, migración 032).
+    const [otro] = await filas(ex, "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? AND lada = ? AND id_cliente <> ? LIMIT 1", [datos.telefono, datos.lada ?? LADA_MEXICO, idPropio]);
     if (otro) {
       throw new ErrorApi(
         409,
@@ -113,13 +118,14 @@ export const editarClienteGerente = async (req: Request, res: Response) => {
     if (actual.eliminado_en) throw new ErrorApi(409, "estado_invalido", "El cliente está eliminado. Restáuralo para poder editarlo.");
 
     // El teléfono se valida con la lada que quedará (la nueva o la que ya tenía).
-    if (d.telefono !== undefined || d.lada !== undefined) {
-      const telefonoFinal = d.telefono ?? ((actual.telefono as string | null) ?? "");
-      const ladaFinal = d.lada ?? ((actual.lada as string | null) ?? LADA_MEXICO);
+    const telefonoFinal = d.telefono ?? ((actual.telefono as string | null) ?? "");
+    const ladaFinal = d.lada ?? ((actual.lada as string | null) ?? LADA_MEXICO);
+    const cambiaTelefono = d.telefono !== undefined || d.lada !== undefined;
+    if (cambiaTelefono) {
       const mensaje = telefonoFinal ? errorTelefonoLada(ladaFinal, telefonoFinal) : null;
       if (mensaje) throw new ErrorApi(422, "estado_invalido", `Datos inválidos (telefono: ${mensaje}).`);
     }
-    await exigirLibres(cx, { telefono: d.telefono, correo: d.correo }, id);
+    await exigirLibres(cx, { telefono: cambiaTelefono ? telefonoFinal : undefined, lada: ladaFinal, correo: d.correo }, id);
 
     const sets: string[] = [];
     const params: unknown[] = [];

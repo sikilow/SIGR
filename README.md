@@ -64,7 +64,7 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 
 > **Leyenda:** ✅ implementado · 🟡 parcial o distinto a lo que pide el ERS · 🚧 pendiente · 🔎 aún sin medir o revisar
 
-**Avance de requisitos funcionales del ERS:** 14 ✅ · 2 🟡 · 6 🚧 de 22.
+**Avance de requisitos funcionales del ERS:** 16 ✅ · 6 🟡 · 0 🚧 de 22 (revisado el 19 de noviembre de 2026).
 
 ### Requisitos funcionales
 
@@ -84,26 +84,26 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 | --- | --- | --- | --- | --- |
 | `RF-PED-001` | Registrar pedido | Mesero | ✅ | `POST /api/pedidos` · Pedido de mesa |
 | `RF-PED-002` | Cancelar pedido | Mesero, Gerente | ✅ | `POST /api/pedidos/:id/cancelar` (con motivo) · Mis pedidos |
-| `RF-PED-003` | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | 🟡 | Mesero: Mis pedidos; cocinero: cola operativa de pedidos enviados y en preparación. Historial para cajero y gerente pendiente |
+| `RF-PED-003` | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | 🟡 | Mesero: Mis pedidos; cocinero: cola de cocina; gerente: pantalla **Pedidos** (con historial por fechas). El cajero consulta sus **tickets** (ventas cobradas), no los pedidos: el equipo decidió no agregarle historial de pedidos |
 | `RF-PED-004` | Cambiar estado del pedido | Cocinero, Mesero | ✅ | Mesero envía y entrega; cocina avanza `Pendiente` → `En preparacion` → `Listo` en `/cocinero/cocina` |
-| `RF-PED-005` | Consultar historial de pedidos | Gerente, Cajero | 🚧 | Sin pantalla ni endpoint propio |
+| `RF-PED-005` | Consultar historial de pedidos | Gerente, Cajero | 🟡 | Gerente: `GET /api/pedidos` con historial (RF-PED-007) y pantalla Pedidos. Cajero: no se hace (decisión del equipo); ve el historial de **ventas** en Tickets y devoluciones |
 
 #### Gestión de ventas
 
 | Código | Requisito | Actor(es) | Estado | Dónde está / nota |
 | --- | --- | --- | --- | --- |
 | `RF-VEN-001` | Registrar venta | Cajero | ✅ | `POST /api/caja/cuentas/:id/cobrar`; pago exacto o dividido, cambio en efectivo y cierre de cuenta |
-| `RF-VEN-002` | Generar factura | Cajero | 🚧 | El esquema ya existe (`factura`, `datos_fiscales`); falta API y pantalla |
-| `RF-VEN-003` | Consultar historial de ventas | Cajero, Gerente | 🚧 | Pendiente |
-| `RF-VEN-004` | Generar reporte de ventas | Gerente | 🚧 | Pendiente |
+| `RF-VEN-002` | Generar factura | Cajero | 🟡 | **No se emite factura.** El gerente guarda una **referencia para el contador** y, si el cliente la pide, sus datos fiscales (todos opcionales): `PUT /api/caja/ventas/:id/fiscal` · Tickets y devoluciones → «Referencia fiscal» (RF-VEN-007) |
+| `RF-VEN-003` | Consultar historial de ventas | Cajero, Gerente | ✅ | Gerente: Cortes y ventas → Reporte de ventas (historial con filtros). Cajero y gerente: **Tickets y devoluciones** (`GET /api/caja/ventas`, por fecha o número de ticket o mesa; reimpresión con constancia) |
+| `RF-VEN-004` | Generar reporte de ventas | Gerente | ✅ | `GET /api/caja/reportes/ventas` · Cortes y ventas → Reporte de ventas, con exportación a Excel; ahora muestra devoluciones y neto |
 
 #### Gestión de clientes
 
 | Código | Requisito | Actor(es) | Estado | Dónde está / nota |
 | --- | --- | --- | --- | --- |
 | `RF-CLI-001` | Registrar cliente | Hostess, Cajero | ✅ | `POST /api/clientes` · selector de cliente en Reservaciones y Espera |
-| `RF-CLI-002` | Actualizar cliente | Hostess, Cajero | 🚧 | Sin endpoint |
-| `RF-CLI-003` | Eliminar cliente | Gerente, Cajero | 🚧 | Sin endpoint |
+| `RF-CLI-002` | Actualizar cliente | Hostess, Cajero | 🟡 | Gerente: corrige todos los datos en Clientes (`PATCH /api/clientes/:id`); hostess: solo el correo. **El cajero no registra ni actualiza clientes** (decisión del equipo) |
+| `RF-CLI-003` | Eliminar cliente | Gerente, Cajero | 🟡 | Solo el gerente: eliminado **lógico** y restaurable (`DELETE /api/clientes/:id`; ver [`docs/eliminado-logico.md`](docs/eliminado-logico.md)). El cajero no elimina clientes |
 
 #### Gestión de reservas (Hostess)
 
@@ -141,7 +141,14 @@ Aparecieron durante el desarrollo. Los códigos son **propuestos**: falta aproba
 | `RF-RES-006` | Registrar la llegada de un cliente con reservación | Hostess | `POST /api/reservaciones/:id/llegada` |
 | `RF-RES-007` | Configurar tolerancia y recordatorio; vencer la reservación, liberar la mesa y encolar avisos de correo | Gerente, Sistema | `GET/PATCH /api/catalogo/configuracion-reservacion` y servicio de notificaciones |
 | `RF-COR-001` | Encolar correos de confirmación y cancelación de reservaciones dentro de la transacción; procesarlos sin bloquear la respuesta y enviarlos con HTML y texto alternativo | Sistema | `POST /api/reservaciones`, `PATCH /api/reservaciones/:id`, `notificacion_reservacion` y `backend/src/services/plantillasCorreo.ts` |
-| `RF-ESP-001` | Gestionar la lista de espera: agregar grupos, consultar por orden de llegada y sentarlos; la edición (`PATCH`) sigue pendiente | Hostess | `GET` y `POST /api/lista-espera` |
+| `RF-ESP-001` | Gestionar la lista de espera: agregar grupos, consultar por orden de llegada, sentarlos y quitarlos o cambiar cuántas personas son | Hostess | `GET`, `POST` y `PATCH /api/lista-espera` |
+| `RF-VEN-005` | Consultar tickets pasados por fecha o por número de ticket o mesa, y **reimprimirlos** (queda constancia de quién y cuándo) | Cajero, Gerente | `GET /api/caja/ventas`, `GET /api/caja/ventas/:id`, `POST /api/caja/ventas/:id/reimpresion` · Tickets y devoluciones (`/cajero/tickets`, `/gerente/tickets`) |
+| `RF-VEN-006` | **Devoluciones**, totales o parciales (por producto y cantidad) y con motivo: el cajero **solicita** y el gerente **autoriza** (o la registra ya aprobada). Se devuelve con los métodos del cobro, sin pasar de lo cobrado con cada uno; el efectivo sale del corte del cajero (baja el efectivo esperado) y, si se pide, se repone el inventario. El corte y el reporte de ventas muestran lo devuelto y el neto | Cajero, Gerente | `POST /api/caja/ventas/:id/devoluciones`, `GET /api/caja/devoluciones`, `POST /api/caja/devoluciones/:id/aprobar` y `/rechazar` · migración 034 |
+| `RF-VEN-007` | **Referencia para el contador** de una venta (sin emitir factura) y datos fiscales del cliente opcionales (RFC, razón social, régimen, código postal, correo) | Gerente | `PUT` y `DELETE /api/caja/ventas/:id/fiscal` · migración 034 |
+| `RF-CLI-004` | **Teléfono de cliente único** en la base (lada + teléfono); dos altas simultáneas con el mismo número no se duplican | Sistema | índice `uq_cliente_telefono` · migración 032 |
+| `RF-CLI-005` | **Recuperar la contraseña** de la cuenta de cliente del portal: enlace de un solo uso por correo, 1 hora, máximo 3 por hora, respuesta siempre igual (no revela quién está registrado) | Cliente | `POST /api/auth-clientes/recuperar`, `GET` y `POST /api/auth-clientes/restablecer` · `/cliente/recuperar` · migración 033 |
+| `RF-RES-008` | **Reporte de reservaciones e inasistencias** por periodo: llegaron, no llegaron, canceladas y por llegar; por día de la semana, hora y sección; clientes con 2 o más inasistencias | Gerente | `GET /api/reservaciones/reporte` · Reservaciones → Reporte e inasistencias |
+| `RF-PRO-007` | **Mermas**: registrar producto que se perdió (caducó, se dañó, error de preparación…); si controla existencia se descuenta del inventario sin pasar de lo que hay. Reporte por periodo, producto y motivo, con el valor estimado a precio de venta | Gerente | `POST /api/catalogo/mermas`, `GET /api/catalogo/mermas/reporte` · Productos → Mermas · migración 035 |
 | `RNF-030` | Las acciones críticas (crear, enviar, cancelar, entregar pedidos, solicitar pago, asignar mesa y cobrar) no deben duplicarse si el cliente reintenta (`Idempotency-Key`) | Sistema | `backend/src/services/idempotencia.ts`, tabla `idempotencia` |
 
 ### Requerimientos nuevos y su estado
@@ -168,7 +175,7 @@ Salen de lo que pidió el equipo y de la revisión del proyecto. El detalle, las
 | Estados de pedido | El ERS: pendiente, en preparación, listo, entregado | La BD agrega `Registrado`, `Cancelado` y `Pagado`; `Pendiente` se usa como «enviado a cocina» |
 | RNF-011 | Expiración a los 15 min de inactividad | Se cumple con una sesión en el servidor; el token sigue durando 8 horas como tope |
 | RNF-025 | Actualización en < 2 s | Consulta periódica cada 10 s |
-| Hostess | — | Las rutas de Salón, Reservaciones, clientes y asignación están implementadas; solo falta `PATCH /api/lista-espera/:id` |
+| Hostess | — | Las rutas de Salón, Reservaciones, clientes, asignación y lista de espera (incluido `PATCH /api/lista-espera/:id`) están implementadas |
 
 ### Requisitos no funcionales
 

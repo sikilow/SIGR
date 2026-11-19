@@ -5,7 +5,7 @@ import { crearLibroVentas, HOJAS_VENTAS, nombreArchivoVentas } from './ventasExc
 const reporte: ReporteVentas = {
   desde: '2026-11-01',
   hasta: '2026-11-30',
-  resumen: { ventas: 2, total: 500 },
+  resumen: { ventas: 2, total: 500, devoluciones: 0, devuelto: 0, neto: 500 },
   porDia: [{ dia: '2026-11-02', ventas: 2, total: 500 }],
   porHora: [{ hora: 14, ventas: 2, total: 500 }],
   porMetodo: [

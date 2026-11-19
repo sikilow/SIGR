@@ -2,6 +2,7 @@
 // Solo se usa con VITE_USE_MOCK=false.
 import { ErrorServicio } from '../errores'
 import { crearCajaApi } from './caja'
+import { crearReportesApi } from './reportes'
 import { crearHostessApi } from '../hostess/api'
 import type { Servicios } from '../interfaces'
 import type { MetodoPagoAdmin } from '../../types'
@@ -592,5 +593,6 @@ export function crearServiciosApi(): Servicios {
 
     hostess: crearHostessApi(),
     caja: crearCajaApi(),
+    reportes: crearReportesApi(),
   }
 }

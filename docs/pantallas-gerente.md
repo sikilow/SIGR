@@ -11,18 +11,21 @@ en [`capturas/`](capturas/) y se tomaron con el servidor de desarrollo en modo m
 | Usuarios | `/gerente/usuarios` | RF-USR-001 a 007 | Funcional; documentación visual pendiente |
 | Clientes | `/gerente/clientes` | RF-CLI-002 y RF-CLI-003 | Consultar, corregir, eliminar (lógico) y restaurar clientes; ver [`eliminado-logico.md`](eliminado-logico.md) |
 | Productos e inventario | `/gerente/productos` | RF-PRO-001 a 006 | Funcional; incluye descripción obligatoria, variantes y filtros de inventario |
+| Productos → Mermas | `/gerente/mermas` | RF-PRO-007 | Documentada abajo |
 | Mesas, secciones y características | `/gerente/mesas` | RF-MES-002 a 007 | Funcional; administración de mesas, catálogo de secciones y catálogo de **características** (botón «Características»: crear, renombrar, desactivar, eliminar y restaurar; se marcan en cada mesa al editarla). Mesas, secciones, características, canales y métodos de pago se eliminan de forma lógica y se restauran desde «Eliminadas»; ver [`eliminado-logico.md`](eliminado-logico.md) |
 | Canales de pedido | `/gerente/canales` | Canales de los pedidos para llevar: agregar y activar o desactivar (migración 019) | Funcional |
 | Reservas | `/gerente/reservaciones` | Horario de reservaciones **por día** (cada día abierto o cerrado, con su primera y última hora; botón «Copiar a todos»), un intervalo único y vista previa de las horas del portal de un día (migraciones 022 y 030); duración de cada reservación (023); anticipación mínima (018), tolerancia y recordatorio (010) | Funcional; ruta protegida para gerente |
+| Reservas → Reporte e inasistencias | `/gerente/reservaciones/reporte` | RF-RES-008 | Documentada abajo |
 | Pedidos | `/gerente/pedidos` y `/gerente/pedidos/:idPedido` | RF-PED-002 (gerente), RF-PED-003, RF-PED-005 (parcial) | Documentada abajo |
 | Cortes y ventas → Cortes de caja | `/gerente/cortes` | Cierres de turno por cajero, cuadre de efectivo | Funcional |
 | Cortes y ventas → Reporte de ventas | `/gerente/ventas` | RF-VEN-003 (historial) y RF-VEN-004 (reporte con exportación) | Documentada abajo |
+| Cortes y ventas → Tickets y devoluciones | `/gerente/tickets` | RF-VEN-005, RF-VEN-006 y RF-VEN-007 | Autoriza las devoluciones que piden los cajeros y guarda la referencia para el contador; ver [`pantallas-caja.md`](pantallas-caja.md) |
 
 ## Productos, inventario y mesas
 
 - **Productos:** la descripción es obligatoria. El campo «Presentación o variante» solo aparece para las categorías Bebidas y Postres. La categoría, el nombre y la presentación identifican una variante; intentar crear una ya existente no cambia el inventario. Para ajustar existencias se edita el producto. La lista permite distinguir Disponible, Stock bajo y Agotado.
 - **Mesas:** se administra número, capacidad, sección y disponibilidad, además de las características de planta baja, espacio para carriola y acceso sin escaleras.
-- **Secciones:** desde Gerente → Mesas → Secciones se pueden crear, renombrar, inhabilitar/habilitar y eliminar (lógico, se restaura desde «Eliminadas»). Renombrar actualiza las mesas asociadas; eliminar requiere que no haya mesas vigentes asignadas. Las mesas deben pertenecer a una sección activa.
+- **Secciones:** desde Gerente → Mesas → Secciones se pueden crear, renombrar, inhabilitar/habilitar y eliminar (lógico, se restaura desde «Eliminadas»). Renombrar actualiza las mesas asociadas; eliminar una sección elimina también sus mesas (todo o nada: si alguna está en uso, no se elimina nada) y al restaurarla vuelven las que se eliminaron con ella; ver [`eliminado-logico.md`](eliminado-logico.md). Las mesas deben pertenecer a una sección activa.
 
 ## Usuarios y seguridad
 
@@ -131,3 +134,38 @@ Menú **Cortes y ventas** → pestaña **Reporte de ventas** (`/gerente/ventas`)
 
 En modo demo (`npm run dev:demo`) el reporte usa ventas de ejemplo generadas para cada día hasta hoy (siempre las mismas
 para el mismo día). Código: `frontend/src/views/gerente/VentasView.vue`, `utils/periodos.ts` y `utils/ventasExcel.ts`.
+
+## Reporte de reservaciones e inasistencias (RF-RES-008)
+
+Menú **Reservaciones** → pestaña **Reporte e inasistencias** (`/gerente/reservaciones/reporte`; la otra pestaña es **Configuración**).
+
+![Reporte de reservaciones](capturas/g5-01-reporte-reservaciones-1024x768.png)
+
+- **Periodo:** los mismos botones del reporte de ventas (día, semana, mes, trimestre, semestre, año o rango propio, hasta dos años), con flechas para ir al anterior o al siguiente. Al abrir se ve el mes en curso. Cuenta por la **fecha de la reservación**.
+- **Resumen:** reservaciones y personas, cuántas **llegaron**, cuántas **no llegaron** (inasistencia: pasó la tolerancia y se marcaron vencidas) y cuántas se **cancelaron**, con su porcentaje. La **tasa de inasistencia** compara solo a quienes ya se resolvieron (llegaron o no llegaron): las canceladas avisaron y las que siguen por llegar todavía no cuentan.
+- **Lectura rápida:** una línea dice qué día de la semana y qué hora fallan más (con al menos 3 reservaciones resueltas).
+- **Desgloses:** por día de la semana, por hora y por sección que pidió el cliente (sin preferencia = «Cualquiera»), cada uno con una barra apilada (llegaron / no llegaron / canceladas; el detalle numérico está en la tabla). «Ver por día» abre la tabla día por día.
+- **Clientes con 2 o más inasistencias** en el periodo, con su teléfono: conviene llamarles para confirmar antes de apartarles mesa.
+
+![Desglose por día de la semana](capturas/g5-02-reporte-reservaciones-desglose-1024x768.png)
+
+En modo demo, los días anteriores a hoy se generan con datos de ejemplo (siempre los mismos para el mismo día) y se suman las reservaciones reales de la sesión. Código: `frontend/src/views/gerente/ReporteReservacionesView.vue`, `components/SelectorPeriodo.vue`, `utils/reporteReservaciones.ts`; API: [`contrato-api-hostess.md`](contrato-api-hostess.md#get-apireservacionesreportedesdeaaaa-mm-ddhastaaaaa-mm-dd--solo-gerente).
+
+## Mermas (RF-PRO-007)
+
+Menú **Productos** → pestaña **Mermas** (`/gerente/mermas`; la otra pestaña es **Productos e inventario**). Una merma es producto que se perdió: caducó, se dañó o se cayó, error de preparación u otro motivo.
+
+![Reporte de mermas](capturas/g5-03-mermas-reporte-1024x768.png)
+
+- **Registrar merma:** se elige el producto (con buscador; se ve cuánto queda), las unidades, el motivo y una nota opcional. Antes de guardar se ve el **valor a precio de venta** y cuánto quedaría en inventario. Si el producto **controla existencia**, se descuenta del inventario y no se puede pasar de lo que hay; si se prepara al momento, solo queda el registro.
+
+![Registrar merma](capturas/g5-04-registrar-merma-1024x768.png)
+
+- **Reporte del periodo:** valor perdido (**estimado**: el sistema no guarda costos, solo el precio de venta de ese momento), unidades y registros; **por producto** y **por motivo** con barras; y la tabla de registros (quién, cuándo, nota). Las 500 más recientes; los totales cuentan todas.
+- **Devoluciones sin reponer:** lo que un cliente devolvió y no volvió al inventario (devoluciones aprobadas sin «reponer al inventario») se muestra aparte y no se suma al valor de las mermas registradas.
+
+Código: `frontend/src/views/gerente/MermasView.vue`, `components/MermaDialog.vue`, `components/SelectorPeriodo.vue`; API: [`contrato-api-gerente.md`](contrato-api-gerente.md#mermas-migración-035).
+
+## Aviso de devoluciones por autorizar
+
+El menú **Cortes y ventas** muestra un globo con el número de solicitudes de devolución que esperan al gerente (se consulta cada 20 segundos). Se atienden en **Cortes y ventas → Tickets y devoluciones → Devoluciones** ([`pantallas-caja.md`](pantallas-caja.md)).

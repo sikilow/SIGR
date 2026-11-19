@@ -156,7 +156,7 @@ async function borrar() {
       </div>
 
       <template v-if="verEliminadas">
-        <p class="secciones__ayuda">Las secciones eliminadas no se ofrecen en ningún lado y su nombre sigue ocupado. Al restaurarla vuelve inhabilitada.</p>
+        <p class="secciones__ayuda">Las secciones eliminadas no se ofrecen en ningún lado y su nombre sigue ocupado. Al restaurarla vuelve inhabilitada, con las mesas que se eliminaron con ella (no disponibles).</p>
         <ul class="secciones__lista">
           <li v-for="seccion in eliminadas" :key="seccion.nombre" class="secciones__fila">
             <div class="secciones__datos">
@@ -184,7 +184,9 @@ async function borrar() {
             </form>
           </template>
           <template v-else-if="aBorrar === seccion.nombre">
-            <p class="secciones__confirmar" role="alert">¿Eliminar «{{ seccion.nombre }}»? Dejará de mostrarse; podrás restaurarla desde «Eliminadas».</p>
+            <p class="secciones__confirmar" role="alert">¿Eliminar «{{ seccion.nombre }}»?
+              <template v-if="seccion.totalMesas > 0">{{ seccion.totalMesas === 1 ? 'Se eliminará también su única mesa' : `Se eliminarán también sus ${seccion.totalMesas} mesas` }} (deben estar libres, sin cuentas ni reservaciones vigentes).</template>
+              Dejará de mostrarse; podrás restaurarla desde «Eliminadas» (con las mesas que se eliminaron con ella).</p>
             <div class="secciones__acciones">
               <button type="button" class="btn btn--peligro" :aria-disabled="enCurso ? 'true' : undefined" @click="borrar">Sí, eliminar</button>
               <button type="button" class="btn btn--secundario" @click="aBorrar = null">No eliminar</button>
@@ -216,9 +218,7 @@ async function borrar() {
                 type="button"
                 class="btn btn--peligro-suave"
                 :aria-label="`Eliminar ${seccion.nombre}`"
-                :aria-disabled="seccion.totalMesas > 0 ? 'true' : undefined"
-                :title="seccion.totalMesas > 0 ? 'Solo se pueden eliminar secciones sin mesas vigentes' : undefined"
-                @click="seccion.totalMesas === 0 ? (aBorrar = seccion.nombre) : (error = `«${seccion.nombre}» tiene mesas vigentes. Muévelas a otra sección o elimínalas antes de eliminarla.`)"
+                @click="aBorrar = seccion.nombre"
               >
                 Eliminar
               </button>

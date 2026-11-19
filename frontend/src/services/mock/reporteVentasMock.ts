@@ -7,7 +7,8 @@ import { aDia, deDia } from '../../utils/periodos'
 import { baseDatos } from './baseDatos'
 import { metodosPagoMock } from './metodosPago'
 
-interface LineaMock {
+export interface LineaMock {
+  idProducto: number
   producto: string
   presentacion: string
   categoria: string
@@ -30,7 +31,9 @@ function aleatorio(semilla: number): () => number {
 
 const centavos = (monto: number) => Math.round(monto * 100)
 
-function ventasDelDia(dia: string, primerId: number): Array<VentaReporte & { lineas: LineaMock[] }> {
+/** Las ventas de ejemplo de un día (con sus líneas). El primer id de venta del día es `AAAAMMDD00`. */
+export function ventasDemoDelDia(dia: string): Array<VentaReporte & { lineas: LineaMock[] }> {
+  const primerId = Number(dia.replaceAll('-', '')) * 100
   const azar = aleatorio(Number(dia.replaceAll('-', '')))
   const elegir = <T>(lista: readonly T[]): T => lista[Math.floor(azar() * lista.length)]!
   const productos = baseDatos.categorias.flatMap((c) => c.productos.map((p) => ({ ...p, categoria: c.nombre })))
@@ -52,6 +55,7 @@ function ventasDelDia(dia: string, primerId: number): Array<VentaReporte & { lin
       const producto = elegir(productos)
       const cantidad = Math.floor(azar() * 3) + 1
       lineas.push({
+        idProducto: producto.idProducto,
         producto: producto.nombre,
         presentacion: producto.presentacion ?? '',
         categoria: producto.categoria,
@@ -103,7 +107,7 @@ export function reporteVentasMock(desde: string, hasta: string, hoy = new Date()
   const ultimo = hasta < aDia(hoy) ? hasta : aDia(hoy)
   const ventas: Array<VentaReporte & { lineas: LineaMock[] }> = []
   for (let f = deDia(desde); aDia(f) <= ultimo; f.setDate(f.getDate() + 1)) {
-    ventas.push(...ventasDelDia(aDia(f), Number(aDia(f).replaceAll('-', '')) * 100))
+    ventas.push(...ventasDemoDelDia(aDia(f)))
   }
   // Solo lo ya cobrado: el día de hoy, hasta la hora actual.
   const cobradas = ventas.filter((v) => v.fechaHora.getTime() <= hoy.getTime())
@@ -134,7 +138,14 @@ export function reporteVentasMock(desde: string, hasta: string, hoy = new Date()
   return {
     desde,
     hasta,
-    resumen: { ventas: cobradas.length, total: cobradas.reduce((s, v) => s + centavos(v.total), 0) / 100 },
+    // Las devoluciones las agrega la demo de la caja (cajaMock), que es quien las registra.
+    resumen: {
+      ventas: cobradas.length,
+      total: cobradas.reduce((s, v) => s + centavos(v.total), 0) / 100,
+      devoluciones: 0,
+      devuelto: 0,
+      neto: cobradas.reduce((s, v) => s + centavos(v.total), 0) / 100,
+    },
     porDia,
     porHora,
     porMetodo,

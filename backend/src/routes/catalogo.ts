@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requiereAuth } from "../utils/auth";
+import { registrarMerma, reporteMermas } from "../controllers/mermas";
 import { actualizarConfiguracionReservacion, obtenerConfiguracionReservacion, listarCategorias, crearCategoria, editarCategoria, borrarCategoria, restaurarCategoria, listarProductos, crearProducto, editarProducto, eliminarProducto, restaurarProducto, listarCaracteristicas, crearCaracteristica, editarCaracteristica, borrarCaracteristica, listarSeccionesAdmin, crearSeccionAdmin, editarSeccionAdmin, borrarSeccionAdmin, listarMesasAdmin, crearMesaAdmin, editarMesaAdmin, listarMetodosPago, listarMetodosPagoDisponibles, listarCanales, listarCanalesDisponibles, crearCanal, actualizarCanal, crearCategoriaMetodoPago, actualizarCategoriaMetodoPago, crearMetodoPago, actualizarMetodoPago, eliminarCanal, restaurarCanal, eliminarMesaAdmin, restaurarMesaAdmin, restaurarCaracteristica, restaurarSeccionAdmin, eliminarMetodoPago, restaurarMetodoPago, eliminarCategoriaMetodoPago, restaurarCategoriaMetodoPago } from "../controllers/catalogo";
 
 export const catalogoRouter = Router();
@@ -28,6 +29,9 @@ catalogoRouter.post("/productos", crearProducto);
 catalogoRouter.patch("/productos/:id", editarProducto);
 catalogoRouter.delete("/productos/:id", eliminarProducto);
 catalogoRouter.post("/productos/:id/restaurar", restaurarProducto);
+// Mermas (migración 035): registrar y reporte por periodo.
+catalogoRouter.post("/mermas", registrarMerma);
+catalogoRouter.get("/mermas/reporte", reporteMermas);
 catalogoRouter.get("/mesas", listarMesasAdmin);
 catalogoRouter.post("/mesas", crearMesaAdmin);
 catalogoRouter.patch("/mesas/:id", editarMesaAdmin);

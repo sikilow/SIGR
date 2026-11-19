@@ -172,7 +172,9 @@ const fechaCorta = (d: Date | null | undefined) => (d ? d.toLocaleDateString('es
           </template>
           <template v-else-if="aBorrar?.idCategoria === c.idCategoria">
             <p class="cat__confirmar" role="alert">
-              ¿Eliminar «{{ c.nombre }}»? Dejará de mostrarse. Se conserva y podrás restaurarla desde «Eliminadas».
+              ¿Eliminar «{{ c.nombre }}»?
+              <template v-if="c.totalProductos > 0">{{ c.totalProductos === 1 ? 'Se eliminará también su único producto.' : `Se eliminarán también sus ${c.totalProductos} productos.` }}</template>
+              Dejará de mostrarse. Se conserva y podrás restaurarla desde «Eliminadas» (con los productos que se eliminaron con ella).
             </p>
             <div class="cat__acciones">
               <button type="button" class="btn btn--peligro" :aria-disabled="enCurso ? 'true' : undefined" @click="borrar">Sí, eliminar</button>
@@ -190,9 +192,7 @@ const fechaCorta = (d: Date | null | undefined) => (d ? d.toLocaleDateString('es
                 type="button"
                 class="btn btn--peligro-suave"
                 :aria-label="`Eliminar ${c.nombre}`"
-                :aria-disabled="c.totalProductos > 0 ? 'true' : undefined"
-                :title="c.totalProductos > 0 ? 'Solo se pueden eliminar categorías sin productos' : undefined"
-                @click="c.totalProductos === 0 ? (aBorrar = c) : (error = `«${c.nombre}» tiene productos. Elimínalos o muévelos a otra categoría antes de eliminarla.`)"
+                @click="aBorrar = c"
               >
                 Eliminar
               </button>

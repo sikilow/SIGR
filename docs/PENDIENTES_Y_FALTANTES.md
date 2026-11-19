@@ -66,8 +66,8 @@ El actor autenticado se establece en la sesión MySQL que ejecuta la transacció
 | P-02 | **Auditoría de cancelaciones** | La migración 013 audita quién y cuándo modificó el pedido, incluidos estado y valores anterior/nuevo. No hay campos dedicados `pedido.id_cancelado_por` ni `pedido.cancelado_en`; la auditoría no se expone en la respuesta del pedido. | Implementado en migración; falta aplicarla en cada base y probar MySQL |
 | P-03 | **Resuelto: seguridad de acceso del ERS** | Bloqueo tras 5 intentos fallidos (RNF-009), cierre por inactividad (RNF-011), cierre de sesión en el servidor (RNF-012) y registro de accesos fallidos y no autorizados (RNF-017). Migración 031; ver [`auditoria-seguridad.md`](auditoria-seguridad.md#acceso-sesiones-y-límites-migración-031). Quedan: sesiones de clientes del portal sin cierre por inactividad y bitácora de accesos sin pantalla. | Resuelto |
 | P-04 | **Resuelto: protecciones básicas de la API** | `helmet` (cabeceras de seguridad) y límite de peticiones por IP. El HTTPS no lo configura el proyecto: va en el proxy o servidor donde se despliegue (`TRUST_PROXY=1` detrás de un proxy). | Resuelto, salvo HTTPS |
-| P-05 | **Las pruebas del backend son unitarias** | `backend/tests/` tiene 97 pruebas en 13 archivos (dominio, caja, correo, horario, disponibilidad, reporte de ventas…) y el frontend 619. Falta probar las rutas contra MySQL. | Verificado |
-| P-06 | **Pantallas pendientes** | Caja (`/cajero/caja`) y Reporte de ventas (`/gerente/ventas`) ya existen. Falta solo el comprobante con datos fiscales (RF-VEN-002). | Parcial |
+| P-05 | **Las pruebas del backend son unitarias** | `backend/tests/` tiene 155 pruebas en 20 archivos (dominio, caja, devoluciones, correo, horario, disponibilidad, reporte de ventas…) y el frontend 720. Falta probar las rutas contra MySQL de forma automática; las de devoluciones, mermas, reportes, teléfono único y recuperar contraseña del cliente se probaron a mano contra la API real y una base temporal. | Verificado |
+| P-06 | **Pantallas pendientes** | Caja, Tickets y devoluciones, Reporte de ventas, Reporte de reservaciones y Mermas ya existen. El comprobante con datos fiscales (RF-VEN-002) se resolvió **sin emitir factura**: el gerente guarda una referencia para el contador. | Resuelto |
 | P-07 | **Resuelto: `PATCH /api/lista-espera/:id`** | Quita a un grupo de la lista (`estado: cancelada`) o cambia cuántas personas son, solo mientras sigue esperando. | Resuelto |
 
 ### 2.2 Reglas del dominio que el servidor no aplica o que chocan con el diseño
@@ -124,7 +124,7 @@ Son sugerencias mías, **no requisitos**. Solo valen si el restaurante las neces
 - Cambiar una cuenta de mesa o unir mesas (grupos que se juntan).
 - Dividir la cuenta por comensal o por producto.
 - Propinas y descuentos.
-- Impresión de tickets o comandas para cocina.
+- Impresión de comandas para cocina (el ticket de venta ya se reimprime desde Tickets y devoluciones).
 - Alerta al gerente cuando un producto baje de su stock mínimo (hoy hay un filtro, no un aviso).
 - ~~Reporte de ventas y productos más vendidos~~ Hecho (RF-VEN-004, Gerente → Cortes y ventas → Reporte de ventas).
 - Historial de cambios de precio del menú.
@@ -136,7 +136,7 @@ Son sugerencias mías, **no requisitos**. Solo valen si el restaurante las neces
 1. Confirmar las decisiones D-3 a D-5 de las mesas; D-1 y D-2 ya se resolvieron con el catálogo de secciones.
 2. Aplicar y probar la migración 013 en cada base; prueba operativa de secciones/mesas en el entorno compartido (RF-MES-007).
 3. Implementar los controles de seguridad del ERS aún pendientes (P-03 y P-04); RF-USR-008 ya está implementado.
-4. Facturación fiscal (RF-VEN-002). El historial de ventas (RF-VEN-003) y los informes (RF-VEN-004) ya están en Gerente → Cortes y ventas → Reporte de ventas.
+4. ~~Facturación fiscal (RF-VEN-002)~~: no se emite factura; el gerente guarda la referencia para el contador (RF-VEN-007). El historial de ventas, los tickets pasados y las devoluciones están en Cortes y ventas.
 5. Pruebas de rutas del backend contra una base de datos (P-05).
 6. Actualizar el ERS y documentación cuando se validen las reglas pendientes.
 
@@ -146,3 +146,25 @@ Son sugerencias mías, **no requisitos**. Solo valen si el restaurante las neces
 
 - Confirmar las reglas 5, 8, 9 y 11 de la sección 2.2: ¿son comportamientos intencionales o errores?
 - Decidir si las ideas de la sección 3 interesan.
+
+---
+
+## 6. Decisiones del 19 de noviembre de 2026
+
+| Tema | Decisión |
+|---|---|
+| Tickets pasados, reimpresión y devoluciones | **Se hace**: el cajero solicita y el gerente autoriza; afecta el corte, el inventario y la bitácora (migración 034) |
+| Cancelar o modificar una reservación | Solo la **hostess** (no el cliente desde el portal) |
+| Recuperar contraseña del cliente | **Se hace** (migración 033) |
+| Historial de pedidos del cajero por rango de fechas y paginado | **No se hace** |
+| Comprobante fiscal | **No se emite factura**; el gerente guarda una referencia para el contador y datos opcionales del cliente (RF-VEN-007) |
+| El cajero registra y actualiza clientes | **No se hace** |
+| Teléfono de cliente único | **Se hace**, como índice único en la base (migración 032) |
+| Pantalla de accesos y bitácora de auditoría | **En espera** (los datos ya se guardan: `registro_acceso` y `sigr_auditoria`) |
+| «Sistema de diseño» | Oculta para el gerente con la API real; solo se ve en modo demo |
+| Cierres especiales y días festivos en reservaciones | **Se deja** como está |
+| Aviso de stock bajo al gerente | **Propuesta pendiente de elegir** (ver abajo) |
+| Reportes de reservaciones e inasistencias y de mermas | **Se hacen** (RF-RES-008 y RF-PRO-007; migración 035 para mermas) |
+| Edición simultánea por dos gerentes | **Probada**: gana el último en guardar; ver [`concurrencia.md`](concurrencia.md). Falta decidir si se agrega control optimista |
+
+**Aviso de stock bajo (propuesta):** hoy el gerente solo ve el filtro «Poco stock» y el estado en cada producto. Opciones, de menos a más trabajo: (1) un **globo con el número de productos agotados o con poco stock** en el menú «Productos», igual al de devoluciones pendientes; (2) además, un **panel de resumen** arriba de Productos con la lista corta (agotados primero) y su existencia contra el mínimo; (3) además, un **correo diario o semanal** al gerente con esa lista. Recomendación: 1 + 2, que no necesitan tablas nuevas ni proveedor de correo.

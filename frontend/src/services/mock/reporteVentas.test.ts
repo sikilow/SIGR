@@ -65,7 +65,7 @@ describe('aReporteVentas (respuesta de la API)', () => {
       ],
       ventas_truncadas: false,
     })
-    expect(r.resumen).toEqual({ ventas: 2, total: 500.5 })
+    expect(r.resumen).toEqual({ ventas: 2, total: 500.5, devoluciones: 0, devuelto: 0, neto: 500.5 })
     expect(r.porProducto[0]).toMatchObject({ presentacion: '', cantidad: 3, total: 90 })
     expect(r.ventas[0]).toMatchObject({ idVenta: 7, mesaNumero: 3, meseros: '', pagos: [{ metodo: 'Efectivo', monto: 500.5 }] })
     expect(r.ventas[0]!.fechaHora).toEqual(new Date(2026, 10, 2, 14, 5))

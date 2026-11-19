@@ -66,6 +66,8 @@ app.use("/api/auth-clientes", limiteAcceso);
 // Recuperar contraseña manda correos: cuenta todo.
 const limiteRecuperar = limite({ ventanaMs: 15 * 60_000, maximo: 15, mensaje: "Demasiadas solicitudes de recuperación. Espera unos minutos." });
 app.use("/api/auth/recuperar", limiteRecuperar);
+app.use("/api/auth-clientes/recuperar", limiteRecuperar);
+app.use("/api/auth-clientes/restablecer", limiteRecuperar);
 app.use("/api/auth/restablecer", limiteRecuperar);
 // Los datos de la API cambian entre peticiones (métodos de pago, mesas, pedidos…): ningún navegador ni proxy
 // (por ejemplo Nginx en el servidor compartido) debe servir una respuesta guardada.
@@ -152,6 +154,10 @@ async function iniciarAPI(): Promise<void> {
     { archivo: "030_horario_reservaciones_por_dia.sql", consulta: "SELECT dia, abierto, hora_apertura, hora_ultima_reservacion FROM horario_reservacion_dia LIMIT 0" },
     { archivo: "031_seguridad_acceso.sql", consulta: "SELECT id_sesion, ultima_actividad, cerrada_en FROM sesion_empleado LIMIT 0" },
     { archivo: "031_seguridad_acceso.sql", consulta: "SELECT ambito, identificador, resultado, creado_en FROM registro_acceso LIMIT 0" },
+    { archivo: "035_mermas.sql", consulta: "SELECT id_merma, id_producto, cantidad, motivo FROM merma LIMIT 0" },
+    { archivo: "034_devoluciones_y_referencia_fiscal.sql", consulta: "SELECT id_devolucion, estado, id_corte FROM devolucion LIMIT 0" },
+    { archivo: "034_devoluciones_y_referencia_fiscal.sql", consulta: "SELECT id_venta, referencia_contador FROM venta_fiscal LIMIT 0" },
+    { archivo: "033_recuperar_contrasena_cliente.sql", consulta: "SELECT id_cliente, token_hash, expira_en, usado_en FROM restablecimiento_contrasena_cliente LIMIT 0" },
   ];
   for (const { archivo, consulta } of migraciones) {
     try {
@@ -177,6 +183,16 @@ async function iniciarAPI(): Promise<void> {
   );
   if (Number(telefonoUnico?.total ?? 0) === 0) {
     throw new Error("Falta aplicar database/migrations/018_telefono_unico_y_anticipacion_reserva.sql (teléfono único de usuarios).");
+  }
+
+  const [telefonoClienteUnico] = await filas(
+    pool,
+    `SELECT COUNT(*) AS total
+       FROM information_schema.statistics
+      WHERE table_schema = DATABASE() AND table_name = 'cliente' AND index_name = 'uq_cliente_telefono'`,
+  );
+  if (Number(telefonoClienteUnico?.total ?? 0) === 0) {
+    throw new Error("Falta aplicar database/migrations/032_telefono_cliente_unico.sql (teléfono de cliente único). Consulta docs/actualizar-base-datos.md.");
   }
 
   const [auditoriaCuenta] = await filas(

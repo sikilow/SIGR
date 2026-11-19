@@ -207,3 +207,14 @@ Un único archivo, `frontend/src/types/estados.ts`, define los códigos. Normali
 | `MAX_OBSERVACIONES` / `establecerObservaciones` | `MAX_INDICACIONES` / `establecerIndicaciones` | carrito |
 | `seleccionadoId` | `idPedidoSeleccionado` | store de pedidos |
 | `sigr.borradores` (sessionStorage) | `sigr.borradores.v2` (la clave anterior se elimina) | borrador del pedido |
+
+## Tickets, devoluciones y mermas (migraciones 034 y 035)
+
+| Tabla | Para qué sirve | En la API (snake_case) → frontend (camelCase) |
+|---|---|---|
+| `devolucion` | Una devolución de una venta ya cobrada: estado (`pendiente`, `aprobada`, `rechazada`), motivo, total, quién la pidió y quién la resolvió, corte del que salió el efectivo | `id_devolucion`, `solicitado_en`, `reponer_inventario`, `id_corte` → `idDevolucion`, `solicitadoEn`, `reponerInventario`, `idCorte` (`types/caja.ts`, `Devolucion`) |
+| `devolucion_linea` | Qué productos y cuántas unidades se devuelven (cada línea apunta a `detalle_pedido`) | `lineas[]` de la devolución |
+| `devolucion_pago` | Con qué métodos se devuelve el dinero | `pagos[]` de la devolución |
+| `venta_reimpresion` | Quién reimprimió un ticket y cuándo | `reimpresiones`, `ultima_reimpresion` → `reimpresiones`, `ultimaReimpresion` (`VentaDetalle`) |
+| `venta_fiscal` | Referencia para el contador y datos fiscales opcionales de la venta | `referencia_fiscal` → `referenciaFiscal` (solo la recibe el gerente) |
+| `merma` | Producto perdido: producto, cantidad, motivo, nota, precio de venta del momento y quién la registró | `Merma` en `types/reportes.ts` (`valor` = `cantidad × precio_unitario`) |

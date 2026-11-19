@@ -204,7 +204,7 @@ export const registrarCliente = async (req: Request, res: Response) => {
   const datos = validar(ClienteNuevo, req.body);
   const correo = datos.correo?.trim() || null;
   await conIdempotencia(req, res, 201, async () => {
-    const [existente] = await filas(pool, "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? LIMIT 1", [datos.telefono]);
+    const [existente] = await filas(pool, "SELECT id_cliente, eliminado_en FROM cliente WHERE telefono = ? AND lada = ? LIMIT 1", [datos.telefono, datos.lada ?? LADA_MEXICO]);
     if (existente) {
       throw new ErrorApi(409, "estado_invalido", existente.eliminado_en ? MENSAJE_CLIENTE_ELIMINADO : "Ya existe un cliente con ese teléfono. Búscalo para seleccionarlo.");
     }

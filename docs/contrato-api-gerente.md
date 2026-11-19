@@ -116,3 +116,33 @@ Enlace de un solo uso por correo: el empleado crea su contraseña nueva; nadie m
 | `POST /api/usuarios/:id/restablecer` | Gerente | — | 200 `{ ok: true, correo: "c***@dominio" }` · 404 · 409 usuario inactivo · 429 límite por hora · 502 `correo_no_enviado` |
 
 El correo (`plantillaRestablecerContrasena`) lleva el nombre de usuario y el botón «Crear nueva contraseña» que abre `/restablecer?token=…` en el front. La contraseña anterior sigue funcionando hasta que se use el enlace.
+
+## Recuperar la contraseña del cliente del portal (migración 033)
+
+Igual que el del personal: enlace de un solo uso por correo, caduca en 1 hora, pedir otro invalida el anterior y se mandan como máximo 3 por cliente por hora. Solo se guarda la huella SHA-256 del enlace. Un cliente eliminado, o que solo registró la hostess y nunca creó su cuenta del portal, no recibe enlace; quien entró con Google sí puede crear así una contraseña. Pantallas: `/cliente/recuperar` y `/cliente/restablecer?token=…`.
+
+| Método y ruta | Quién | Cuerpo | Respuesta |
+|---|---|---|---|
+| `POST /api/auth-clientes/recuperar` | Público | `{ correo }` | 200 `{ mensaje }` siempre igual, exista o no la cuenta · 422 si el correo está mal escrito |
+| `GET /api/auth-clientes/restablecer/:token` | Público | — | 200 `{ nombre, correo }` · 410 `enlace_invalido` si se usó, caducó o no existe |
+| `POST /api/auth-clientes/restablecer` | Público | `{ token, contrasena }` (política de contraseñas) | 200 `{ ok: true }` · 410 `enlace_invalido` · 422 contraseña débil |
+
+Las tres rutas comparten el límite de peticiones de recuperación (15 cada 15 minutos por IP). Código: `controllers/recuperarCliente.ts` y `services/restablecerContrasenaCliente.ts`.
+
+## Teléfono de cliente único (migración 032)
+
+El par (lada, teléfono) no se repite: `409 estado_invalido` («Ya existe un cliente con ese teléfono») al registrar o corregir un cliente, también con altas simultáneas (lo garantiza el índice `uq_cliente_telefono`, no solo una consulta).
+
+## Mermas (migración 035)
+
+Solo gerente. Pantalla: Productos → Mermas ([`pantallas-gerente.md`](pantallas-gerente.md)). Código: `backend/src/controllers/mermas.ts`.
+
+| Método y ruta | Cuerpo / consulta | Respuesta |
+|---|---|---|
+| `POST /api/catalogo/mermas` (acepta `Idempotency-Key`) | `{ id_producto, cantidad, motivo, nota? }` · `motivo`: `caducado`, `danado`, `preparacion` u `otro` | `201` la merma (`valor` = cantidad × precio de venta de ese momento, `descuenta_inventario`) · 404 · 409 si el producto está eliminado · 422 si `cantidad` no alcanza el inventario |
+| `GET /api/catalogo/mermas/reporte?desde&hasta` | Fechas AAAA-MM-DD, máximo dos años | `{ resumen: { registros, unidades, valor }, por_producto, por_motivo, por_dia, devoluciones_sin_reponer: { devoluciones, unidades, valor }, mermas: [...], mermas_truncadas }` |
+
+- Si el producto **controla existencia**, la merma se descuenta del inventario en la misma transacción y nunca lo deja negativo (seis mermas simultáneas con cinco unidades: se aceptan las que caben). Si se prepara al momento, solo queda el registro.
+- El sistema no guarda costos: el **valor** es a precio de venta y debe leerse como estimado.
+- `devoluciones_sin_reponer` suma lo que un cliente devolvió y no volvió al inventario (devoluciones aprobadas sin «reponer»); no se suma al valor de las mermas registradas.
+- `mermas` trae las 500 más recientes; los totales cuentan todas.

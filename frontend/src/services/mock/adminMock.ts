@@ -359,6 +359,42 @@ function sincronizarDisponible(id: number): void {
 }
 const activos = new Map<number, boolean>()
 
+/**
+ * Merma de un producto: si controla existencia, la descuenta (sin pasar de lo que hay) y devuelve `true`; si se prepara al
+ * momento, devuelve `false` (solo queda el registro). Falla si no existe, está eliminado o no alcanza.
+ */
+export function descontarExistenciaMock(idProducto: number, cantidad: number): boolean {
+  const p = baseDatos.categorias.flatMap((c) => c.productos).find((x) => x.idProducto === idProducto)
+  if (!p) {
+    if (productosEliminados.some((e) => e.producto.idProducto === idProducto)) {
+      throw new ErrorServicio('estado_invalido', 'El producto está eliminado: restáuralo para registrar su merma.', 409)
+    }
+    throw noExiste('El producto')
+  }
+  const i = inv(idProducto, p.disponible)
+  if (!i.controla) return false
+  if (cantidad > i.existencia) {
+    throw new ErrorServicio(
+      'estado_invalido',
+      i.existencia === 0 ? `«${p.nombre}» no tiene existencias en el inventario.` : `Solo quedan ${i.existencia} de «${p.nombre}» en el inventario: no se pueden registrar ${cantidad} como merma.`,
+      422,
+    )
+  }
+  i.existencia -= cantidad
+  sincronizarDisponible(idProducto)
+  return true
+}
+
+/** Devolución aprobada con «reponer al inventario»: suma las unidades al producto, si controla existencia. */
+export function reponerExistenciaMock(idProducto: number, cantidad: number): void {
+  const p = baseDatos.categorias.flatMap((c) => c.productos).find((x) => x.idProducto === idProducto)
+  if (!p) return
+  const i = inv(idProducto, p.disponible)
+  if (!i.controla) return
+  i.existencia += cantidad
+  sincronizarDisponible(idProducto)
+}
+
 // «Papelera» de la demo: lo eliminado sale de `baseDatos` (así desaparece del menú del mesero y de las listas) y se
 // guarda aquí para poder verlo y restaurarlo, como hace la API con `eliminado_en`.
 interface ProductoEliminado {
@@ -517,6 +553,15 @@ function exigirNumeroLibre(numero: number, exceptoId?: number): void {
 }
 
 /** Una mesa solo se puede dejar de usar (no disponible o eliminada) si está libre, sin cuenta abierta y sin reservaciones vigentes. */
+/** Un método de pago no se elimina si es el de efectivo (el cuadre de caja lo necesita) ni si una cuenta abierta lo tiene solicitado. */
+function exigirMetodoEliminable(metodo: { idMetodo: number; nombre: string; esEfectivo: boolean }): void {
+  if (metodo.esEfectivo) {
+    throw new ErrorServicio('estado_invalido', `El método «${metodo.nombre}» está marcado como efectivo y no se puede eliminar: el cuadre de caja lo necesita.`, 409)
+  }
+  const solicitado = baseDatos.cuentas.filter((c) => c.idMetodoPagoSolicitado === metodo.idMetodo && c.estado !== 'cerrada').length
+  if (solicitado > 0) throw new ErrorServicio('estado_invalido', `«${metodo.nombre}» lo tienen solicitado ${solicitado} cuenta(s) abiertas. Espera a que se cobren.`, 409)
+}
+
 function exigirMesaSinUsoMock(mesa: MesaGuardada, destino: string): void {
   if (mesa.estado !== 'libre') throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} está ${mesa.estado}: libérala antes de ${destino}.`, 409)
   if (baseDatos.cuentas.some((c) => c.idMesa === mesa.idMesa && c.estado !== 'cerrada')) {
@@ -524,6 +569,30 @@ function exigirMesaSinUsoMock(mesa: MesaGuardada, destino: string): void {
   }
   if (baseDatos.reservaciones.some((r) => r.idMesa === mesa.idMesa && (r.estado === 'pendiente' || r.estado === 'confirmada'))) {
     throw new ErrorServicio('estado_invalido', `La mesa ${mesa.numero} tiene reservaciones vigentes: cancélalas o cámbialas de mesa antes.`, 409)
+  }
+}
+
+// ---------- Eliminar en cascada (igual que la API) ----------
+// Eliminar una categoría de pago, una sección o una categoría del menú elimina TAMBIÉN lo que tiene dentro, todo o nada y con
+// la misma hora. Al restaurarla vuelven los que se eliminaron CON ella (los eliminados antes por separado no).
+
+/** Hora de una cascada: ahora, pero nunca igual ni anterior a la de un hijo eliminado antes por separado. */
+function ahoraDeCascada(horasDeHijos: Array<Date | undefined>): Date {
+  const maxima = Math.max(0, ...horasDeHijos.map((h) => h?.getTime() ?? 0))
+  return new Date(Math.max(Date.now(), maxima + 1000))
+}
+
+/** Si un hijo no se puede eliminar, el error dice de qué contenedor se trataba. */
+function enCascadaMock<T>(padre: string, accion: () => T): T {
+  try {
+    return accion()
+  } catch (e) {
+    if (e instanceof ErrorServicio && e.estadoHttp === 409) {
+      const m = e.message
+      const texto = /^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]/.test(m) ? m.charAt(0).toLowerCase() + m.slice(1) : m
+      throw new ErrorServicio('estado_invalido', `No se puede eliminar «${padre}»: ${texto}`, 409)
+    }
+    throw e
   }
 }
 
@@ -632,11 +701,20 @@ export function crearCatalogoMock(): CatalogoService {
         const categoria = categoriasMetodoPagoMock.find((c) => c.idCategoriaMetodoPago === id)
         if (!categoria) throw noExiste('La categoría de pago')
         if (elimCategoriasPago.has(id)) throw new ErrorServicio('estado_invalido', 'La categoría ya está eliminada.', 409)
-        const vigentes = metodosPagoMock.filter((m) => m.idCategoriaMetodoPago === id && !elimMetodos.has(m.idMetodo)).length
-        if (vigentes > 0) throw new ErrorServicio('estado_invalido', `«${categoria.nombre}» tiene ${vigentes} método(s) de pago. Elimínalos antes de eliminar la categoría.`, 409)
+        const hijos = metodosPagoMock.filter((m) => m.idCategoriaMetodoPago === id)
+        const vigentes = hijos.filter((m) => !elimMetodos.has(m.idMetodo))
+        // Todo o nada: primero se comprueba cada método; si alguno no se puede eliminar, no se toca nada.
+        for (const m of vigentes) {
+          enCascadaMock(categoria.nombre, () => exigirMetodoEliminable(m))
+        }
+        const ahora = ahoraDeCascada(hijos.map((m) => elimMetodos.get(m.idMetodo)))
+        for (const m of vigentes) {
+          m.activo = false
+          elimMetodos.set(m.idMetodo, ahora)
+        }
         categoria.activo = false
-        elimCategoriasPago.set(id, new Date())
-        return { ...structuredClone(categoria), eliminadoEn: elimCategoriasPago.get(id) ?? null, metodos: [] }
+        elimCategoriasPago.set(id, ahora)
+        return { ...structuredClone(categoria), eliminadoEn: ahora, metodos: [] }
       })
     },
 
@@ -644,7 +722,12 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const categoria = categoriasMetodoPagoMock.find((c) => c.idCategoriaMetodoPago === id)
         if (!categoria) throw noExiste('La categoría de pago')
-        if (!elimCategoriasPago.has(id)) throw new ErrorServicio('estado_invalido', 'La categoría no está eliminada.', 409)
+        const cuando = elimCategoriasPago.get(id)
+        if (!cuando) throw new ErrorServicio('estado_invalido', 'La categoría no está eliminada.', 409)
+        // Vuelven (inactivos) los métodos que se eliminaron CON la categoría.
+        for (const m of metodosPagoMock) {
+          if (m.idCategoriaMetodoPago === id && elimMetodos.get(m.idMetodo)?.getTime() === cuando.getTime()) elimMetodos.delete(m.idMetodo)
+        }
         elimCategoriasPago.delete(id)
         return { ...structuredClone(categoria), eliminadoEn: null, metodos: structuredClone(metodosPagoMock.filter((m) => m.idCategoriaMetodoPago === id && !elimMetodos.has(m.idMetodo))) }
       })
@@ -655,9 +738,7 @@ export function crearCatalogoMock(): CatalogoService {
         const metodo = metodosPagoMock.find((m) => m.idMetodo === id)
         if (!metodo) throw noExiste('El método de pago')
         if (elimMetodos.has(id)) throw new ErrorServicio('estado_invalido', 'El método de pago ya está eliminado.', 409)
-        if (metodo.esEfectivo) throw new ErrorServicio('estado_invalido', 'El método marcado como efectivo no se puede eliminar: el cuadre de caja lo necesita.', 409)
-        const solicitado = baseDatos.cuentas.filter((c) => c.idMetodoPagoSolicitado === id && c.estado !== 'cerrada').length
-        if (solicitado > 0) throw new ErrorServicio('estado_invalido', `«${metodo.nombre}» lo tienen solicitado ${solicitado} cuenta(s) abiertas. Espera a que se cobren.`, 409)
+        exigirMetodoEliminable(metodo)
         metodo.activo = false
         elimMetodos.set(id, new Date())
         return { ...metodo, eliminadoEn: elimMetodos.get(id) ?? null }
@@ -888,19 +969,29 @@ export function crearCatalogoMock(): CatalogoService {
         if (!seccion) throw noExiste('La sección')
         if (elimSecciones.has(nombre)) throw new ErrorServicio('estado_invalido', 'La sección ya está eliminada.', 409)
         if (nombre === 'Para llevar') throw new ErrorServicio('estado_invalido', `«${nombre}» la usa el sistema para los pedidos para llevar y no se puede eliminar.`, 409)
-        const totalMesas = baseDatos.mesas.filter((m) => m.zona === nombre && !elimMesas.has(m.idMesa)).length
-        if (totalMesas > 0) {
-          throw new ErrorServicio('estado_invalido', `No se puede eliminar «${nombre}» mientras tenga ${totalMesas} mesa(s) asignadas. Elimínalas o pásalas a otra sección.`, 409)
+        const hijas = baseDatos.mesas.filter((m) => m.zona === nombre)
+        const vigentes = hijas.filter((m) => !elimMesas.has(m.idMesa))
+        // Todo o nada: si una mesa está ocupada, con cuenta abierta o con reservaciones vigentes, no se elimina nada.
+        for (const m of vigentes) enCascadaMock(nombre, () => exigirMesaSinUsoMock(m, 'eliminarla'))
+        const ahora = ahoraDeCascada(hijas.map((m) => elimMesas.get(m.idMesa)))
+        for (const m of vigentes) {
+          m.activa = false
+          elimMesas.set(m.idMesa, ahora)
         }
         seccion.activa = false
-        elimSecciones.set(nombre, new Date())
+        elimSecciones.set(nombre, ahora)
       })
     },
 
     restaurarSeccion(nombre) {
       return conRetraso(() => {
         if (!baseDatos.secciones.some((s) => s.nombre === nombre)) throw noExiste('La sección')
-        if (!elimSecciones.has(nombre)) throw new ErrorServicio('estado_invalido', 'La sección no está eliminada.', 409)
+        const cuando = elimSecciones.get(nombre)
+        if (!cuando) throw new ErrorServicio('estado_invalido', 'La sección no está eliminada.', 409)
+        // Vuelven (no disponibles) las mesas que se eliminaron CON la sección.
+        for (const m of baseDatos.mesas) {
+          if (m.zona === nombre && elimMesas.get(m.idMesa)?.getTime() === cuando.getTime()) elimMesas.delete(m.idMesa)
+        }
         elimSecciones.delete(nombre)
         return aSeccionAdmin(nombre)
       })
@@ -1013,11 +1104,24 @@ export function crearCatalogoMock(): CatalogoService {
       return conRetraso(() => {
         const c = baseDatos.categorias.find((x) => x.idCategoria === id)
         if (!c) throw noExiste('La categoría')
-        if (c.productos.length > 0) {
-          throw new ErrorServicio('estado_invalido', `La categoría tiene ${c.productos.length} producto(s). Elimínalos o muévelos a otra categoría antes de eliminarla.`, 409)
+        // Todo o nada: un producto en un pedido sin entregar frena toda la categoría.
+        for (const p of c.productos) {
+          const enPedido = baseDatos.pedidos.filter((pe) => estaSinEntregar(pe.estado) && pe.detalle.some((l) => l.idProducto === p.idProducto)).length
+          if (enPedido > 0) {
+            enCascadaMock(c.nombre, () => {
+              throw new ErrorServicio(
+                'estado_invalido',
+                `«${p.nombre}» está en ${enPedido} pedido(s) que aún no se entregan. Espera a que se entreguen o cancélalos; mientras tanto puedes desactivarlo.`,
+                409,
+              )
+            })
+          }
         }
+        const ahora = ahoraDeCascada(productosEliminados.filter((e) => e.producto.idCategoria === id).map((e) => e.eliminadoEn))
+        for (const p of [...c.productos]) productosEliminados.push({ producto: p, eliminadoEn: ahora })
+        c.productos = []
         baseDatos.categorias.splice(baseDatos.categorias.indexOf(c), 1)
-        categoriasEliminadas.push({ idCategoria: c.idCategoria, nombre: c.nombre, eliminadoEn: new Date() })
+        categoriasEliminadas.push({ idCategoria: c.idCategoria, nombre: c.nombre, eliminadoEn: ahora })
       })
     },
 
@@ -1026,8 +1130,17 @@ export function crearCatalogoMock(): CatalogoService {
         const e = categoriasEliminadas.find((x) => x.idCategoria === id)
         if (!e) throw noExiste('La categoría eliminada')
         categoriasEliminadas.splice(categoriasEliminadas.indexOf(e), 1)
-        baseDatos.categorias.push({ idCategoria: e.idCategoria, nombre: e.nombre, productos: [] })
+        const productos: Producto[] = []
+        // Vuelven los productos que se eliminaron CON la categoría.
+        for (const p of [...productosEliminados]) {
+          if (p.producto.idCategoria === id && p.eliminadoEn.getTime() === e.eliminadoEn.getTime()) {
+            productosEliminados.splice(productosEliminados.indexOf(p), 1)
+            productos.push(p.producto)
+          }
+        }
+        baseDatos.categorias.push({ idCategoria: e.idCategoria, nombre: e.nombre, productos })
         baseDatos.categorias.sort((a, b) => a.idCategoria - b.idCategoria)
+        for (const p of productos) sincronizarDisponible(p.idProducto)
         return aCategoria(id)
       })
     },

@@ -333,6 +333,13 @@ async function descargar() {
           </div>
         </div>
 
+        <!-- Devoluciones aprobadas en el periodo (migración 034): el total vendido no las descuenta; el neto sí. -->
+        <p v-if="reporte.resumen.devoluciones > 0" class="aviso aviso--info devoluciones-periodo" role="status">
+          {{ plural(reporte.resumen.devoluciones, 'devolución aprobada', 'devoluciones aprobadas') }} en el periodo por
+          <strong class="numero">{{ formatearMoneda(reporte.resumen.devuelto) }}</strong> · Neto (vendido menos devuelto):
+          <strong class="numero">{{ formatearMoneda(reporte.resumen.neto) }}</strong>
+        </p>
+
         <div v-if="cuentas === 0" class="vacio panel">
           <h3>Sin ventas en {{ etiqueta.toLowerCase() }}</h3>
           <p>Aquí aparecen las cuentas que el cajero cobra. Prueba con otro periodo.</p>

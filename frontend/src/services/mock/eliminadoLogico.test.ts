@@ -93,11 +93,8 @@ describe('eliminar y restaurar productos', () => {
 })
 
 describe('eliminar y restaurar categorías', () => {
-  it('una categoría con productos vigentes no se elimina; vacía sí, y se restaura', async () => {
+  it('una categoría vacía se elimina y se restaura', async () => {
     const { catalogo } = await nuevo()
-    const conProductos = (await resolver(catalogo.listarCategorias())).find((c) => c.totalProductos > 0)!
-    expect(await mensajeDeError(catalogo.eliminarCategoria(conProductos.idCategoria))).toMatch(/producto/)
-
     const nueva = await resolver(catalogo.crearCategoria('Categoría de prueba'))
     await resolver(catalogo.eliminarCategoria(nueva.idCategoria))
     expect((await resolver(catalogo.listarCategorias())).some((c) => c.idCategoria === nueva.idCategoria)).toBe(false)
@@ -108,5 +105,44 @@ describe('eliminar y restaurar categorías', () => {
     const restaurada = await resolver(catalogo.restaurarCategoria(nueva.idCategoria))
     expect(restaurada.eliminadoEn).toBeNull()
     expect((await resolver(catalogo.listarCategorias())).some((c) => c.idCategoria === nueva.idCategoria)).toBe(true)
+  })
+
+  it('eliminar una categoría con productos elimina también sus productos; restaurarla devuelve los que se eliminaron con ella', async () => {
+    const { catalogo } = await nuevo()
+    const categoria = await resolver(catalogo.crearCategoria('Cat cascada'))
+    const crear = (nombre: string) =>
+      resolver(catalogo.crearProducto({ idCategoria: categoria.idCategoria, nombre, presentacion: '', descripcion: 'Algo muy rico', precio: 50, activo: true, existencia: 5, stockMinimo: 1, controlaExistencia: false }))
+    const uno = await crear('Uno')
+    await crear('Dos')
+    await crear('Tres')
+
+    // Eliminar uno solo elimina solo ese.
+    await resolver(catalogo.eliminarProducto(uno.idProducto))
+    const nombresDe = async (eliminados: boolean) =>
+      (await resolver(catalogo.listarProductos({ eliminados }))).filter((p) => p.idCategoria === categoria.idCategoria).map((p) => p.nombre).sort()
+    expect(await nombresDe(false)).toEqual(['Dos', 'Tres'])
+
+    // Eliminar la categoría: se va con todo lo que tenía vigente.
+    await resolver(catalogo.eliminarCategoria(categoria.idCategoria))
+    expect(await nombresDe(false)).toEqual([])
+    expect(await nombresDe(true)).toEqual(['Dos', 'Tres', 'Uno'])
+
+    // Restaurar: vuelven Dos y Tres; Uno (eliminado antes por separado) sigue eliminado.
+    await resolver(catalogo.restaurarCategoria(categoria.idCategoria))
+    expect(await nombresDe(false)).toEqual(['Dos', 'Tres'])
+    expect(await nombresDe(true)).toEqual(['Uno'])
+  })
+
+  it('un producto en un pedido sin entregar frena la eliminación de toda su categoría (todo o nada)', async () => {
+    const { catalogo, baseDatos } = await nuevo()
+    const pedido = baseDatos.pedidos.find((p) => ['registrado', 'enviado', 'en_preparacion', 'listo'].includes(p.estado) && p.detalle.length > 0)!
+    const categoria = baseDatos.categorias.find((c) => c.productos.some((p) => p.idProducto === pedido.detalle[0]!.idProducto))!
+    const total = categoria.productos.length
+    const mensaje = await mensajeDeError(catalogo.eliminarCategoria(categoria.idCategoria))
+    expect(mensaje).toMatch(/No se puede eliminar/)
+    expect(mensaje).toMatch(/pedido/)
+    // No se eliminó nada.
+    expect((await resolver(catalogo.listarProductos())).filter((p) => p.idCategoria === categoria.idCategoria)).toHaveLength(total)
+    expect((await resolver(catalogo.listarCategorias())).some((c) => c.idCategoria === categoria.idCategoria)).toBe(true)
   })
 })

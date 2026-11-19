@@ -27,7 +27,8 @@ const redondear = (monto: number): number => Math.round(monto * 100) / 100;
 const SELECT_CORTE = `
   SELECT cc.id_corte, cc.id_cajero, u.nombre AS cajero_nombre, cc.inicio, cc.fin,
          cc.fondo_inicial, cc.efectivo_esperado, cc.efectivo_contado, cc.total_reportado,
-         COUNT(v.id_venta) AS cobros, COALESCE(SUM(v.total), 0) AS total_ventas
+         COUNT(v.id_venta) AS cobros, COALESCE(SUM(v.total), 0) AS total_ventas,
+         COALESCE((SELECT SUM(d.total) FROM devolucion d WHERE d.id_corte = cc.id_corte AND d.estado = 'aprobada'), 0) AS total_devuelto
     FROM corte_caja cc
     JOIN usuario u ON u.id_usuario = cc.id_cajero
     LEFT JOIN venta v ON v.id_corte = cc.id_corte`;
@@ -45,6 +46,8 @@ function aCorteResumen(fila: FilaCorte) {
     fondo_inicial: Number(fila.fondo_inicial),
     cobros: Number(fila.cobros),
     total_ventas: Number(fila.total_ventas),
+    /** Devoluciones aprobadas que salieron de este corte (migración 034). */
+    total_devuelto: Number(fila.total_devuelto ?? 0),
     efectivo_esperado: esperado,
     efectivo_contado: contado,
     diferencia: contado === null || esperado === null ? null : redondear(contado - esperado),
@@ -57,18 +60,22 @@ function aCorteResumen(fila: FilaCorte) {
 async function desgloseCorte(ex: Ejecutor, idCorte: number): Promise<CobroPorMetodo[]> {
   const filasDesglose = await filas(
     ex,
-    `SELECT mp.nombre AS metodo, mp.es_efectivo, COUNT(p.id_pago) AS cobros, COALESCE(SUM(p.monto), 0) AS monto
+    `SELECT mp.nombre AS metodo, mp.es_efectivo, COUNT(p.id_pago) AS cobros, COALESCE(SUM(p.monto), 0) AS monto,
+            COALESCE((SELECT SUM(dpg.monto) FROM devolucion_pago dpg
+                        JOIN devolucion d ON d.id_devolucion = dpg.id_devolucion AND d.estado = 'aprobada' AND d.id_corte = ?
+                       WHERE dpg.id_metodo = mp.id_metodo), 0) AS devuelto
        FROM metodo_pago mp
        LEFT JOIN (pago p JOIN venta v ON v.id_venta = p.id_venta AND v.id_corte = ?) ON p.id_metodo = mp.id_metodo
       GROUP BY mp.id_metodo, mp.nombre
       ORDER BY mp.id_metodo`,
-    [idCorte],
+    [idCorte, idCorte],
   );
   return filasDesglose.map((fila) => ({
     metodo: String(fila.metodo),
     es_efectivo: Boolean(fila.es_efectivo),
     cobros: Number(fila.cobros),
     monto: Number(fila.monto),
+    devuelto: Number(fila.devuelto ?? 0),
   }));
 }
 

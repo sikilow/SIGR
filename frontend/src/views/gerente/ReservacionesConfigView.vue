@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import ReservacionesPestanas from '../../components/ReservacionesPestanas.vue'
 import { ErrorServicio, servicios } from '../../services'
 import { vPermitir } from '../../utils/campos'
 import type { ConfiguracionReservacion } from '../../types'
@@ -138,6 +139,8 @@ onMounted(() => void cargar())
         Actualizar
       </button>
     </header>
+
+    <ReservacionesPestanas />
 
     <template v-if="cargando && !cargado">
       <div class="esqueletos" aria-hidden="true">

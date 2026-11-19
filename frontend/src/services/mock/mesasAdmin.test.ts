@@ -205,13 +205,14 @@ describe('administración de secciones', () => {
   it('no permite inhabilitar secciones con mesas en uso, borrar secciones asignadas ni asignar una inhabilitada', async () => {
     const { catalogo, hostess } = await nuevoMock()
     expect((await errorDe(catalogo.actualizarSeccion('Salón', { activa: false }))).codigo).toBe('estado_invalido')
-    expect((await errorDe(catalogo.eliminarSeccion('General'))).codigo).toBe('estado_invalido')
+    // Eliminar una sección elimina sus mesas, pero si alguna está en uso no se elimina nada.
+    expect((await errorDe(catalogo.eliminarSeccion('Salón'))).codigo).toBe('estado_invalido')
     await resolver(catalogo.actualizarSeccion('General', { activa: false }))
     expect((await errorDe(catalogo.crearMesa({ numero: 121, capacidad: 2, zona: 'General', activa: true }))).codigo).toBe('estado_invalido')
     expect((await errorDe(hostess.asignarMesa(18, { tipo: 'sinRegistro', personas: 2 }))).codigo).toBe('mesa_no_disponible')
   })
 
-  it('permite borrar solo una sección vacía', async () => {
+  it('permite eliminar una sección vacía', async () => {
     const { catalogo } = await nuevoMock()
     await resolver(catalogo.crearSeccion('Evento'))
     await resolver(catalogo.eliminarSeccion('Evento'))

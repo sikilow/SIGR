@@ -5,7 +5,8 @@ import AvisoGlobal from '../components/AvisoGlobal.vue'
 import FranjaDemo from '../components/FranjaDemo.vue'
 import LogoMarca from '../components/LogoMarca.vue'
 import { useCompacto } from '../composables/useCompacto'
-import { usandoMock } from '../services'
+import { usePolling } from '../composables/usePolling'
+import { servicios, usandoMock } from '../services'
 import { useSesionStore } from '../stores/sesion'
 import { ETIQUETA_ROL } from '../types'
 
@@ -13,6 +14,17 @@ const sesion = useSesionStore()
 const router = useRouter()
 const route = useRoute()
 const compacto = useCompacto()
+
+/** Devoluciones que piden los cajeros y esperan al gerente: se avisa en «Cortes y ventas». */
+const devolucionesPendientes = ref(0)
+const sondeoDevoluciones = usePolling(async () => {
+  try {
+    devolucionesPendientes.value = (await servicios.caja.listarDevoluciones({ estado: 'pendiente' })).length
+  } catch {
+    // Sin red el aviso simplemente no se actualiza.
+  }
+}, 20_000)
+onMounted(() => sondeoDevoluciones.iniciar())
 
 const contenido = ref<HTMLElement | null>(null)
 const navInferior = ref<HTMLElement | null>(null)
@@ -63,7 +75,9 @@ const enlaces = [
 
 /** «Cortes y ventas» sigue marcado en la pestaña Reporte de ventas (es la misma sección). */
 function enlaceActivo(nombre: string): boolean {
-  return nombre === 'gerente-cortes' && route.name === 'gerente-ventas'
+  if (nombre === 'gerente-productos') return route.name === 'gerente-mermas'
+  if (nombre === 'gerente-reservaciones') return route.name === 'gerente-reservaciones-reporte'
+  return nombre === 'gerente-cortes' && (route.name === 'gerente-ventas' || route.name === 'gerente-tickets')
 }
 
 async function salir() {
@@ -127,10 +141,12 @@ async function salir() {
             <path d="M9 8h6M9 12h6M9 16h3" />
           </svg>
           <span>{{ enlace.texto }}</span>
+          <span v-if="enlace.nombre === 'gerente-cortes' && devolucionesPendientes > 0" class="nav__pendiente" role="status" :aria-label="`${devolucionesPendientes} devoluciones por autorizar`">{{ devolucionesPendientes }}</span>
         </RouterLink>
       </nav>
 
-      <RouterLink class="sidebar__sistema" :to="{ name: 'gerente-sistema' }">
+      <!-- «Sistema de diseño» es una guía de desarrollo: solo se muestra en la demostración, no con la API real -->
+      <RouterLink v-if="usandoMock" class="sidebar__sistema" :to="{ name: 'gerente-sistema' }">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="9" />
           <path d="M12 3a9 9 0 0 0 0 18M3 12h18M5.6 5.6c2 2.4 4.1 3.9 6.4 3.9s4.4-1.5 6.4-3.9M5.6 18.4c2-2.4 4.1-3.9 6.4-3.9s4.4 1.5 6.4 3.9" />
@@ -170,7 +186,7 @@ async function salir() {
             <strong>{{ sesion.usuario?.nombre }}</strong>
             <span class="barra__rol">{{ rolVisible }}</span>
           </p>
-          <RouterLink class="btn btn--icono barra__sistema" :to="{ name: 'gerente-sistema' }" aria-label="Sistema de diseño" title="Sistema de diseño">
+          <RouterLink v-if="usandoMock" class="btn btn--icono barra__sistema" :to="{ name: 'gerente-sistema' }" aria-label="Sistema de diseño" title="Sistema de diseño">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="9" />
               <path d="M12 3a9 9 0 0 0 0 18M3 12h18" />
@@ -229,6 +245,7 @@ async function salir() {
             <path d="M9 8h6M9 12h6M9 16h3" />
           </svg>
           <span>{{ enlace.texto }}</span>
+          <span v-if="enlace.nombre === 'gerente-cortes' && devolucionesPendientes > 0" class="nav__pendiente" role="status" :aria-label="`${devolucionesPendientes} devoluciones por autorizar`">{{ devolucionesPendientes }}</span>
         </RouterLink>
       </nav>
     </div>
@@ -283,6 +300,7 @@ async function salir() {
 }
 
 .nav__enlace {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--espacio-3);
@@ -453,6 +471,27 @@ async function salir() {
   scrollbar-width: none;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
+}
+
+/* Aviso de devoluciones por autorizar en «Cortes y ventas». */
+.nav__pendiente {
+  min-width: 1.4rem;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-cancelado);
+  color: #fff;
+  font-size: var(--texto-sm);
+  font-weight: 700;
+  line-height: 1.4rem;
+  text-align: center;
+}
+
+.nav .nav__pendiente {
+  position: absolute;
+  top: 2px;
+  left: calc(50% + 0.6rem);
+  margin: 0;
 }
 
 .nav::-webkit-scrollbar {

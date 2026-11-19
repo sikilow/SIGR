@@ -91,7 +91,7 @@ Reporte e historial de ventas por periodo (RF-VEN-003 y RF-VEN-004). **Solo gere
 {
   "desde": "2026-11-01",
   "hasta": "2026-11-30",
-  "resumen": { "ventas": 5, "total": 2325 },
+  "resumen": { "ventas": 5, "total": 2325, "devoluciones": 1, "devuelto": 165, "neto": 2160 },
   "por_dia": [{ "dia": "2026-11-10", "ventas": 4, "total": 1958 }],
   "por_hora": [{ "hora": 13, "ventas": 1, "total": 367 }],
   "por_metodo": [{ "metodo": "Tarjeta", "pagos": 3, "total": 1486 }],
@@ -111,7 +111,34 @@ Reporte e historial de ventas por periodo (RF-VEN-003 y RF-VEN-004). **Solo gere
 - `por_dia` y `por_hora` solo traen días u horas con ventas; la pantalla rellena con cero y agrupa por semana o mes.
 - `por_mesero`, `por_producto` y `por_categoria` suman `cantidad × precio_unitario` de los pedidos no cancelados (el mesero es el de cada pedido, por eso una cuenta puede contar para dos meseros).
 - `ventas` es el historial, de la más reciente a la más antigua, con un máximo de 20,000. Si el periodo tiene más, `ventas_truncadas` es `true`; los totales y desgloses siempre cuentan todas.
+- `resumen.devoluciones`, `devuelto` y `neto` cuentan las devoluciones **aprobadas** en el periodo (por la fecha en que se aprobaron); `total` no las descuenta y `neto = total − devuelto`.
 - Código: `backend/src/controllers/reporteVentas.ts`.
+
+## Tickets pasados, reimpresión, devoluciones y referencia fiscal (migración 034)
+
+Código: `backend/src/controllers/ventas.ts` y `backend/src/models/devolucion.ts`. Pantalla: [`pantallas-caja.md`](pantallas-caja.md).
+
+| Método y ruta | Quién | Qué hace |
+|---|---|---|
+| `GET /api/caja/ventas?desde&hasta&q` | Cajero, gerente | Ventas cobradas, las más recientes primero (por omisión, últimos 7 días; máximo 92 días y 200 ventas). `q` = número de ticket o de mesa (solo dígitos) |
+| `GET /api/caja/ventas/:id` | Cajero, gerente | El ticket: líneas con `devuelta` y `pendiente`, pagos con lo `devuelto` y `pendiente` por método, devoluciones, reimpresiones y, **solo al gerente**, `referencia_fiscal` |
+| `POST /api/caja/ventas/:id/reimpresion` | Cajero, gerente | Deja constancia (quién y cuándo). `201 { reimpresiones, ultima_reimpresion }` |
+| `POST /api/caja/ventas/:id/devoluciones` | Cajero, gerente | Cuerpo: `{ lineas: [{ id_detalle, cantidad }], pagos: [{ id_metodo, monto }], motivo, reponer_inventario? }` (acepta `Idempotency-Key`). El cajero crea una solicitud `pendiente`; el gerente la registra `aprobada` |
+| `GET /api/caja/devoluciones?estado&desde&hasta` | Cajero (las suyas), gerente (todas) | `estado`: `pendiente`, `aprobada`, `rechazada` o `todas`. Las pendientes salen siempre; el resto, de los últimos 30 días si no se indica periodo |
+| `POST /api/caja/devoluciones/:id/aprobar` | Gerente | `{ nota? }`. El efectivo sale del corte abierto del cajero que la pidió |
+| `POST /api/caja/devoluciones/:id/rechazar` | Gerente | `{ nota }` obligatoria |
+| `PUT /api/caja/ventas/:id/fiscal` | Gerente | `{ referencia_contador, rfc?, razon_social?, regimen_fiscal?, codigo_postal?, correo?, notas? }`; reemplaza la anterior. No se emite factura |
+| `DELETE /api/caja/ventas/:id/fiscal` | Gerente | Quita la referencia (404 si no había) |
+
+Reglas de una devolución (todas con `422 estado_invalido` y un mensaje en español):
+
+- Producto por producto y por cantidad: no se pasa de lo vendido menos lo ya devuelto y lo apartado por solicitudes pendientes. Una línea no puede repetirse.
+- El dinero se devuelve **solo con métodos que se usaron al cobrar**, sin pasar de lo cobrado con cada uno (menos lo ya devuelto y lo pendiente), y los importes deben **sumar exactamente** el total de las líneas.
+- El motivo lleva de 5 a 200 caracteres.
+- La venta se bloquea (`FOR UPDATE`) mientras se pide o se resuelve: dos devoluciones simultáneas no se pisan, y aprobar dos veces la misma devuelve `409` (`Esta devolución ya está aprobada`).
+- Al aprobar una pedida por un cajero se anota su corte abierto (`devolucion.id_corte`); si hay efectivo y no tiene caja iniciada → `409`. Si `reponer_inventario`, se suma la existencia de los productos que la controlan.
+
+Otros cambios de respuesta: `GET /api/caja/cortes` y `/cortes/:id` traen `total_devuelto` y, en el desglose, `devuelto` por método; `efectivo_esperado` ya descuenta lo devuelto en efectivo.
 
 ## `POST /api/caja/cuentas/:id/cobrar`
 

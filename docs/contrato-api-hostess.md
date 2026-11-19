@@ -295,6 +295,27 @@ Las reservaciones que siguen en estado `pendiente` (sin confirmar), de **cualqui
 - Al **confirmar** se encola `confirmacion` con evento `confirmada`: «Reservación confirmada».
 - El recordatorio solo se manda a reservaciones `confirmada`.
 
+### `GET /api/reservaciones/reporte?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` — solo gerente
+
+Reporte de reservaciones e inasistencias del periodo (por la fecha de la reservación; máximo dos años; `403` para otros roles). Solo lectura. Estados: `llego` (asistió), `vencida` (no llegó dentro de la tolerancia = inasistencia), `cancelada` y `pendiente`/`confirmada` (por llegar).
+
+```json
+{
+  "desde": "2026-11-01", "hasta": "2026-11-30",
+  "resumen": { "total": 79, "llegaron": 53, "vencidas": 14, "canceladas": 9, "por_llegar": 3, "personas": 393, "personas_llegaron": 267, "personas_vencidas": 68 },
+  "por_dia": [{ "dia": "2026-11-02", "total": 4, "llegaron": 3, "vencidas": 1, "canceladas": 0 }],
+  "por_hora": [{ "hora": 14, "total": 9, "llegaron": 7, "vencidas": 1, "canceladas": 1 }],
+  "por_dia_semana": [{ "dia_semana": 0, "total": 11, "llegaron": 9, "vencidas": 1, "canceladas": 1 }],
+  "por_seccion": [{ "seccion": "Terraza", "total": 20, "llegaron": 15, "vencidas": 3, "canceladas": 2 }],
+  "clientes_con_inasistencias": [{ "id_cliente": 7, "nombre": "Cliente Reincidente", "telefono": "+52 5500001111", "reservaciones": 3, "inasistencias": 2 }]
+}
+```
+
+- `dia_semana`: 0 = lunes … 6 = domingo. `por_seccion` usa la sección que pidió el cliente (`pref_zona`); sin preferencia, `Cualquiera`.
+- La **tasa de inasistencia** (`vencidas / (llegaron + vencidas)`) y la de cancelación (`canceladas / total`) las calcula la pantalla.
+- `clientes_con_inasistencias`: 2 o más `vencida` en el periodo (hasta 10).
+- Código: `backend/src/controllers/reporteReservaciones.ts`. Pantalla: Gerente → Reservaciones → Reporte e inasistencias ([`pantallas-gerente.md`](pantallas-gerente.md)).
+
 ### `PATCH /api/reservaciones/{id}`
 
 O **cambia el estado** o **edita datos**, nunca las dos cosas (si vienen juntas → `422 estado_invalido`). Solo viajan los

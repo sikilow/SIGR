@@ -44,6 +44,11 @@ export function manejarErrores(err: unknown, _req: Request, res: Response, _next
     res.status(400).json({ codigo: "estado_invalido", mensaje: "El cuerpo de la petición no es un JSON válido." });
     return;
   }
+  // Último recurso: el índice único del teléfono (migración 032) salta si dos peticiones simultáneas lo repiten.
+  if (typeof err === "object" && err !== null && "code" in err && err.code === "ER_DUP_ENTRY" && err instanceof Error && err.message.includes("uq_cliente_telefono")) {
+    res.status(409).json({ codigo: "estado_invalido", mensaje: "Ya existe un cliente con ese teléfono." });
+    return;
+  }
   console.error(err);
   res.status(500).json({ codigo: "desconocido", mensaje: "Error interno del servidor." });
 }

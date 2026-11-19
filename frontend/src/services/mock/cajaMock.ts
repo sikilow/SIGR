@@ -4,6 +4,8 @@ import { ErrorServicio } from '../errores'
 import { baseDatos } from './baseDatos'
 import { categoriasMetodoPagoMock, metodosPagoMock } from './metodosPago'
 import { reporteVentasMock } from './reporteVentasMock'
+import { crearTicketsMock, devolucionesAprobadasEntre, devolucionesDelCorte, registrarVentaMock } from './ticketsMock'
+import { usuarioActual } from './authMock'
 import { conRetraso, conRetrasoIdempotente } from './utiles'
 
 let corte: CorteCaja | null = null
@@ -17,12 +19,14 @@ let siguienteVenta = 1
 const centavos = (monto: number): number => Math.round(monto * 100)
 
 function desglose(): CobroPorMetodo[] {
+  const devueltas = corte ? devolucionesDelCorte(corte.idCorte).flatMap((d) => d.pagos) : []
   return metodosPagoMock.map((metodo) => {
     const pagos = pagosDelCorte.filter((pago) => pago.idMetodo === metodo.idMetodo)
     return {
       metodo: metodo.nombre,
       cobros: pagos.length,
       monto: pagos.reduce((suma, pago) => suma + centavos(pago.monto), 0) / 100,
+      devuelto: devueltas.filter((p) => p.idMetodo === metodo.idMetodo).reduce((suma, p) => suma + centavos(p.monto), 0) / 100,
     }
   })
 }
@@ -42,7 +46,8 @@ export function crearCajaMock(): CajaService {
               // Como la API: sin efectivo (se cuenta a ciegas al cerrar).
               desglose: desglose()
                 .filter((m) => m.cobros > 0 && !metodosPagoMock.find((x) => x.nombre === m.metodo)?.esEfectivo)
-                .sort((a, b) => b.monto - a.monto),
+                .sort((a, b) => b.monto - a.monto)
+                .map(({ metodo, cobros, monto }) => ({ metodo, cobros, monto })),
             }
           : null,
         cuentas: baseDatos.cuentas
@@ -99,7 +104,11 @@ export function crearCajaMock(): CajaService {
         const efectivo = pagosDelCorte
           .filter((pago) => metodosPagoMock.find((metodo) => metodo.idMetodo === pago.idMetodo)?.esEfectivo)
           .reduce((suma, pago) => suma + centavos(pago.monto), 0) / 100
-        const esperado = (centavos(corte.fondoInicial) + centavos(efectivo)) / 100
+        // Lo que se devolvió en efectivo sale de la caja: baja el efectivo esperado.
+        const devueltoEfectivo = filas
+          .filter((fila) => metodosPagoMock.find((metodo) => metodo.nombre === fila.metodo)?.esEfectivo)
+          .reduce((suma, fila) => suma + centavos(fila.devuelto ?? 0), 0)
+        const esperado = (centavos(corte.fondoInicial) + centavos(efectivo) - devueltoEfectivo) / 100
         const cerrado: CorteDetalle = {
           idCorte: corte.idCorte,
           cajeroNombre: 'Marta Solís',
@@ -108,6 +117,7 @@ export function crearCajaMock(): CajaService {
           fondoInicial: corte.fondoInicial,
           cobros: ventasDelCorte,
           totalVentas: filas.reduce((suma, fila) => suma + centavos(fila.monto), 0) / 100,
+          totalDevuelto: filas.reduce((suma, fila) => suma + centavos(fila.devuelto ?? 0), 0) / 100,
           efectivoEsperado: esperado,
           efectivoContado,
           diferencia: (centavos(efectivoContado) - centavos(esperado)) / 100,
@@ -167,8 +177,9 @@ export function crearCajaMock(): CajaService {
         if (pagos.some((pago, i) => (pago.montoRecibido > pago.monto) && !metodosAplicados[i]?.esEfectivo)) {
           throw new ErrorServicio('estado_invalido', 'Solo se puede recibir un importe mayor al aplicado en pagos en efectivo.', 422)
         }
+        const idVenta = siguienteVenta++
         const venta: VentaCaja = {
-          idVenta: siguienteVenta++,
+          idVenta,
           fechaHora: new Date(),
           total,
           idCuenta,
@@ -186,6 +197,38 @@ export function crearCajaMock(): CajaService {
         pedidos.filter((pedido) => pedido.estado !== 'cancelado').forEach((pedido) => { pedido.estado = 'pagado' })
         const mesa = baseDatos.mesas.find((item) => item.idMesa === cuenta.idMesa)
         if (mesa) mesa.estado = 'libre'
+        registrarVentaMock({
+          idVenta,
+          idCuenta,
+          fechaHora: venta.fechaHora,
+          total,
+          cajero: usuarioActual()?.nombre ?? 'Cajero',
+          meseros: [...new Set(pedidos.map((pedido) => pedido.nombreMesero))].join(', '),
+          mesaNumero: venta.mesaNumero,
+          seccion: mesa?.zona ?? null,
+          canal: null,
+          referencia: null,
+          lineas: pedidos
+            .filter((pedido) => pedido.estado !== 'cancelado')
+            .flatMap((pedido) => pedido.detalle)
+            .map((linea, i) => ({
+              idDetalle: idVenta * 1000 + i + 1,
+              idProducto: linea.idProducto,
+              producto: linea.nombreProducto,
+              presentacion: null,
+              cantidad: linea.cantidad,
+              precioUnitario: linea.precioUnitario,
+              indicaciones: linea.indicaciones || null,
+            })),
+          pagos: venta.pagos.map((pago, i) => ({
+            idMetodo: pagos[i]!.idMetodo,
+            metodo: pago.metodo,
+            esEfectivo: metodosAplicados[i]?.esEfectivo ?? false,
+            monto: pago.monto,
+            montoRecibido: pago.montoRecibido,
+            cambio: pago.cambio,
+          })),
+        })
         corte.cobros += 1
         ventasDelCorte += 1
         pagosDelCorte.push(...pagos.map((pago) => ({ idMetodo: pago.idMetodo, monto: pago.monto })))
@@ -195,8 +238,14 @@ export function crearCajaMock(): CajaService {
     reporteVentas(desde, hasta) {
       return conRetraso(() => {
         if (desde > hasta) throw new ErrorServicio('estado_invalido', 'La fecha inicial no puede ser posterior a la final.', 422)
-        return reporteVentasMock(desde, hasta)
+        const reporte = reporteVentasMock(desde, hasta)
+        const devueltas = devolucionesAprobadasEntre(desde, hasta)
+        reporte.resumen.devoluciones = devueltas.cantidad
+        reporte.resumen.devuelto = devueltas.total
+        reporte.resumen.neto = (centavos(reporte.resumen.total) - centavos(devueltas.total)) / 100
+        return reporte
       })
     },
+    ...crearTicketsMock(() => corte?.idCorte ?? null),
   }
 }

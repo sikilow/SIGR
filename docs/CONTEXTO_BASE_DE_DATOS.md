@@ -1,7 +1,7 @@
 # Contexto de la base de datos para una IA (init.sql, migraciones y verificación)
 
 > Léelo completo **antes** de tocar cualquier archivo de `database/`, cualquier consulta SQL del backend o cualquier columna.
-> Última verificación: 15 de noviembre de 2026 (`node database/verificar_init.mjs` sin diferencias contra la base de desarrollo `SIGR`).
+> Última verificación: 19 de noviembre de 2026 (`node database/verificar_init.mjs` sin diferencias contra la base de desarrollo `SIGR`: 672 elementos comparados).
 > Si algo de aquí contradice al código o a la base, gana la base que ya funciona; avísalo y corrige este documento.
 
 ## 1. La regla de oro
@@ -120,6 +120,15 @@ Migraciones y dónde viven sus efectos en `init.sql`:
 | 021 | `reservacion.pref_zona/pref_planta_baja/pref_carriola/pref_sin_escaleras` (preferencias de mesa del cliente) | En el `CREATE TABLE reservacion` (los triggers de auditoría no cambian) |
 | 022 | `configuracion_reservacion.hora_apertura/hora_ultima_reservacion/intervalo_minutos/dias_abiertos` (horario de reservaciones; la 030 pasó el horario a una tabla por día y quitó estas tres columnas, queda `intervalo_minutos`) | En el `CREATE TABLE configuracion_reservacion` (los triggers de auditoría no cambian) |
 | 023 | Tablas `caracteristica_mesa`, `mesa_caracteristica` y `reservacion_caracteristica`; quita `mesa.planta_baja/espacio_carriola/sin_escaleras` y `reservacion.pref_planta_baja/pref_carriola/pref_sin_escaleras`; agrega `configuracion_reservacion.duracion_reservacion_minutos` | `CREATE TABLE` nuevos, datos base y triggers de `mesa` sin las columnas quitadas |
+| 024 | `restablecimiento_contrasena` (enlace de un solo uso por correo para el personal) | `CREATE TABLE` (sin triggers: no se audita) |
+| 025 | `lada` (código de país del teléfono) en `cliente` y `perfil_usuario` | En los `CREATE TABLE` + triggers de auditoría |
+| 026–029 | Eliminado lógico (`eliminado_en`, `eliminado_por`) de productos y categorías (026), usuarios (027), clientes (028), mesas, secciones, características, canales y métodos de pago (029) | En los `CREATE TABLE` + triggers de auditoría |
+| 030 | `horario_reservacion_dia` (horario por día); quita `hora_apertura`, `hora_ultima_reservacion` y `dias_abiertos` de `configuracion_reservacion` | `CREATE TABLE horario_reservacion_dia` + datos base |
+| 031 | `sesion_empleado` y `registro_acceso` (sesiones, bloqueo e historial de accesos) | `CREATE TABLE` |
+| 032 | Índice único `uq_cliente_telefono` (`lada`, `telefono`) en `cliente`; se detiene si ya hay teléfonos repetidos | En el `CREATE TABLE cliente` |
+| 033 | `restablecimiento_contrasena_cliente` (enlace de un solo uso para el cliente del portal) | `CREATE TABLE` (sin triggers) |
+| 034 | `devolucion`, `devolucion_linea`, `devolucion_pago`, `venta_reimpresion` y `venta_fiscal` (devoluciones, reimpresión de tickets y referencia para el contador) | `CREATE TABLE` + triggers de auditoría al final (menos `venta_reimpresion`) |
+| 035 | `merma` (producto perdido; guarda el precio de venta del momento) | `CREATE TABLE` + triggers de auditoría al final |
 
 Notas importantes:
 
@@ -134,7 +143,7 @@ Notas importantes:
 ## 7. Lista de comprobación rápida
 
 - [ ] Hice respaldo antes de aplicar la migración.
-- [ ] Migración nueva con el siguiente número (032 o más) y repetible si fue posible.
+- [ ] Migración nueva con el siguiente número (036 o más) y repetible si fue posible.
 - [ ] La apliqué a la base de desarrollo y la API sigue funcionando.
 - [ ] `init.sql` tiene el mismo cambio en su forma final (tablas, datos base y triggers de auditoría).
 - [ ] `node database/verificar_init.mjs` termina con `exit 0`.

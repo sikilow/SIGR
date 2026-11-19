@@ -33,7 +33,8 @@ vez, súbelo. Revisa que `max_connections` de MySQL (por omisión 151) sea mayor
 ## Lo que todavía no cubre
 
 - **Dos gerentes editando el mismo registro** (producto, mesa…): gana el último en guardar y no se avisa que se pisó el
-  cambio. Si hiciera falta, se resuelve con una columna de versión (control optimista).
+  cambio. Si hiciera falta, se resuelve con una columna de versión (control optimista). Resultados de la prueba en la
+  sección siguiente.
 - Hay **una sola instancia de la API**: el tope de peticiones idempotentes vive en su memoria. Con varias instancias
   detrás de un balanceador, cada una tendría su propio tope (el candado de la clave sí es de MySQL y vale para todas).
 
@@ -44,3 +45,22 @@ quedaban 2 confirmadas (sobreventa); después, siempre 1 (las otras 7 reciben `4
 conexiones, 40 peticiones simultáneas con `Idempotency-Key` dejaban la API congelada; ahora terminan en menos de un segundo.
 La misma clave enviada 5 veces a la vez crea una sola reservación. Pruebas automáticas:
 `backend/tests/transaccionInterbloqueo.test.ts`.
+
+## Prueba de edición simultánea por dos gerentes (19 de noviembre de 2026)
+
+Con una base temporal, la API real y **dos gerentes con sesión a la vez**, sobre el mismo producto:
+
+| Caso | Resultado |
+|---|---|
+| Cada gerente abre el producto; A cambia el **precio** y B, con su copia vieja, guarda el formulario completo con otro **nombre** | ❌ El precio de A **se pierde**: el formulario manda todos los campos y B guarda el precio anterior |
+| A cambia el precio y B la descripción, cada uno con un `PATCH` de solo ese campo | ✅ Los dos cambios se conservan |
+| Los dos cambian el **mismo campo** al mismo tiempo (111 y 222) | Gana el último que escribe (222); ninguno recibe aviso |
+| B registra una **merma** de 3 (descuento atómico) y A, con su copia vieja, fija la existencia a otro número | ❌ La edición manual pisa el descuento de la merma (queda 55 en vez de 52) |
+| Tres altas simultáneas del mismo producto | ✅ Se crea una; las demás reciben `409` (la base lo impide) |
+| A elimina el producto mientras B lo edita | A: `200`; B: `200` (la edición sobre un producto ya eliminado se acepta) |
+
+Conclusión: lo que ocurre **dentro de una operación** es seguro (cobros, devoluciones, mermas, existencias al enviar pedidos, altas
+duplicadas, teléfonos y correos únicos). Lo que **no** está protegido es la **edición manual con un formulario abierto mucho
+tiempo**: al guardar se pisan los cambios que otro hizo mientras tanto. La solución es el **control optimista** (una versión o
+`actualizado_en` por registro; al guardar con una versión vieja la API responde `409` y la pantalla pide recargar). No se
+implementó: queda como decisión del equipo (ver [`PENDIENTES_Y_FALTANTES.md`](PENDIENTES_Y_FALTANTES.md)).

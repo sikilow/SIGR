@@ -7,6 +7,7 @@ import { crearCajaMock } from './cajaMock'
 import { crearMenuMock } from './menuMock'
 import { crearMesasMock } from './mesasMock'
 import { crearPedidosMock } from './pedidosMock'
+import { crearReportesMock } from './reportesMock'
 import { iniciarSimulacion } from './simulacion'
 
 /** Servicios simulados en memoria, con retraso de 300 ms. */
@@ -23,5 +24,6 @@ export function crearServiciosMock(): Servicios {
     clientes: crearClientesMock(),
     catalogo: crearCatalogoMock(),
     hostess: crearHostessMock(),
+    reportes: crearReportesMock(),
   }
 }

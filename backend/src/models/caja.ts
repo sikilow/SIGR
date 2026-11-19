@@ -85,6 +85,8 @@ export interface CobroPorMetodo {
   es_efectivo: boolean;
   cobros: number;
   monto: number;
+  /** Lo devuelto con este método en devoluciones aprobadas que salieron de este corte (migración 034). */
+  devuelto?: number;
 }
 
 export interface CuadreCorte {
@@ -99,9 +101,10 @@ export interface CuadreCorte {
  */
 export function cuadrarCorte(fondoInicial: number, desglose: CobroPorMetodo[], efectivoContado: number | null): CuadreCorte {
   const totalVentas = desglose.reduce((suma, fila) => suma + centavos(fila.monto), 0);
+  // Lo que se devolvió en efectivo sale de la caja: baja el efectivo esperado.
   const efectivo = desglose
     .filter((fila) => fila.es_efectivo)
-    .reduce((suma, fila) => suma + centavos(fila.monto), 0);
+    .reduce((suma, fila) => suma + centavos(fila.monto) - centavos(fila.devuelto ?? 0), 0);
   const esperado = centavos(fondoInicial) + efectivo;
   return {
     total_ventas: totalVentas / 100,

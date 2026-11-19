@@ -32,9 +32,9 @@ describe('caja demo', () => {
     const cierre = await caja.cerrarCorte(790)
     expect(cierre).toMatchObject({ totalVentas: 480, efectivoEsperado: 800, efectivoContado: 790, diferencia: -10 })
     expect(cierre.desglose).toEqual([
-      { metodo: 'Efectivo', cobros: 1, monto: 300 },
-      { metodo: 'Tarjeta', cobros: 1, monto: 180 },
-      { metodo: 'Transferencia', cobros: 0, monto: 0 },
+      { metodo: 'Efectivo', cobros: 1, monto: 300, devuelto: 0 },
+      { metodo: 'Tarjeta', cobros: 1, monto: 180, devuelto: 0 },
+      { metodo: 'Transferencia', cobros: 0, monto: 0, devuelto: 0 },
     ])
 
     const historial = await caja.listarCortes()
