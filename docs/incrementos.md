@@ -50,6 +50,7 @@ este documento ya está hecho. Al terminar un punto, se marca aquí y en su fila
 | A8 | Teléfono de cliente único en la base (hoy solo lo revisa la API) | Regla de dominio 22 | migración |
 | A9 | Comprobante con datos fiscales del cliente (sin CFDI timbrado: el contrato lo excluye) | RF-VEN-002 | tablas `datos_fiscales` y `factura` (ya existen) |
 | A10 | Historial de pedidos por **rango** de fechas (hoy un día) y también para el cajero; paginar `GET /api/pedidos` | RF-PED-005, P-11 | pedidos |
+| ~~A12~~ | ✅ Hecho: recuperar contraseña del personal por correo con enlace de un solo uso (1 h): «¿Olvidaste tu contraseña?» en el inicio de sesión y **Restablecer** en Gerente → Usuarios (migración 024) | RF-USR (seguridad de acceso) | `controllers/auth.ts`, `services/restablecerContrasena.ts` |
 | ~~A11~~ | ✅ Hecho: la duración de la reservación la configura Gerencia (Reservas, migración 023) y se descuentan las mesas ocupadas sin reservación si la hora está dentro de esa duración | Regla de dominio 6 | `disponibilidadReservacion.ts` |
 
 ### B. Pruebas y entorno de entrega (no es código nuevo)

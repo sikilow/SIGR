@@ -27,7 +27,8 @@ en [`capturas/`](capturas/) y se tomaron con el servidor de desarrollo en modo m
 
 - **Gerente inicial:** se identifica como «Gerente inicial protegido». No se puede desactivar ni cambiar de rol; la API y MySQL aplican la misma protección. Requiere la migración 013.
 - **Cambio de contraseña:** solo Gerencia puede iniciarlo y se solicita la contraseña anterior de la cuenta afectada antes de guardar la nueva; también aplica cuando Gerencia modifica su propia cuenta.
-- **Restablecimiento de otra persona:** Gerencia puede establecer una contraseña nueva sin conocer la anterior.
+- **Olvidó su contraseña (migración 024):** el botón **Restablecer** de cada usuario activo manda a su correo un enlace para que él mismo cree una contraseña nueva. Gerencia nunca ve ni escribe la contraseña; el aviso confirma a qué correo (enmascarado) se mandó. El enlace sirve una sola vez, caduca en 1 hora y, mientras no se use, la contraseña anterior sigue funcionando. Máximo 3 enlaces por usuario por hora.
+- **Desde el inicio de sesión:** el propio empleado puede usar «¿Olvidaste tu contraseña?» (`/recuperar`) escribiendo su usuario o su correo; la respuesta es la misma exista o no la cuenta, para no revelar qué usuarios hay. El enlace abre `/restablecer`.
 - Los cambios de datos se registran en la auditoría de MySQL; consulta [Protección de usuarios y auditoría](auditoria-seguridad.md).
 
 ## Reservas

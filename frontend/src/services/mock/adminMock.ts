@@ -8,6 +8,7 @@ import type { CatalogoService, UsuariosService } from '../interfaces'
 import { baseDatos, type MesaGuardada } from './baseDatos'
 import { categoriasMetodoPagoMock, metodosPagoMock } from './metodosPago'
 import { conRetraso } from './utiles'
+import { crearEnlaceMock, enmascararCorreo } from './restablecerMock'
 
 const duplicado = (campo: string) => new ErrorServicio('estado_invalido', `Ya existe otro usuario con ese ${campo}.`, 409)
 const claveProducto = (texto: string) => texto.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase()
@@ -142,6 +143,26 @@ export function crearUsuariosMock(): UsuariosService {
           throw new ErrorServicio('credenciales_invalidas', 'La contraseña anterior del usuario es incorrecta.', 401)
         }
         u.contrasena = contrasena
+      })
+    },
+
+    enviarRestablecimiento(id) {
+      return conRetraso(() => {
+        const u = baseDatos.usuarios.find((x) => x.idUsuario === id)
+        if (!u) throw noExiste('El usuario')
+        if (u.activo === false) {
+          throw new ErrorServicio('estado_invalido', 'El usuario está inactivo. Actívalo antes de restablecer su contraseña.', 409)
+        }
+        const enlace = crearEnlaceMock(id)
+        if (!enlace) {
+          throw new ErrorServicio(
+            'estado_invalido',
+            'Ya se enviaron 3 enlaces a este usuario en la última hora. Pídele que revise su correo (también spam).',
+            429,
+          )
+        }
+        console.info(`[demo] Enlace para crear contraseña de ${u.nombreUsuario}: ${enlace}`)
+        return enmascararCorreo(datosExtra(u.idUsuario, u.nombreUsuario).correo)
       })
     },
   }

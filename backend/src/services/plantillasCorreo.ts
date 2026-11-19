@@ -175,6 +175,8 @@ interface Contenido {
   nota: string;
   cierre: string;
   acento: string;
+  /** Primera línea del pie. Por omisión habla de reservaciones (correos a clientes). */
+  pie?: string;
 }
 
 function construirHtml(contenido: Contenido): string {
@@ -245,7 +247,7 @@ function construirHtml(contenido: Contenido): string {
           <tr>
             <td align="center" style="padding:26px 24px 8px;background-color:${MARCA.agaveProfundo};">
               <p style="margin:0;font-family:${SERIF};font-size:15px;line-height:1.4;color:#f2e6d3;">La Madalena</p>
-              <p style="margin:6px 0 0;font-family:${SANS};font-size:11px;line-height:1.6;color:${MARCA.pie};">Recibes este correo porque hiciste una reservación.<br>Este mensaje se envió automáticamente; no es necesario responder.</p>
+              <p style="margin:6px 0 0;font-family:${SANS};font-size:11px;line-height:1.6;color:${MARCA.pie};">${escaparHtml(contenido.pie ?? "Recibes este correo porque hiciste una reservación.")}<br>Este mensaje se envió automáticamente; no es necesario responder.</p>
             </td>
           </tr>
         </table>
@@ -370,6 +372,68 @@ export function plantillaCancelacion(datos: DatosReservacion): CorreoReservacion
       nota: "Si no reconoces esta cancelación o quieres reservar de nuevo, contacta al restaurante para revisar la disponibilidad.",
       cierre: "Gracias por avisarnos.",
       acento: MARCA.neutro,
+    }),
+  };
+}
+
+export interface CorreoRestablecer {
+  asunto: string;
+  texto: string;
+  html: string;
+}
+
+/**
+ * Enlace de un solo uso para que un empleado cree una contraseña nueva. Nunca lleva la contraseña: solo el enlace,
+ * que caduca en `minutos` y deja de servir en cuanto se usa.
+ */
+export function plantillaRestablecerContrasena(datos: {
+  nombre: string;
+  usuario: string;
+  enlace: string;
+  minutos: number;
+  porGerente: boolean;
+}): CorreoRestablecer {
+  const asunto = "Crea una nueva contraseña para SIGR";
+  const motivo = datos.porGerente
+    ? "El gerente pidió restablecer tu contraseña de SIGR."
+    : "Recibimos una solicitud para restablecer tu contraseña de SIGR.";
+  const texto =
+    `Hola ${datos.nombre}, ${motivo.charAt(0).toLowerCase()}${motivo.slice(1)} ` +
+    `Tu usuario es ${datos.usuario}. Para crear una contraseña nueva abre este enlace (sirve una sola vez y caduca en ${datos.minutos} minutos): ${datos.enlace} ` +
+    "Si no lo pediste, ignora este correo: tu contraseña actual sigue funcionando.";
+  const enlace = escaparHtml(datos.enlace);
+  const panel = `
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 0;background-color:#ffffff;border:1px solid ${MARCA.borde};border-left:4px solid ${MARCA.terracota};">
+                <tr>
+                  <td style="padding:20px 22px;">
+                    <p style="margin:0;font-family:${SANS};font-size:11px;font-weight:bold;letter-spacing:.14em;text-transform:uppercase;color:${MARCA.muted};">Tu usuario</p>
+                    <p style="margin:4px 0 18px;font-family:${SERIF};font-size:22px;line-height:1.3;color:${MARCA.texto};">${escaparHtml(datos.usuario)}</p>
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="background-color:${MARCA.terracota};">
+                          <a href="${enlace}" target="_blank" style="display:inline-block;padding:13px 26px;font-family:${SANS};font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">Crear nueva contraseña</a>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="margin:16px 0 0;font-family:${SANS};font-size:12px;line-height:1.6;color:${MARCA.muted};">Si el botón no abre, copia este enlace en el navegador:<br><a href="${enlace}" target="_blank" style="color:${MARCA.terracota};word-break:break-all;">${enlace}</a></p>
+                  </td>
+                </tr>
+              </table>`;
+  return {
+    asunto,
+    texto,
+    html: construirHtml({
+      asunto,
+      preheader: `Crea tu nueva contraseña. El enlace caduca en ${datos.minutos} minutos.`,
+      etiqueta: "Acceso del personal",
+      titulo: "Crea una nueva contraseña",
+      saludo: `Hola ${datos.nombre},`,
+      parrafo: `${motivo} Usa el botón para elegir una nueva.`,
+      panel,
+      nota: `El enlace sirve una sola vez y caduca en ${datos.minutos} minutos. Si no lo pediste, ignora este correo: tu contraseña actual sigue funcionando.`,
+      cierre: "Equipo La Madalena.",
+      acento: MARCA.terracota,
+      pie: "Recibes este correo porque tienes una cuenta del personal en SIGR.",
     }),
   };
 }

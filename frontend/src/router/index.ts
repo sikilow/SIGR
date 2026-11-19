@@ -33,6 +33,9 @@ export const router = createRouter({
       name: 'login',
       component: () => import('../views/LoginView.vue'),
     },
+    // Recuperar contraseña del personal: pedir el enlace y, desde el correo, crear la nueva. Son públicas.
+    { path: '/recuperar', name: 'recuperar', component: () => import('../views/RecuperarAccesoView.vue') },
+    { path: '/restablecer', name: 'restablecer', component: () => import('../views/RecuperarAccesoView.vue') },
     {
       path: '/mesero',
       component: MeseroLayout,

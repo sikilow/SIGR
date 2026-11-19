@@ -42,6 +42,8 @@ const CODIGOS_CONOCIDOS: readonly CodigoError[] = [
   'estado_invalido',
   'producto_agotado',
   'mesa_no_disponible',
+  'enlace_invalido',
+  'correo_no_enviado',
 ]
 
 function codigoPorEstadoHttp(estado: number): CodigoError {
@@ -99,7 +101,8 @@ export async function solicitar<T>(metodo: Metodo, ruta: string, opciones: Opcio
   if (!respuesta.ok) {
     // Token vencido o inválido en plena sesión: se limpia y se manda al login.
     // (En login y /auth/me un 401 es normal y lo maneja quien llama.)
-    const esRutaDeSesion = ruta === '/auth/login' || ruta === '/auth/me'
+    const esRutaDeSesion =
+      ruta === '/auth/login' || ruta === '/auth/me' || ruta === '/auth/recuperar' || ruta.startsWith('/auth/restablecer')
     if (respuesta.status === 401 && !esRutaDeSesion) {
       limpiarToken()
       if (window.location.pathname !== '/login') window.location.assign('/login?motivo=expirada')

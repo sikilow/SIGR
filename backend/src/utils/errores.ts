@@ -13,6 +13,8 @@ export type CodigoError =
   | "estado_invalido"
   | "producto_agotado"
   | "mesa_no_disponible"
+  | "enlace_invalido"
+  | "correo_no_enviado"
   | "desconocido";
 
 export class ErrorApi extends Error {

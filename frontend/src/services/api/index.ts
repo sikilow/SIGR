@@ -63,6 +63,25 @@ export function crearServiciosApi(): Servicios {
         return aUsuario(r.usuario)
       },
 
+      async solicitarRecuperacion(usuarioOCorreo) {
+        const r = await solicitar<{ mensaje: string }>('POST', '/auth/recuperar', {
+          cuerpo: { usuario_o_correo: usuarioOCorreo },
+        })
+        return { mensaje: r.mensaje }
+      },
+
+      async validarEnlaceRestablecer(token) {
+        const r = await solicitar<{ nombre_usuario: string; nombre: string }>(
+          'GET',
+          `/auth/restablecer/${encodeURIComponent(token)}`,
+        )
+        return { nombreUsuario: r.nombre_usuario, nombre: r.nombre }
+      },
+
+      async restablecerContrasena(token, contrasena) {
+        await solicitar<{ ok: boolean }>('POST', '/auth/restablecer', { cuerpo: { token, contrasena } })
+      },
+
       async cerrarSesion() {
         // El token es un JWT sin estado en el servidor: cerrar sesión es olvidarlo aquí.
         limpiarToken()
@@ -201,6 +220,11 @@ export function crearServiciosApi(): Servicios {
         await solicitar<{ ok: boolean }>('POST', `/usuarios/${id}/contrasena`, {
           cuerpo: { contrasena, contrasena_actual: contrasenaActual },
         })
+      },
+
+      async enviarRestablecimiento(id) {
+        const r = await solicitar<{ ok: boolean; correo: string }>('POST', `/usuarios/${id}/restablecer`)
+        return r.correo
       },
     },
 

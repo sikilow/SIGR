@@ -48,6 +48,15 @@ export interface AuthService {
   cerrarSesion(): Promise<void>
   /** GET /auth/me. Devuelve `null` si no hay sesión activa. */
   obtenerSesion(): Promise<Usuario | null>
+  /**
+   * POST /auth/recuperar. Pública: manda al correo del empleado un enlace de un solo uso (1 h) para crear contraseña.
+   * Responde lo mismo exista o no la cuenta. `enlaceDemo` solo viene en el modo demostración (no hay correo real).
+   */
+  solicitarRecuperacion(usuarioOCorreo: string): Promise<{ mensaje: string; enlaceDemo?: string }>
+  /** GET /auth/restablecer/{token}. Falla con `enlace_invalido` si ya se usó o caducó. */
+  validarEnlaceRestablecer(token: string): Promise<{ nombreUsuario: string; nombre: string }>
+  /** POST /auth/restablecer. Guarda la contraseña nueva y deja el enlace sin efecto. */
+  restablecerContrasena(token: string, contrasena: string): Promise<void>
 }
 
 export interface MesasService {
@@ -140,6 +149,11 @@ export interface UsuariosService {
   actualizar(id: number, cambio: CambioUsuario): Promise<UsuarioAdmin>
   /** POST /usuarios/{id}/contrasena. El usuario afectado debe proporcionar su contraseña anterior. */
   cambiarContrasena(id: number, contrasena: string, contrasenaActual: string): Promise<void>
+  /**
+   * POST /usuarios/{id}/restablecer. Manda al correo del usuario un enlace para que él cree su contraseña nueva.
+   * Devuelve el correo enmascarado (p. ej. `a***@dominio.com`). Falla con `correo_no_enviado` si el envío falló.
+   */
+  enviarRestablecimiento(id: number): Promise<string>
 }
 
 /** Administración del catálogo: categorías, productos e inventario. Solo el gerente. */

@@ -3,7 +3,7 @@
 // campo y estado de carga en el botón. En escritorio la marca ocupa el panel izquierdo; en pantallas
 // angostas se convierte en una barra compacta para dejar todo el alto al formulario.
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import FranjaDemo from '../components/FranjaDemo.vue'
 import LogoMarca from '../components/LogoMarca.vue'
 import { rutaInicial } from '../router'
@@ -192,6 +192,7 @@ async function entrar() {
               </svg>
             </button>
             <p class="solo-lectores" role="status">{{ cargando ? 'Iniciando sesión…' : '' }}</p>
+            <RouterLink to="/recuperar" class="acceso__olvido">¿Olvidaste tu contraseña?</RouterLink>
           </form>
 
           <!-- Solo con el mock: usuarios de prueba -->
@@ -208,7 +209,7 @@ async function entrar() {
             <p class="demo__nota">Contraseña para todos: <strong class="numero">1234</strong></p>
           </aside>
 
-          <p class="acceso__ayuda">¿No puedes entrar? Avisa a gerencia para revisar tu usuario.</p>
+          <p class="acceso__ayuda">¿No recuerdas tu usuario o ya no usas ese correo? Avisa a gerencia.</p>
         </div>
       </section>
     </main>
@@ -525,6 +526,13 @@ async function entrar() {
 .acceso__entrar {
   width: 100%;
   margin-top: var(--espacio-1);
+}
+
+.acceso__olvido {
+  align-self: center;
+  padding: var(--espacio-2);
+  color: var(--color-primary-dark);
+  font-weight: 650;
 }
 
 .acceso__girando {

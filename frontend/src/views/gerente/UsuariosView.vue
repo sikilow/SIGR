@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Usuarios (/gerente/usuarios): consultar, crear, editar, cambiar contraseña y desactivar/reactivar.
+// Usuarios (/gerente/usuarios): consultar, crear, editar, cambiar contraseña, mandar enlace para restablecerla
+// (si el empleado la olvidó) y desactivar/reactivar.
 // Los usuarios no se borran (tienen pedidos y ventas ligados): se desactivan y dejan de poder entrar.
 import { computed, onMounted, ref } from 'vue'
 import ConfirmarAccionDialog from '../../components/ConfirmarAccionDialog.vue'
@@ -91,6 +92,42 @@ function abrirContrasena(u: UsuarioAdmin, e: Event) {
 function alCambiarContrasena(u: UsuarioAdmin) {
   pwAbierto.value = false
   void anuncios.anunciar(`Contraseña de ${u.nombre} cambiada`)
+}
+
+// ---------- Restablecer (olvidó su contraseña) ----------
+// El gerente no ve ni escribe la contraseña: se manda al correo del empleado un enlace de un solo uso (1 hora).
+const aRestablecer = ref<UsuarioAdmin | null>(null)
+const origenRestablecer = ref<HTMLElement | null>(null)
+const restableciendo = ref(false)
+const errorRestablecerRed = ref('')
+const rechazoRestablecer = ref('')
+
+function pedirRestablecer(u: UsuarioAdmin, e: Event) {
+  aRestablecer.value = u
+  origenRestablecer.value = e.currentTarget as HTMLElement
+  restableciendo.value = false
+  errorRestablecerRed.value = ''
+  rechazoRestablecer.value = ''
+}
+
+async function confirmarRestablecer() {
+  const u = aRestablecer.value
+  if (!u || restableciendo.value) return
+  restableciendo.value = true
+  errorRestablecerRed.value = ''
+  try {
+    const correo = await servicios.usuarios.enviarRestablecimiento(u.idUsuario)
+    aRestablecer.value = null
+    void anuncios.anunciar(`Enlace enviado a ${correo}. ${u.nombre} tiene 1 hora para crear su contraseña.`)
+  } catch (e) {
+    if (e instanceof ErrorServicio && e.codigo === 'red') {
+      errorRestablecerRed.value = 'No se pudo conectar con el servidor. Vuelve a intentarlo.'
+    } else {
+      rechazoRestablecer.value = e instanceof ErrorServicio ? e.message : 'Ocurrió un error inesperado.'
+    }
+  } finally {
+    restableciendo.value = false
+  }
 }
 
 // ---------- Activar / desactivar ----------
@@ -221,6 +258,16 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
             <button
               v-if="u.activo"
               type="button"
+              class="btn btn--secundario"
+              :aria-label="`Enviar a ${u.nombre} un enlace para restablecer su contraseña`"
+              title="Si olvidó su contraseña: le llega un enlace a su correo para crear una nueva"
+              @click="pedirRestablecer(u, $event)"
+            >
+              Restablecer
+            </button>
+            <button
+              v-if="u.activo"
+              type="button"
               class="btn btn--peligro-suave"
               :disabled="u.esPrimerGerente || u.idUsuario === sesion.usuario?.idUsuario"
               :aria-label="`Desactivar a ${u.nombre}`"
@@ -247,6 +294,20 @@ const ROLES_FILTRO: Array<Rol | 'todos'> = ['todos', 'gerente', 'mesero', 'cocin
     />
 
     <ContrasenaUsuarioDialog :abierto="pwAbierto" :usuario="usuarioPw" :origen-foco="origenPw" @cerrar="pwAbierto = false" @cambiada="alCambiarContrasena" />
+
+    <ConfirmarAccionDialog
+      :abierto="aRestablecer !== null"
+      id-base="restablecer-usuario"
+      :titulo="`¿Restablecer la contraseña de ${aRestablecer?.nombre}?`"
+      :descripcion="`Se enviará a ${aRestablecer?.correo} un enlace para que cree una contraseña nueva. Sirve una sola vez y caduca en 1 hora. Su contraseña actual sigue funcionando hasta que la cambie.`"
+      texto-confirmar="Enviar enlace"
+      :en-curso="restableciendo"
+      :error-reintentable="errorRestablecerRed"
+      :rechazo="rechazoRestablecer"
+      :origen-foco="origenRestablecer"
+      @confirmar="confirmarRestablecer"
+      @cerrar="aRestablecer = null"
+    />
 
     <ConfirmarAccionDialog
       :abierto="objetivo !== null"

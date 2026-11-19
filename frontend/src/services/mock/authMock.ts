@@ -3,6 +3,10 @@ import { ErrorServicio } from '../errores'
 import type { AuthService } from '../interfaces'
 import { baseDatos } from './baseDatos'
 import { conRetraso } from './utiles'
+import { crearEnlaceMock, usarEnlaceMock, usuarioDeEnlaceMock } from './restablecerMock'
+
+const MENSAJE_GENERICO =
+  'Si el usuario o correo pertenece a un empleado activo, le enviamos un enlace para crear una contraseña nueva. Revisa tu correo (también en spam).'
 
 const CLAVE_SESION = 'sigr.mock.sesion'
 
@@ -62,6 +66,32 @@ export function crearAuthMock(): AuthService {
 
     obtenerSesion() {
       return conRetraso(() => usuarioActual())
+    },
+
+    solicitarRecuperacion(usuarioOCorreo) {
+      return conRetraso(() => {
+        const buscado = usuarioOCorreo.trim().toLowerCase()
+        if (buscado === '') throw new ErrorServicio('estado_invalido', 'Escribe tu usuario o tu correo.', 422)
+        const u = baseDatos.usuarios.find(
+          (x) => x.activo !== false && (x.nombreUsuario.toLowerCase() === buscado || x.correo.toLowerCase() === buscado),
+        )
+        const enlaceDemo = u ? crearEnlaceMock(u.idUsuario) : null
+        return enlaceDemo ? { mensaje: MENSAJE_GENERICO, enlaceDemo } : { mensaje: MENSAJE_GENERICO }
+      })
+    },
+
+    validarEnlaceRestablecer(token) {
+      return conRetraso(() => {
+        const usuario = usuarioDeEnlaceMock(token)
+        return { nombreUsuario: usuario.nombreUsuario, nombre: usuario.nombre }
+      })
+    },
+
+    restablecerContrasena(token, contrasena) {
+      return conRetraso(() => {
+        if (contrasena.length < 6) throw new ErrorServicio('estado_invalido', 'contrasena: mínimo 6 caracteres', 422)
+        usarEnlaceMock(token, contrasena)
+      })
     },
 
   }

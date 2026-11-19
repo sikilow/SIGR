@@ -27,7 +27,7 @@ export function esCorreoValido(correo: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim());
 }
 
-function enmascararCorreo(correo: string): string {
+export function enmascararCorreo(correo: string): string {
   const [usuario, dominio] = correo.split("@");
   if (!usuario || !dominio) return "***";
   return `${usuario[0]}***@${dominio}`;

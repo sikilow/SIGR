@@ -4,6 +4,8 @@ import { z } from "zod";
 import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/db";
 import { idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
+import { enmascararCorreo } from "../services/correo";
+import { enviarEnlaceRestablecer, MAXIMO_ENLACES_POR_HORA, origenApp } from "../services/restablecerContrasena";
 
 // Todo este módulo es solo del gerente (se valida aquí, en el servidor, no en el front).
 
@@ -255,4 +257,45 @@ export const cambiarContrasena = async (req: Request, res: Response) => {
     await ejecutar(cx, "UPDATE credenciales SET password_hash = ? WHERE id_usuario = ?", [hash, id]);
   });
   res.json({ ok: true });
+};
+
+/**
+ * POST /api/usuarios/:id/restablecer  →  { ok: true, correo: "c***@dominio" }
+ * El gerente manda al empleado un enlace de un solo uso para que él mismo cree su contraseña nueva.
+ * El gerente nunca ve ni escribe la contraseña.
+ */
+export const enviarRestablecimiento = async (req: Request, res: Response) => {
+  const id = idDeRuta(req.params.id);
+  const [destino] = await filas(
+    pool,
+    `SELECT u.id_usuario, u.nombre, u.correo, u.activo, c.nombre_usuario
+       FROM usuario u JOIN credenciales c ON c.id_usuario = u.id_usuario
+      WHERE u.id_usuario = ?`,
+    [id],
+  );
+  if (!destino) throw new ErrorApi(404, "no_encontrado", "El usuario no existe.");
+  if (!destino.activo) {
+    throw new ErrorApi(409, "estado_invalido", "El usuario está inactivo. Actívalo antes de restablecer su contraseña.");
+  }
+  const resultado = await enviarEnlaceRestablecer(
+    {
+      id_usuario: destino.id_usuario as number,
+      nombre: destino.nombre as string,
+      correo: destino.correo as string,
+      nombre_usuario: destino.nombre_usuario as string,
+    },
+    origenApp(req),
+    req.usuario?.id ?? null,
+  );
+  if (resultado === "limite") {
+    throw new ErrorApi(
+      429,
+      "estado_invalido",
+      `Ya se enviaron ${MAXIMO_ENLACES_POR_HORA} enlaces a este usuario en la última hora. Pídele que revise su correo (también spam).`,
+    );
+  }
+  if (resultado === "fallo") {
+    throw new ErrorApi(502, "correo_no_enviado", "No se pudo enviar el correo. Revisa que el correo del usuario sea correcto y la configuración de correo del servidor.");
+  }
+  res.json({ ok: true, correo: enmascararCorreo(destino.correo as string) });
 };

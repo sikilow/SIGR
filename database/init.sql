@@ -37,6 +37,21 @@ CREATE TABLE credenciales (
   CONSTRAINT fk_credenciales_id_usuario FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+-- Enlaces de un solo uso para crear una contraseña nueva (migración 024). Solo se guarda la huella SHA-256.
+CREATE TABLE restablecimiento_contrasena (
+  id_restablecimiento INT AUTO_INCREMENT PRIMARY KEY,
+  id_usuario INT NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  solicitado_por INT NULL,
+  creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expira_en DATETIME NOT NULL,
+  usado_en DATETIME NULL,
+  CONSTRAINT uq_restablecimiento_token UNIQUE (token_hash),
+  INDEX idx_restablecimiento_usuario (id_usuario, creado_en),
+  CONSTRAINT fk_restablecimiento_usuario FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_restablecimiento_solicitante FOREIGN KEY (solicitado_por) REFERENCES usuario (id_usuario) ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 CREATE TABLE perfil_usuario (
   id_usuario INT PRIMARY KEY,
   telefono VARCHAR(20) NULL,

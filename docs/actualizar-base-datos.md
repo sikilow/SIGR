@@ -136,6 +136,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `021_preferencias_reservacion.sql` | Preferencias de mesa en la reservación (`pref_zona`, `pref_planta_baja`, `pref_carriola`, `pref_sin_escaleras`) | Tras 020; puede repetirse |
 | `022_horario_reservaciones.sql` | Horario de reservaciones en `configuracion_reservacion` (primera y última hora, intervalo y días abiertos) | Tras 021; puede repetirse |
 | `023_caracteristicas_mesa_y_duracion.sql` | Catálogo de características de mesa (`caracteristica_mesa`, `mesa_caracteristica`, `reservacion_caracteristica`), quita las columnas fijas de acceso y agrega `duracion_reservacion_minutos` | Tras 022; puede repetirse |
+| `024_restablecer_contrasena.sql` | Tabla `restablecimiento_contrasena`: enlaces de un solo uso (1 hora) para que el personal cree una contraseña nueva por correo | Tras 023; puede repetirse |
 
 La tabla es una referencia, no indica qué scripts están instalados en una base particular. Para una base antigua, revisa el esquema y el historial del equipo y ejecuta únicamente los pendientes en orden; no asumas que todos están pendientes. Las migraciones 011 y 012 tienen sus propios pasos de respaldo, inspección y verificación en las secciones «Migración 011» y «Migración 012».
 
@@ -378,6 +379,16 @@ mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT * FROM caracteristica_mesa
 ```
 
 La API no arranca sin esta migración (lo avisa al iniciar). Si el backend ya estaba encendido cuando la aplicaste, **reinícialo**.
+
+## Migración 024: recuperar contraseña por correo
+
+Crea `restablecimiento_contrasena`, donde se guardan los enlaces para crear una contraseña nueva («¿Olvidaste tu contraseña?» en el inicio de sesión y Gerente → Usuarios → Restablecer). Solo se guarda la huella SHA-256 del enlace, su caducidad y cuándo se usó. Solo agrega una tabla; puede repetirse.
+
+```powershell
+Get-Content -Raw ".\database\migrations\024_restablecer_contrasena.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+```
+
+Necesita el correo configurado (Resend o SMTP, igual que las reservaciones). El enlace apunta al front desde el que se pidió; si se pide desde otro lado se usa `URL_APP` de `backend/.env` (por omisión `http://localhost:5173`). En producción define `URL_APP` con la dirección pública del front. La API no arranca sin esta migración.
 
 ## Base nueva o entorno de demostración
 

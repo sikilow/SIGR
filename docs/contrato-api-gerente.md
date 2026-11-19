@@ -103,3 +103,16 @@ Desactivar una característica la deja de ofrecer en el portal, en la hostess y 
 ya la tenían la conservan. En `POST/PATCH /api/catalogo/mesas`, `caracteristicas` es la lista de ids (activos) de la mesa y
 `GET /api/catalogo/mesas` la devuelve con los ids de todas sus características (también las desactivadas). Las columnas fijas
 `mesa.planta_baja`, `espacio_carriola` y `sin_escaleras` se eliminaron: sus valores pasaron al catálogo.
+
+## Recuperar contraseña del personal (migración 024)
+
+Enlace de un solo uso por correo: el empleado crea su contraseña nueva; nadie más la ve. Caduca en 1 hora, pedir otro invalida el anterior y se mandan como máximo 3 por usuario por hora.
+
+| Método y ruta | Quién | Cuerpo | Respuesta |
+|---|---|---|---|
+| `POST /api/auth/recuperar` | Público | `{ usuario_o_correo }` | 200 `{ mensaje }` siempre igual, exista o no la cuenta (también si llegó al límite) |
+| `GET /api/auth/restablecer/:token` | Público | — | 200 `{ nombre_usuario, nombre }` · 410 `enlace_invalido` si se usó o caducó |
+| `POST /api/auth/restablecer` | Público | `{ token, contrasena }` (6 a 72 caracteres) | 200 `{ ok: true }` · 410 `enlace_invalido` · 422 `estado_invalido` |
+| `POST /api/usuarios/:id/restablecer` | Gerente | — | 200 `{ ok: true, correo: "c***@dominio" }` · 404 · 409 usuario inactivo · 429 límite por hora · 502 `correo_no_enviado` |
+
+El correo (`plantillaRestablecerContrasena`) lleva el nombre de usuario y el botón «Crear nueva contraseña» que abre `/restablecer?token=…` en el front. La contraseña anterior sigue funcionando hasta que se use el enlace.
