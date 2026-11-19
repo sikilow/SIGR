@@ -60,6 +60,7 @@ async function salir() {
     <main id="contenido-principal" ref="contenido" class="contenido" tabindex="-1">
       <nav class="pestanas cajero-pestanas no-imprimir" aria-label="Secciones de la caja">
         <RouterLink class="pestana" :to="{ name: 'cajero-caja' }">Caja</RouterLink>
+        <RouterLink class="pestana" :to="{ name: 'cajero-pedidos' }">Pedidos</RouterLink>
         <RouterLink class="pestana" :to="{ name: 'cajero-tickets' }">Tickets y devoluciones</RouterLink>
       </nav>
       <RouterView />

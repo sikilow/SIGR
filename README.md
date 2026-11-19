@@ -64,7 +64,7 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 
 > **Leyenda:** ✅ implementado · 🟡 parcial o distinto a lo que pide el ERS · 🚧 pendiente · 🔎 aún sin medir o revisar
 
-**Avance de requisitos funcionales del ERS:** 16 ✅ · 6 🟡 · 0 🚧 de 22 (revisado el 19 de noviembre de 2026).
+**Avance de requisitos funcionales del ERS:** 19 ✅ · 3 🟡 · 0 🚧 de 22 (revisado el 19 de noviembre de 2026).
 
 ### Requisitos funcionales
 
@@ -74,7 +74,7 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 | --- | --- | --- | --- | --- |
 | `RF-USR-001` | Registrar usuario | Gerente | ✅ | `POST /api/usuarios` · Usuarios → Nuevo usuario |
 | `RF-USR-002` | Actualizar usuario | Gerente | ✅ | `PATCH /api/usuarios/:id` y `POST /api/usuarios/:id/contrasena` · Usuarios → Editar / Contraseña |
-| `RF-USR-003` | Eliminar usuario | Gerente | 🟡 | Se implementó como **desactivar / reactivar** (no se borra: el usuario tiene pedidos y ventas ligados) |
+| `RF-USR-003` | Eliminar usuario | Gerente | ✅ | Solo el gerente. Es un borrado **lógico** (el usuario tiene pedidos y ventas ligados): deja de entrar, se oculta y se puede restaurar desde «Eliminados»; no se elimina a uno mismo, al primer gerente ni al último gerente activo. `DELETE /api/usuarios/:id` y `POST /api/usuarios/:id/restaurar` (ver [`docs/eliminado-logico.md`](docs/eliminado-logico.md)) |
 | `RF-USR-004` | Consultar usuario | Gerente | ✅ | `GET /api/usuarios` · lista con filtros por estado y rol y búsqueda |
 | `RF-USR-005` | Asignar rol a usuario | Gerente | ✅ | Campo Rol al crear o editar un usuario |
 
@@ -84,16 +84,16 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 | --- | --- | --- | --- | --- |
 | `RF-PED-001` | Registrar pedido | Mesero | ✅ | `POST /api/pedidos` · Pedido de mesa |
 | `RF-PED-002` | Cancelar pedido | Mesero, Gerente | ✅ | `POST /api/pedidos/:id/cancelar` (con motivo) · Mis pedidos |
-| `RF-PED-003` | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | 🟡 | Mesero: Mis pedidos; cocinero: cola de cocina; gerente: pantalla **Pedidos** (con historial por fechas). El cajero consulta sus **tickets** (ventas cobradas), no los pedidos: el equipo decidió no agregarle historial de pedidos |
+| `RF-PED-003` | Consultar pedido | Mesero, Cajero, Gerente, Cocinero | ✅ | Mesero: Mis pedidos; cocinero: cola de cocina; gerente: pantalla **Pedidos**; **cajero: Pedidos (`/cajero/pedidos`), de solo lectura**: ve los pedidos del salón y su detalle, sin editar ni cancelar |
 | `RF-PED-004` | Cambiar estado del pedido | Cocinero, Mesero | ✅ | Mesero envía y entrega; cocina avanza `Pendiente` → `En preparacion` → `Listo` en `/cocinero/cocina` |
-| `RF-PED-005` | Consultar historial de pedidos | Gerente, Cajero | 🟡 | Gerente: `GET /api/pedidos` con historial (RF-PED-007) y pantalla Pedidos. Cajero: no se hace (decisión del equipo); ve el historial de **ventas** en Tickets y devoluciones |
+| `RF-PED-005` | Consultar historial de pedidos | Gerente, Cajero | 🟡 | Gerente: `GET /api/pedidos` con historial (RF-PED-007) y pantalla Pedidos. Cajero: **en espera** (decisión del equipo): hoy ve los pedidos por día en su pantalla de consulta, sin paginación ni rangos de fechas |
 
 #### Gestión de ventas
 
 | Código | Requisito | Actor(es) | Estado | Dónde está / nota |
 | --- | --- | --- | --- | --- |
 | `RF-VEN-001` | Registrar venta | Cajero | ✅ | `POST /api/caja/cuentas/:id/cobrar`; pago exacto o dividido, cambio en efectivo y cierre de cuenta |
-| `RF-VEN-002` | Generar factura | Cajero | 🟡 | **No se emite factura.** El gerente guarda una **referencia para el contador** y, si el cliente la pide, sus datos fiscales (todos opcionales): `PUT /api/caja/ventas/:id/fiscal` · Tickets y devoluciones → «Referencia fiscal» (RF-VEN-007) |
+| `RF-VEN-002` | Registrar la referencia fiscal de una venta para el contador (sustituye a «Generar factura»: el sistema **no emite factura**) | Gerente | ✅ | `PUT` y `DELETE /api/caja/ventas/:id/fiscal` · Tickets y devoluciones → «Referencia fiscal»: un id para el contador y datos del cliente opcionales (RFC, razón social, régimen, código postal, correo) |
 | `RF-VEN-003` | Consultar historial de ventas | Cajero, Gerente | ✅ | Gerente: Cortes y ventas → Reporte de ventas (historial con filtros). Cajero y gerente: **Tickets y devoluciones** (`GET /api/caja/ventas`, por fecha o número de ticket o mesa; reimpresión con constancia) |
 | `RF-VEN-004` | Generar reporte de ventas | Gerente | ✅ | `GET /api/caja/reportes/ventas` · Cortes y ventas → Reporte de ventas, con exportación a Excel; ahora muestra devoluciones y neto |
 
@@ -103,7 +103,7 @@ El estado se revisó leyendo el código del repositorio; no es una prueba de ext
 | --- | --- | --- | --- | --- |
 | `RF-CLI-001` | Registrar cliente | Hostess, Cajero | ✅ | `POST /api/clientes` · selector de cliente en Reservaciones y Espera |
 | `RF-CLI-002` | Actualizar cliente | Hostess, Cajero | 🟡 | Gerente: corrige todos los datos en Clientes (`PATCH /api/clientes/:id`); hostess: solo el correo. **El cajero no registra ni actualiza clientes** (decisión del equipo) |
-| `RF-CLI-003` | Eliminar cliente | Gerente, Cajero | 🟡 | Solo el gerente: eliminado **lógico** y restaurable (`DELETE /api/clientes/:id`; ver [`docs/eliminado-logico.md`](docs/eliminado-logico.md)). El cajero no elimina clientes |
+| `RF-CLI-003` | Eliminar cliente | Gerente, Cajero | 🟡 | Solo el gerente, con eliminado **lógico** (se puede restaurar): `DELETE /api/clientes/:id`; ver [`docs/eliminado-logico.md`](docs/eliminado-logico.md). El cajero no elimina clientes |
 
 #### Gestión de reservas (Hostess)
 
@@ -134,7 +134,7 @@ Aparecieron durante el desarrollo. Los códigos son **propuestos**: falta aproba
 | `RF-MES-006` | Sección obligatoria por mesa: el gerente administra el catálogo (crear, renombrar, inhabilitar/habilitar y borrar secciones); una sección inhabilitada no ofrece sus mesas al mesero ni a la hostess | Gerente | `seccion`, `mesa.zona` |
 | `RF-MES-007` | Mostrar y agrupar las mesas por sección en el Panel del mesero y el Salón de la hostess, con filtro «Sección» (`?seccion=`) combinable con el de estado | Mesero, Hostess | `/mesero/mesas`, `/hostess/salon` |
 | `RF-USR-006` | Cambiar la contraseña de un usuario | Gerente | `POST /api/usuarios/:id/contrasena` |
-| `RF-USR-007` | Desactivar y reactivar usuarios (sustituye al borrado de RF-USR-003) | Gerente | `PATCH /api/usuarios/:id` |
+| `RF-USR-007` | Desactivar y reactivar usuarios (además de eliminarlos, RF-USR-003) | Gerente | `PATCH /api/usuarios/:id` |
 | `RF-CUE-001` | Solicitar la cuenta de una mesa y elegir pago en caja o digital (la cuenta pasa a `por_pagar`) | Mesero, Gerente | `POST /api/cuentas/:id/solicitar-pago` |
 | `RF-CUE-002` | Cerrar cuenta únicamente al registrar su pago | Cajero | `POST /api/caja/cuentas/:id/cobrar` |
 | `RF-MES-001` | Asignar mesa a un grupo y cambiar el estado de la mesa (`libre`, `ocupada`, `reservada`) | Hostess, Gerente | `POST /api/mesas/:id/asignar`, `PATCH /api/mesas/:id/estado` |
@@ -144,7 +144,7 @@ Aparecieron durante el desarrollo. Los códigos son **propuestos**: falta aproba
 | `RF-ESP-001` | Gestionar la lista de espera: agregar grupos, consultar por orden de llegada, sentarlos y quitarlos o cambiar cuántas personas son | Hostess | `GET`, `POST` y `PATCH /api/lista-espera` |
 | `RF-VEN-005` | Consultar tickets pasados por fecha o por número de ticket o mesa, y **reimprimirlos** (queda constancia de quién y cuándo) | Cajero, Gerente | `GET /api/caja/ventas`, `GET /api/caja/ventas/:id`, `POST /api/caja/ventas/:id/reimpresion` · Tickets y devoluciones (`/cajero/tickets`, `/gerente/tickets`) |
 | `RF-VEN-006` | **Devoluciones**, totales o parciales (por producto y cantidad) y con motivo: el cajero **solicita** y el gerente **autoriza** (o la registra ya aprobada). Se devuelve con los métodos del cobro, sin pasar de lo cobrado con cada uno; el efectivo sale del corte del cajero (baja el efectivo esperado) y, si se pide, se repone el inventario. El corte y el reporte de ventas muestran lo devuelto y el neto | Cajero, Gerente | `POST /api/caja/ventas/:id/devoluciones`, `GET /api/caja/devoluciones`, `POST /api/caja/devoluciones/:id/aprobar` y `/rechazar` · migración 034 |
-| `RF-VEN-007` | **Referencia para el contador** de una venta (sin emitir factura) y datos fiscales del cliente opcionales (RFC, razón social, régimen, código postal, correo) | Gerente | `PUT` y `DELETE /api/caja/ventas/:id/fiscal` · migración 034 |
+| `RF-VEN-007` | Detalle de RF-VEN-002: la referencia para el contador es obligatoria y los datos fiscales del cliente son opcionales | Gerente | `PUT` y `DELETE /api/caja/ventas/:id/fiscal` · migración 034 |
 | `RF-CLI-004` | **Teléfono de cliente único** en la base (lada + teléfono); dos altas simultáneas con el mismo número no se duplican | Sistema | índice `uq_cliente_telefono` · migración 032 |
 | `RF-CLI-005` | **Recuperar la contraseña** de la cuenta de cliente del portal: enlace de un solo uso por correo, 1 hora, máximo 3 por hora, respuesta siempre igual (no revela quién está registrado) | Cliente | `POST /api/auth-clientes/recuperar`, `GET` y `POST /api/auth-clientes/restablecer` · `/cliente/recuperar` · migración 033 |
 | `RF-RES-008` | **Reporte de reservaciones e inasistencias** por periodo: llegaron, no llegaron, canceladas y por llegar; por día de la semana, hora y sección; clientes con 2 o más inasistencias | Gerente | `GET /api/reservaciones/reporte` · Reservaciones → Reporte e inasistencias |
@@ -170,7 +170,7 @@ Salen de lo que pidió el equipo y de la revisión del proyecto. El detalle, las
 
 | Tema | El ERS dice | En el código |
 | --- | --- | --- |
-| RF-USR-003 / RF-CLI-003 | El ERS pide **eliminar** | Los usuarios se **desactivan** (no se borran). Falta decidir qué pasa con clientes |
+| RF-CLI-003 | El ERS pide **eliminar** clientes (gerente y cajero) | Solo el gerente, con eliminado **lógico** y restaurable; el cajero no gestiona clientes |
 | Estados de mesa | El ERS dice «disponible u ocupada» | La BD usa `libre`, `ocupada` y `reservada` |
 | Estados de pedido | El ERS: pendiente, en preparación, listo, entregado | La BD agrega `Registrado`, `Cancelado` y `Pagado`; `Pendiente` se usa como «enviado a cocina» |
 | RNF-011 | Expiración a los 15 min de inactividad | Se cumple con una sesión en el servidor; el token sigue durando 8 horas como tope |

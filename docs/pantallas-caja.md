@@ -8,6 +8,10 @@ como pestaña de «Cortes y ventas»). El cobro, el corte y el reporte de ventas
 está en [`contrato-api-caja.md`](contrato-api-caja.md). Requisitos: RF-VEN-003, RF-VEN-005, RF-VEN-006 y RF-VEN-007 del
 [README](../README.md#requerimientos).
 
+## Pedidos (solo lectura)
+
+La pestaña **Pedidos** del cajero (`/cajero/pedidos`) es la misma pantalla de Pedidos del gerente, pero **solo para consultar**: lista los pedidos del salón (por día, estado, mesa, mesero o número), muestra el detalle y la cuenta, y dice «Este pedido es de solo lectura». El cajero no puede editar, enviar, entregar ni cancelar. Cubre RF-PED-003. La API ya permitía a cualquier rol con sesión consultar (`GET /api/pedidos`).
+
 ## Qué se puede hacer
 
 | Quién | Acción |

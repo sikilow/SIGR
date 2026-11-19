@@ -204,6 +204,12 @@ export const router = createRouter({
           component: () => import('../views/cajero/CajaView.vue'),
         },
         {
+          // Consulta de los pedidos del salón (solo lectura): RF-PED-003.
+          path: String.raw`pedidos/:idPedido(\d+)?`,
+          name: 'cajero-pedidos',
+          component: () => import('../views/gerente/PedidosView.vue'),
+        },
+        {
           path: 'tickets',
           name: 'cajero-tickets',
           component: () => import('../views/cajero/TicketsView.vue'),

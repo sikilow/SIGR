@@ -29,12 +29,14 @@ const props = withDefaults(
     /** La cuenta de la mesa ya se solicitó: no se edita ni se cancela (suposición, ver contrato). */
     cuentaPorPagar: boolean
     /** Quién mira el pedido: cambia las acciones disponibles (ver el comentario de arriba). */
-    modo?: 'mesero' | 'gerente'
+    modo?: 'mesero' | 'gerente' | 'consulta'
   }>(),
   { modo: 'mesero' },
 )
 
 const esGerente = computed(() => props.modo === 'gerente')
+/** El cajero solo consulta: no edita, envía, entrega ni cancela. */
+const soloConsulta = computed(() => props.modo === 'consulta')
 
 const anuncios = useAnunciosStore()
 const claves = crearClaveIdempotencia()
@@ -79,14 +81,14 @@ const TEXTO_FASE: Record<FasePaso, string> = { hecho: 'completado', actual: 'pas
 // ---------- Qué acciones corresponden ----------
 const acciones = computed(() => accionesDePedido(props.pedido.estado, props.cuentaPorPagar))
 // Editar, enviar y entregar son acciones del mesero: el gerente solo supervisa y cancela como excepción.
-const puedeEditar = computed(() => !esGerente.value && acciones.value.editar !== 'no_aplica')
-const puedeEnviar = computed(() => !esGerente.value && acciones.value.enviar)
-const puedeEntregarAhora = computed(() => !esGerente.value && acciones.value.entregar)
+const puedeEditar = computed(() => !esGerente.value && !soloConsulta.value && acciones.value.editar !== 'no_aplica')
+const puedeEnviar = computed(() => !esGerente.value && !soloConsulta.value && acciones.value.enviar)
+const puedeEntregarAhora = computed(() => !esGerente.value && !soloConsulta.value && acciones.value.entregar)
 /**
  * Hay botón "Cancelar pedido" (activo o bloqueado). Al mesero se le oculta cuando no tiene sentido; al gerente se le
  * muestra SIEMPRE, bloqueado con su motivo, para que sepa por qué no puede (no desaparece sin explicación).
  */
-const muestraCancelar = computed(() => esGerente.value || acciones.value.cancelar !== 'no_aplica')
+const muestraCancelar = computed(() => !soloConsulta.value && (esGerente.value || acciones.value.cancelar !== 'no_aplica'))
 /** Motivo visible por el que "Cancelar pedido" está bloqueado; `null` si se puede usar. */
 const motivoCancelarBloqueado = computed(() =>
   esGerente.value

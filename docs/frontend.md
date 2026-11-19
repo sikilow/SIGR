@@ -20,6 +20,7 @@ El frontend es una aplicación Vue 3 con TypeScript, Vite, Vue Router y Pinia. L
 | `/mesero/pedidos` y `/mesero/pedidos/:idPedido` | `mesero` | Mis pedidos |
 | `/cocinero/cocina` | `cocinero` | Cola de preparación |
 | `/cajero/caja` | `cajero` | Cortes y cobro |
+| `/cajero/pedidos` y `/cajero/pedidos/:idPedido` | `cajero` | Consulta de pedidos del salón (solo lectura) |
 | `/cajero/tickets` | `cajero` | Tickets pasados, reimpresión y solicitud de devoluciones |
 | `/gerente/tickets` | `gerente` | Tickets, reimpresión, autorizar devoluciones y referencia para el contador |
 | `/gerente/reservaciones/reporte` | `gerente` | Reporte de reservaciones e inasistencias |

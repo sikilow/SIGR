@@ -13,6 +13,7 @@ import SelectorDia from '../../components/hostess/SelectorDia.vue'
 import { useCompacto } from '../../composables/useCompacto'
 import { usePolling } from '../../composables/usePolling'
 import { usePedidosGerenteStore } from '../../stores/pedidosGerente'
+import { useSesionStore } from '../../stores/sesion'
 import { ETIQUETA_ESTADO_CUENTA, ETIQUETA_ESTADO_PEDIDO, type Pedido } from '../../types'
 import { formatearFechaHoraCorta, formatearMoneda, formatearPedidos, formatearProductos } from '../../utils/formato'
 import {
@@ -141,8 +142,11 @@ watch(idPedido, async () => {
   panelDetalle.value?.scrollTo({ top: 0 })
 })
 
-const enlaceVolver = { name: 'gerente-pedidos' as const }
-const enlaceAPedido = (id: number) => ({ name: 'gerente-pedidos' as const, params: { idPedido: id } })
+// El cajero usa esta misma pantalla solo para consultar (/cajero/pedidos): sin cancelar ni cambiar nada.
+const esCajero = computed(() => useSesionStore().rol === 'cajero')
+const nombreRuta = computed(() => (esCajero.value ? 'cajero-pedidos' : 'gerente-pedidos') as 'cajero-pedidos' | 'gerente-pedidos')
+const enlaceVolver = computed(() => ({ name: nombreRuta.value }))
+const enlaceAPedido = (id: number) => ({ name: nombreRuta.value, params: { idPedido: id } })
 
 onMounted(() => polling.iniciar())
 </script>
@@ -291,11 +295,11 @@ onMounted(() => polling.iniciar())
 
         <div v-if="idPedido === null" class="vacio">
           <h3>Selecciona un pedido</h3>
-          <p>Toca un pedido de la lista para ver su detalle, su cuenta y si se puede cancelar.</p>
+          <p>Toca un pedido de la lista para ver su detalle y su cuenta{{ esCajero ? '' : ' y si se puede cancelar' }}.</p>
         </div>
 
         <template v-else-if="seleccionado">
-          <PedidoDetalle ref="detalle" :pedido="seleccionado" :cuenta-por-pagar="cuentaPorPagar" modo="gerente" />
+          <PedidoDetalle ref="detalle" :pedido="seleccionado" :cuenta-por-pagar="cuentaPorPagar" :modo="esCajero ? 'consulta' : 'gerente'" />
 
           <!-- Cuenta del pedido (GET /api/mesas/:id/cuenta: solo existe mientras la cuenta está activa) -->
           <section class="cuenta" aria-labelledby="cuenta-titulo">

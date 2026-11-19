@@ -50,6 +50,7 @@ este documento ya está hecho. Al terminar un punto, se marca aquí y en su fila
 | ~~A8~~ | ✅ Hecho: el par (lada, teléfono) de un cliente es único en la base (índice `uq_cliente_telefono`, migración 032) | Regla de dominio 22 | `database/migrations/032_telefono_cliente_unico.sql` |
 | ~~A9~~ | ✅ Hecho sin factura: el gerente guarda una **referencia para el contador** y datos fiscales opcionales del cliente (migración 034; ver [`pantallas-caja.md`](pantallas-caja.md)) | RF-VEN-002, RF-VEN-007 | `controllers/ventas.ts`, tabla `venta_fiscal` |
 | ~~A10~~ | 🚫 **No se hace** (decisión del 19 de noviembre): historial de pedidos del cajero por rango y paginado. El gerente ya tiene el historial en Pedidos y el cajero consulta sus **tickets** | RF-PED-005, P-11 | — |
+| ~~A20~~ | ✅ Hecho: el cajero **consulta los pedidos** del salón en una pantalla de solo lectura (`/cajero/pedidos`); el historial amplio para el cajero sigue en espera | RF-PED-003 | `views/gerente/PedidosView.vue` (modo consulta) |
 | ~~A12~~ | ✅ Hecho: recuperar contraseña del personal por correo con enlace de un solo uso (1 h): «¿Olvidaste tu contraseña?» en el inicio de sesión y **Restablecer** en Gerente → Usuarios (migración 024) | RF-USR (seguridad de acceso) | `controllers/auth.ts`, `services/restablecerContrasena.ts` |
 | ~~A11~~ | ✅ Hecho: la duración de la reservación la configura Gerencia (Reservas, migración 023) y se descuentan las mesas ocupadas sin reservación si la hora está dentro de esa duración | Regla de dominio 6 | `disponibilidadReservacion.ts` |
 
