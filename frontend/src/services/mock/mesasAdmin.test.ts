@@ -1,4 +1,4 @@
-import { HORARIO_POR_DEFECTO } from '../../utils/horarioReservacion'
+import { horarioPorDefecto } from '../../utils/horarioReservacion'
 // Administración de mesas del gerente (mock). Cada prueba parte de una «base de datos» recién creada.
 // Mesas de la demo: libres 1, 2, 4, 6 y 9; ocupadas 3, 5, 8, 11 y 12; reservadas 7 y 10. La mesa 2 solo tiene una cuenta cerrada.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -119,7 +119,7 @@ describe('mesas no disponibles', () => {
     const mesa1 = (await resolver(catalogo.listarMesas())).find((m) => m.numero === 1)!
     await resolver(catalogo.actualizarMesa(mesa1.idMesa, { activa: false }))
     // Sin anticipación mínima: esta prueba solo quiere comprobar la regla de la mesa no disponible.
-    await resolver(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 0, duracionReservacionMinutos: 90, ...HORARIO_POR_DEFECTO, horaApertura: '00:00', horaUltima: '23:59' }))
+    await resolver(catalogo.actualizarConfiguracionReservacion({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 0, duracionReservacionMinutos: 90, ...horarioPorDefecto(), dias: horarioPorDefecto().dias.map((d) => ({ ...d, horaApertura: '00:00', horaUltima: '23:59' })) }))
     const e = await errorDe(hostess.crearReservacion({ idCliente: 1, fechaHora: new Date(Date.now() + 60_000), personas: 2, idMesa: mesa1.idMesa }))
     expect(e.codigo).toBe('mesa_no_disponible')
   })

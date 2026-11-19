@@ -5,8 +5,8 @@ import { listarMesas, obtenerCuentaDeMesa, asignarMesa, cambiarEstadoMesa, abrir
 export const mesasRouter = Router();
 
 mesasRouter.get("/", requiereAuth(), listarMesas);
-mesasRouter.post("/para-llevar", requiereAuth("mesero", "gerente"), abrirParaLlevar);
+mesasRouter.post("/para-llevar", requiereAuth("mesero", "hostess", "gerente"), abrirParaLlevar);
 mesasRouter.get("/:id/cuenta", requiereAuth(), obtenerCuentaDeMesa);
-mesasRouter.post("/:id/liberar-para-llevar", requiereAuth("mesero", "gerente"), liberarParaLlevar);
+mesasRouter.post("/:id/liberar-para-llevar", requiereAuth("mesero", "hostess", "gerente"), liberarParaLlevar);
 mesasRouter.post("/:id/asignar", requiereAuth("hostess", "gerente"), asignarMesa);
 mesasRouter.patch("/:id/estado", requiereAuth("hostess", "gerente"), cambiarEstadoMesa);

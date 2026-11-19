@@ -139,6 +139,7 @@ Confirma también con quien administra la base antes de repetir una migración.
 | `024_restablecer_contrasena.sql` | Tabla `restablecimiento_contrasena`: enlaces de un solo uso (1 hora) para que el personal cree una contraseña nueva por correo | Tras 023; puede repetirse |
 | `028_eliminado_logico_clientes.sql` | Columnas `eliminado_en` y `eliminado_por` en `cliente` (eliminado lógico, fase 3); la auditoría las registra | Tras 027; puede repetirse |
 | `029_eliminado_logico_catalogos.sql` | Columnas `eliminado_en` y `eliminado_por` en `mesa`, `seccion`, `caracteristica_mesa`, `canal_pedido`, `categoria_metodo_pago` y `metodo_pago` (eliminado lógico, fase 4); la auditoría las registra | Tras 028; puede repetirse |
+| `030_horario_reservaciones_por_dia.sql` | Tabla `horario_reservacion_dia` (siete filas: abierto, primera y última hora de cada día); copia el horario general que había y **quita** de `configuracion_reservacion` las columnas `hora_apertura`, `hora_ultima_reservacion` y `dias_abiertos`; la auditoría registra la tabla nueva | Tras 029; **hacer respaldo antes**; puede repetirse |
 | `027_eliminado_logico_usuarios.sql` | Columnas `eliminado_en` y `eliminado_por` en `usuario` (eliminado lógico, fase 2); protege al primer gerente también de ser eliminado; la auditoría las registra | Tras 026; puede repetirse |
 | `026_eliminado_logico_productos.sql` | Columnas `eliminado_en` y `eliminado_por` en `producto` y `categoria_menu` (eliminado lógico, fase 1); la auditoría las registra | Tras 025; puede repetirse |
 | `025_lada_telefono.sql` | Columna `lada` (código de país, «52» por defecto) en `cliente` y `perfil_usuario`; la auditoría de ambas la registra | Tras 024; puede repetirse |
@@ -367,7 +368,7 @@ Agrega a `configuracion_reservacion` la primera y la última hora para reservar 
 New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
 mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-022.sql"
 Get-Content -Raw ".\database\migrations\022_horario_reservaciones.sql" | mysql -h localhost -P 3306 -u root -p SIGR
-mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT hora_apertura, hora_ultima_reservacion, intervalo_minutos, dias_abiertos FROM configuracion_reservacion;"
+mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT intervalo_minutos FROM configuracion_reservacion;"
 ```
 
 La API no arranca sin las migraciones 021 y 022 (lo avisa al iniciar).
@@ -444,6 +445,19 @@ Get-Content -Raw ".\database\migrations\029_eliminado_logico_catalogos.sql" | my
 ```
 
 La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**.
+
+## Migración 030: horario de reservaciones por día
+
+Cada día de la semana tiene su propio horario de reservaciones (abierto o cerrado, primera y última hora para reservar), así que un día puede abrir más temprano o cerrar más tarde que otro. Crea la tabla `horario_reservacion_dia` (siete filas, lunes a domingo) y **copia a cada día** la hora de apertura, la última hora y si abría que ya estaban configuradas, así que el horario actual no cambia. Después **quita** de `configuracion_reservacion` las columnas `hora_apertura`, `hora_ultima_reservacion` y `dias_abiertos` (el `intervalo_minutos` se queda y sigue siendo uno solo). Como borra columnas, **haz respaldo antes**. Puede repetirse.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Desktop\SIGR-respaldos" | Out-Null
+mysqldump -h localhost -P 3306 -u root -p --databases SIGR --result-file="$env:USERPROFILE\Desktop\SIGR-respaldos\SIGR-antes-030.sql"
+Get-Content -Raw ".\database\migrations\030_horario_reservaciones_por_dia.sql" | mysql --default-character-set=utf8mb4 -h localhost -P 3306 -u root -p SIGR
+mysql -h localhost -P 3306 -u root -p SIGR -e "SELECT dia, abierto, hora_apertura, hora_ultima_reservacion FROM horario_reservacion_dia ORDER BY dia;"
+```
+
+La API no arranca sin esta migración; si ya estaba encendida, **reinícialo**. Se edita en Gerente → Reservaciones.
 
 ## Base nueva o entorno de demostración
 

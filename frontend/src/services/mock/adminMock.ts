@@ -775,8 +775,8 @@ export function crearCatalogoMock(): CatalogoService {
         }
         const errorHorario = validarHorario(cambio)
         if (errorHorario) throw new ErrorServicio('estado_invalido', errorHorario, 422)
-        baseDatos.configuracionReservacion = { ...cambio }
-        return { ...baseDatos.configuracionReservacion }
+        baseDatos.configuracionReservacion = { ...cambio, dias: cambio.dias.map((d) => ({ ...d })) }
+        return { ...baseDatos.configuracionReservacion, dias: baseDatos.configuracionReservacion.dias.map((d) => ({ ...d })) }
       })
     },
 

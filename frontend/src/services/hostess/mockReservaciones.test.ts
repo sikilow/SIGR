@@ -242,7 +242,7 @@ describe('mock reservaciones: editar', () => {
     // Horario predeterminado: de 13:00 a 21:00.
     expect(await codigoDeError(hostess.actualizarReservacion(3, { fechaHora: hoyA(23) }))).toBe('estado_invalido')
     // Cerrado el viernes (el 16 de octubre de 2026 es viernes).
-    baseDatos.configuracionReservacion.diasAbiertos = '1111011'
+    baseDatos.configuracionReservacion.dias[4]!.abierto = false
     expect(await codigoDeError(hostess.actualizarReservacion(3, { fechaHora: hoyA(21) }))).toBe('estado_invalido')
   })
 

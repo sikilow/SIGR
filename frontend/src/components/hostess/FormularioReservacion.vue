@@ -32,7 +32,8 @@ import {
 } from '../../utils/reservaciones'
 import {
   diaAbierto,
-  HORARIO_POR_DEFECTO,
+  horarioDelDia,
+  horarioPorDefecto,
   type HorarioReservacion,
   horasDelDia,
   horasDisponibles,
@@ -66,7 +67,7 @@ const edita = computed(() => props.reservacion !== null)
 const hoy = aDiaISO(new Date())
 
 // Horario de reservaciones (lo configura Gerencia). Mientras carga se usa el predeterminado; la API valida igual.
-const horario = ref<HorarioReservacion>({ ...HORARIO_POR_DEFECTO })
+const horario = ref<HorarioReservacion>(horarioPorDefecto())
 const anticipacionMinutos = ref(60)
 const horarioCargado = ref(false)
 
@@ -98,7 +99,9 @@ onMounted(async () => {
 })
 
 /** Horas sugeridas en el campo (la hostess puede escribir cualquier minuto dentro del horario). */
-const horasSugeridas = computed(() => horasDelDia(horario.value))
+const horasSugeridas = computed(() => horasDelDia(horario.value, fecha.value))
+/** Primera y última hora del día elegido (cada día tiene su horario). */
+const horarioDelDiaElegido = computed(() => horarioDelDia(horario.value, fecha.value))
 const ayudaHora = computed(() =>
   fecha.value && !diaAbierto(horario.value, fecha.value)
     ? 'Ese día no se reciben reservaciones.'
@@ -392,8 +395,8 @@ async function guardar() {
             v-model="hora"
             type="time"
             list="res-horas"
-            :min="horario.horaApertura"
-            :max="horario.horaUltima"
+            :min="horarioDelDiaElegido.horaApertura"
+            :max="horarioDelDiaElegido.horaUltima"
             aria-required="true"
             :aria-invalid="errores.hora ? 'true' : undefined"
             :aria-describedby="errores.hora ? 'error-res-hora ayuda-res-hora' : 'ayuda-res-hora'"

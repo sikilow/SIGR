@@ -247,21 +247,33 @@ Solo Gerencia puede consultar y modificar `GET/PATCH /api/catalogo/configuracion
 ```json
 {
   "tolerancia_minutos": 15, "recordatorio_minutos": 5, "anticipacion_minutos": 60,
-  "hora_apertura": "13:00", "hora_ultima_reservacion": "21:00", "intervalo_minutos": 30, "dias_abiertos": "1111111"
+  "duracion_reservacion_minutos": 90, "intervalo_minutos": 30,
+  "dias": [
+    { "abierto": false, "hora_apertura": "13:00", "hora_ultima_reservacion": "21:00" },
+    { "abierto": true,  "hora_apertura": "13:00", "hora_ultima_reservacion": "21:30" },
+    { "abierto": true,  "hora_apertura": "13:00", "hora_ultima_reservacion": "21:30" },
+    { "abierto": true,  "hora_apertura": "13:00", "hora_ultima_reservacion": "21:30" },
+    { "abierto": true,  "hora_apertura": "11:00", "hora_ultima_reservacion": "23:00" },
+    { "abierto": true,  "hora_apertura": "11:00", "hora_ultima_reservacion": "23:00" },
+    { "abierto": true,  "hora_apertura": "09:00", "hora_ultima_reservacion": "16:00" }
+  ]
 }
 ```
 
-**Horario de reservaciones (migración 022).** `hora_apertura` y `hora_ultima_reservacion` («HH:MM») son la primera y la
-última hora que se pueden reservar (la última no es la hora de cierre); `intervalo_minutos` (15, 30 o 60) es cada cuánto
-ofrece horas el portal; `dias_abiertos` son siete caracteres `1`/`0` de lunes a domingo (al menos uno abierto). El PATCH
-exige todos los campos y responde `422 estado_invalido` si la última hora es anterior a la primera. Con el horario:
+**Horario de reservaciones por día (migraciones 022 y 030).** `intervalo_minutos` (15, 30 o 60) es cada cuánto ofrece
+horas el portal y es uno solo para todo el restaurante. `dias` son **siete** objetos, de lunes (posición 0) a domingo
+(posición 6): `abierto` (al menos un día abierto), y `hora_apertura` y `hora_ultima_reservacion` («HH:MM»), la primera y
+la última hora que se pueden reservar ese día (la última no es la hora de cierre). Así un día puede abrir más temprano o
+cerrar más tarde que otro. Un día cerrado conserva sus horas. El PATCH exige todos los campos (ya no existen
+`hora_apertura`, `hora_ultima_reservacion` ni `dias_abiertos` sueltos) y responde `422 estado_invalido` si en algún día la
+última hora es anterior a la primera («Los miércoles, la última hora…»). Con el horario:
 
-- `POST /api/reservaciones-clientes` (portal) rechaza un día cerrado, una hora fuera del horario o una hora que no cae en
-  el intervalo («Elige una de las horas disponibles (cada 30 minutos desde las 13:00).»).
+- `POST /api/reservaciones-clientes` (portal) rechaza un día cerrado, una hora fuera del horario **de ese día** o una hora que no cae en
+  el intervalo, contado desde la primera hora de ese día («Elige una de las horas disponibles (cada 30 minutos desde las 13:00).»).
 - `POST /api/reservaciones` y `PATCH /api/reservaciones/{id}` (al cambiar la fecha) rechazan el día cerrado y la hora
   fuera del horario, pero la hostess **sí** puede anotar un minuto entre intervalos (por ejemplo, 19:45).
-- `GET /api/reservaciones/horario` (hostess) y `GET /api/reservaciones-clientes/horario` (portal) devuelven el horario
-  y `anticipacion_minutos`, para armar las horas y avisar antes de guardar.
+- `GET /api/reservaciones/horario` (hostess) y `GET /api/reservaciones-clientes/horario` (portal) devuelven `intervalo_minutos`, los siete
+  `dias` y `anticipacion_minutos`, para armar las horas de cada día y avisar antes de guardar.
 
 Código: `backend/src/models/horarioReservacion.ts` y `frontend/src/utils/horarioReservacion.ts`.
 

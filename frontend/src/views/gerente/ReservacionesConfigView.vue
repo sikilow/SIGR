@@ -4,13 +4,13 @@ import { ErrorServicio, servicios } from '../../services'
 import { vPermitir } from '../../utils/campos'
 import type { ConfiguracionReservacion } from '../../types'
 import {
-  alternarDia,
+  copiarHorario,
   DIAS_SEMANA,
-  HORARIO_POR_DEFECTO,
+  horarioPorDefecto,
   type HorarioReservacion,
-  horasDelDia,
+  horasDeUnDia,
   INTERVALOS_RESERVACION,
-  textoDiasCerrados,
+  textoHorario,
   validarHorario,
 } from '../../utils/horarioReservacion'
 
@@ -18,28 +18,35 @@ const tolerancia = ref('15')
 const recordatorio = ref('5')
 const anticipacion = ref('60')
 const duracion = ref('90')
-// Horario de reservaciones (migración 022).
-const horaApertura = ref(HORARIO_POR_DEFECTO.horaApertura)
-const horaUltima = ref(HORARIO_POR_DEFECTO.horaUltima)
-const intervalo = ref<HorarioReservacion['intervaloMinutos']>(HORARIO_POR_DEFECTO.intervaloMinutos)
-const diasAbiertos = ref(HORARIO_POR_DEFECTO.diasAbiertos)
+// Horario de reservaciones por día (migración 030): el intervalo es uno solo; cada día tiene su apertura y cierre.
+const horario = ref<HorarioReservacion>(horarioPorDefecto())
 
-const horario = computed<HorarioReservacion>(() => ({
-  horaApertura: horaApertura.value,
-  horaUltima: horaUltima.value,
-  intervaloMinutos: intervalo.value,
-  diasAbiertos: diasAbiertos.value,
-}))
 const errorHorario = computed(() => validarHorario(horario.value))
-/** Lo que verá el cliente en el portal: las horas de un día abierto. */
-const vistaPrevia = computed(() => (errorHorario.value ? [] : horasDelDia(horario.value)))
-const cerrados = computed(() => textoDiasCerrados(horario.value))
+const resumen = computed(() => (errorHorario.value ? '' : textoHorario(horario.value)))
+
+/** Día cuyas horas se muestran en la vista previa (si queda cerrado, se pasa al primero abierto). */
+const diaVista = ref(0)
+const diasAbiertos = computed(() => horario.value.dias.map((d, i) => (d.abierto ? i : -1)).filter((i) => i >= 0))
+const diaVistaActual = computed(() => (horario.value.dias[diaVista.value]?.abierto ? diaVista.value : (diasAbiertos.value[0] ?? 0)))
+/** Lo que verá el cliente en el portal el día elegido. */
+const vistaPrevia = computed(() => {
+  const d = horario.value.dias[diaVistaActual.value]
+  return errorHorario.value || !d ? [] : horasDeUnDia(d, horario.value.intervaloMinutos)
+})
+
+/** Copia la primera y la última hora de un día a todos los demás días (cada uno conserva si está abierto o cerrado). */
+function copiarATodos(origen: number) {
+  const o = horario.value.dias[origen]
+  if (!o) return
+  for (const d of horario.value.dias) {
+    d.horaApertura = o.horaApertura
+    d.horaUltima = o.horaUltima
+  }
+  mensaje.value = `Se copió el horario del ${DIAS_SEMANA[origen]!.nombre.toLowerCase()} a todos los días. Revisa y guarda.`
+}
 
 function aplicarHorario(config: HorarioReservacion) {
-  horaApertura.value = config.horaApertura
-  horaUltima.value = config.horaUltima
-  intervalo.value = config.intervaloMinutos
-  diasAbiertos.value = config.diasAbiertos
+  horario.value = copiarHorario(config)
 }
 const cargando = ref(true)
 const cargado = ref(false)
@@ -73,7 +80,7 @@ async function guardar() {
     recordatorioMinutos: Number(recordatorio.value),
     anticipacionMinutos: Number(anticipacion.value),
     duracionReservacionMinutos: Number(duracion.value),
-    ...horario.value,
+    ...copiarHorario(horario.value),
   }
   if (!Number.isInteger(config.toleranciaMinutos) || config.toleranciaMinutos < 5 || config.toleranciaMinutos > 180) {
     error.value = 'La tolerancia debe estar entre 5 y 180 minutos.'
@@ -156,51 +163,58 @@ onMounted(() => void cargar())
         <fieldset class="horario">
           <legend class="horario__titulo">Horario de reservaciones</legend>
           <p class="horario__ayuda">
-            El portal de clientes ofrece estas horas, y la hostess y el sistema no aceptan reservaciones fuera de ellas ni en días
-            cerrados. La hostess sí puede anotar una hora entre intervalos (por ejemplo, 19:45).
+            Cada día tiene su propio horario: puede abrir más temprano, cerrar más tarde o no recibir reservaciones. El portal de
+            clientes ofrece estas horas, y la hostess y el sistema no aceptan reservaciones fuera de ellas ni en días cerrados. La
+            hostess sí puede anotar una hora entre intervalos (por ejemplo, 19:45).
           </p>
 
-          <div class="config__campos">
-            <div class="campo">
-              <label for="hora-apertura">Primera hora para reservar</label>
-              <input id="hora-apertura" v-model="horaApertura" type="time" step="900" required :disabled="cargando || guardando" />
-            </div>
-            <div class="campo">
-              <label for="hora-ultima">Última hora para reservar</label>
-              <input id="hora-ultima" v-model="horaUltima" type="time" step="900" required :disabled="cargando || guardando" />
-              <p class="campo__ayuda">La última mesa que se puede apartar, no la hora de cierre.</p>
-            </div>
-            <div class="campo">
-              <label for="intervalo">Horas disponibles cada</label>
-              <select id="intervalo" v-model.number="intervalo" :disabled="cargando || guardando">
-                <option v-for="i in INTERVALOS_RESERVACION" :key="i" :value="i">{{ i === 60 ? '1 hora (en punto)' : `${i} minutos` }}</option>
-              </select>
-            </div>
+          <div class="campo campo--intervalo">
+            <label for="intervalo">Horas disponibles cada</label>
+            <select id="intervalo" v-model.number="horario.intervaloMinutos" :disabled="cargando || guardando">
+              <option v-for="i in INTERVALOS_RESERVACION" :key="i" :value="i">{{ i === 60 ? '1 hora (en punto)' : `${i} minutos` }}</option>
+            </select>
           </div>
 
-          <div class="dias" role="group" aria-labelledby="dias-titulo">
-            <p id="dias-titulo" class="dias__titulo">Días que se reciben reservaciones</p>
-            <div class="dias__botones">
-              <button
-                v-for="(d, i) in DIAS_SEMANA"
-                :key="d.nombre"
-                type="button"
-                class="dia"
-                :class="{ 'dia--abierto': diasAbiertos[i] === '1' }"
-                :aria-pressed="diasAbiertos[i] === '1'"
-                :aria-label="d.nombre"
-                :title="d.nombre"
-                :disabled="cargando || guardando"
-                @click="diasAbiertos = alternarDia(diasAbiertos, i)"
-              >
-                {{ d.corto }}
-              </button>
-            </div>
-            <p class="campo__ayuda">{{ cerrados || 'Abierto todos los días.' }}</p>
-          </div>
+          <ul class="semana" aria-label="Horario de cada día">
+            <li v-for="(d, i) in horario.dias" :key="i" class="semana__dia" :class="{ 'semana__dia--cerrado': !d.abierto }">
+              <label class="semana__nombre" :for="`dia-abierto-${i}`">
+                <input :id="`dia-abierto-${i}`" v-model="d.abierto" type="checkbox" :disabled="cargando || guardando" />
+                <span>{{ DIAS_SEMANA[i]!.nombre }}</span>
+                <span class="semana__estado">{{ d.abierto ? 'Abierto' : 'Cerrado' }}</span>
+              </label>
+              <div v-if="d.abierto" class="semana__horas">
+                <div class="campo">
+                  <label :for="`hora-apertura-${i}`">Primera hora</label>
+                  <input :id="`hora-apertura-${i}`" v-model="d.horaApertura" type="time" step="900" required :disabled="cargando || guardando" />
+                </div>
+                <div class="campo">
+                  <label :for="`hora-ultima-${i}`">Última hora</label>
+                  <input :id="`hora-ultima-${i}`" v-model="d.horaUltima" type="time" step="900" required :disabled="cargando || guardando" />
+                </div>
+                <button
+                  type="button"
+                  class="btn btn--secundario semana__copiar"
+                  :aria-label="`Usar el horario del ${DIAS_SEMANA[i]!.nombre.toLowerCase()} en todos los días`"
+                  :disabled="cargando || guardando"
+                  @click="copiarATodos(i)"
+                >
+                  Copiar a todos
+                </button>
+              </div>
+              <p v-else class="semana__cerrado">No se reciben reservaciones.</p>
+            </li>
+          </ul>
+          <p class="campo__ayuda">La última hora es la última mesa que se puede apartar, no la hora de cierre.</p>
 
           <p v-if="errorHorario" class="texto-error" role="alert">{{ errorHorario }}</p>
           <div v-else class="vista-previa">
+            <p class="vista-previa__resumen"><strong>Resumen:</strong> {{ resumen }}</p>
+            <div class="campo campo--intervalo">
+              <label for="vista-dia">Ver las horas del cliente de</label>
+              <select id="vista-dia" :value="diaVistaActual" @change="diaVista = Number(($event.target as HTMLSelectElement).value)">
+                <option v-for="i in diasAbiertos" :key="i" :value="i">{{ DIAS_SEMANA[i]!.nombre }}</option>
+              </select>
+            </div>
             <p class="vista-previa__titulo">Así verá las horas el cliente ({{ vistaPrevia.length }}):</p>
             <ul class="vista-previa__horas">
               <li v-for="h in vistaPrevia" :key="h" class="numero">{{ h }}</li>
@@ -351,40 +365,102 @@ onMounted(() => void cargar())
   color: var(--color-muted);
 }
 
-.dias__titulo {
-  margin: 0 0 var(--espacio-2);
-  font-weight: 700;
+.campo--intervalo {
+  max-width: 320px;
 }
 
-.dias__botones {
+.semana {
+  display: grid;
+  gap: var(--espacio-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.semana__dia {
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) 1fr;
+  align-items: center;
+  gap: var(--espacio-3);
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radio);
+  background: var(--color-surface);
+}
+
+.semana__dia--cerrado {
+  background: transparent;
+  border-style: dashed;
+}
+
+.semana__nombre {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--espacio-2);
-}
-
-.dia {
-  width: 48px;
-  height: 48px;
-  border: 2px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-surface);
-  color: var(--color-muted);
-  font: inherit;
   font-weight: 700;
-  text-decoration: line-through;
   cursor: pointer;
 }
 
-.dia:focus-visible {
-  outline: 3px solid var(--color-primary);
-  outline-offset: 2px;
+.semana__nombre input {
+  width: 24px;
+  height: 24px;
+  accent-color: var(--color-primary);
 }
 
-.dia--abierto {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: #fff;
-  text-decoration: none;
+.semana__estado {
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
+  font-weight: 650;
+}
+
+.semana__horas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr)) auto;
+  align-items: end;
+  gap: var(--espacio-3);
+  min-width: 0;
+}
+
+.semana__copiar {
+  min-height: var(--tactil-min);
+  padding: 0 var(--espacio-3);
+  font-size: var(--texto-sm);
+}
+
+.semana__cerrado {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+@media (max-width: 40em) {
+  .semana__dia {
+    grid-template-columns: 1fr;
+  }
+
+  .semana__horas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .semana__copiar {
+    grid-column: 1 / -1;
+  }
+}
+
+/* En pantallas angostas las dos horas no caben lado a lado (el reloj del campo recorta el texto). */
+@media (max-width: 30em) {
+  .semana__horas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.vista-previa {
+  display: grid;
+  gap: var(--espacio-3);
+}
+
+.vista-previa__resumen {
+  margin: 0;
 }
 
 .vista-previa__titulo {

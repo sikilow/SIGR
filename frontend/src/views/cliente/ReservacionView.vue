@@ -3,13 +3,13 @@
 // horas del horario que configura Gerencia), cuántas personas y, opcional, dónde (sección y características del
 // catálogo de Gerencia). Antes de enviar se ve un resumen; al enviar, una confirmación con el folio. La mesa la asigna
 // la hostess: la solicitud queda pendiente hasta que la confirme.
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { aCaracteristicas, aHorarioReservacion, type CaracteristicaDto, type HorarioReservacionDto } from '../../services/api/mappers'
 import type { CaracteristicaMesa } from '../../types'
 import {
   diaAbierto,
-  HORARIO_POR_DEFECTO,
+  horarioPorDefecto,
   type HorarioReservacion,
   horasDisponibles,
   textoHorario,
@@ -27,7 +27,7 @@ const prefZona = ref('')
 const prefCaracteristicas = ref<number[]>([])
 
 // ---------------- Horario (Gerente → Reservas) ----------------
-const horario = ref<HorarioReservacion>({ ...HORARIO_POR_DEFECTO })
+const horario = ref<HorarioReservacion>(horarioPorDefecto())
 const anticipacionMinutos = ref(60)
 const ahora = ref(new Date())
 
@@ -36,19 +36,13 @@ const diaCerrado = computed(() => !!fecha.value && !diaAbierto(horario.value, fe
 const sinHoras = computed(() => !!fecha.value && !diaCerrado.value && horarios.value.length === 0)
 const descripcionHorario = computed(() => textoHorario(horario.value))
 
-/** Horas agrupadas para que se lean fácil: comida (antes de las 16), tarde (16–19) y cena (19 en adelante). */
-const gruposHoras = computed(() => {
-  const grupos = [
-    { nombre: 'Mañana y comida', horas: [] as string[] },
-    { nombre: 'Tarde', horas: [] as string[] },
-    { nombre: 'Noche', horas: [] as string[] },
-  ]
-  for (const h of horarios.value) {
-    const hh = Number(h.slice(0, 2))
-    grupos[hh < 16 ? 0 : hh < 19 ? 1 : 2]!.horas.push(h)
-  }
-  return grupos.filter((g) => g.horas.length > 0)
+// Las horas que ya pasaron (o que no cumplen la anticipación mínima) no se ofrecen. `ahora` se refresca cada minuto para que,
+// con la pantalla abierta, una hora desaparezca sola cuando deja de estar disponible.
+let relojHoras: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  relojHoras = setInterval(() => (ahora.value = new Date()), 60_000)
 })
+onBeforeUnmount(() => clearInterval(relojHoras))
 
 watch(horarios, (lista) => {
   if (hora.value && !lista.includes(hora.value)) hora.value = ''
@@ -323,22 +317,19 @@ function otraReservacion() {
             <p v-else-if="sinHoras" class="paso__aviso" role="alert">Ya no hay horas disponibles ese día. Elige otra fecha.</p>
             <template v-else>
               <p class="paso__ayuda">{{ fechaLarga }}</p>
-              <div v-for="g in gruposHoras" :key="g.nombre" class="horas">
-                <span class="horas__grupo">{{ g.nombre }}</span>
-                <div class="horas__lista" role="radiogroup" :aria-label="g.nombre">
-                  <button
-                    v-for="h in g.horas"
-                    :key="h"
-                    type="button"
-                    role="radio"
-                    class="hora"
-                    :class="{ 'hora--activa': hora === h }"
-                    :aria-checked="hora === h"
-                    @click="hora = h"
-                  >
-                    {{ h }}
-                  </button>
-                </div>
+              <div class="horas__lista" role="radiogroup" aria-label="Horas disponibles">
+                <button
+                  v-for="h in horarios"
+                  :key="h"
+                  type="button"
+                  role="radio"
+                  class="hora"
+                  :class="{ 'hora--activa': hora === h }"
+                  :aria-checked="hora === h"
+                  @click="hora = h"
+                >
+                  {{ h }}
+                </button>
               </div>
             </template>
           </fieldset>
@@ -772,20 +763,6 @@ form {
 }
 
 /* Horas */
-.horas + .horas {
-  margin-top: 12px;
-}
-
-.horas__grupo {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--tinta-2);
-  font-size: 12px;
-  font-weight: bold;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
 .horas__lista {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));

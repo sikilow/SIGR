@@ -3,7 +3,7 @@
 // el esquema de la BD (ids numéricos, `fechaHora`, `indicaciones`…). Ver docs/equivalencias-bd.md.
 import clientesJson from '../../mocks/clientes.json'
 import productosJson from '../../mocks/productos.json'
-import { HORARIO_POR_DEFECTO } from '../../utils/horarioReservacion'
+import { horarioPorDefecto } from '../../utils/horarioReservacion'
 import type { CanalPedido, CategoriaMenu, Cliente, ConfiguracionReservacion, Cuenta, ListaEspera, Mesa, MotivoCancelacion, Pedido, Reservacion, Rol, Usuario } from '../../types'
 
 /** Usuario de demostración: además del perfil guarda el acceso (`credenciales.nombre_usuario` y su contraseña). */
@@ -330,7 +330,7 @@ export const baseDatos: BaseDatosMock = {
   clientesEliminados: new Map<number, Date>(),
   reservaciones: crearReservaciones(),
   listaEspera: crearListaEspera(),
-  configuracionReservacion: { toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60, duracionReservacionMinutos: 90, ...HORARIO_POR_DEFECTO },
+  configuracionReservacion: { toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60, duracionReservacionMinutos: 90, ...horarioPorDefecto() },
   caracteristicas: [
     { idCaracteristica: 1, nombre: 'Planta baja', activa: true },
     { idCaracteristica: 2, nombre: 'Espacio para carriola', activa: true },

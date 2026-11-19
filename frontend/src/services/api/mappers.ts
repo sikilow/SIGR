@@ -34,7 +34,7 @@ import type {
   Usuario,
   UsuarioAdmin, CambioCliente, ClienteAdmin, CategoriaMetodoPagoAdmin, MetodoPagoAdmin
 } from '../../types'
-import { HORARIO_POR_DEFECTO, type HorarioReservacion, INTERVALOS_RESERVACION } from '../../utils/horarioReservacion'
+import { type HorarioDia, horarioPorDefecto, type HorarioReservacion, INTERVALOS_RESERVACION } from '../../utils/horarioReservacion'
 import { ErrorServicio } from '../errores'
 import {
   aBooleano,
@@ -394,12 +394,20 @@ export interface SeccionAdminDto {
   eliminado_en?: string | null
 }
 
-/** Horario de reservaciones tal como lo envía la API (horas "HH:MM"; una API anterior a la 022 no lo envía). */
-export interface HorarioReservacionDto {
+/** Un día del horario tal como lo envía la API (horas "HH:MM"). */
+export interface HorarioDiaDto {
+  abierto?: unknown
   hora_apertura?: string
   hora_ultima_reservacion?: string
+}
+
+/**
+ * Horario de reservaciones tal como lo envía la API (migración 030): el intervalo y siete días, de lunes a domingo.
+ * Lo que falte toma el predeterminado.
+ */
+export interface HorarioReservacionDto {
   intervalo_minutos?: Numerico
-  dias_abiertos?: string
+  dias?: HorarioDiaDto[]
 }
 
 export interface ConfiguracionReservacionDto extends HorarioReservacionDto {
@@ -442,23 +450,30 @@ export function aCaracteristicaAdmin(dto: CaracteristicaAdminDto): Caracteristic
 /** Horario de la API; lo que falte toma el predeterminado (13:00 a 21:00, cada 30 min, todos los días). */
 export function aHorarioReservacion(dto: HorarioReservacionDto): HorarioReservacion {
   const intervalo = Number(dto.intervalo_minutos)
+  const horario = horarioPorDefecto()
+  const hora = /^([01]\d|2[0-3]):[0-5]\d/
+  const dias: HorarioDia[] = horario.dias.map((porDefecto, i) => {
+    const d = dto.dias?.[i]
+    if (!d) return porDefecto
+    return {
+      abierto: d.abierto === undefined ? porDefecto.abierto : d.abierto === true || d.abierto === 1 || d.abierto === '1',
+      horaApertura: d.hora_apertura && hora.test(d.hora_apertura) ? d.hora_apertura.slice(0, 5) : porDefecto.horaApertura,
+      horaUltima: d.hora_ultima_reservacion && hora.test(d.hora_ultima_reservacion) ? d.hora_ultima_reservacion.slice(0, 5) : porDefecto.horaUltima,
+    }
+  })
   return {
-    horaApertura: dto.hora_apertura?.slice(0, 5) || HORARIO_POR_DEFECTO.horaApertura,
-    horaUltima: dto.hora_ultima_reservacion?.slice(0, 5) || HORARIO_POR_DEFECTO.horaUltima,
     intervaloMinutos: (INTERVALOS_RESERVACION as readonly number[]).includes(intervalo)
       ? (intervalo as HorarioReservacion['intervaloMinutos'])
-      : HORARIO_POR_DEFECTO.intervaloMinutos,
-    diasAbiertos: /^[01]{7}$/.test(dto.dias_abiertos ?? '') ? dto.dias_abiertos! : HORARIO_POR_DEFECTO.diasAbiertos,
+      : horario.intervaloMinutos,
+    dias,
   }
 }
 
 /** Horario → cuerpo de la API. */
-export function deHorarioReservacion(h: HorarioReservacion): Required<HorarioReservacionDto> {
+export function deHorarioReservacion(h: HorarioReservacion): { intervalo_minutos: number; dias: Required<HorarioDiaDto>[] } {
   return {
-    hora_apertura: h.horaApertura,
-    hora_ultima_reservacion: h.horaUltima,
     intervalo_minutos: h.intervaloMinutos,
-    dias_abiertos: h.diasAbiertos,
+    dias: h.dias.map((d) => ({ abierto: d.abierto, hora_apertura: d.horaApertura, hora_ultima_reservacion: d.horaUltima })),
   }
 }
 

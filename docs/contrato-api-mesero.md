@@ -477,7 +477,7 @@ Un pedido para llevar usa una **mesa virtual** de la sección «Para llevar» (`
 
 ### `POST /api/mesas/para-llevar`
 
-Roles: `mesero` y `gerente`. Acepta `Idempotency-Key`. Ocupa la primera mesa virtual libre y abre su cuenta con el canal elegido.
+Roles: `mesero`, `hostess` y `gerente`. Acepta `Idempotency-Key`. Ocupa la primera mesa virtual libre y abre su cuenta con el canal elegido. La **hostess** lo usa cuando recibe un pedido de una plataforma (Didi, Rappi…) o por teléfono: lo asigna a una mesa virtual y el mesero lo ve ocupado en su panel y le toma el pedido (la hostess no toma pedidos).
 
 ```json
 { "id_canal": 3, "referencia": "Juan P." }
@@ -493,7 +493,7 @@ Después se piden los productos con `POST /api/pedidos` usando ese `id_mesa`. Er
 
 ### `POST /api/mesas/{id}/liberar-para-llevar`
 
-Libera una mesa virtual abierta por error o cuyos pedidos se cancelaron todos: cierra su cuenta y la deja `libre`. `409 estado_invalido` si la mesa no es virtual o si la cuenta aún tiene pedidos vigentes (se cobran en Caja).
+Roles: `mesero`, `hostess` y `gerente`. Libera una mesa virtual abierta por error o cuyos pedidos se cancelaron todos: cierra su cuenta y la deja `libre`. `409 estado_invalido` si la mesa no es virtual o si la cuenta aún tiene pedidos vigentes (se cobran en Caja).
 
 ### Canales de pedido
 

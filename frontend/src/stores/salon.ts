@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { servicios } from '../services'
-import type { EstadoMesa, GrupoAsignacion, ListaEspera, MesaSalon, Reservacion, ResultadoAsignacion } from '../types'
+import type { EstadoMesa, GrupoAsignacion, ListaEspera, Mesa, MesaSalon, Reservacion, ResultadoAsignacion } from '../types'
 import {
   TODAS_LAS_SECCIONES,
   agruparPorSeccion,
@@ -29,6 +29,8 @@ export const useSalonStore = defineStore('salon', () => {
   const mesas = ref<MesaSalon[]>([])
   const reservaciones = ref<Reservacion[]>([])
   const espera = ref<ListaEspera[]>([])
+  /** Pedidos para llevar abiertos (mesas virtuales ocupadas de «Para llevar»), con su canal y referencia. */
+  const paraLlevar = ref<Mesa[]>([])
   /** `true` solo mientras llega la PRIMERA carga (sin datos que mostrar todavía). */
   const cargando = ref(false)
   /** `true` durante cualquier petición, incluida la actualización automática. */
@@ -104,10 +106,11 @@ export const useSalonStore = defineStore('salon', () => {
     cargando.value = primeraCarga && mesas.value.length === 0
     actualizando.value = true
     try {
-      const [m, r, e] = await Promise.allSettled([
+      const [m, r, e, l] = await Promise.allSettled([
         servicios.hostess.listarMesas(),
         servicios.hostess.listarReservaciones(),
         servicios.hostess.listarEspera(),
+        servicios.mesas.listar(),
       ])
       // Se conservan los datos anteriores de lo que falle y se informa el error.
       if (m.status === 'fulfilled') {
@@ -119,7 +122,8 @@ export const useSalonStore = defineStore('salon', () => {
       }
       if (r.status === 'fulfilled') reservaciones.value = r.value
       if (e.status === 'fulfilled') espera.value = e.value
-      const fallo = r.status === 'rejected' ? r.reason : e.status === 'rejected' ? e.reason : null
+      if (l.status === 'fulfilled') paraLlevar.value = l.value.filter((x) => x.esParaLlevar === true && x.estado !== 'libre')
+      const fallo = r.status === 'rejected' ? r.reason : e.status === 'rejected' ? e.reason : l.status === 'rejected' ? l.reason : null
       errorLateral.value = fallo ? mensajeDe(fallo, 'No se pudieron cargar las reservaciones y la lista de espera.') : null
     } finally {
       cargando.value = false
@@ -153,10 +157,21 @@ export const useSalonStore = defineStore('salon', () => {
     }
   }
 
+  /** Libera un pedido para llevar que se abrió por error (solo si aún no tiene productos) y recarga el salón. */
+  async function liberarParaLlevar(idMesa: number): Promise<void> {
+    try {
+      await servicios.mesas.liberarParaLlevar(idMesa)
+    } finally {
+      await invalidar()
+    }
+  }
+
   return {
     mesas,
     reservaciones,
     espera,
+    paraLlevar,
+    liberarParaLlevar,
     cargando,
     actualizando,
     error,

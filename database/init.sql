@@ -202,20 +202,30 @@ CREATE TABLE configuracion_reservacion (
   recordatorio_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 5 CHECK (recordatorio_minutos BETWEEN 1 AND 30),
   anticipacion_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 60,
   CONSTRAINT chk_config_res_anticipacion CHECK (anticipacion_minutos BETWEEN 0 AND 1440),
-  -- Horario de reservaciones (migración 022). dias_abiertos: '1'/'0' de lunes a domingo.
-  hora_apertura TIME NOT NULL DEFAULT '13:00:00',
-  hora_ultima_reservacion TIME NOT NULL DEFAULT '21:00:00',
+  -- Cada cuánto se ofrecen horas (migración 022). La primera y última hora y los días abiertos van por día
+  -- en horario_reservacion_dia (migración 030).
   intervalo_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 30,
-  dias_abiertos CHAR(7) NOT NULL DEFAULT '1111111',
   -- Cuánto ocupa una reservación su mesa al calcular la disponibilidad (migración 023).
   duracion_reservacion_minutos SMALLINT UNSIGNED NOT NULL DEFAULT 90,
   CONSTRAINT chk_config_res_duracion CHECK (duracion_reservacion_minutos BETWEEN 30 AND 360),
-  CONSTRAINT chk_config_res_horario CHECK (hora_apertura <= hora_ultima_reservacion),
   CONSTRAINT chk_config_res_intervalo CHECK (intervalo_minutos IN (15, 30, 60)),
   actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 INSERT INTO configuracion_reservacion (id, tolerancia_minutos, recordatorio_minutos) VALUES (1, 15, 5);
+
+-- Horario de reservaciones por día (migración 030): dia 0 = lunes ... 6 = domingo.
+CREATE TABLE horario_reservacion_dia (
+  dia TINYINT UNSIGNED PRIMARY KEY,
+  abierto BOOLEAN NOT NULL DEFAULT TRUE,
+  hora_apertura TIME NOT NULL DEFAULT '13:00:00',
+  hora_ultima_reservacion TIME NOT NULL DEFAULT '21:00:00',
+  actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT chk_horario_dia_dia CHECK (dia BETWEEN 0 AND 6),
+  CONSTRAINT chk_horario_dia_horas CHECK (hora_apertura <= hora_ultima_reservacion)
+) ENGINE=InnoDB;
+
+INSERT INTO horario_reservacion_dia (dia) VALUES (0), (1), (2), (3), (4), (5), (6);
 
 CREATE TABLE notificacion_reservacion (
   id_notificacion INT AUTO_INCREMENT PRIMARY KEY,
@@ -1330,5 +1340,27 @@ CREATE TRIGGER `trg_aud_categoria_metodo_pago_ad` AFTER DELETE ON `categoria_met
 BEGIN
   INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
   VALUES (@sigr_actor_id, 'categoria_metodo_pago', 'DELETE', JSON_OBJECT('id_categoria_metodo_pago', OLD.`id_categoria_metodo_pago`), JSON_OBJECT('id_categoria_metodo_pago', OLD.`id_categoria_metodo_pago`, 'nombre', OLD.`nombre`, 'tipo', OLD.`tipo`, 'activo', OLD.`activo`, 'eliminado_en', OLD.`eliminado_en`, 'eliminado_por', OLD.`eliminado_por`), USER());
+END$$
+DELIMITER ;
+
+-- Horario de reservaciones por día (migracion 030): auditoria.
+DELIMITER $$
+DROP TRIGGER IF EXISTS `trg_aud_horario_reservacion_dia_ai`$$
+DROP TRIGGER IF EXISTS `trg_aud_horario_reservacion_dia_au`$$
+DROP TRIGGER IF EXISTS `trg_aud_horario_reservacion_dia_ad`$$
+CREATE TRIGGER `trg_aud_horario_reservacion_dia_ai` AFTER INSERT ON `horario_reservacion_dia` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'horario_reservacion_dia', 'INSERT', JSON_OBJECT('dia', NEW.`dia`), JSON_OBJECT('dia', NEW.`dia`, 'abierto', NEW.`abierto`, 'hora_apertura', NEW.`hora_apertura`, 'hora_ultima_reservacion', NEW.`hora_ultima_reservacion`, 'actualizado_en', NEW.`actualizado_en`), USER());
+END$$
+CREATE TRIGGER `trg_aud_horario_reservacion_dia_au` AFTER UPDATE ON `horario_reservacion_dia` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, despues, usuario_bd)
+  VALUES (@sigr_actor_id, 'horario_reservacion_dia', 'UPDATE', JSON_OBJECT('dia', NEW.`dia`), JSON_OBJECT('dia', OLD.`dia`, 'abierto', OLD.`abierto`, 'hora_apertura', OLD.`hora_apertura`, 'hora_ultima_reservacion', OLD.`hora_ultima_reservacion`, 'actualizado_en', OLD.`actualizado_en`), JSON_OBJECT('dia', NEW.`dia`, 'abierto', NEW.`abierto`, 'hora_apertura', NEW.`hora_apertura`, 'hora_ultima_reservacion', NEW.`hora_ultima_reservacion`, 'actualizado_en', NEW.`actualizado_en`), USER());
+END$$
+CREATE TRIGGER `trg_aud_horario_reservacion_dia_ad` AFTER DELETE ON `horario_reservacion_dia` FOR EACH ROW
+BEGIN
+  INSERT INTO sigr_auditoria (actor_id, tabla, operacion, registro_id, antes, usuario_bd)
+  VALUES (@sigr_actor_id, 'horario_reservacion_dia', 'DELETE', JSON_OBJECT('dia', OLD.`dia`), JSON_OBJECT('dia', OLD.`dia`, 'abierto', OLD.`abierto`, 'hora_apertura', OLD.`hora_apertura`, 'hora_ultima_reservacion', OLD.`hora_ultima_reservacion`, 'actualizado_en', OLD.`actualizado_en`), USER());
 END$$
 DELIMITER ;

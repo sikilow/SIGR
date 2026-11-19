@@ -246,8 +246,8 @@ export function crearHostessMock(): HostessService {
 
     obtenerHorario() {
       return conRetraso(() => {
-        const { horaApertura, horaUltima, intervaloMinutos, diasAbiertos, anticipacionMinutos } = baseDatos.configuracionReservacion
-        return { horaApertura, horaUltima, intervaloMinutos, diasAbiertos, anticipacionMinutos }
+        const { intervaloMinutos, dias, anticipacionMinutos } = baseDatos.configuracionReservacion
+        return { intervaloMinutos, dias: dias.map((d) => ({ ...d })), anticipacionMinutos }
       })
     },
 

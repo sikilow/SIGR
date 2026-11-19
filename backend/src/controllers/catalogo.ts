@@ -4,80 +4,87 @@ import { ejecutar, filas, pool, transaccion, type Ejecutor } from "../services/d
 import { ESTADO_PEDIDO_DB, idDeRuta, validar } from "../models/dominio";
 import { ErrorApi } from "../utils/errores";
 import { MENSAJE_NOTA, MENSAJE_TEXTO_CATALOGO, REGEX_NOTA, REGEX_TEXTO_CATALOGO, textoCatalogo, textoCatalogoOpcional } from "../utils/campos";
-import { aHoraCorta, aMinutos, INTERVALOS_RESERVACION } from "../models/horarioReservacion";
+import { aMinutos, cargarHorario, INTERVALOS_RESERVACION, NOMBRES_DIA } from "../models/horarioReservacion";
 import { guardarCaracteristicasMesa, IdsCaracteristicas, idsCaracteristicasDeMesas } from "../models/caracteristicasMesa";
 
 // Todo este módulo es solo del gerente.
 
 const SELECT_CONFIGURACION = `
-  SELECT tolerancia_minutos, recordatorio_minutos, anticipacion_minutos,
-         hora_apertura, hora_ultima_reservacion, intervalo_minutos, dias_abiertos, duracion_reservacion_minutos
+  SELECT tolerancia_minutos, recordatorio_minutos, anticipacion_minutos, duracion_reservacion_minutos
     FROM configuracion_reservacion WHERE id = 1`;
 
-/** Fila de la base → respuesta (horas como "HH:MM"). */
-function aConfiguracionDto(fila: Record<string, unknown>) {
+/** Configuración + horario por día (horas como "HH:MM"; `dias` va de lunes a domingo). */
+async function leerConfiguracionDto(ex: Ejecutor) {
+  const [fila] = await filas(ex, SELECT_CONFIGURACION);
+  if (!fila) throw new ErrorApi(500, "desconocido", "No existe la configuración de reservaciones. Ejecuta la migración 010.");
+  const horario = await cargarHorario(ex);
   return {
     tolerancia_minutos: Number(fila.tolerancia_minutos),
     recordatorio_minutos: Number(fila.recordatorio_minutos),
     anticipacion_minutos: Number(fila.anticipacion_minutos),
-    hora_apertura: aHoraCorta(fila.hora_apertura),
-    hora_ultima_reservacion: aHoraCorta(fila.hora_ultima_reservacion),
-    intervalo_minutos: Number(fila.intervalo_minutos),
-    dias_abiertos: String(fila.dias_abiertos),
     duracion_reservacion_minutos: Number(fila.duracion_reservacion_minutos),
+    intervalo_minutos: horario.intervalo_minutos,
+    dias: horario.dias,
   };
 }
 
 /** GET /api/catalogo/configuracion-reservacion */
 export const obtenerConfiguracionReservacion = async (_req: Request, res: Response) => {
-  const [configuracion] = await filas(
-    pool,
-    SELECT_CONFIGURACION,
-  );
-  if (!configuracion) throw new ErrorApi(500, "desconocido", "No existe la configuración de reservaciones. Ejecuta la migración 010.");
-  res.json(aConfiguracionDto(configuracion));
+  res.json(await leerConfiguracionDto(pool));
 };
 
 const HoraHHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "la hora debe tener formato HH:MM");
+const DiaHorario = z.object({
+  abierto: z.boolean(),
+  hora_apertura: HoraHHMM,
+  hora_ultima_reservacion: HoraHHMM,
+}).strict();
 const ConfiguracionReservacion = z.object({
   tolerancia_minutos: z.number().int().min(5).max(180),
   recordatorio_minutos: z.number().int().min(1).max(30),
   /** Con cuánto tiempo mínimo antes de la hora se puede reservar (0 = sin mínimo; hasta 24 h). */
   anticipacion_minutos: z.number().int().min(0).max(1440),
-  /** Horario de reservaciones (migración 022). */
-  hora_apertura: HoraHHMM,
-  hora_ultima_reservacion: HoraHHMM,
+  /** Cada cuánto se ofrecen horas (migración 022). */
   intervalo_minutos: z.number().int().refine((n) => (INTERVALOS_RESERVACION as readonly number[]).includes(n), "debe ser 15, 30 o 60"),
-  dias_abiertos: z.string().regex(/^[01]{7}$/, "siete caracteres 0/1 de lunes a domingo").refine((d) => d !== "0000000", "abre al menos un día"),
+  /** Horario de cada día, de lunes a domingo (migración 030). */
+  dias: z.array(DiaHorario).length(7, "deben ser siete días, de lunes a domingo").refine((d) => d.some((x) => x.abierto), "abre al menos un día"),
   /** Cuánto ocupa una reservación su mesa al calcular la disponibilidad (migración 023). */
   duracion_reservacion_minutos: z.number().int().min(30).max(360),
-}).strict().refine(
-  (c) => aMinutos(c.hora_apertura) <= aMinutos(c.hora_ultima_reservacion),
-  "la última hora para reservar no puede ser antes de la primera",
-);
+}).strict();
 
 /** PATCH /api/catalogo/configuracion-reservacion */
 export const actualizarConfiguracionReservacion = async (req: Request, res: Response) => {
   const datos = validar(ConfiguracionReservacion, req.body);
-  await ejecutar(
-    pool,
-    `UPDATE configuracion_reservacion
-        SET tolerancia_minutos = ?, recordatorio_minutos = ?, anticipacion_minutos = ?,
-            hora_apertura = ?, hora_ultima_reservacion = ?, intervalo_minutos = ?, dias_abiertos = ?,
-            duracion_reservacion_minutos = ?
-      WHERE id = 1`,
-    [
-      datos.tolerancia_minutos, datos.recordatorio_minutos, datos.anticipacion_minutos,
-      datos.hora_apertura, datos.hora_ultima_reservacion, datos.intervalo_minutos, datos.dias_abiertos,
-      datos.duracion_reservacion_minutos,
-    ],
+  // La última hora no puede ser antes de la primera (también en un día cerrado: sus horas se conservan).
+  datos.dias.forEach((d, i) => {
+    if (aMinutos(d.hora_apertura) > aMinutos(d.hora_ultima_reservacion)) {
+      throw new ErrorApi(422, "estado_invalido", `Los ${NOMBRES_DIA[i]}, la última hora para reservar no puede ser antes de la primera.`);
+    }
+  });
+  res.json(
+    await transaccion(async (cx) => {
+      const [existe] = await filas(cx, "SELECT id FROM configuracion_reservacion WHERE id = 1 FOR UPDATE");
+      if (!existe) throw new ErrorApi(500, "desconocido", "No existe la configuración de reservaciones. Ejecuta la migración 010.");
+      await ejecutar(
+        cx,
+        `UPDATE configuracion_reservacion
+            SET tolerancia_minutos = ?, recordatorio_minutos = ?, anticipacion_minutos = ?,
+                intervalo_minutos = ?, duracion_reservacion_minutos = ?
+          WHERE id = 1`,
+        [datos.tolerancia_minutos, datos.recordatorio_minutos, datos.anticipacion_minutos, datos.intervalo_minutos, datos.duracion_reservacion_minutos],
+      );
+      for (const [dia, d] of datos.dias.entries()) {
+        await ejecutar(
+          cx,
+          `INSERT INTO horario_reservacion_dia (dia, abierto, hora_apertura, hora_ultima_reservacion) VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE abierto = VALUES(abierto), hora_apertura = VALUES(hora_apertura),
+                                   hora_ultima_reservacion = VALUES(hora_ultima_reservacion)`,
+          [dia, d.abierto, d.hora_apertura, d.hora_ultima_reservacion],
+        );
+      }
+      return leerConfiguracionDto(cx);
+    }),
   );
-  const [configuracion] = await filas(
-    pool,
-    SELECT_CONFIGURACION,
-  );
-  if (!configuracion) throw new ErrorApi(500, "desconocido", "No existe la configuración de reservaciones. Ejecuta la migración 010.");
-  res.json(aConfiguracionDto(configuracion));
 };
 
 const TipoCategoriaPago = z.enum(["fisico", "digital"]);

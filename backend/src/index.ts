@@ -88,7 +88,7 @@ async function iniciarAPI(): Promise<void> {
     { archivo: "019_pedidos_para_llevar.sql", consulta: "SELECT id_canal, nombre, activo FROM canal_pedido LIMIT 0" },
     { archivo: "020_acceso_google_clientes.sql", consulta: "SELECT google_sub FROM cliente_credencial LIMIT 0" },
     { archivo: "021_preferencias_reservacion.sql", consulta: "SELECT pref_zona FROM reservacion LIMIT 0" },
-    { archivo: "022_horario_reservaciones.sql", consulta: "SELECT hora_apertura, dias_abiertos FROM configuracion_reservacion LIMIT 0" },
+    { archivo: "022_horario_reservaciones.sql", consulta: "SELECT intervalo_minutos FROM configuracion_reservacion LIMIT 0" },
     { archivo: "023_caracteristicas_mesa_y_duracion.sql", consulta: "SELECT id_caracteristica FROM mesa_caracteristica LIMIT 0" },
     { archivo: "023_caracteristicas_mesa_y_duracion.sql", consulta: "SELECT duracion_reservacion_minutos FROM configuracion_reservacion LIMIT 0" },
     { archivo: "024_restablecer_contrasena.sql", consulta: "SELECT token_hash FROM restablecimiento_contrasena LIMIT 0" },
@@ -104,6 +104,7 @@ async function iniciarAPI(): Promise<void> {
     { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM canal_pedido LIMIT 0" },
     { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM metodo_pago LIMIT 0" },
     { archivo: "029_eliminado_logico_catalogos.sql", consulta: "SELECT eliminado_en FROM categoria_metodo_pago LIMIT 0" },
+    { archivo: "030_horario_reservaciones_por_dia.sql", consulta: "SELECT dia, abierto, hora_apertura, hora_ultima_reservacion FROM horario_reservacion_dia LIMIT 0" },
   ];
   for (const { archivo, consulta } of migraciones) {
     try {

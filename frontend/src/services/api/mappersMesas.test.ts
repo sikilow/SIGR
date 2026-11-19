@@ -1,28 +1,45 @@
 // Conversión de mesas del gerente entre el JSON de la API y los tipos del frontend.
 import { describe, expect, it } from 'vitest'
-import { aConfiguracionReservacion, aMesaAdmin, aSeccionAdmin, deCambioMesa, deNuevaMesa } from './mappers'
+import { aConfiguracionReservacion, aHorarioReservacion, aMesaAdmin, aSeccionAdmin, deCambioMesa, deHorarioReservacion, deNuevaMesa } from './mappers'
+import { horarioPorDefecto } from '../../utils/horarioReservacion'
 
 describe('aConfiguracionReservacion', () => {
   it('convierte los minutos enviados por MySQL', () => {
     expect(aConfiguracionReservacion({ tolerancia_minutos: '15', recordatorio_minutos: 5, anticipacion_minutos: '60' }))
-      .toEqual({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60, duracionReservacionMinutos: 90, horaApertura: '13:00', horaUltima: '21:00', intervaloMinutos: 30, diasAbiertos: '1111111' })
+      .toEqual({ toleranciaMinutos: 15, recordatorioMinutos: 5, anticipacionMinutos: 60, duracionReservacionMinutos: 90, ...horarioPorDefecto() })
   })
 
   it('lee el horario (TIME de MySQL) y descarta valores inválidos', () => {
-    expect(
-      aConfiguracionReservacion({
-        tolerancia_minutos: 15,
-        recordatorio_minutos: 5,
-        anticipacion_minutos: 60,
-        hora_apertura: '12:30:00',
-        hora_ultima_reservacion: '22:00',
-        intervalo_minutos: '15',
-        dias_abiertos: '0111111',
-      }),
-    ).toMatchObject({ horaApertura: '12:30', horaUltima: '22:00', intervaloMinutos: 15, diasAbiertos: '0111111' })
-    expect(
-      aConfiguracionReservacion({ tolerancia_minutos: 15, recordatorio_minutos: 5, anticipacion_minutos: 60, intervalo_minutos: 45, dias_abiertos: 'x' }),
-    ).toMatchObject({ intervaloMinutos: 30, diasAbiertos: '1111111' })
+    const leido = aConfiguracionReservacion({
+      tolerancia_minutos: 15,
+      recordatorio_minutos: 5,
+      anticipacion_minutos: 60,
+      intervalo_minutos: '15',
+      dias: [
+        { abierto: 0, hora_apertura: '12:30:00', hora_ultima_reservacion: '22:00:00' },
+        { abierto: 1, hora_apertura: '08:00:00', hora_ultima_reservacion: '23:00' },
+      ],
+    })
+    expect(leido.intervaloMinutos).toBe(15)
+    expect(leido.dias).toHaveLength(7)
+    expect(leido.dias.slice(0, 3)).toEqual([
+      { abierto: false, horaApertura: '12:30', horaUltima: '22:00' },
+      { abierto: true, horaApertura: '08:00', horaUltima: '23:00' },
+      { abierto: true, horaApertura: '13:00', horaUltima: '21:00' }, // lo que falta toma el predeterminado
+    ])
+    const invalido = aConfiguracionReservacion({ tolerancia_minutos: 15, recordatorio_minutos: 5, anticipacion_minutos: 60, intervalo_minutos: 45, dias: [{ hora_apertura: 'x' }] })
+    expect(invalido.intervaloMinutos).toBe(30)
+    expect(invalido.dias[0]).toEqual({ abierto: true, horaApertura: '13:00', horaUltima: '21:00' })
+  })
+
+  it('el horario va y vuelve entre la API y el frontend con siete días', () => {
+    const horario = horarioPorDefecto()
+    horario.dias[5] = { abierto: true, horaApertura: '11:00', horaUltima: '23:30' }
+    horario.dias[6]!.abierto = false
+    const cuerpo = deHorarioReservacion(horario)
+    expect(cuerpo.dias).toHaveLength(7)
+    expect(cuerpo.dias[5]).toEqual({ abierto: true, hora_apertura: '11:00', hora_ultima_reservacion: '23:30' })
+    expect(aHorarioReservacion(cuerpo)).toEqual(horario)
   })
 })
 
