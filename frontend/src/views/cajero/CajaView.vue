@@ -53,6 +53,11 @@ const puedeCobrar = computed(
     pagos.value.every((pago) => pago.monto > 0 && pago.montoRecibido >= pago.monto),
 )
 
+/** Lo cobrado en el turno con métodos que no son efectivo (la API no envía el efectivo: se cuenta a ciegas). */
+const totalSinEfectivo = computed(() =>
+  (estado.value?.corte?.desglose ?? []).reduce((suma, m) => suma + Math.round(m.monto * 100), 0) / 100,
+)
+
 /** Métodos de pago del turno para el panel lateral (mismo formato que el reporte del gerente). */
 const metodosTurno = computed(() =>
   (estado.value?.corte?.desglose ?? []).map((m) => ({
@@ -535,8 +540,8 @@ onMounted(() => {
       <h3 id="turno-titulo">Ventas del turno</h3>
       <div class="turno__cifras">
         <div class="turno__cifra">
-          <span>Total vendido</span>
-          <strong class="numero">{{ moneda(estado.corte.totalVentas) }}<small>MXN</small></strong>
+          <span>Cobrado sin efectivo</span>
+          <strong class="numero">{{ moneda(totalSinEfectivo) }}<small>MXN</small></strong>
         </div>
         <div class="turno__cifra">
           <span>Cuentas cobradas</span>
@@ -544,7 +549,10 @@ onMounted(() => {
         </div>
       </div>
       <h4 class="turno__subtitulo">Métodos de pago</h4>
-      <BarrasRanking :filas="metodosTurno" :total-general="estado.corte.totalVentas" numerada vacio="Todavía no hay cobros en este turno." />
+      <BarrasRanking :filas="metodosTurno" :total-general="totalSinEfectivo" numerada vacio="Todavía no hay cobros con tarjeta, transferencia u otros métodos." />
+      <p class="turno__nota">
+        El efectivo no se muestra: cuéntalo al cerrar el corte y ahí verás si cuadra.
+      </p>
     </aside>
     </div>
 
@@ -717,6 +725,15 @@ onMounted(() => {
 .turno__subtitulo {
   margin: 0;
   font-size: var(--texto-base);
+}
+
+.turno__nota {
+  margin: 0;
+  padding: var(--espacio-2) var(--espacio-3);
+  border-radius: var(--radio-sm);
+  background: var(--color-surface-2);
+  color: var(--color-muted);
+  font-size: var(--texto-sm);
 }
 
 .caja h2 {
@@ -1311,6 +1328,7 @@ onMounted(() => {
   }
 
   .turno__subtitulo,
+  .turno__nota,
   .turno :deep(.ranking),
   .turno :deep(.ranking__vacio),
   .turno :deep(.ranking__mas) {

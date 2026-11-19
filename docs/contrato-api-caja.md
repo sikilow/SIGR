@@ -6,12 +6,13 @@ Todas las rutas están bajo `/api/caja`. La operación del turno (estado, abrir 
 
 Devuelve el corte abierto del cajero autenticado, las cuentas en `por_pagar` de todo el restaurante y los métodos de pago disponibles. Las cuentas incluyen pedidos sin entregar para que la pantalla los identifique y bloquee el cobro.
 
-El corte abierto no incluye totales de venta ni el efectivo esperado: el cajero cuenta el efectivo al cerrar sin conocer la cifra del sistema.
+El corte abierto incluye `desglose`: lo cobrado en el turno **solo con métodos que no son efectivo** (`es_efectivo = false`), con su número de pagos y monto, de mayor a menor. Es lo que muestra el panel «Ventas del turno» del cajero. No incluye el efectivo, el total de ventas ni el efectivo esperado (con el total se podría deducir el efectivo): el cajero cuenta el efectivo a ciegas al cerrar y ve el faltante o sobrante después.
 Las cuentas incluyen `id_metodo_pago_solicitado` cuando el mesero registró un método; caja precarga ese método en el formulario de cobro. Los métodos están asociados a una categoría física o digital.
 
 ```json
 {
-  "corte": { "id_corte": 4, "inicio": "2026-10-21 19:00:00", "fondo_inicial": 500, "cobros": 3 },
+  "corte": { "id_corte": 4, "inicio": "2026-10-21 19:00:00", "fondo_inicial": 500, "cobros": 3,
+             "desglose": [{ "metodo": "Tarjeta", "cobros": 2, "monto": 860 }] },
   "cuentas": [{
     "cuenta": { "id_cuenta": 3, "id_mesa": 8, "estado": "por_pagar", "pedidos": [], "total": 480 },
     "mesa_numero": 8,

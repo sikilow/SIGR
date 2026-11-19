@@ -40,9 +40,10 @@ export interface CorteCaja {
   inicio: Date
   fondoInicial: number
   cobros: number
-  /** Total cobrado en el turno (ventas del corte abierto). */
-  totalVentas: number
-  /** Cobros del turno por método de pago (solo los métodos con cobros, de mayor a menor). */
+  /**
+   * Cobros del turno por método de pago que NO es efectivo (con cobros, de mayor a menor). El efectivo no se envía:
+   * el cajero lo cuenta a ciegas al cerrar el corte.
+   */
   desglose: CobroPorMetodo[]
 }
 

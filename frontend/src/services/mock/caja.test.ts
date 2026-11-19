@@ -24,12 +24,9 @@ describe('caja demo', () => {
     const estado = await caja.obtenerEstado()
     expect(estado.cuentas.some((item) => item.cuenta.idCuenta === 3)).toBe(false)
     expect(estado.corte?.cobros).toBe(1)
-    // Panel «Ventas del turno»: lo cobrado en el corte abierto, por método de pago (de mayor a menor).
-    expect(estado.corte?.totalVentas).toBe(480)
-    expect(estado.corte?.desglose).toEqual([
-      { metodo: 'Efectivo', cobros: 1, monto: 300 },
-      { metodo: 'Tarjeta', cobros: 1, monto: 180 },
-    ])
+    // Panel «Ventas del turno»: solo métodos que no son efectivo; el efectivo se cuenta a ciegas al cerrar.
+    expect(estado.corte?.desglose).toEqual([{ metodo: 'Tarjeta', cobros: 1, monto: 180 }])
+    expect(estado.corte).not.toHaveProperty('totalVentas')
 
     // Esperado = fondo 500 + efectivo 300 (el cambio de 20 ya salió de la caja); la tarjeta no se cuenta.
     const cierre = await caja.cerrarCorte(790)

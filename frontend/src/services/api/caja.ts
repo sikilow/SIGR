@@ -10,8 +10,7 @@ interface CorteDto {
   inicio: string
   fondo_inicial: number | string
   cobros: number | string
-  /** Solo en GET /caja/estado; al abrir el corte aún no hay ventas. */
-  total_ventas?: number | string
+  /** Solo en GET /caja/estado (sin efectivo); al abrir el corte aún no hay ventas. */
   desglose?: Array<{ metodo: string; cobros: number | string; monto: number | string }>
 }
 
@@ -75,7 +74,6 @@ function aCorte(dto: CorteDto): CorteCaja {
     inicio: parseFechaMySQL(dto.inicio, 'corte.inicio'),
     fondoInicial: Number(dto.fondo_inicial),
     cobros: Number(dto.cobros),
-    totalVentas: Number(dto.total_ventas ?? 0),
     desglose: (dto.desglose ?? []).map((m) => ({ metodo: m.metodo, cobros: Number(m.cobros), monto: Number(m.monto) })),
   }
 }
